@@ -1,0 +1,16 @@
+<Application
+    x:Class="OpenCareer.App.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <SolidColorBrush x:Key="AppBackgroundBrush" Color="#0B1520" />
+            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#111E2B" />
+            <SolidColorBrush x:Key="AppSurfaceAltBrush" Color="#172737" />
+            <SolidColorBrush x:Key="AppBorderBrush" Color="#294156" />
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#4EA8DE" />
+            <SolidColorBrush x:Key="AppSuccessBrush" Color="#52D273" />
+            <SolidColorBrush x:Key="AppMutedTextBrush" Color="#9FB1C2" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
