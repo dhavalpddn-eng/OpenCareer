@@ -145,6 +145,46 @@ public sealed class WorldFeedRuntimeTests
     }
 
     [Fact]
+    public async Task ExpiredPostsLeaveActiveTimelineButRemainInHistory()
+    {
+        var databasePath = Path.Combine(
+            Path.GetTempPath(),
+            $"opencareer-worldfeed-history-{Guid.NewGuid():N}.db");
+
+        try
+        {
+            var store = new SqliteWorldFeedPostStore(databasePath);
+            var service = new WorldFeedNarrationService(
+                primaryNarrator: null,
+                new DeterministicWorldFeedNarrator());
+            var coordinator = new WorldFeedCoordinator(
+                service,
+                store,
+                new WorldFeedRefreshPolicy(TimeSpan.FromMinutes(30), 5));
+
+            var first = await coordinator.RefreshAsync(Request());
+            var originalIds = first.Generation!.Posts.Select(post => post.PostId).ToHashSet();
+
+            var laterAt = Epoch.AddHours(5);
+            var second = await coordinator.RefreshAsync(Request(laterAt), force: true);
+            Assert.False(second.WasSkipped);
+
+            var active = await store.ReadTimelineAsync(laterAt, "KRME", 20);
+            Assert.DoesNotContain(active, post => originalIds.Contains(post.PostId));
+
+            var history = await store.ReadHistoryAsync(laterAt, "KRME", 20);
+            Assert.All(originalIds, id => Assert.Contains(history, post => post.PostId == id));
+            Assert.Contains(history, post => second.Generation!.Posts.Any(current => current.PostId == post.PostId));
+        }
+        finally
+        {
+            TryDelete(databasePath);
+            TryDelete(databasePath + "-wal");
+            TryDelete(databasePath + "-shm");
+        }
+    }
+
+    [Fact]
     public async Task UnknownAiFactReferenceIsRejected()
     {
         var outputText = JsonSerializer.Serialize(new

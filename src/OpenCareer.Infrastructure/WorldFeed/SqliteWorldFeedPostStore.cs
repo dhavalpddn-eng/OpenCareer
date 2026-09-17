@@ -100,43 +100,19 @@ public sealed class SqliteWorldFeedPostStore : IWorldFeedPostStore
         transaction.Commit();
     }
 
-    public async Task<IReadOnlyList<WorldFeedPost>> ReadTimelineAsync(
+    public Task<IReadOnlyList<WorldFeedPost>> ReadTimelineAsync(
         DateTimeOffset asOf,
         string? scopeId,
         int limit,
-        CancellationToken cancellationToken = default)
-    {
-        if (limit is < 1 or > 500)
-            throw new ArgumentOutOfRangeException(nameof(limit));
+        CancellationToken cancellationToken = default) =>
+        ReadPostsAsync(asOf, scopeId, limit, includeExpired: false, cancellationToken);
 
-        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT
-                PostId, CreatedAtUnixMs, Category, Headline, Body, ScopeId, ExpiresAtUnixMs,
-                RelatedSignalIdsJson, RelatedWorldEventIdsJson, IsAiGenerated, SourceDisclosure
-            FROM WorldFeedPosts
-            WHERE CreatedAtUnixMs <= $asOf
-              AND (ExpiresAtUnixMs IS NULL OR ExpiresAtUnixMs > $asOf)
-              AND ($scopeId IS NULL OR ScopeId IS NULL OR ScopeId = $scopeId)
-            ORDER BY CreatedAtUnixMs DESC, PostId ASC
-            LIMIT $limit;
-            """;
-        command.Parameters.AddWithValue("$asOf", asOf.ToUnixTimeMilliseconds());
-        command.Parameters.AddWithValue("$scopeId", (object?)scopeId ?? DBNull.Value);
-        command.Parameters.AddWithValue("$limit", limit);
-
-        var posts = new List<WorldFeedPost>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            posts.Add(ReadPost(reader));
-
-        return posts;
-    }
+    public Task<IReadOnlyList<WorldFeedPost>> ReadHistoryAsync(
+        DateTimeOffset asOf,
+        string? scopeId,
+        int limit,
+        CancellationToken cancellationToken = default) =>
+        ReadPostsAsync(asOf, scopeId, limit, includeExpired: true, cancellationToken);
 
     public async Task<DateTimeOffset?> GetLatestCreatedAtAsync(
         string? scopeId,
@@ -179,6 +155,56 @@ public sealed class SqliteWorldFeedPostStore : IWorldFeedPostStore
             """;
         command.Parameters.AddWithValue("$asOf", asOf.ToUnixTimeMilliseconds());
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<WorldFeedPost>> ReadPostsAsync(
+        DateTimeOffset asOf,
+        string? scopeId,
+        int limit,
+        bool includeExpired,
+        CancellationToken cancellationToken)
+    {
+        if (limit is < 1 or > 500)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = includeExpired
+            ? """
+              SELECT
+                  PostId, CreatedAtUnixMs, Category, Headline, Body, ScopeId, ExpiresAtUnixMs,
+                  RelatedSignalIdsJson, RelatedWorldEventIdsJson, IsAiGenerated, SourceDisclosure
+              FROM WorldFeedPosts
+              WHERE CreatedAtUnixMs <= $asOf
+                AND ($scopeId IS NULL OR ScopeId IS NULL OR ScopeId = $scopeId)
+              ORDER BY CreatedAtUnixMs DESC, PostId ASC
+              LIMIT $limit;
+              """
+            : """
+              SELECT
+                  PostId, CreatedAtUnixMs, Category, Headline, Body, ScopeId, ExpiresAtUnixMs,
+                  RelatedSignalIdsJson, RelatedWorldEventIdsJson, IsAiGenerated, SourceDisclosure
+              FROM WorldFeedPosts
+              WHERE CreatedAtUnixMs <= $asOf
+                AND (ExpiresAtUnixMs IS NULL OR ExpiresAtUnixMs > $asOf)
+                AND ($scopeId IS NULL OR ScopeId IS NULL OR ScopeId = $scopeId)
+              ORDER BY CreatedAtUnixMs DESC, PostId ASC
+              LIMIT $limit;
+              """;
+
+        command.Parameters.AddWithValue("$asOf", asOf.ToUnixTimeMilliseconds());
+        command.Parameters.AddWithValue("$scopeId", (object?)scopeId ?? DBNull.Value);
+        command.Parameters.AddWithValue("$limit", limit);
+
+        var posts = new List<WorldFeedPost>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            posts.Add(ReadPost(reader));
+
+        return posts;
     }
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)

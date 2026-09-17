@@ -14,6 +14,12 @@ public interface IWorldFeedPostStore
         int limit,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<WorldFeedPost>> ReadHistoryAsync(
+        DateTimeOffset asOf,
+        string? scopeId,
+        int limit,
+        CancellationToken cancellationToken = default);
+
     Task<DateTimeOffset?> GetLatestCreatedAtAsync(
         string? scopeId,
         CancellationToken cancellationToken = default);

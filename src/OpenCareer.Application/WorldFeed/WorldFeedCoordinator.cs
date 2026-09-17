@@ -80,7 +80,7 @@ public sealed class WorldFeedCoordinator
             var recent = _policy.RecentPostContextLimit == 0
                 ? Array.Empty<WorldFeedPost>()
                 : await _store
-                    .ReadTimelineAsync(
+                    .ReadHistoryAsync(
                         request.GeneratedAt,
                         request.ScopeId,
                         _policy.RecentPostContextLimit,
@@ -94,10 +94,6 @@ public sealed class WorldFeedCoordinator
 
             await _store
                 .SaveAsync(generation.Posts, cancellationToken)
-                .ConfigureAwait(false);
-
-            await _store
-                .DeleteExpiredAsync(request.GeneratedAt, cancellationToken)
                 .ConfigureAwait(false);
 
             return WorldFeedRefreshResult.Completed(generation);

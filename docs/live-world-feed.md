@@ -21,8 +21,8 @@ The feed is narrative only. It cannot create money, jobs, wars, aircraft ownersh
 - `IWorldFeedNarrator` — one narration boundary for AI or offline generation.
 - `WorldFeedNarrationService` — tries the configured AI narrator and immediately falls back to the deterministic narrator on timeout/API/validation failure.
 - `DeterministicWorldFeedNarrator` — no network dependency; the same career seed + timestamp + world facts produces the same posts.
-- `IWorldFeedPostStore` — persistence boundary.
-- `WorldFeedCoordinator` — throttles ordinary refreshes, loads recent posts for continuity, persists new posts and prunes expired posts. Major world transitions may call it with `force: true`.
+- `IWorldFeedPostStore` — persistence boundary with separate active-timeline and historical reads.
+- `WorldFeedCoordinator` — throttles ordinary refreshes, loads recent historical posts for continuity, persists new posts and preserves old posts. Major world transitions may call it with `force: true`.
 
 Default normal refresh interval is 30 minutes. That is a policy value, not a telemetry loop.
 
@@ -69,9 +69,11 @@ SQLite stores:
 - AI-generated flag,
 - source disclosure.
 
-The coordinator reads recent posts back into the next narration request so AI can continue a storyline without treating old prose as new world facts.
+`ReadTimelineAsync` returns only posts still active at the requested time. `ReadHistoryAsync` returns the persistent career timeline, including posts whose active-feed expiry has passed.
 
-Expired posts are removed from the active timeline. Historical archive/retention beyond active expiry can be added later if the player wants a permanent career newspaper.
+The coordinator uses recent historical posts as continuity context so the narrator can refer naturally to earlier developments without treating old prose as new authoritative facts.
+
+Expired posts are **not deleted during normal refresh**. `DeleteExpiredAsync` remains an explicit maintenance/retention operation only, so a future settings policy can prune old history without changing normal gameplay behavior.
 
 ## No live collector
 
@@ -109,4 +111,4 @@ After this branch is rebased onto Astra's current head:
 3. trigger ordinary refreshes from the application/world clock, not SimConnect telemetry;
 4. force refresh after major simulated event transitions;
 5. add a World / Network feed page;
-6. decide whether expired posts are archived permanently or pruned.
+6. add an optional retention setting only if the persistent timeline becomes too large.
