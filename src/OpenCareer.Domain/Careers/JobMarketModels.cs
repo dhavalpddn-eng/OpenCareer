@@ -44,7 +44,8 @@ public sealed record JobMarketGenerationRequest(
     JobMarketPolicy? Policy = null,
     CareerLevelSnapshot? CareerStanding = null,
     AirportMarketCapacity? Capacity = null,
-    RegionalSecurityState? SecurityState = null)
+    RegionalSecurityState? SecurityState = null,
+    ConflictAviationDemandProfile? ConflictDemand = null)
 {
     public JobMarketPolicy EffectivePolicy => Policy ?? JobMarketPolicy.Default;
     public CareerLevelSnapshot EffectiveCareerStanding => CareerStanding ?? CareerLevelSnapshot.Starting;
@@ -58,6 +59,7 @@ public sealed record JobMarketGenerationRequest(
         EffectivePolicy.Validate();
         EffectiveCapacity.Validate();
         SecurityState?.Validate();
+        ConflictDemand?.Validate();
         if (EffectiveCareerStanding.Level < 1 || EffectiveCareerStanding.Level > EffectivePolicy.CareerLevelCap
             || EffectiveCareerStanding.MeritPoints < 0 || EffectiveCareerStanding.NextLevelAt < 0)
             throw new ArgumentOutOfRangeException(nameof(CareerStanding));

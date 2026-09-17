@@ -10,6 +10,7 @@ public enum JobScenarioKind
     TroopMovement,
     HumanitarianAirlift,
     ConflictReconnaissance,
+    AirfieldReinforcement,
     RecoverySupply,
     InfrastructureAssessment
 }
@@ -33,8 +34,14 @@ public static class JobScenarioSelector
 
         if (security?.Phase == RegionalSecurityPhase.ActiveConflict)
         {
-            if (kind == ContractKind.MilitaryTransport && random.Chance(0.60))
-                return JobScenarioKind.TroopMovement;
+            if (kind == ContractKind.MilitaryTransport)
+            {
+                var transportRoll = random.NextDouble();
+                if (transportRoll < 0.20)
+                    return JobScenarioKind.AirfieldReinforcement;
+                if (transportRoll < 0.70)
+                    return JobScenarioKind.TroopMovement;
+            }
             if (kind == ContractKind.MilitarySurveillance && random.Chance(0.75))
                 return JobScenarioKind.ConflictReconnaissance;
             if (kind is ContractKind.Medevac or ContractKind.Evacuation or ContractKind.DisasterRelief)

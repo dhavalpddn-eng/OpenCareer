@@ -50,6 +50,7 @@ public class RegionalSecurityJobMarketTests
         var offers = GenerateAcrossBuckets(conflict, 900).ToArray();
 
         Assert.Contains(offers, x => x.Scenario == JobScenarioKind.TroopMovement);
+        Assert.Contains(offers, x => x.Scenario == JobScenarioKind.AirfieldReinforcement);
         Assert.Contains(offers, x => x.Scenario == JobScenarioKind.ConflictReconnaissance);
         Assert.Contains(offers, x => x.ServiceTrack == ServiceTrack.MilitaryService);
     }

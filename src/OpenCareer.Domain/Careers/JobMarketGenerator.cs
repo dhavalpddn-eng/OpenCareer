@@ -80,7 +80,12 @@ public static class JobMarketGenerator
         for (var attempt = 0; attempt < maxAttempts && added < targetCount; attempt++)
         {
             var track = ChooseWeighted(trackChoices, random);
-            var kindChoices = BuildKindChoices(track.Value, request.Origin, request.SecurityState, policy);
+            var kindChoices = BuildKindChoices(
+                track.Value,
+                request.Origin,
+                request.SecurityState,
+                request.ConflictDemand,
+                policy);
             if (kindChoices.Count == 0)
                 continue;
             var kind = ChooseWeighted(kindChoices, random);
@@ -130,6 +135,8 @@ public static class JobMarketGenerator
             var weight = policy.TrackWeight(request.Origin, track);
             if (request.SecurityState is not null)
                 weight *= request.SecurityState.TrackMultiplier(track);
+            if (request.ConflictDemand is not null)
+                weight *= request.ConflictDemand.TrackMultiplier(track);
             if (weight <= 0)
                 continue;
             if (locked)
@@ -145,6 +152,7 @@ public static class JobMarketGenerator
         ServiceTrack track,
         AirportCareerProfile airport,
         RegionalSecurityState? security,
+        ConflictAviationDemandProfile? conflictDemand,
         JobMarketPolicy policy)
     {
         var choices = track switch
@@ -216,6 +224,15 @@ public static class JobMarketGenerator
         {
             for (var i = 0; i < choices.Count; i++)
                 choices[i] = choices[i] with { Weight = choices[i].Weight * security.KindMultiplier(choices[i].Value) };
+        }
+
+        if (conflictDemand is not null)
+        {
+            for (var i = 0; i < choices.Count; i++)
+                choices[i] = choices[i] with
+                {
+                    Weight = choices[i].Weight * conflictDemand.KindMultiplier(choices[i].Value)
+                };
         }
 
         return choices;
