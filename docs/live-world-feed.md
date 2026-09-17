@@ -1,178 +1,112 @@
-# Live world / social feed design
+# Live world / social feed runtime
 
-This feature is **optional online flavor + signal collection**. OpenCareer remains fully playable offline. AI/news output is never authoritative for balances, ownership, mission completion, aircraft access, airspace restrictions or contract eligibility.
+Updated 2026-09-17.
 
-## Player experience
+## Locked direction
 
-Add a world/social board that feels like an aviation-focused mix of local news, dispatch chatter, company updates and travel trends. Examples:
+OpenCareer's social/world feed is generated from **OpenCareer's own simulated world state**. This implementation does **not** collect current news, scrape social media, call web search, or let the model browse.
 
-- "Weekend demand into Miami is climbing."
-- "Express freight backlog building around Memphis."
-- "Wildfire response crews are staging in the region."
-- "Ceasefire announced; humanitarian and infrastructure flights are increasing."
-- "A major carrier added seasonal service."
-- "Local skydiving operator expects a busy weekend."
+Online mode:
+OpenCareer deterministic world state -> structured narration request -> OpenAI Responses API -> validated social-style posts -> SQLite.
 
-The feed should explain *why* markets and jobs are changing without becoming a wall of raw simulation variables.
+Offline mode:
+OpenCareer deterministic world state -> deterministic template narrator -> SQLite.
 
-## Two-layer architecture
+The feed is narrative only. It cannot create money, jobs, wars, aircraft ownership, qualifications, airspace restrictions, mission completion or employer access.
 
-```text
-External/public sources (optional)
-    -> OnlineSignalCollector
-    -> normalized WorldSignal with source + timestamp + confidence
-    -> deterministic validation/mapping
-    -> authoritative game-world effects
+## Implemented components
 
-Authoritative game-world effects + stored signals
-    -> WorldFeedNarrator (AI optional; deterministic fallback available)
-    -> WorldFeedPost
-    -> SQLite
-    -> WinUI World / Dispatch feed
-```
+### Application
 
-Never reverse this flow. A generated social post cannot create a war, close an airport, move money or complete a mission.
+- `IWorldFeedNarrator` — one narration boundary for AI or offline generation.
+- `WorldFeedNarrationService` — tries the configured AI narrator and immediately falls back to the deterministic narrator on timeout/API/validation failure.
+- `DeterministicWorldFeedNarrator` — no network dependency; the same career seed + timestamp + world facts produces the same posts.
+- `IWorldFeedPostStore` — persistence boundary.
+- `WorldFeedCoordinator` — throttles ordinary refreshes, loads recent posts for continuity, persists new posts and prunes expired posts. Major world transitions may call it with `force: true`.
 
-## Offline mode
+Default normal refresh interval is 30 minutes. That is a policy value, not a telemetry loop.
 
-Offline careers synthesize the feed entirely from OpenCareer's deterministic economy and world events. The same world seed/state produces the same underlying event sequence; prose can use deterministic templates.
+### Infrastructure
 
-Core gameplay must not wait on an internet request.
+- `OpenAiWorldFeedNarrator` calls `POST /v1/responses`.
+- It uses structured output through `text.format.type = json_schema`.
+- The request deliberately includes **no `tools` field** and no web-search configuration.
+- Model name and API key are configuration inputs; neither is owned by Domain.
+- AI is given only normalized OpenCareer facts plus recent stored posts for continuity.
+- Every returned post must reference one to four supplied fact keys. Unknown references reject the response and trigger offline fallback.
+- AI posts are marked `IsAiGenerated=true` with the disclosure: `AI-generated from OpenCareer simulated state; no live web/news collection.`
+- `SqliteWorldFeedPostStore` stores the timeline in SQLite with parameterized SQL and idempotent post upserts.
 
-## Optional OpenAI mode
+The Infrastructure project currently pins `Microsoft.Data.Sqlite 10.0.12`.
 
-For an online-enhanced career, a background application service may use the OpenAI **Responses API** with Web Search to gather recent public context and separately generate concise aviation-world summaries. Current OpenAI documentation describes Web Search as a Responses API tool for current information.
+## AI authority boundary
 
-Rules:
+The model may choose wording and which supplied facts deserve a post. It may not invent authoritative facts.
 
-1. Request only periodically (for example every few hours or on explicit refresh), never per telemetry frame.
-2. Require structured output for extracted signals.
-3. Every live signal needs source provenance, source timestamp when available, fetched-at time and a confidence/validation state.
-4. Persist normalized signals locally before using them.
-5. Deterministic code maps a validated signal into bounded simulation inputs.
-6. GPT may write the public-facing social post from already validated state, but does not choose numeric rewards or access rules.
-7. Cache aggressively. If API/web lookup fails, retain the last validated signals until they expire and fall back to offline feed generation.
-8. User can disable online/world-news features completely.
+The prompt explicitly prohibits:
 
-Potential inexpensive production model choice can be decided later from current API pricing/capability; do not hardcode a model name into Domain.
+- browsing or outside facts,
+- invented current real-world events,
+- invented people or named companies,
+- claims that a real military operation is occurring,
+- rewards, balances, eligibility, ownership or mission-completion decisions.
 
-## Proposed persistence
+The adapter additionally rejects posts that reference fact keys not supplied by OpenCareer.
 
-### WorldSignal
+If the AI request fails, times out, returns invalid JSON, violates the schema mapping, or references an unknown fact, `WorldFeedNarrationService` uses the offline narrator for that refresh.
 
-- `SignalId`
-- `SignalType`
-- `GeographicScope`
-- `ScopeId`
-- `ObservedAt`
-- `FetchedAt`
-- `ExpiresAt`
-- `SourceKind`
-- `SourceUri` or stable source reference
-- `SourcePublisher`
-- `Confidence`
-- `ValidationStatus`
-- structured attributes/payload
+## Persistence and continuity
 
-### WorldFeedPost
+SQLite stores:
 
-- `PostId`
-- `CreatedAt`
-- `ExpiresAt?`
-- `ScopeId?`
-- `PostCategory`
-- `Headline`
-- `Body`
-- `RelatedSignalIds`
-- `RelatedWorldEventIds`
-- `IsAiGenerated`
-- `SourceDisclosure`
+- post ID,
+- creation/expiry timestamps,
+- category,
+- headline/body,
+- scope,
+- related signal IDs,
+- related simulated world-event IDs,
+- AI-generated flag,
+- source disclosure.
 
-Keep historical posts so the player's career develops a readable world timeline.
+The coordinator reads recent posts back into the next narration request so AI can continue a storyline without treating old prose as new world facts.
 
-## Signal categories
+Expired posts are removed from the active timeline. Historical archive/retention beyond active expiry can be added later if the player wants a permanent career newspaper.
 
-Start with low-risk categories that map well to aviation economics:
+## No live collector
 
-- passenger destination trend,
-- cargo/logistics trend,
-- major public event/tourism surge,
-- severe weather/disaster response,
-- airport/service disruption,
-- airline/cargo-operator route/service change,
-- government/public-service need,
-- regional security status.
+There is intentionally no `OnlineSignalCollector`, web-search adapter or social/news scraper in this implementation.
 
-A live geopolitical/security signal requires stronger provenance than a travel trend. Do not infer conflict status from social chatter alone.
+Future real-data features, if ever enabled, must be a separate opt-in subsystem with provenance and deterministic validation. They are not required for the social feed to feel live: the current feed reacts to simulated passenger/cargo pressure, regional security states and world events already generated by OpenCareer.
 
-## Real regions and conflict
+## Composition
 
-OpenCareer may use real geography. For real current conflicts, factual state must come from curated/reliable current sources and be represented as a sourced `RegionalSecurityState`. The game should generate fictional contracts from the operational category (reconnaissance, transport, medevac, logistics, humanitarian relief) rather than claim the player is participating in a specific real operation.
+The app composition root will later provide:
 
-This avoids fabricating military activity while still allowing the world to react to real conditions.
+1. a shared `HttpClient`,
+2. `OpenAiWorldFeedOptions` from secure/local configuration,
+3. `OpenAiWorldFeedNarrator` as the optional primary narrator,
+4. `DeterministicWorldFeedNarrator` as mandatory fallback,
+5. `SqliteWorldFeedPostStore`,
+6. `WorldFeedCoordinator`.
 
-## Passenger trends
+Do not put API keys in source, SQLite, logs or generated posts.
 
-Passenger demand can combine:
+The UI integration is intentionally deferred from this parallel branch so it does not collide with Astra's WinUI/SimConnect work.
 
-- baseline airport/route demand,
-- seasonality,
-- historical BTS/airport activity,
-- major event/tourism signals,
-- player-established route relationships,
-- temporary live trend signals.
+## OpenAI protocol reference
 
-A viral/trending destination should increase demand gradually and decay rather than instantly multiplying every route to that city.
+Current OpenAI Responses API documentation places structured JSON schema output under `text.format`. The adapter parses the raw response's message/output-text item instead of depending on an SDK convenience property.
 
-## Cargo trends
+No OpenAI package is required; the adapter uses `HttpClient` so the dependency surface remains small.
 
-Cargo markets should be commodity-aware. Suggested first categories:
+## Next integration
 
-- express parcels,
-- general freight,
-- mail,
-- perishables,
-- medical supplies,
-- aircraft/AOG parts,
-- industrial/automotive parts,
-- electronics/high-value goods,
-- humanitarian supplies,
-- government/military logistics.
+After this branch is rebased onto Astra's current head:
 
-Each category should have different urgency, aircraft suitability, seasonality, shortage/backlog behavior and pay premiums. Existing `MarketState` demand/capacity/backlog mechanics can drive the underlying economics.
-
-## UI concept
-
-World feed should live beside—not inside—the authoritative job list. A post can link to affected markets/routes/jobs, but the job card must clearly show actual dispatch requirements separately.
-
-Suggested screen:
-
-```text
-WORLD / NETWORK
-
-Trending                   Regional Operations
-----------------------     ----------------------------
-Miami leisure demand ↑     Recovery logistics expanding
-Memphis cargo backlog ↑    Medical supply demand ↑
-Boston business travel ↑   Security status: sourced
-
-Aviation Feed
-------------------------------------------------------
-[Cargo] Express volume rises at MEM
-[Travel] South Florida weekend bookings trending
-[Ops]    Regional recovery flights requested
-[Company] Employer relationship unlocked a preferred route
-```
-
-## Implementation order
-
-1. deterministic `WorldSignal` + `WorldFeedPost` domain records;
-2. SQLite persistence and retention policy;
-3. deterministic offline feed renderer;
-4. connect existing economy/world-event signals;
-5. add passenger/cargo trend signals;
-6. add optional online collector behind an interface;
-7. add OpenAI Responses/Web Search adapter only in Infrastructure;
-8. validate and rate-limit; then expose in WinUI.
-
-Do not add the OpenAI SDK/package to Domain.
+1. add DI/config wiring in the WinUI composition root;
+2. choose a configurable production model;
+3. trigger ordinary refreshes from the application/world clock, not SimConnect telemetry;
+4. force refresh after major simulated event transitions;
+5. add a World / Network feed page;
+6. decide whether expired posts are archived permanently or pruned.

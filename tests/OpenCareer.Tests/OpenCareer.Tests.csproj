@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OpenCareer.Domain/OpenCareer.Domain.csproj" />
+    <ProjectReference Include="../../src/OpenCareer.Application/OpenCareer.Application.csproj" />
+    <ProjectReference Include="../../src/OpenCareer.Infrastructure/OpenCareer.Infrastructure.csproj" />
     <ProjectReference Include="../../src/OpenCareer.SimConnect/OpenCareer.SimConnect.csproj" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/ShellViewModel.cs" Link="ViewModels/ShellViewModel.cs" />
   </ItemGroup>

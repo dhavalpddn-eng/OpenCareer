@@ -7,6 +7,7 @@ on:
     paths:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"
+      - "src/OpenCareer.Infrastructure/**"
       - "src/OpenCareer.SimConnect/**"
       - "tests/OpenCareer.Tests/**"
       - "Directory.Build.props"
@@ -15,6 +16,7 @@ on:
     paths:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"
+      - "src/OpenCareer.Infrastructure/**"
       - "src/OpenCareer.SimConnect/**"
       - "tests/OpenCareer.Tests/**"
       - "Directory.Build.props"
