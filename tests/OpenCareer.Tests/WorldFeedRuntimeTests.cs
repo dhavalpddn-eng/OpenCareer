@@ -21,7 +21,9 @@ public sealed class WorldFeedRuntimeTests
         var first = await narrator.GenerateAsync(request);
         var second = await narrator.GenerateAsync(request);
 
-        Assert.Equal(first, second);
+        Assert.Equal(first.Count, second.Count);
+        for (var i = 0; i < first.Count; i++)
+            AssertPostEquivalent(first[i], second[i]);
         Assert.NotEmpty(first);
         Assert.All(first, post => Assert.False(post.IsAiGenerated));
     }
@@ -120,7 +122,9 @@ public sealed class WorldFeedRuntimeTests
 
             var stored = await store.ReadTimelineAsync(Epoch, "KRME", 20);
             Assert.NotEmpty(stored);
-            Assert.Equal(first.Generation.Posts, stored);
+            Assert.Equal(first.Generation.Posts.Count, stored.Count);
+            for (var i = 0; i < stored.Count; i++)
+                AssertPostEquivalent(first.Generation.Posts[i], stored[i]);
 
             var skipped = await coordinator.RefreshAsync(Request(Epoch.AddMinutes(30)));
             Assert.True(skipped.WasSkipped);
@@ -199,6 +203,25 @@ public sealed class WorldFeedRuntimeTests
             Signals: [signal],
             ActiveEvents: Array.Empty<WorldEventInstance>(),
             MaximumPosts: 4);
+    }
+
+    private static void AssertPostEquivalent(WorldFeedPost expected, WorldFeedPost actual)
+    {
+        Assert.Equal(expected.PostId, actual.PostId);
+        Assert.Equal(expected.CreatedAt, actual.CreatedAt);
+        Assert.Equal(expected.Category, actual.Category);
+        Assert.Equal(expected.Headline, actual.Headline);
+        Assert.Equal(expected.Body, actual.Body);
+        Assert.Equal(expected.ScopeId, actual.ScopeId);
+        Assert.Equal(expected.ExpiresAt, actual.ExpiresAt);
+        Assert.Equal(expected.IsAiGenerated, actual.IsAiGenerated);
+        Assert.Equal(expected.SourceDisclosure, actual.SourceDisclosure);
+        Assert.Equal(
+            expected.RelatedSignalIds ?? Array.Empty<Guid>(),
+            actual.RelatedSignalIds ?? Array.Empty<Guid>());
+        Assert.Equal(
+            expected.RelatedWorldEventIds ?? Array.Empty<string>(),
+            actual.RelatedWorldEventIds ?? Array.Empty<string>());
     }
 
     private static void TryDelete(string path)
