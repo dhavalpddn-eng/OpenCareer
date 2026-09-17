@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Events;
 using OpenCareer.Domain.Simulation;
 
@@ -250,10 +251,12 @@ public static class JobMarketGenerator
                 kind,
                 destination.EstimatedFlightHours,
                 request.EffectiveCareerStanding.Level);
+            var demandAttractiveness = DemandAttractiveness(kind, destination.DemandProfile);
             var weight = distanceWeight
                 * routeWeight
                 * relationshipWeight
                 * destination.MarketAttractiveness
+                * demandAttractiveness
                 * kindDistanceSuitability
                 * durationSuitability;
             if (weight <= 0 || !double.IsFinite(weight))
@@ -270,6 +273,31 @@ public static class JobMarketGenerator
         }
 
         return choices.Count == 0 ? null : ChooseWeighted(choices, random).Value;
+    }
+
+    private static double DemandAttractiveness(ContractKind kind, RouteDemandProfile? demand)
+    {
+        if (demand is null)
+            return 1;
+
+        return kind switch
+        {
+            ContractKind.Passenger or ContractKind.Charter or ContractKind.Evacuation =>
+                demand.PassengerAttractiveness,
+            ContractKind.Cargo =>
+                demand.CargoAttractiveness(),
+            ContractKind.ExpressCargo =>
+                demand.CargoAttractiveness(CargoCommodityCategory.ExpressParcel),
+            ContractKind.AogPartsDelivery =>
+                demand.CargoAttractiveness(CargoCommodityCategory.AircraftAogParts),
+            ContractKind.Medical =>
+                demand.CargoAttractiveness(CargoCommodityCategory.MedicalSupplies),
+            ContractKind.DisasterRelief =>
+                demand.CargoAttractiveness(CargoCommodityCategory.HumanitarianSupplies),
+            ContractKind.MilitaryTransport =>
+                demand.CargoAttractiveness(CargoCommodityCategory.GovernmentMilitaryLogistics),
+            _ => 1
+        };
     }
 
     private static double DistanceSuitability(ContractKind kind, double distanceNm)
