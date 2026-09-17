@@ -41,7 +41,7 @@ MSFS 2024 remains the flight simulator. OpenCareer owns the career, economy, emp
 
 ## Development status
 
-Bootstrap in progress. The first milestone is a deterministic headless simulation core plus a telemetry abstraction so the economy and mission engine can be tested without launching MSFS.
+The deterministic simulation foundation is implemented and tested. The next milestone is a WinUI 3 application that connects/reconnects through SimConnect, displays normalized telemetry, tracks a flight and saves/recovers it locally. Jobs and economic expansion follow that integration foundation.
 
 
 ## Audit follow-up and development checklist
@@ -51,6 +51,8 @@ checkpoint replay, contract dispatch guards and executable regression checks. It
 a playable application: job generation, a persistent money ledger, aircraft ownership,
 inflation, WinUI 3 and SimConnect integration remain unfinished.
 
+- [Canonical project instructions](AGENTS.md)
+- [Instruction alignment review and foundation acceptance](docs/instruction-alignment.md)
 - [Current simulation rules and verification](docs/simulation-model.md)
 - [Remaining work, next milestone and gameplay decisions](docs/development-backlog.md)
 
