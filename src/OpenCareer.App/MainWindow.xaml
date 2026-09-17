@@ -1,0 +1,77 @@
+<Window
+    x:Class="OpenCareer.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="OpenCareer">
+
+    <Grid Background="{StaticResource AppBackgroundBrush}">
+        <NavigationView
+            x:Name="NavView"
+            PaneDisplayMode="Left"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            IsPaneToggleButtonVisible="True"
+            SelectionChanged="NavView_SelectionChanged"
+            Background="{StaticResource AppBackgroundBrush}">
+
+            <NavigationView.PaneHeader>
+                <StackPanel Margin="8,14,8,18" Spacing="2">
+                    <TextBlock Text="OpenCareer" FontSize="24" FontWeight="SemiBold" />
+                    <TextBlock Text="MSFS 2024 Companion" Foreground="{StaticResource AppMutedTextBrush}" FontSize="12" />
+                </StackPanel>
+            </NavigationView.PaneHeader>
+
+            <NavigationView.Header>
+                <Grid Margin="0,4,16,4" ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel>
+                        <TextBlock Text="Operations" FontSize="22" FontWeight="SemiBold" />
+                        <TextBlock Text="Career, dispatch and live flight management" Foreground="{StaticResource AppMutedTextBrush}" />
+                    </StackPanel>
+
+                    <Border Grid.Column="1"
+                            Background="{StaticResource AppSurfaceBrush}"
+                            BorderBrush="{StaticResource AppBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="14,8">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Ellipse Width="9" Height="9" Fill="{StaticResource AppAccentBrush}" />
+                            <StackPanel>
+                                <TextBlock Text="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}" FontWeight="SemiBold" />
+                                <TextBlock Text="{x:Bind ViewModel.AircraftStatus, Mode=OneWay}" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </NavigationView.Header>
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem x:Name="DashboardItem" Content="Dashboard" Tag="dashboard" />
+                <NavigationViewItem Content="Dispatch" Tag="dispatch" />
+                <NavigationViewItem Content="Jobs" Tag="jobs" />
+                <NavigationViewItem Content="Current Flight" Tag="current-flight" />
+                <NavigationViewItem Content="Map / World" Tag="world" />
+                <NavigationViewItem Content="Aircraft" Tag="aircraft" />
+                <NavigationViewItem Content="Hangar / Bases" Tag="bases" />
+                <NavigationViewItem Content="Maintenance" Tag="maintenance" />
+                <NavigationViewItem Content="Company" Tag="company" />
+                <NavigationViewItem Content="Finances" Tag="finances" />
+                <NavigationViewItem Content="Markets" Tag="markets" />
+                <NavigationViewItem Content="Military / Government" Tag="military" />
+                <NavigationViewItem Content="Logbook" Tag="logbook" />
+                <NavigationViewItem Content="Career" Tag="career" />
+                <NavigationViewItem Content="Settings" Tag="settings" />
+            </NavigationView.MenuItems>
+
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
+</Window>
