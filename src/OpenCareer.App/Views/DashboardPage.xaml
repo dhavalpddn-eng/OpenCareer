@@ -1,0 +1,84 @@
+<Page
+    x:Class="OpenCareer.App.Views.DashboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel Margin="32" Spacing="20">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Dashboard" FontSize="30" FontWeight="SemiBold" />
+                <TextBlock Text="Your career starts here. OpenCareer remains usable even when MSFS is not running."
+                           Foreground="{StaticResource AppMutedTextBrush}" />
+            </StackPanel>
+
+            <Border Background="{StaticResource AppSurfaceBrush}"
+                    BorderBrush="{StaticResource AppBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="28">
+                <Grid ColumnSpacing="24">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="{Binding ConnectionStatus}" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding ConnectionDetail}"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="700" />
+                        <TextBlock Text="The SimConnect service will be added behind an isolated integration boundary in the next chapter step."
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="700" />
+                    </StackPanel>
+
+                    <Border Grid.Column="1"
+                            Background="{StaticResource AppSurfaceAltBrush}"
+                            CornerRadius="12"
+                            Padding="18,12"
+                            VerticalAlignment="Center">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="HOME BASE" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
+                            <TextBlock Text="KRME" FontSize="24" FontWeight="SemiBold" />
+                            <TextBlock Text="Griffiss International" Foreground="{StaticResource AppMutedTextBrush}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Background="{StaticResource AppSurfaceBrush}" BorderBrush="{StaticResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="20">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="CAREER STANDING" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
+                        <TextBlock Text="New Pilot" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Qualifications, reputation and employer trust will drive access." Foreground="{StaticResource AppMutedTextBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource AppSurfaceBrush}" BorderBrush="{StaticResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="20">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="CURRENT AIRCRAFT" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
+                        <TextBlock Text="{Binding AircraftStatus}" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Employer, rented, assigned and owned aircraft stay distinct." Foreground="{StaticResource AppMutedTextBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Background="{StaticResource AppSurfaceBrush}" BorderBrush="{StaticResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="20">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="NEXT STEP" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
+                        <TextBlock Text="Connect to MSFS" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Live telemetry and flight-state detection come next." Foreground="{StaticResource AppMutedTextBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
