@@ -2,19 +2,29 @@ namespace OpenCareer.Domain.Economy;
 
 public sealed record MarketTickContext(
     double ElapsedDays = 1.0,
-    double DemandShock = 1.0,
-    double CapacityShock = 1.0);
+    double DemandMultiplier = 1.0,
+    double AvailableCapacityMultiplier = 1.0,
+    double OperatingCostMultiplier = 1.0);
 
 public sealed record MarketTickResult(
     MarketState State,
-    double ServedDemand,
-    double Utilization,
-    double Margin,
-    double UnservedDemand);
+    double FreshDemandVolume,
+    double ServedDemandVolume,
+    double AverageUtilization,
+    double OperatingMarkup,
+    decimal EffectiveUnitCost,
+    double BacklogUnits);
 
 public static class MarketTickEngine
 {
+    private const double Epsilon = 1e-9;
+
     public static MarketTickResult Tick(
+        MarketState state,
+        MarketParameters parameters,
+        MarketTickContext context) => Advance(state, parameters, context);
+
+    public static MarketTickResult Advance(
         MarketState state,
         MarketParameters parameters,
         MarketTickContext context)
@@ -25,77 +35,154 @@ public static class MarketTickEngine
 
         Validate(state, parameters, context);
 
-        var basePrice = Math.Max(0.01, (double)state.BaseUnitCost);
-        var currentPrice = Math.Max(0.01, (double)state.CurrentUnitPrice);
-        var relativePrice = currentPrice / basePrice;
+        var remainingDays = context.ElapsedDays;
+        var current = state;
+        var freshDemandVolume = 0.0;
+        var servedDemandVolume = 0.0;
+        var utilizationDaySum = 0.0;
+        var finalMarkup = 0.0;
+        var finalEffectiveCost = (double)state.ReferenceUnitCost * context.OperatingCostMultiplier;
 
+        while (remainingDays > Epsilon)
+        {
+            var stepDays = Math.Min(parameters.MaximumStepDays, remainingDays);
+            var step = TickStep(
+                current,
+                parameters,
+                context with { ElapsedDays = stepDays });
+
+            current = step.State;
+            freshDemandVolume += step.FreshDemandVolume;
+            servedDemandVolume += step.ServedDemandVolume;
+            utilizationDaySum += step.Utilization * stepDays;
+            finalMarkup = step.OperatingMarkup;
+            finalEffectiveCost = step.EffectiveUnitCost;
+            remainingDays -= stepDays;
+        }
+
+        return new MarketTickResult(
+            current,
+            freshDemandVolume,
+            servedDemandVolume,
+            utilizationDaySum / context.ElapsedDays,
+            finalMarkup,
+            decimal.Round((decimal)finalEffectiveCost, 4),
+            current.BacklogUnits);
+    }
+
+    private static StepResult TickStep(
+        MarketState state,
+        MarketParameters parameters,
+        MarketTickContext context)
+    {
+        var dt = context.ElapsedDays;
+        var referencePrice = (double)state.ReferenceUnitPrice;
+        var currentPrice = (double)state.CurrentUnitPrice;
+        var effectiveUnitCost = (double)state.ReferenceUnitCost * context.OperatingCostMultiplier;
+
+        var relativePrice = currentPrice / referencePrice;
         var priceDemandFactor = Math.Exp(
             -parameters.PriceElasticity * (relativePrice - 1.0));
 
-        var freshDemand = state.BaselineDemand
+        var freshDemandRate = state.BaselineDemandPerDay
             * state.SeasonalFactor
             * state.RegionalEconomicFactor
-            * state.EventFactor
-            * context.DemandShock
+            * context.DemandMultiplier
             * priceDemandFactor;
 
-        freshDemand = Math.Max(0.0, freshDemand);
+        freshDemandRate = Math.Max(0.0, freshDemandRate);
+        var freshDemandVolume = freshDemandRate * dt;
 
-        var availableCapacity = Math.Max(
-            0.001,
-            state.Capacity * context.CapacityShock);
+        var survivingBacklog = state.BacklogUnits
+            * Math.Pow(parameters.BacklogRetentionPerDay, dt);
 
-        var totalDemand = freshDemand + Math.Max(0.0, state.Backlog);
-        var served = Math.Min(totalDemand, availableCapacity);
-        var unserved = Math.Max(0.0, totalDemand - served);
-        var utilization = Math.Clamp(served / availableCapacity, 0.0, 1.0);
+        var effectiveCapacityRate = state.StructuralCapacityPerDay
+            * context.AvailableCapacityMultiplier;
+        var effectiveCapacityVolume = Math.Max(0.0, effectiveCapacityRate * dt);
 
-        var nextBacklog = parameters.BacklogCarryover * unserved;
+        var totalDemandVolume = freshDemandVolume + survivingBacklog;
+        var servedVolume = Math.Min(totalDemandVolume, effectiveCapacityVolume);
+        var unservedVolume = Math.Max(0.0, totalDemandVolume - servedVolume);
 
+        var utilization = effectiveCapacityVolume > Epsilon
+            ? Math.Clamp(servedVolume / effectiveCapacityVolume, 0.0, 1.0)
+            : 0.0;
+
+        var scarcityCapacityRate = Math.Max(effectiveCapacityRate, 0.001);
+        var backlogRateEquivalent = survivingBacklog / Math.Max(dt, Epsilon);
         var scarcityRatio = (
-            freshDemand + parameters.BacklogPriceWeight * state.Backlog)
-            / availableCapacity;
+            freshDemandRate + parameters.BacklogPriceWeight * backlogRateEquivalent)
+            / scarcityCapacityRate;
 
         var scarcityPressure = scarcityRatio - parameters.TargetUtilization;
-        var targetPriceFactor = Math.Clamp(
-            1.0 + parameters.TargetMargin + parameters.BacklogPriceWeight * scarcityPressure,
-            0.50,
-            5.00);
+        var targetPriceToCostRatio = Math.Clamp(
+            1.0
+            + parameters.TargetMarkup
+            + parameters.BacklogPriceWeight * scarcityPressure,
+            parameters.MinimumPriceToCostRatio,
+            parameters.MaximumPriceToCostRatio);
 
-        var targetPrice = basePrice * targetPriceFactor;
-        var nextPrice = parameters.PriceSmoothing * currentPrice
-            + (1.0 - parameters.PriceSmoothing) * targetPrice;
+        var targetPrice = effectiveUnitCost * targetPriceToCostRatio;
+        var priceRetention = Math.Pow(0.5, dt / parameters.PriceHalfLifeDays);
+        var nextPrice = priceRetention * currentPrice
+            + (1.0 - priceRetention) * targetPrice;
 
-        var margin = (nextPrice - basePrice) / basePrice;
-        var monthFraction = context.ElapsedDays / 30.0;
-        var capacitySignal =
-            (utilization - parameters.TargetUtilization)
-            + 0.5 * (margin - parameters.TargetMargin);
+        var operatingMarkup = (nextPrice - effectiveUnitCost) / effectiveUnitCost;
 
-        var capacityChangeFraction = Math.Clamp(
-            parameters.CapacityResponse * monthFraction * capacitySignal,
-            -0.15,
-            0.15);
+        // Permanent capacity reacts to normal demand and sustained economics, not directly
+        // to a temporary airport/airspace availability multiplier.
+        var structuralCapacityVolume = state.StructuralCapacityPerDay * dt;
+        var investmentUtilization = structuralCapacityVolume > Epsilon
+            ? Math.Clamp(
+                Math.Min(freshDemandVolume, structuralCapacityVolume)
+                / structuralCapacityVolume,
+                0.0,
+                1.0)
+            : 0.0;
 
-        var nextCapacity = Math.Max(
+        var rawInvestmentSignal =
+            (investmentUtilization - parameters.TargetUtilization)
+            + 0.5 * (operatingMarkup - parameters.TargetMarkup);
+
+        var investmentSignalRetention = Math.Pow(
+            0.5,
+            dt / parameters.CapacityInvestmentSignalHalfLifeDays);
+
+        var nextInvestmentSignal =
+            investmentSignalRetention * state.CapacityInvestmentSignal
+            + (1.0 - investmentSignalRetention) * rawInvestmentSignal;
+
+        var capacityGrowthExponent =
+            (parameters.CapacityResponsePer30Days / 30.0)
+            * nextInvestmentSignal
+            * dt;
+
+        capacityGrowthExponent = Math.Clamp(
+            capacityGrowthExponent,
+            -parameters.MaximumDailyCapacityChangeFraction * dt,
+            parameters.MaximumDailyCapacityChangeFraction * dt);
+
+        var nextStructuralCapacity = Math.Max(
             0.001,
-            availableCapacity * (1.0 + capacityChangeFraction));
+            state.StructuralCapacityPerDay * Math.Exp(capacityGrowthExponent));
 
         var nextState = state with
         {
             CurrentUnitPrice = decimal.Round((decimal)nextPrice, 4),
-            CurrentDemand = freshDemand,
-            Capacity = nextCapacity,
-            Backlog = nextBacklog,
-            UpdatedAt = state.UpdatedAt.AddDays(context.ElapsedDays)
+            CurrentDemandPerDay = freshDemandRate,
+            StructuralCapacityPerDay = nextStructuralCapacity,
+            BacklogUnits = unservedVolume,
+            CapacityInvestmentSignal = nextInvestmentSignal,
+            UpdatedAt = state.UpdatedAt.AddDays(dt)
         };
 
-        return new MarketTickResult(
+        return new StepResult(
             nextState,
-            served,
+            freshDemandVolume,
+            servedVolume,
             utilization,
-            margin,
-            unserved);
+            operatingMarkup,
+            effectiveUnitCost);
     }
 
     private static void Validate(
@@ -108,43 +195,66 @@ public static class MarketTickEngine
             throw new ArgumentException("MarketId is required.", nameof(state));
         }
 
-        if (state.BaseUnitCost <= 0 || state.CurrentUnitPrice <= 0)
+        if (state.ReferenceUnitCost <= 0
+            || state.ReferenceUnitPrice <= 0
+            || state.CurrentUnitPrice <= 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(state),
-                "Market prices and costs must be positive.");
+                "Reference cost, reference price, and current price must be positive.");
         }
 
-        if (state.BaselineDemand < 0 || state.Capacity <= 0 || state.Backlog < 0)
+        if (!double.IsFinite(state.BaselineDemandPerDay)
+            || !double.IsFinite(state.CurrentDemandPerDay)
+            || !double.IsFinite(state.StructuralCapacityPerDay)
+            || !double.IsFinite(state.BacklogUnits)
+            || !double.IsFinite(state.SeasonalFactor)
+            || !double.IsFinite(state.RegionalEconomicFactor)
+            || !double.IsFinite(state.CapacityInvestmentSignal)
+            || state.BaselineDemandPerDay < 0
+            || state.CurrentDemandPerDay < 0
+            || state.StructuralCapacityPerDay <= 0
+            || state.BacklogUnits < 0
+            || state.SeasonalFactor <= 0
+            || state.RegionalEconomicFactor <= 0)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(state),
-                "Demand/backlog cannot be negative and capacity must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(state), "Market state is invalid.");
         }
 
-        if (state.SeasonalFactor <= 0
-            || state.RegionalEconomicFactor <= 0
-            || state.EventFactor <= 0
-            || context.DemandShock <= 0
-            || context.CapacityShock <= 0
-            || context.ElapsedDays <= 0)
+        if (!double.IsFinite(context.ElapsedDays)
+            || !double.IsFinite(context.DemandMultiplier)
+            || !double.IsFinite(context.AvailableCapacityMultiplier)
+            || !double.IsFinite(context.OperatingCostMultiplier)
+            || context.ElapsedDays <= 0
+            || context.DemandMultiplier < 0
+            || context.AvailableCapacityMultiplier < 0
+            || context.OperatingCostMultiplier <= 0)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(context),
-                "Economic factors and elapsed time must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(context), "Market tick context is invalid.");
         }
 
         if (parameters.PriceElasticity < 0
-            || parameters.BacklogCarryover is < 0 or > 1
-            || parameters.PriceSmoothing is < 0 or > 1
+            || parameters.BacklogRetentionPerDay is < 0 or > 1
+            || parameters.PriceHalfLifeDays <= 0
+            || parameters.CapacityInvestmentSignalHalfLifeDays <= 0
             || parameters.BacklogPriceWeight < 0
-            || parameters.CapacityResponse < 0
+            || parameters.CapacityResponsePer30Days < 0
             || parameters.TargetUtilization is <= 0 or > 1
-            || parameters.TargetMargin < 0)
+            || parameters.TargetMarkup < 0
+            || parameters.MinimumPriceToCostRatio <= 0
+            || parameters.MaximumPriceToCostRatio <= parameters.MinimumPriceToCostRatio
+            || parameters.MaximumDailyCapacityChangeFraction <= 0
+            || parameters.MaximumStepDays is <= 0 or > 1)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(parameters),
-                "Market parameters are outside valid ranges.");
+            throw new ArgumentOutOfRangeException(nameof(parameters), "Market parameters are outside valid ranges.");
         }
     }
+
+    private sealed record StepResult(
+        MarketState State,
+        double FreshDemandVolume,
+        double ServedDemandVolume,
+        double Utilization,
+        double OperatingMarkup,
+        double EffectiveUnitCost);
 }

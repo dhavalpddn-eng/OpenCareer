@@ -23,13 +23,28 @@ public enum AircraftCapability
     Tanker = 1 << 16,
     Surveillance = 1 << 17,
     StrategicTransport = 1 << 18,
-    CarrierCapable = 1 << 19
+    CarrierCapable = 1 << 19,
+    BannerTow = 1 << 20,
+    Trainer = 1 << 21,
+    MaritimePatrol = 1 << 22,
+    AerialRefuelingReceiver = 1 << 23
+}
+
+[Flags]
+public enum AircraftAccess
+{
+    None = 0,
+    Civilian = 1 << 0,
+    Government = 1 << 1,
+    Military = 1 << 2,
+    Any = Civilian | Government | Military
 }
 
 public sealed record AircraftCapabilityProfile(
     string AircraftId,
     string DisplayName,
     AircraftCapability Capabilities,
+    AircraftAccess Access,
     double MaximumPayloadPounds,
     double MaximumRangeNauticalMiles,
     double TypicalCruiseKnots,
@@ -37,8 +52,7 @@ public sealed record AircraftCapabilityProfile(
     int EngineCount,
     bool IfrCapable,
     bool Pressurized,
-    bool RetractableGear,
-    bool IsGovernmentOnly = false)
+    bool RetractableGear)
 {
     public bool Has(AircraftCapability capability) =>
         (Capabilities & capability) == capability;
@@ -54,16 +68,16 @@ public sealed record AircraftCapabilityProfile(
             && (!requirements.RequiresIfr || IfrCapable)
             && (!requirements.RequiresPressurization || Pressurized)
             && Has(requirements.RequiredCapabilities)
-            && (requirements.AllowGovernmentOnlyAircraft || !IsGovernmentOnly);
+            && (Access & requirements.AllowedAccess) != 0;
     }
 }
 
 public sealed record AircraftMissionRequirements(
     AircraftCapability RequiredCapabilities = AircraftCapability.None,
+    AircraftAccess AllowedAccess = AircraftAccess.Civilian,
     double MinimumPayloadPounds = 0,
     double MinimumRangeNauticalMiles = 0,
     double MinimumCruiseKnots = 0,
     int MinimumSeats = 1,
     bool RequiresIfr = false,
-    bool RequiresPressurization = false,
-    bool AllowGovernmentOnlyAircraft = false);
+    bool RequiresPressurization = false);
