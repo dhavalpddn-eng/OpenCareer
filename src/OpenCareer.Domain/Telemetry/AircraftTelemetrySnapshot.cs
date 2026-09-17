@@ -1,0 +1,24 @@
+namespace OpenCareer.Domain.Telemetry;
+
+public sealed record AircraftTelemetrySnapshot(
+    DateTimeOffset Timestamp,
+    double LatitudeDegrees,
+    double LongitudeDegrees,
+    double AltitudeMslFeet,
+    double AltitudeAglFeet,
+    double IndicatedAirspeedKnots,
+    double GroundSpeedKnots,
+    double VerticalSpeedFeetPerMinute,
+    double HeadingDegrees,
+    double PitchDegrees,
+    double BankDegrees,
+    double NormalAccelerationG,
+    bool OnGround,
+    bool ParkingBrakeSet,
+    int EnginesRunning,
+    double FuelTotalPounds,
+    double PayloadPounds,
+    double FlapsPositionPercent,
+    bool GearDown,
+    bool Paused,
+    bool SlewActive);
