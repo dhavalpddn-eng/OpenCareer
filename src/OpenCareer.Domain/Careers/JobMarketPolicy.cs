@@ -73,7 +73,7 @@ public sealed record JobMarketPolicy(
         RelationshipBoost: 1.10,
         GovernmentTrackBoost: 1.35,
         MilitaryTrackBoost: 1.80,
-        UasSpecialtyBoost: 1.60,
+        UasSpecialtyBoost: 2.75,
         CivilianEmploymentShare: 0.60,
         IndependentContractShare: 0.25,
         CompanyContractShare: 0.15,
