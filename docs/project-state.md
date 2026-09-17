@@ -1,80 +1,76 @@
 # OpenCareer project state
 
-Updated: 2026-09-17. Compact handoff for a fresh chat; detailed rules remain in AGENTS.md.
+Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
-- Repository: `dhavalpddn-eng/OpenCareer`.
-- Working branch: `feature/m1-simulation-core`; draft PR #2. Keep main stable.
-- Latest implementation commit: `79f1072d6a9b7a111f03899ea104e2086c9b7f2d` (dealer stock and offer-consistency validation). This handoff is a later documentation-only change.
-- Read AGENTS.md and this file first, then only source/docs needed for the current task. Retrieve earlier conversations only if a necessary decision is missing.
-- Verify current remote branch head before editing; other chats may change it. Do not overwrite their work.
-- Update this handoff after substantive work: implementation commit, verification, limitations and next task. Keep it short; replace stale status instead of appending a transcript.
+- Repo: `dhavalpddn-eng/OpenCareer`
+- Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
+- Chapter 2 is in progress: real WinUI 3 shell now exists under `src/OpenCareer.App`.
+- Windows UI build workflow: `.github/workflows/winui-build.yml`.
+- UI target/spec: `docs/ui-concept.md`; refined lightweight preview: `docs/assets/opencareer-dashboard-concept-v2.svg`.
+- Verify remote branch head before edits because other chats may change it.
 
 ## Fixed direction
 
-Single-player MSFS 2024 companion; offline core; C#/.NET 10; Windows x64; WinUI 3/Windows App SDK; isolated SimConnect adapter; SQLite. Domain rules stay independent of simulator/UI. No aircraft whitelist or XP grind: career standing comes from qualifications, reliability, reputation, relationships and finances. User permits focused implementation/fixes on the feature branch; no main merge is implied.
+Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI 3/Windows App SDK, isolated SimConnect boundary, SQLite, deterministic/testable domain. No aircraft whitelist. AI is optional and never authoritative for money, ownership, mission completion or critical state.
 
-## Confirmed gameplay decisions
+## Confirmed gameplay
 
-- First live test: F-22 at Griffiss International (KRME). Exact installed add-on identity/performance still unverified. Military assignment is separate from civilian ownership.
-- First ownership target: roughly 50–80 real flying hours, either buy a small aircraft outright or finance a larger one according to career standing and affordability. No forced hour unlock.
-- Sessions: mostly 1–3 hours, supported up to six; interruption recovery required.
-- Home airport and geographic connections matter. Jobs/travel can expose new markets; storage and expansion must be local economic resources, with no teleporting.
-- Bankruptcy should follow sustained bad decisions; employee work remains a recovery path.
-- Mostly automatic management, optional modest manual-ground rewards.
-- Military-heavy airports should have substantially more military work while public airports retain civilian jobs. KRME has civil/government/UAS and defense-support context; do not invent a resident fighter wing or actual advertised military sorties.
+- First live test hub: **KRME Griffiss International**; mixed civilian/government/defense/UAS context. Do not invent a resident fighter wing or real-world missions that are not documented.
+- First owned used light aircraft should become reasonably attainable around **50–80 real flying hours** through actual savings/financing, not an hour unlock.
+- Typical sessions 1–3 hours; support up to ~6 and recover interrupted sessions where technically possible.
+- Home airport, local route connections, relationships, hangar/storage and additional bases matter; no teleporting the company around the map.
+- Bankruptcy is possible but should usually require sustained bad decisions; employee work remains a recovery path.
+- Management is mostly automatic. Eligible manual ground procedures may provide modest bounded rewards.
+- Military-heavy airports produce much more military/government work while retaining appropriate civilian work.
+- Military/rented/employer/assigned aircraft are distinct from owned aircraft.
+- **Levels may be added later as meaningful meta-progression.** They may summarize experience or unlock convenience/prestige, but never bypass licenses/ratings, reputation, military authorization, aircraft capability, affordability or dispatch rules.
 
-## Implemented and verified
+## Implemented domain foundation
 
-Projects: `src/OpenCareer.Domain`, `src/OpenCareer.SimLab`, `tests/OpenCareer.Tests`.
+- Deterministic economy/world events, replay/checkpoints, contract lifecycle/dispatch guards.
+- Location/home-base connection rules and travel-history guards.
+- Protected-absence policy, session preferences, bankruptcy stages and bounded manual-ground reward quotes.
+- Career-derived credit model, fictional lenders, affordability/debt-service checks.
+- Fictional aircraft dealers, seeded offers/discounts, stock validation and cash/finance eligibility.
+- Last verified domain baseline: **35 xUnit tests** plus **29 deterministic SimLab scenarios** after dealer-validation correction.
 
-- Deterministic economy/world events, scope handling, checkpoint replay, contract transitions and dispatch guards.
-- Home/current location separation, local job guards, completed-travel connection history and replay protection.
-- Protected absence default, session-duration preferences, bankruptcy eligibility stages, bounded manual-reward quotes.
-- Career-derived credit score; three fictional lenders with rate, collateral, income, debt-service, deposit and reserve checks.
-- Three fictional dealer profiles with new/used filters, seeded daily discounts, cash eligibility and financing quote composition.
-- Verification baseline: 34 xUnit tests and 29 SimLab scenarios passed locally. A subsequent dealer-validation correction passes 35 xUnit tests. [GitHub CI passed](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35244805482).
+## Chapter 2 shell now present
 
-Commands from repository root:
-```sh
-dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release
-dotnet run --project src/OpenCareer.SimLab/OpenCareer.SimLab.csproj --configuration Release
-```
+`src/OpenCareer.App` contains:
 
-## Provisional rules and material limits
+- unpackaged .NET 10 WinUI 3 project pinned to `Microsoft.WindowsAppSDK 2.4.0`,
+- application resources and DI/logging startup,
+- `NavigationView` shell,
+- observable simulator connection-state ViewModel,
+- disconnected Dashboard with KRME home-base placeholder,
+- empty Current Flight view,
+- placeholders for later sections,
+- Windows GitHub Actions build workflow.
 
-- Protected absence was chosen provisionally because the user was undecided: world advances; personal bills pause. Staff alone must not enable uncontrolled offline debt. Passive income and personal deadline integration remain unfinished.
-- Ownership calibration: fictional $60,000 small aircraft + $4,000 reserve, or $250,000 larger aircraft with 20% deposit + $14,000 reserve; $1,000 net savings/hour gives 64 hours for either. Actual wages/markets are not yet balanced to this target.
-- Loan/dealer outputs are quotes, not funded loans or purchases. Career input aggregation, inventory/issued-offer persistence, atomic settlement, repayment scheduling and UI remain open. Preserve issued discounts; never trust client-supplied scores/prices/ownership flags.
-- Manual rewards are quotes only; independent evidence and once-per-flight ledger settlement remain open.
-- Location-aware wrappers exist; future orchestration must use them. Aircraft location, employer transfers, storage inventory/purchase and relocation are unfinished.
-- Serialization tests are not crash-safe SQLite saves or MSFS in-flight restoration.
-- No playable Windows application, SimConnect integration, flight detector, persistent flight session, installed-aircraft registry, dispatch planner or market job generator yet. No live MSFS verification.
+The shell currently has **no SimConnect implementation**; `Waiting for MSFS 2024` is intentional. A passing Windows CI build proves compilation only, not live MSFS behavior.
 
-## Chapter workflow
+## Material limits
 
-Follow [development workflow](development-workflow.md) for chapter order and exit gates. Chapter 1 handoff is established; Chapter 2 (Windows application shell) is next. Existing later-chapter domain rules do not imply those chapters are playable or complete.
+No live SimConnect verification, telemetry detector, durable SQLite flight recovery, installed-aircraft registry, dispatch/runway planner or market-driven job generator yet. Loan/dealer/manual-ground outputs remain quotes until authoritative persistence and one-time settlement exist. Ownership balance numbers are provisional until real job income is wired and playtested.
 
-## Next bounded task
+## Next bounded work
 
-Build the WinUI 3 application shell with connection-status and empty Current Flight views. It must launch without MSFS and show Waiting/Disconnected. Keep domain isolated; introduce application-level DI/logging only where needed. Verify build on Windows; do not claim a Linux domain build validates WinUI or live SimConnect.
+1. Make Windows CI green and fix any WinUI compile/runtime-shell issues.
+2. Add isolated `ISimulatorConnection` / SimConnect connection + safe reconnect.
+3. Normalize first telemetry fields.
+4. Build flight-state detection and recoverable FlightSession persistence.
+5. Then connect registry/runway feasibility/jobs/economy settlement.
 
-Then: isolated SimConnect connection/reconnect boundary → normalized telemetry → robust flight detection → versioned SQLite session save/recovery → registry and runway feasibility → jobs and atomic mission/economy settlement. Do not expand finance complexity before this playable foundation works unless explicitly requested.
+Do **not** expand finance complexity before the playable flight foundation unless explicitly requested.
 
-## Detail references
+## Detail only when needed
 
-- [Backlog](development-backlog.md): implementation order and outstanding work.
-- [Career decisions](career-foundation-decisions.md): accepted answers, provisional policies and airport sources.
-- [Credit and dealers](credit-and-dealers.md): scoring, lender/dealer tuning, transaction boundaries.
-- [SDK strategy](msfs-sdk-strategy.md): verified SDK direction and integration limitations.
-- [Simulation model](simulation-model.md): deterministic invariants.
-- [Instruction alignment](instruction-alignment.md): earlier architecture review; historical status, not current implementation inventory.
-
-## Visual reference
-
-[UI concept and preview](ui-concept.md) — optional reading for UI/design tasks only. Keep the SVG/image out of routine context. Concept uses sample data; no implemented-screen claim.
-
-## Latest review
-
-[Current review](current-review.md): fresh source/test verification, dealer consistency fix, image-authentication blocker and seven unanswered design questions. Chapter 2 remains next. Read the review only when those details are relevant.
+- `docs/ui-concept.md` — UI direction and level policy.
+- `docs/career-foundation-decisions.md` — accepted gameplay/base decisions.
+- `docs/credit-and-dealers.md` — finance/dealer model.
+- `docs/msfs-sdk-strategy.md` — verified SDK boundaries.
+- `docs/simulation-model.md` — deterministic simulation invariants.
+- `docs/development-workflow.md` — chapter order/exit gates.
+- `docs/current-review.md` — latest review findings before Chapter 2.
