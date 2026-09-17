@@ -1,21 +1,54 @@
-# Simulator connection boundary
+# Simulator connection and first telemetry boundary
 
-Scope: connection/reconnect only. No aircraft telemetry, flight detection, mission completion or save mutation.
+Scope: resilient SimConnect connection/reconnect plus first normalized user-aircraft telemetry. No flight-state detector, mission completion or save mutation.
 
 ## Structure and behavior
 
-- `OpenCareer.Application/Simulator` owns `ISimulatorConnection` and immutable status/identity records. It has no WinUI, native SDK or database dependency.
-- `OpenCareer.SimConnect` owns the native ABI and a single dedicated worker. Open, dispatch, system-state requests and close all run on that worker. Start is nonblocking/idempotent; Stop/Dispose await cleanup. A stopped instance may restart until disposed.
-- Open success creates a handle; **only `SIMCONNECT_RECV_OPEN` confirms Connected**. Missing acknowledgement expires after 10 seconds. Duplicate acknowledgements do not create sessions.
-- Quit, transport failure, protocol errors and an unresponsive connection close the current handle before another opens. Identity clears as soon as the status leaves Connected.
+- `OpenCareer.Application/Simulator` owns `ISimulatorConnection`, `ISimulatorTelemetrySource` and immutable status/identity boundaries. It contains no WinUI, native SDK or database code.
+- `OpenCareer.SimConnect` owns the native ABI and a single dedicated worker. Open, data-definition setup, subscriptions, dispatch, system-state requests and close all run on that worker. Start is nonblocking/idempotent; Stop/Dispose await cleanup. A stopped instance may restart until disposed.
+- Open success creates a handle; **only `SIMCONNECT_RECV_OPEN` plus successful telemetry setup confirms Connected**. Missing acknowledgement expires after 10 seconds. Duplicate acknowledgements do not create sessions.
+- Quit, transport failure, protocol errors and an unresponsive connection close the current handle before another opens. Identity and telemetry clear when the current simulator session ends.
 - Automatic retries back off 1, 2, 4, 8, then 15 seconds maximum. Missing/wrong runtime and version mismatch wait 30 seconds. Cancellation interrupts the waits. Unexpected implementation errors stop the worker with a Faulted status.
-- A Windows event wakes dispatch early; a 250 ms fallback processes messages. An empty generic `E_FAIL` is treated conservatively, not as proof that the simulator exited. A `RequestSystemState("Sim")` every five seconds checks liveness; its matching request ID must respond within 30 seconds. State 0 (simulator menus) is a valid response. This is not a flight-state detector. No frame-rate subscription or network service is used.
-- The native callback validates message lengths and contains managed exceptions. It never calls UI/domain code. Native resources are closed on their owning worker before the event handle is disposed.
-- WinUI reads immutable snapshots on its own 250 ms dispatcher timer; unchanged snapshots generate no UI notifications. Closing the window awaits asynchronous service disposal. It never runs SimConnect work on the UI thread.
+- A Windows event wakes dispatch early; a 250 ms fallback processes messages. An empty generic `E_FAIL` is treated conservatively, not as proof that the simulator exited. A `RequestSystemState("Sim")` every five seconds checks liveness; its matching request ID must respond within 30 seconds. State 0 (simulator menus) is a valid response. This is not a flight-state detector.
+- The native callback validates message lengths and copies the numeric `SIMCONNECT_RECV_SIMOBJECT_DATA` payload before returning. Managed exceptions never cross the unmanaged callback boundary. It never calls UI/domain code.
+- WinUI reads immutable snapshots on its own 250 ms dispatcher timer; unchanged snapshots generate no UI notifications. Closing the window awaits asynchronous service disposal. SimConnect never runs on the UI thread.
+
+## First telemetry subscription
+
+After the OPEN acknowledgement the same SimConnect worker:
+
+1. adds a single numeric data definition,
+2. subscribes to the `Pause_EX1` system event,
+3. requests the user aircraft once per second with `SimConnect_RequestDataOnSimObject`, and
+4. maps SDK values into the existing `AircraftTelemetrySnapshot` domain record.
+
+All fields use `SIMCONNECT_DATATYPE_FLOAT64` so the callback payload has one fixed numeric layout. Booleans are normalized as false only for zero; nonzero values, including `-1`, are true.
+
+| Normalized field | MSFS 2024 source | Requested units / mapping |
+| --- | --- | --- |
+| Latitude / longitude | `PLANE LATITUDE`, `PLANE LONGITUDE` | degrees |
+| MSL / AGL altitude | `PLANE ALTITUDE`, `PLANE ALT ABOVE GROUND` | feet |
+| IAS / ground speed | `AIRSPEED INDICATED`, `GROUND VELOCITY` | knots |
+| Vertical speed | `VERTICAL SPEED` | feet/second, converted to feet/minute |
+| Heading | `PLANE HEADING DEGREES TRUE` | requested as degrees; normalized to `[0,360)` |
+| Pitch / bank | `PLANE PITCH DEGREES`, `PLANE BANK DEGREES` | requested as degrees |
+| Load factor | `G FORCE` | Gforce |
+| Ground / parking brake | `SIM ON GROUND`, `BRAKE PARKING POSITION` | bool |
+| Engines | `NUMBER OF ENGINES`, `GENERAL ENG COMBUSTION:1..4` | installed count plus bool combustion state |
+| Fuel | `FUEL TOTAL QUANTITY WEIGHT EX1` | pounds, includes unusable fuel |
+| Payload | `TOTAL WEIGHT - EMPTY WEIGHT - FUEL TOTAL QUANTITY WEIGHT EX1` | pounds, clamped to zero |
+| Flaps | `FLAPS HANDLE PERCENT` | percent-over-100 converted to 0–100% |
+| Gear | `GEAR TOTAL PCT EXTENDED` | percent; current first-pass `GearDown` threshold is >=95% |
+| Slew | `IS SLEW ACTIVE` | bool |
+| Pause | `Pause_EX1` system event | nonzero event data means at least one pause state is active |
+
+The Current Flight page may display these values but still says **No active flight**. Telemetry availability does not create a FlightSession or prove takeoff/landing/mission state.
+
+The first pass intentionally does not request aircraft title/type, autopilot detail, per-tank fuel or arbitrary payload-station arrays. Add fields only when the flight detector/session tracker has a concrete need and official SDK semantics are verified.
 
 ## Native runtime and Windows build
 
-The adapter uses four documented native exports through P/Invoke: Open, CallDispatch, RequestSystemState and Close. This avoids binding .NET 10 to the SDK's legacy .NET Framework managed wrapper. The boundary is deliberately small; official ABI signatures/layouts are recorded in source and decoder tests.
+The adapter currently uses seven documented native exports through P/Invoke: Open, CallDispatch, AddToDataDefinition, RequestDataOnSimObject, SubscribeToSystemEvent, RequestSystemState and Close. This avoids binding .NET 10 to the SDK's legacy .NET Framework managed wrapper. Official ABI signatures/layouts are recorded in source and decoder tests.
 
 Supply the **x64 native `SimConnect.dll` from the installed MSFS 2024 SDK**. This is a runtime dependency, not a repository binary or a third-party NuGet wrapper. Search is restricted to the application directory. No SDK binaries are committed or downloaded by CI.
 
@@ -25,34 +58,42 @@ The app project uses `MSFS2024_SDK/SimConnect SDK/lib/SimConnect.dll` when that 
 dotnet build src/OpenCareer.App/OpenCareer.App.csproj --configuration Release -p:Platform=x64 -p:SimConnectNativePath="C:\MSFS 2024 SDK\SimConnect SDK\lib\SimConnect.dll"
 ```
 
-The file is copied beside the executable for build/publish. An explicitly supplied nonexistent path fails the build. With no runtime path, the shell still builds/launches and reports the missing component instead of crashing. Without MSFS running, a correctly supplied runtime yields Waiting for MSFS and automatic retries. Default SDK configuration index 0 is used; no `SimConnect.cfg` is created or rewritten.
+The file is copied beside the executable for build/publish. An explicitly supplied nonexistent path fails the build. With no runtime path, the shell still builds/launches and reports the missing component instead of crashing. Without MSFS running, a correctly supplied runtime should yield Waiting for MSFS and automatic retries. Default SDK configuration index 0 is used; no `SimConnect.cfg` is created or rewritten.
 
-## Verification and remaining acceptance gate
+## CI verification
 
-```sh
-dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release
-dotnet run --project src/OpenCareer.SimLab/OpenCareer.SimLab.csproj --configuration Release
-```
+Tested implementation: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 
-Transport tests inject native-call results and raw callback buffers. They cover simulator absence, acknowledgement, duplicate start/open, serialized ownership, quit, abrupt transport loss, heartbeat request/response failure, mismatched heartbeat IDs, cancellation, timeout, missing/wrong runtime, malformed data, restart and disposal. ViewModel tests cover status mapping and stale connection/aircraft labels. Fake-clock tests advance deadlines without waiting real timeout durations. Windows CI builds the actual WinUI app and reruns tests.
+- Windows x64 Release: [run 35279439075](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35279439075) — WinUI build succeeded with **0 warnings, 0 errors**; **74/74 xUnit tests passed**.
+- Linux: [run 35279438991](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35279438991) — **74/74 xUnit tests** and **29/29 SimLab scenarios** passed.
 
-**Neither mock tests nor Windows compilation prove live SDK behavior.** The following Windows/MSFS checks remain necessary with the user's installed SDK/runtime:
+The tests inject native-call results and raw SDK-shaped callback buffers. Coverage includes simulator absence, acknowledgement, serialized ownership, quit/loss/retry, heartbeat failures, malformed messages, EVENT/SIMOBJECT_DATA decoding, telemetry setup failure, normalization, pause updates, stale-data clearing, restart/disposal and ViewModel display refresh.
+
+**Neither mock tests nor Windows compilation prove live SDK behavior.**
+
+## Remaining live acceptance gate
+
+Use the installed MSFS 2024 SDK/runtime on the user's Windows machine. Record observed behavior; do not infer success from CI.
 
 1. Launch without the native DLL: shell remains responsive and identifies the missing component.
 2. Supply the correct DLL and launch while MSFS is closed: Waiting for MSFS; navigation works.
-3. Launch MSFS 2024: Connecting becomes Connected after acknowledgement. Leave it in menus, then load a flight; do not infer an active flight from connection alone.
-4. Pause and resume; remain connected if system-state responses continue. An unresponsive loading screen lasting over 30 seconds can cause a safe reconnect.
-5. Exit/restart MSFS, then separately terminate it abruptly: identity clears and connection recovers automatically. Repeat twice; verify one connection in SimConnect Inspector.
-6. Close OpenCareer while connected and while retrying: window/process exits, with the native handle closed. Native API calls themselves cannot be forcibly interrupted; a hung native call remains a live-test risk.
+3. Launch MSFS 2024 and remain in menus: connection reaches Connected only after acknowledgement/setup; no active flight is claimed.
+4. Load the first test at **KRME with the F-22**. Compare displayed position, MSL/AGL altitude, IAS/GS, vertical speed, heading, pitch/bank/G, on-ground state, engine state, fuel, flaps, gear and slew against the simulator/Developer Mode/SimConnect Inspector where practical. Check for sign, unit, range or aircraft-specific discrepancies.
+5. Pause and resume using the simulator UI and verify `Pause_EX1` changes the displayed state without creating a disconnect. Exercise menu/load transitions too.
+6. Taxi, take off, maneuver and land. This is telemetry validation only; do not add/claim a flight detector from one test event.
+7. Exit/restart MSFS, then separately terminate it abruptly: telemetry and identity clear, then the connection recovers automatically. Repeat twice; verify one connection in SimConnect Inspector.
+8. Close OpenCareer while connected and while retrying: window/process exits, with the native handle closed. Native API calls themselves cannot be forcibly interrupted; a hung native call remains a live-test risk.
 
-Debug logging records state changes and server exception codes; repetitive open failures are Debug-level. No flight/session data exists to restore at this stage. Actual native DLL execution, UI interaction and the F-22/KRME flight test are still unverified.
+Any live discrepancy should be corrected at the SimConnect mapping boundary before flight-state logic is built.
 
 ## Official references checked 2026-09-17
 
 - [SDK overview and thread-safety requirement](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/SimConnect_SDK.htm)
 - [Open and remote-disconnect behavior](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/General/SimConnect_Open.htm)
 - [CallDispatch](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/General/SimConnect_CallDispatch.htm), [callback](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/General/DispatchProc.htm), [Close](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/General/SimConnect_Close.htm)
-- [Receive header](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_RECV.htm), [message IDs](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_RECV_ID.htm), [Open payload](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_RECV_OPEN.htm), [exception payload](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_RECV_EXCEPTION.htm)
-- [System-state request](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/General/SimConnect_RequestSystemState.htm), [system-state response](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_RECV_SYSTEM_STATE.htm)
+- [AddToDataDefinition](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Events_And_Data/SimConnect_AddToDataDefinition.htm), [RequestDataOnSimObject](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Events_And_Data/SimConnect_RequestDataOnSimObject.htm), [SubscribeToSystemEvent](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Events_And_Data/SimConnect_SubscribeToSystemEvent.htm)
+- [SIMOBJECT_DATA payload](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_RECV_SIMOBJECT_DATA.htm), [periods](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_PERIOD.htm), [data types](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_DATATYPE.htm)
+- [System events including `Pause_EX1`](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Events_And_Data/SimConnect_SubscribeToSystemEvent.htm)
+- MSFS 2024 Aircraft SimVar tables for misc/flight-model/control/fuel variables under the official SDK documentation.
 
-Context7 was used to locate documentation; exact ABI declarations were checked directly on the official pages because its generated summaries contained inconsistent signatures.
+Context7 was used to locate current SDK documentation. Exact native ABI/layout details and SimVar semantics were kept behind tests because generated documentation summaries can omit or normalize SDK-specific details.
