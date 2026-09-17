@@ -1,3 +1,5 @@
+using OpenCareer.Domain.Events;
+
 namespace OpenCareer.Domain.Careers;
 
 public sealed record JobMarketDestination(
@@ -38,7 +40,8 @@ public sealed record JobMarketGenerationRequest(
     JobMarketAccess Access,
     JobMarketPolicy? Policy = null,
     CareerLevelSnapshot? CareerStanding = null,
-    AirportMarketCapacity? Capacity = null)
+    AirportMarketCapacity? Capacity = null,
+    RegionalSecurityState? SecurityState = null)
 {
     public JobMarketPolicy EffectivePolicy => Policy ?? JobMarketPolicy.Default;
     public CareerLevelSnapshot EffectiveCareerStanding => CareerStanding ?? CareerLevelSnapshot.Starting;
@@ -51,6 +54,7 @@ public sealed record JobMarketGenerationRequest(
         Origin.Validate();
         EffectivePolicy.Validate();
         EffectiveCapacity.Validate();
+        SecurityState?.Validate();
         if (EffectiveCareerStanding.Level < 1 || EffectiveCareerStanding.Level > EffectivePolicy.CareerLevelCap
             || EffectiveCareerStanding.MeritPoints < 0 || EffectiveCareerStanding.NextLevelAt < 0)
             throw new ArgumentOutOfRangeException(nameof(CareerStanding));
@@ -65,6 +69,7 @@ public sealed record JobMarketOfferDraft(
     Guid OfferId,
     ServiceTrack ServiceTrack,
     ContractKind Kind,
+    JobScenarioKind Scenario,
     string OriginIcao,
     string DestinationIcao,
     double DistanceNm,

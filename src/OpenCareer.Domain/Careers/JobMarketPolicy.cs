@@ -162,10 +162,13 @@ public sealed record JobMarketPolicy(
         return 0;
     }
 
-    public TimeSpan OfferLifetime(ContractKind kind, DeterministicRandom random)
+    public TimeSpan OfferLifetime(ContractKind kind, JobScenarioKind scenario, DeterministicRandom random)
     {
         ArgumentNullException.ThrowIfNull(random);
         Validate();
+
+        if (scenario == JobScenarioKind.OrganTransport)
+            return TimeSpan.FromMinutes(random.NextDouble(15, 90));
 
         var min = EffectiveMinimumOfferLifetime;
         var max = EffectiveMaximumOfferLifetime;
@@ -178,6 +181,9 @@ public sealed record JobMarketPolicy(
         var seconds = random.NextDouble(min.TotalSeconds, max.TotalSeconds + 0.000001);
         return TimeSpan.FromSeconds(seconds);
     }
+
+    public TimeSpan OfferLifetime(ContractKind kind, DeterministicRandom random) =>
+        OfferLifetime(kind, JobScenarioKind.Standard, random);
 
     public double DurationSuitability(ContractKind kind, double? estimatedFlightHours, int careerLevel)
     {

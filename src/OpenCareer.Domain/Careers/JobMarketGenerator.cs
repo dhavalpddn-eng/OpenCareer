@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using OpenCareer.Domain.Events;
 using OpenCareer.Domain.Simulation;
 
 namespace OpenCareer.Domain.Careers;
@@ -78,7 +79,7 @@ public static class JobMarketGenerator
         for (var attempt = 0; attempt < maxAttempts && added < targetCount; attempt++)
         {
             var track = ChooseWeighted(trackChoices, random);
-            var kindChoices = BuildKindChoices(track.Value, request.Origin, policy);
+            var kindChoices = BuildKindChoices(track.Value, request.Origin, request.SecurityState, policy);
             if (kindChoices.Count == 0)
                 continue;
             var kind = ChooseWeighted(kindChoices, random);
@@ -92,11 +93,13 @@ public static class JobMarketGenerator
                 continue;
             equivalentCounts[equivalentKey] = equivalentCount + 1;
 
-            var lifetime = policy.OfferLifetime(kind.Value, random);
+            var scenario = JobScenarioSelector.Select(track.Value, kind.Value, request.SecurityState, random);
+            var lifetime = policy.OfferLifetime(kind.Value, scenario, random);
             offers.Add(new JobMarketOfferDraft(
                 CreateGuid(random),
                 track.Value,
                 kind.Value,
+                scenario,
                 JobMarketIcao.Normalize(request.Origin.Icao),
                 destination.Icao,
                 destination.DistanceNm,
@@ -124,6 +127,8 @@ public static class JobMarketGenerator
                 continue;
 
             var weight = policy.TrackWeight(request.Origin, track);
+            if (request.SecurityState is not null)
+                weight *= request.SecurityState.TrackMultiplier(track);
             if (weight <= 0)
                 continue;
             if (locked)
@@ -138,6 +143,7 @@ public static class JobMarketGenerator
     private static List<Weighted<ContractKind>> BuildKindChoices(
         ServiceTrack track,
         AirportCareerProfile airport,
+        RegionalSecurityState? security,
         JobMarketPolicy policy)
     {
         var choices = track switch
@@ -172,7 +178,8 @@ public static class JobMarketGenerator
                     new(ContractKind.DisasterRelief, 0.22),
                     new(ContractKind.Evacuation, 0.18),
                     new(ContractKind.Firefighting, 0.18),
-                    new(ContractKind.Ferry, 0.22)
+                    new(ContractKind.Ferry, 0.22),
+                    new(ContractKind.Cargo, 0.30)
                 },
             ServiceTrack.MilitaryService =>
                 new List<Weighted<ContractKind>>
@@ -185,7 +192,9 @@ public static class JobMarketGenerator
                     new(ContractKind.MilitaryFerry, 0.50),
                     new(ContractKind.MilitaryEscort, 0.30),
                     new(ContractKind.MilitaryIntercept, 0.25),
-                    new(ContractKind.MilitaryTankerSupport, 0.20)
+                    new(ContractKind.MilitaryTankerSupport, 0.20),
+                    new(ContractKind.Medevac, 0.12),
+                    new(ContractKind.DisasterRelief, 0.10)
                 },
             _ => new List<Weighted<ContractKind>>()
         };
@@ -200,6 +209,12 @@ public static class JobMarketGenerator
                     choices[i] = choices[i] with { Weight = choices[i].Weight * boost };
                 }
             }
+        }
+
+        if (security is not null)
+        {
+            for (var i = 0; i < choices.Count; i++)
+                choices[i] = choices[i] with { Weight = choices[i].Weight * security.KindMultiplier(choices[i].Value) };
         }
 
         return choices;
