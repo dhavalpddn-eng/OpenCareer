@@ -6,7 +6,7 @@ Updated: 2026-09-17. Compact handoff for a fresh chat; detailed rules remain in 
 
 - Repository: `dhavalpddn-eng/OpenCareer`.
 - Working branch: `feature/m1-simulation-core`; draft PR #2. Keep main stable.
-- Latest implementation commit: `f006907e3d327ff30d897d6be6b15700cbc39e46` (career credit and dealers). This handoff is a later documentation-only change.
+- Latest implementation commit: `79f1072d6a9b7a111f03899ea104e2086c9b7f2d` (dealer stock and offer-consistency validation). This handoff is a later documentation-only change.
 - Read AGENTS.md and this file first, then only source/docs needed for the current task. Retrieve earlier conversations only if a necessary decision is missing.
 - Verify current remote branch head before editing; other chats may change it. Do not overwrite their work.
 - Update this handoff after substantive work: implementation commit, verification, limitations and next task. Keep it short; replace stale status instead of appending a transcript.
@@ -34,7 +34,7 @@ Projects: `src/OpenCareer.Domain`, `src/OpenCareer.SimLab`, `tests/OpenCareer.Te
 - Protected absence default, session-duration preferences, bankruptcy eligibility stages, bounded manual-reward quotes.
 - Career-derived credit score; three fictional lenders with rate, collateral, income, debt-service, deposit and reserve checks.
 - Three fictional dealer profiles with new/used filters, seeded daily discounts, cash eligibility and financing quote composition.
-- Latest implementation: 34 xUnit tests and 29 SimLab scenarios passed locally. [GitHub CI passed](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35244805482).
+- Verification baseline: 34 xUnit tests and 29 SimLab scenarios passed locally. A subsequent dealer-validation correction passes 35 xUnit tests. [GitHub CI passed](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35244805482).
 
 Commands from repository root:
 ```sh
@@ -74,3 +74,7 @@ Then: isolated SimConnect connection/reconnect boundary → normalized telemetry
 ## Visual reference
 
 [UI concept and preview](ui-concept.md) — optional reading for UI/design tasks only. Keep the SVG/image out of routine context. Concept uses sample data; no implemented-screen claim.
+
+## Latest review
+
+[Current review](current-review.md): fresh source/test verification, dealer consistency fix, image-authentication blocker and seven unanswered design questions. Chapter 2 remains next. Read the review only when those details are relevant.
