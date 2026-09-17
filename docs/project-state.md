@@ -6,8 +6,9 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Chapter 2 is in progress: real WinUI 3 shell now exists under `src/OpenCareer.App`.
+- Chapter 2 is in progress: real WinUI 3 shell exists under `src/OpenCareer.App`.
 - Windows UI build workflow: `.github/workflows/winui-build.yml`.
+- Windows CI run `35268157690` passed restore + Release build on `windows-latest`.
 - UI target/spec: `docs/ui-concept.md`; refined lightweight preview: `docs/assets/opencareer-dashboard-concept-v2.svg`.
 - Verify remote branch head before edits because other chats may change it.
 
@@ -36,7 +37,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Fictional aircraft dealers, seeded offers/discounts, stock validation and cash/finance eligibility.
 - Last verified domain baseline: **35 xUnit tests** plus **29 deterministic SimLab scenarios** after dealer-validation correction.
 
-## Chapter 2 shell now present
+## Chapter 2 shell verified
 
 `src/OpenCareer.App` contains:
 
@@ -49,7 +50,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - placeholders for later sections,
 - Windows GitHub Actions build workflow.
 
-The shell currently has **no SimConnect implementation**; `Waiting for MSFS 2024` is intentional. A passing Windows CI build proves compilation only, not live MSFS behavior.
+Windows CI confirms the current shell compiles in Release. It has **no SimConnect implementation yet**; `Waiting for MSFS 2024` is intentional. Compilation does not prove live MSFS behavior.
 
 ## Material limits
 
@@ -57,11 +58,10 @@ No live SimConnect verification, telemetry detector, durable SQLite flight recov
 
 ## Next bounded work
 
-1. Make Windows CI green and fix any WinUI compile/runtime-shell issues.
-2. Add isolated `ISimulatorConnection` / SimConnect connection + safe reconnect.
-3. Normalize first telemetry fields.
-4. Build flight-state detection and recoverable FlightSession persistence.
-5. Then connect registry/runway feasibility/jobs/economy settlement.
+1. Add isolated `ISimulatorConnection` / SimConnect connection + safe reconnect.
+2. Normalize first telemetry fields.
+3. Build flight-state detection and recoverable FlightSession persistence.
+4. Then connect registry/runway feasibility/jobs/economy settlement.
 
 Do **not** expand finance complexity before the playable flight foundation unless explicitly requested.
 
