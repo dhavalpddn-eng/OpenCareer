@@ -52,6 +52,10 @@ dotnet run --project src/OpenCareer.SimLab/OpenCareer.SimLab.csproj --configurat
 - Serialization tests are not crash-safe SQLite saves or MSFS in-flight restoration.
 - No playable Windows application, SimConnect integration, flight detector, persistent flight session, installed-aircraft registry, dispatch planner or market job generator yet. No live MSFS verification.
 
+## Chapter workflow
+
+Follow [development workflow](development-workflow.md) for chapter order and exit gates. Chapter 1 handoff is established; Chapter 2 (Windows application shell) is next. Existing later-chapter domain rules do not imply those chapters are playable or complete.
+
 ## Next bounded task
 
 Build the WinUI 3 application shell with connection-status and empty Current Flight views. It must launch without MSFS and show Waiting/Disconnected. Keep domain isolated; introduce application-level DI/logging only where needed. Verify build on Windows; do not claim a Linux domain build validates WinUI or live SimConnect.
