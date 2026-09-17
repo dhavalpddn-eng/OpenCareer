@@ -6,6 +6,8 @@ Updated 2026-09-17. Read `AGENTS.md` and `docs/project-state.md` first. Read thi
 
 Work lives on `feature/job-market-foundation` so Astra can continue telemetry/SimConnect work without editing the same files. Rebase/merge only after checking the current `feature/m1-simulation-core` head and rerunning both CI paths.
 
+Latest compiled/tested job-market implementation: `e823777c2fe4abe7b66444a4e55b012255c7bf99` plus later domain/docs additions. Linux CI for that implementation passed **99/99 xUnit tests + 29/29 SimLab scenarios**; its matching Windows WinUI/domain run also passed. Later changes must still be revalidated before merge.
+
 ## Accepted player decisions
 
 - **Starter board:** level 1 exposes only **1–2 jobs**.
@@ -18,14 +20,14 @@ Work lives on `feature/job-market-foundation` so Astra can continue telemetry/Si
 - **Dream jobs:** show at most **1–2 aspirational locked jobs**. They never grant access.
 - **Route familiarity:** repeated service progresses Untried -> Discovered -> Familiar -> Established -> Preferred -> Core. Current successful-flight thresholds are 1 / 2 / 5 / 12 / 25.
 - **Pay direction:** base pay should primarily reflect time + distance + payload, then market supply/demand, urgency, scarcity, difficulty, employer relationship and operating costs. Final settlement is not implemented yet.
-- **Cargo/passenger economy:** cargo goods and passenger route trends must affect demand. Popular destinations, seasonal travel and local shortages can move job frequency/pay.
+- **Cargo/passenger economy:** cargo goods and passenger route trends affect demand. Popular destinations, seasonality, capacity shortages and commodity pressure can move job frequency and later pay.
 - **Deadhead/travel:** player may pay to travel without their aircraft; the aircraft remains where it physically is. Some large-company duty assignments may provide employer-paid deadhead.
 - **Refresh behavior:** jobs expire/replenish individually at deterministic random times. Internal generation buckets are an implementation aid, not a whole-board wipe. Major world/security transitions can force an immediate relevant-board rebuild.
 - **World/social feed:** optional online GPT/news-assisted feed is allowed for flavor and validated external signals, but it is never authoritative for money, mission completion, ownership, access or airspace state. Persist normalized signals/posts in SQLite; deterministic game logic decides effects.
 
 ## Implemented on this branch
 
-### Job visibility and level
+### Job visibility and meaningful level
 
 - `CareerProgressEvidence`, `CareerLevelSnapshot`, `CareerLevelPolicy`.
 - Default max level: 50.
@@ -44,6 +46,7 @@ Work lives on `feature/job-market-foundation` so Astra can continue telemetry/Si
 - route/relationship weighting;
 - stronger UAS/research weighting for survey/photography/surveillance;
 - local-capable jobs can remain at the origin.
+- `JobBoardState` keeps still-valid offers, retires expired/consumed IDs, fills only open slots and supports explicit event-driven board replacement. It is domain state only; SQLite persistence is still pending.
 
 ### Relationships and network
 
@@ -61,11 +64,30 @@ Work lives on `feature/job-market-foundation` so Astra can continue telemetry/Si
 - `JobScenarioKind` includes Standard, OrganTransport, TroopMovement, HumanitarianAirlift, ConflictReconnaissance, RecoverySupply and InfrastructureAssessment.
 - scenario generation is deterministic. External AI does not decide eligibility or rewards.
 
+### Cargo and passenger demand
+
+- `RouteDemandProfile`, `DemandPressure`, `PassengerRouteDemand`, `CargoCommodityDemand`.
+- cargo categories currently include general freight, express parcels, mail, perishables, medical supplies, AOG parts, industrial parts, electronics/high-value goods, humanitarian supplies and government/military logistics.
+- passenger purposes include general, business, leisure, VFR, major events, seasonal, evacuation and recovery.
+- scarcity/trend/urgency produce a bounded route-attractiveness multiplier from **0.25x to 4x**.
+- `JobMarketGenerator` now consumes route demand: passenger/charter work follows passenger pressure; cargo/express/AOG/medical/disaster/military-transport work uses matching commodity pressure.
+- equal-distance route tests verify cargo scarcity materially changes job selection.
+
+### World/social feed safety boundary
+
+- `WorldSignal` stores type, scope, magnitude, time, source kind, validation state, confidence and provenance.
+- external signals require source reference + publisher before validation.
+- `WorldFeedPost` is narrative only; AI-generated posts require disclosure/provenance.
+- only validated, unexpired passenger/cargo signals map into bounded demand effects.
+- full SQLite persistence and online collector are still pending; `docs/live-world-feed.md` defines the architecture.
+
 ## Calibration notes
 
-The airport-capacity curve was checked with Wolfram before implementation. Current UAS specialization was increased after CI showed the original multiplier produced too little observable separation; this is gameplay tuning rather than a real-world statistic.
+The airport-capacity curve was checked with Wolfram before implementation. UAS specialization was increased after CI showed the original multiplier produced too little observable separation; this is gameplay tuning rather than a real-world statistic.
 
-The existing first-aircraft example needs $64,000 cash/reserve. The prior Wolfram calibration implies average net savings around $1,280/flight-hour for 50h, $985/hour for 65h, or $800/hour for 80h. Actual job pay is intentionally not finalized until the job/cargo/passenger economy and one-time ledger settlement are connected.
+The route-demand pressure function was also checked with Wolfram: a balanced route evaluates to 1.0x, an illustrative high-demand/low-capacity/trending route to about 2.19x, and an illustrative weak route to about 0.65x, with extremes capped at 4x.
+
+The existing first-aircraft example needs $64,000 cash/reserve. Prior Wolfram calibration implies average net savings around $1,280/flight-hour for 50h, $985/hour for 65h, or $800/hour for 80h. Actual job pay is intentionally not finalized until one-time ledger settlement and playtesting are connected.
 
 ## Real-data boundary
 
@@ -77,21 +99,21 @@ For U.S. airports, preferred external calibration sources are:
 - BTS T-100 segment/market data for carrier presence, routes, passengers, freight/mail, capacity, departures and aircraft hours;
 - airport/operator/DoD/government official sources for specialty roles that traffic datasets do not describe.
 
-Do not infer a military base, airline base, cargo operator or employer relationship solely from runway dimensions.
+See `docs/airport-employer-data.md`. Do not infer a military base, airline base, cargo operator or employer relationship solely from runway dimensions.
 
 ## Real-mission inspiration rule
 
-Use documented historical mission patterns as inspiration, not literal reenactments of tragedies. Examples already verified from official U.S. military sources include an FB-111A donor-heart transport in 1986, C-17 troop/equipment airlift supporting an African Union mission in 2014, and C-17 ECMO medical evacuation. Preserve the *operational pattern* (urgent organ lift, troop/logistics movement, specialized medevac), while the generated OpenCareer contract remains fictional unless a live-data feature explicitly labels factual information with provenance.
+Use documented historical mission patterns as inspiration, not literal reenactments of tragedies. Examples already verified from official U.S. military sources include an FB-111A donor-heart transport in 1986, C-17 troop/equipment airlift supporting an African Union mission in 2014, and C-17 ECMO medical evacuation. Preserve the *operational pattern* (urgent organ lift, troop/logistics movement, specialized medevac), while the generated OpenCareer contract remains fictional unless a live-data feature explicitly labels factual information with provenance. See `docs/real-mission-inspiration.md`.
 
 ## Still not implemented
 
-- persistent SQLite board service that keeps surviving offers and replenishes only expired/consumed slots;
-- real employer/airport classification dataset and licensing/attribution review;
-- commodity-level cargo economy and passenger-trend engine;
+- SQLite persistence/application service for `JobBoardState` and feed signals/posts;
+- normalized real employer/airport data pack/importer and licensing/attribution review;
+- long-running passenger/cargo trend evolution layered over `RouteDemandProfile`;
 - pay quote + authoritative one-time ledger settlement;
 - paid personal deadhead quote/settlement and employer-issued duty deadhead orders;
-- online signal collector / GPT world-feed integration and SQLite feed persistence;
+- online signal collector / OpenAI world-feed adapter;
 - conversion of offer drafts into fully validated `JobContract` requirements;
 - UI binding.
 
-Next job-market work should build the persistent board lifecycle plus cargo/passenger demand signals, then hook those outputs into authoritative contract generation after Astra's playable flight foundation is ready.
+Next job-market work should wire persistent board/feed state and deadhead/contract-generation boundaries, then rebase onto Astra's current feature head and rerun all tests before any merge.
