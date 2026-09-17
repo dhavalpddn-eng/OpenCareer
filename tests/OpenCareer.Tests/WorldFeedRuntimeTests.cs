@@ -89,8 +89,8 @@ public sealed class WorldFeedRuntimeTests
         Assert.Contains("no live web/news collection", post.SourceDisclosure!, StringComparison.OrdinalIgnoreCase);
 
         Assert.NotNull(handler.RequestBody);
-        Assert.Contains(""model":"test-model"", handler.RequestBody!, StringComparison.Ordinal);
-        Assert.DoesNotContain(""tools"", handler.RequestBody!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"model\":\"test-model\"", handler.RequestBody!, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"tools\"", handler.RequestBody!, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("web_search", handler.RequestBody!, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("Bearer", handler.AuthorizationScheme);
         Assert.Equal("test-key", handler.AuthorizationParameter);
