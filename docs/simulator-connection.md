@@ -60,12 +60,32 @@ dotnet build src/OpenCareer.App/OpenCareer.App.csproj --configuration Release -p
 
 The file is copied beside the executable for build/publish. An explicitly supplied nonexistent path fails the build. With no runtime path, the shell still builds/launches and reports the missing component instead of crashing. Without MSFS running, a correctly supplied runtime should yield Waiting for MSFS and automatic retries. Default SDK configuration index 0 is used; no `SimConnect.cfg` is created or rewritten.
 
+## Live runtime probe
+
+`tools/OpenCareer.LiveProbe` is a Windows x64 console probe for the acceptance gate. It references the real `OpenCareer.SimConnect` project and instantiates the production `SimConnectConnection`; it does not duplicate native API calls or implement flight-state logic.
+
+From the repository root:
+
+```powershell
+.\tools\run-live-probe.ps1
+```
+
+When `MSFS2024_SDK` is not configured, provide the installed SDK DLL explicitly:
+
+```powershell
+.\tools\run-live-probe.ps1 -SimConnectNativePath "C:\MSFS 2024 SDK\SimConnect SDK\lib\SimConnect.dll"
+```
+
+The probe prints connection transitions and compact telemetry lines, and writes a JSONL trace under `%LOCALAPPDATA%\OpenCareer\Diagnostics` by default. Use `-Output` to choose a path or `-DurationSeconds` for a bounded run. The trace records session metadata, simulator identity/version, connection issues, every normalized telemetry sample, telemetry clearing and the final clean-stop summary.
+
+The probe must be run on the user's Windows machine with the real SDK runtime and MSFS 2024. A successful CI build only proves the tool compiles.
+
 ## CI verification
 
-Tested implementation: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
+Tested implementation/tooling head: `2f63e56a8da585c7cbab4eb2d53d4a6b19a1b404`. Production telemetry implementation: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 
-- Windows x64 Release: [run 35279439075](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35279439075) — WinUI build succeeded with **0 warnings, 0 errors**; **74/74 xUnit tests passed**.
-- Linux: [run 35279438991](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35279438991) — **74/74 xUnit tests** and **29/29 SimLab scenarios** passed.
+- Windows x64 Release: [run 35283864087](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283864087) — WinUI and `OpenCareer.LiveProbe` builds both succeeded with **0 warnings, 0 errors**; **74/74 xUnit tests passed**.
+- Linux: [run 35283863937](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283863937) — **74/74 xUnit tests** and **29/29 SimLab scenarios** passed.
 
 The tests inject native-call results and raw SDK-shaped callback buffers. Coverage includes simulator absence, acknowledgement, serialized ownership, quit/loss/retry, heartbeat failures, malformed messages, EVENT/SIMOBJECT_DATA decoding, telemetry setup failure, normalization, pause updates, stale-data clearing, restart/disposal and ViewModel display refresh.
 
@@ -73,7 +93,7 @@ The tests inject native-call results and raw SDK-shaped callback buffers. Covera
 
 ## Remaining live acceptance gate
 
-Use the installed MSFS 2024 SDK/runtime on the user's Windows machine. Record observed behavior; do not infer success from CI.
+Use the installed MSFS 2024 SDK/runtime on the user's Windows machine. Start `tools/run-live-probe.ps1` so the session produces a shareable JSONL trace. Record observed behavior; do not infer success from CI.
 
 1. Launch without the native DLL: shell remains responsive and identifies the missing component.
 2. Supply the correct DLL and launch while MSFS is closed: Waiting for MSFS; navigation works.

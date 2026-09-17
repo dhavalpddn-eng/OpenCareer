@@ -6,11 +6,11 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Latest tested implementation: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f` (`feat: add normalized aircraft telemetry source`). This handoff is a later documentation change.
+- Latest tested implementation: `2f63e56a8da585c7cbab4eb2d53d4a6b19a1b404` (`fix: compile live SimConnect probe`). The production telemetry implementation remains `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 - WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. **Live simulator/runtime validation remains open.**
-- [Windows CI run 35279439075](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35279439075): WinUI x64 Release build succeeded with 0 warnings/errors and **74/74 xUnit tests passed**.
-- [Linux CI run 35279438991](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35279438991): **74/74 xUnit tests** and **29/29 deterministic SimLab scenarios** passed.
-- Both CI runs tested implementation `7fddbe1`; documentation-only follow-ups do not imply live MSFS verification.
+- [Windows CI run 35283864087](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283864087): WinUI x64 Release build and the live SimConnect probe both succeeded with 0 warnings/errors; **74/74 xUnit tests passed**.
+- [Linux CI run 35283863937](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283863937): **74/74 xUnit tests** and **29/29 deterministic SimLab scenarios** passed.
+- Both CI runs tested `2f63e56`; compilation of the probe still does **not** imply live MSFS verification.
 - UI target/spec: `docs/ui-concept.md`; refined lightweight preview: `docs/assets/opencareer-dashboard-concept-v2.svg`.
 - Verify remote branch head before edits because other chats may change it.
 
@@ -66,14 +66,15 @@ The shell starts the simulator service, refreshes immutable connection/telemetry
 - Tests inject native-call results/raw callback buffers; they verify mapping, packet validation, worker ownership, pause handling and stale-data clearing. Native DLL execution is **not** tested by these mocks.
 - Runtime: supply the installed MSFS 2024 SDK's x64 `SimConnect.dll` through `MSFS2024_SDK` or `-p:SimConnectNativePath=...`. It is copied beside the app, never committed. A build without the DLL launches with connection unavailable; with the DLL and MSFS closed it should show Waiting for MSFS.
 - Exact setup, SDK references, telemetry definitions and remaining Windows live checks: `docs/simulator-connection.md`.
+- `tools/OpenCareer.LiveProbe` reuses the production `SimConnectConnection` and writes connection/telemetry JSONL traces; `tools/run-live-probe.ps1` resolves the SDK DLL and launches it. This is validation tooling only and does not implement flight state.
 
 ## Material limits
 
-No live native SimConnect/UI interaction verification, robust flight-state detector, durable SQLite flight recovery, installed-aircraft registry, dispatch/runway planner or market-driven job generator yet. The first telemetry path is CI-tested against injected SDK-shaped packets but has **not** been observed against the installed MSFS 2024 runtime or a real aircraft. Long simulator stalls may cause a safe reconnect; native calls themselves cannot be forcibly interrupted. Loan/dealer/manual-ground outputs remain quotes until authoritative persistence and one-time settlement exist. Ownership balance numbers are provisional until real job income is wired and playtested.
+No live native SimConnect/UI interaction verification, robust flight-state detector, durable SQLite flight recovery, installed-aircraft registry, dispatch/runway planner or market-driven job generator yet. The first telemetry path and live-probe executable are CI-built/tested, but neither has been observed against the installed MSFS 2024 runtime or a real aircraft. Long simulator stalls may cause a safe reconnect; native calls themselves cannot be forcibly interrupted. Loan/dealer/manual-ground outputs remain quotes until authoritative persistence and one-time settlement exist. Ownership balance numbers are provisional until real job income is wired and playtested.
 
 ## Next bounded work
 
-1. **Validate the actual SDK runtime on Windows before building flight-state logic.** Launch without MSFS, connect, verify the 1 Hz telemetry values, menus/pause/resume, quit/restart, abrupt simulator exit and application shutdown. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first flight test.
+1. **Run the live probe on the user's Windows/MSFS machine before building flight-state logic.** From the repo root use `./tools/run-live-probe.ps1` (or pass `-SimConnectNativePath`). Verify simulator absence, 1 Hz telemetry, menus/pause/resume, quit/restart, abrupt simulator exit and final telemetry clearing. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first flight test.
 2. Correct any SimVar/unit/runtime discrepancy found by that live test without broadening scope.
 3. Build robust flight-state detection with multiple signals/timing thresholds, then versioned SQLite FlightSession save/recovery.
 4. Connect registry/runway feasibility/jobs/economy settlement.
