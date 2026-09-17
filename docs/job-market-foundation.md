@@ -6,7 +6,7 @@ Updated 2026-09-17. Read `AGENTS.md` and `docs/project-state.md` first. Read thi
 
 Work lives on `feature/job-market-foundation` so Astra can continue telemetry/SimConnect work without editing the same files. Rebase/merge only after checking the current `feature/m1-simulation-core` head and rerunning both CI paths.
 
-Latest compiled/tested job-market implementation: `e823777c2fe4abe7b66444a4e55b012255c7bf99` plus later domain/docs additions. Linux CI for that implementation passed **99/99 xUnit tests + 29/29 SimLab scenarios**; its matching Windows WinUI/domain run also passed. Later changes must still be revalidated before merge.
+Latest tested branch implementation: `d32de9b88ed4dc9c34a2925cf9b2692cc1de14d1`. Linux CI run 35283739267 passed **104/104 xUnit tests + 29/29 SimLab scenarios**. Windows CI run 35283739417 passed the WinUI x64 Release build and the same test project.
 
 ## Accepted player decisions
 
@@ -23,7 +23,7 @@ Latest compiled/tested job-market implementation: `e823777c2fe4abe7b66444a4e55b0
 - **Cargo/passenger economy:** cargo goods and passenger route trends affect demand. Popular destinations, seasonality, capacity shortages and commodity pressure can move job frequency and later pay.
 - **Deadhead/travel:** player may pay to travel without their aircraft; the aircraft remains where it physically is. Some large-company duty assignments may provide employer-paid deadhead.
 - **Refresh behavior:** jobs expire/replenish individually at deterministic random times. Internal generation buckets are an implementation aid, not a whole-board wipe. Major world/security transitions can force an immediate relevant-board rebuild.
-- **World/social feed:** optional online GPT/news-assisted feed is allowed for flavor and validated external signals, but it is never authoritative for money, mission completion, ownership, access or airspace state. Persist normalized signals/posts in SQLite; deterministic game logic decides effects.
+- **World/social feed:** current direction is AI narration from OpenCareer's own simulated world state, **without live news/social collection**. The OpenAI narrator is optional; a deterministic offline narrator is mandatory fallback. Feed prose is never authoritative for money, mission completion, ownership, access, airspace state or world-event creation.
 
 ## Implemented on this branch
 
@@ -73,13 +73,18 @@ Latest compiled/tested job-market implementation: `e823777c2fe4abe7b66444a4e55b0
 - `JobMarketGenerator` now consumes route demand: passenger/charter work follows passenger pressure; cargo/express/AOG/medical/disaster/military-transport work uses matching commodity pressure.
 - equal-distance route tests verify cargo scarcity materially changes job selection.
 
-### World/social feed safety boundary
+### World/social feed runtime
 
-- `WorldSignal` stores type, scope, magnitude, time, source kind, validation state, confidence and provenance.
-- external signals require source reference + publisher before validation.
-- `WorldFeedPost` is narrative only; AI-generated posts require disclosure/provenance.
-- only validated, unexpired passenger/cargo signals map into bounded demand effects.
-- full SQLite persistence and online collector are still pending; `docs/live-world-feed.md` defines the architecture.
+- `WorldSignal` stores normalized world state; only validated/unexpired signals may affect deterministic economics.
+- `IWorldFeedNarrator` isolates narration from game authority.
+- `OpenAiWorldFeedNarrator` uses the Responses API with strict JSON-schema output and **no tools/web-search field**. It receives only OpenCareer facts and recent stored posts.
+- every AI post must reference supplied fact keys; unknown facts invalidate the response.
+- `DeterministicWorldFeedNarrator` is the zero-network fallback.
+- `WorldFeedNarrationService` automatically falls back when the AI path times out, errors or returns invalid data.
+- `SqliteWorldFeedPostStore` persists active feed history with parameterized SQL.
+- `WorldFeedCoordinator` throttles ordinary generation, carries recent posts forward for continuity and supports forced refresh after major simulated world transitions.
+- AI-generated posts are explicitly disclosed as generated from OpenCareer simulated state with no live web/news collection.
+- See `docs/live-world-feed.md` for the runtime boundary and future WinUI composition steps.
 
 ## Calibration notes
 
@@ -107,13 +112,14 @@ Use documented historical mission patterns as inspiration, not literal reenactme
 
 ## Still not implemented
 
-- SQLite persistence/application service for `JobBoardState` and feed signals/posts;
+- SQLite persistence/application service for `JobBoardState` itself; world-feed posts are now persisted separately;
+- persistence of normalized `WorldSignal` records if/when needed beyond the existing simulation save;
 - normalized real employer/airport data pack/importer and licensing/attribution review;
 - long-running passenger/cargo trend evolution layered over `RouteDemandProfile`;
 - pay quote + authoritative one-time ledger settlement;
 - paid personal deadhead quote/settlement and employer-issued duty deadhead orders;
-- online signal collector / OpenAI world-feed adapter;
+- WinUI DI/configuration for the AI narrator, secure API-key loading and World/Network feed page;
 - conversion of offer drafts into fully validated `JobContract` requirements;
-- UI binding.
+- UI binding for the job market.
 
-Next job-market work should wire persistent board/feed state and deadhead/contract-generation boundaries, then rebase onto Astra's current feature head and rerun all tests before any merge.
+Next job-market work should keep the no-collector AI feed boundary, wire persistent job-board/deadhead/contract-generation services, then rebase onto Astra's current feature head and rerun both CI paths before any merge.
