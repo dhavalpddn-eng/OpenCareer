@@ -5,7 +5,8 @@ public sealed record JobMarketDestination(
     double DistanceNm,
     double RouteStrength = 0,
     double RelationshipStrength = 0,
-    double MarketAttractiveness = 1)
+    double MarketAttractiveness = 1,
+    double? EstimatedFlightHours = null)
 {
     public string NormalizedIcao => JobMarketIcao.Normalize(Icao);
 
@@ -18,6 +19,8 @@ public sealed record JobMarketDestination(
         ValidateUnit(RelationshipStrength, nameof(RelationshipStrength));
         if (!double.IsFinite(MarketAttractiveness) || MarketAttractiveness is <= 0 or > 10)
             throw new ArgumentOutOfRangeException(nameof(MarketAttractiveness));
+        if (EstimatedFlightHours is { } hours && (!double.IsFinite(hours) || hours < 0))
+            throw new ArgumentOutOfRangeException(nameof(EstimatedFlightHours));
     }
 
     private static void ValidateUnit(double value, string name)
@@ -33,9 +36,13 @@ public sealed record JobMarketGenerationRequest(
     AirportCareerProfile Origin,
     IReadOnlyList<JobMarketDestination> Destinations,
     JobMarketAccess Access,
-    JobMarketPolicy? Policy = null)
+    JobMarketPolicy? Policy = null,
+    CareerLevelSnapshot? CareerStanding = null,
+    AirportMarketCapacity? Capacity = null)
 {
     public JobMarketPolicy EffectivePolicy => Policy ?? JobMarketPolicy.Default;
+    public CareerLevelSnapshot EffectiveCareerStanding => CareerStanding ?? CareerLevelSnapshot.Starting;
+    public AirportMarketCapacity EffectiveCapacity => Capacity ?? AirportMarketCapacity.ForScale(AirportMarketScale.Regional);
 
     public void Validate()
     {
@@ -43,6 +50,10 @@ public sealed record JobMarketGenerationRequest(
         ArgumentNullException.ThrowIfNull(Destinations);
         Origin.Validate();
         EffectivePolicy.Validate();
+        EffectiveCapacity.Validate();
+        if (EffectiveCareerStanding.Level < 1 || EffectiveCareerStanding.Level > EffectivePolicy.CareerLevelCap
+            || EffectiveCareerStanding.MeritPoints < 0 || EffectiveCareerStanding.NextLevelAt < 0)
+            throw new ArgumentOutOfRangeException(nameof(CareerStanding));
         if (Destinations.Count == 0)
             throw new ArgumentException("At least one destination is required.", nameof(Destinations));
         foreach (var destination in Destinations)
@@ -57,6 +68,7 @@ public sealed record JobMarketOfferDraft(
     string OriginIcao,
     string DestinationIcao,
     double DistanceNm,
+    double? EstimatedFlightHours,
     DateTimeOffset OfferedAt,
     DateTimeOffset ExpiresAt,
     bool IsLockedPreview,

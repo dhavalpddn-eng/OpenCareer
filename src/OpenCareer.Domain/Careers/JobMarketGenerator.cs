@@ -13,73 +13,121 @@ public static class JobMarketGenerator
         var policy = request.EffectivePolicy;
         var originIcao = JobMarketIcao.Normalize(request.Origin.Icao);
         var cycleIndex = policy.CycleIndex(request.Time);
-        var cycleStart = policy.CycleStart(request.Time);
+        var offeredAt = policy.CycleStart(request.Time);
         var random = DeterministicSeed.CreateStream(
             request.CareerSeed,
             $"job-market:{originIcao}:{cycleIndex}");
 
-        var trackChoices = BuildTrackChoices(request, policy);
-        if (trackChoices.Count == 0)
+        var availableTracks = BuildTrackChoices(request, policy, locked: false);
+        var lockedTracks = BuildTrackChoices(request, policy, locked: true);
+        if (availableTracks.Count == 0 && lockedTracks.Count == 0)
             return Array.Empty<JobMarketOfferDraft>();
 
-        var requestedCount = random.NextInt(policy.MinimumOffers, policy.MaximumOffers + 1);
+        var requestedCount = policy.VisibleOfferCount(
+            request.EffectiveCapacity,
+            request.EffectiveCareerStanding.Level,
+            random);
+        var dreamCount = policy.DreamPreviewCount(requestedCount, lockedTracks.Count > 0);
+        var actionableCount = availableTracks.Count == 0 ? 0 : requestedCount - dreamCount;
+        if (availableTracks.Count == 0)
+            dreamCount = Math.Min(requestedCount, Math.Max(1, dreamCount));
+
         var offers = new List<JobMarketOfferDraft>(requestedCount);
         var equivalentCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-        var maxAttempts = requestedCount * 40;
 
-        for (var attempt = 0; attempt < maxAttempts && offers.Count < requestedCount; attempt++)
+        GenerateOffers(
+            actionableCount,
+            isLockedPreview: false,
+            availableTracks,
+            request,
+            policy,
+            random,
+            offeredAt,
+            equivalentCounts,
+            offers);
+        GenerateOffers(
+            dreamCount,
+            isLockedPreview: true,
+            lockedTracks,
+            request,
+            policy,
+            random,
+            offeredAt,
+            equivalentCounts,
+            offers);
+
+        return offers;
+    }
+
+    private static void GenerateOffers(
+        int targetCount,
+        bool isLockedPreview,
+        IReadOnlyList<Weighted<ServiceTrack>> trackChoices,
+        JobMarketGenerationRequest request,
+        JobMarketPolicy policy,
+        DeterministicRandom random,
+        DateTimeOffset offeredAt,
+        IDictionary<string, int> equivalentCounts,
+        ICollection<JobMarketOfferDraft> offers)
+    {
+        if (targetCount <= 0 || trackChoices.Count == 0)
+            return;
+
+        var added = 0;
+        var maxAttempts = targetCount * 80;
+        for (var attempt = 0; attempt < maxAttempts && added < targetCount; attempt++)
         {
             var track = ChooseWeighted(trackChoices, random);
             var kindChoices = BuildKindChoices(track.Value, request.Origin, policy);
+            if (kindChoices.Count == 0)
+                continue;
             var kind = ChooseWeighted(kindChoices, random);
             var destination = ChooseDestination(kind.Value, request, policy, random);
             if (destination is null)
                 continue;
 
-            var equivalentKey = $"{track.Value}:{kind.Value}:{destination.Icao}";
+            var equivalentKey = $"{track.Value}:{kind.Value}:{destination.Icao}:{isLockedPreview}";
             equivalentCounts.TryGetValue(equivalentKey, out var equivalentCount);
             if (equivalentCount >= policy.MaxEquivalentOffersPerCycle)
                 continue;
             equivalentCounts[equivalentKey] = equivalentCount + 1;
 
-            var locked = !request.Access.Allows(track.Value);
+            var lifetime = policy.OfferLifetime(kind.Value, random);
             offers.Add(new JobMarketOfferDraft(
                 CreateGuid(random),
                 track.Value,
                 kind.Value,
-                originIcao,
+                JobMarketIcao.Normalize(request.Origin.Icao),
                 destination.Icao,
                 destination.DistanceNm,
-                cycleStart,
-                cycleStart + policy.RefreshInterval,
-                locked,
+                destination.EstimatedFlightHours,
+                offeredAt,
+                offeredAt + lifetime,
+                isLockedPreview,
                 destination.RouteStrength,
                 destination.RelationshipStrength,
                 track.Weight * kind.Weight * destination.Weight));
+            added++;
         }
-
-        return offers;
     }
 
     private static List<Weighted<ServiceTrack>> BuildTrackChoices(
         JobMarketGenerationRequest request,
-        JobMarketPolicy policy)
+        JobMarketPolicy policy,
+        bool locked)
     {
         var choices = new List<Weighted<ServiceTrack>>();
         foreach (var track in Enum.GetValues<ServiceTrack>())
         {
+            var isAvailable = request.Access.Allows(track);
+            if (locked == isAvailable)
+                continue;
+
             var weight = policy.TrackWeight(request.Origin, track);
             if (weight <= 0)
                 continue;
-
-            var available = request.Access.Allows(track);
-            if (!available)
-            {
-                if (!policy.ShowLockedPreviews)
-                    continue;
+            if (locked)
                 weight *= policy.LockedPreviewWeight;
-            }
-
             if (weight > 0)
                 choices.Add(new(track, weight));
         }
@@ -169,7 +217,7 @@ public static class JobMarketGenerator
         if (SupportsLocalOperation(kind))
         {
             choices.Add(new(
-                new DestinationChoice(originIcao, 0, 1, 0, policy.LocalOperationWeight),
+                new DestinationChoice(originIcao, 0, null, 1, 0, policy.LocalOperationWeight),
                 policy.LocalOperationWeight));
         }
 
@@ -182,14 +230,24 @@ public static class JobMarketGenerator
             var distanceWeight = Math.Exp(-destination.DistanceNm / policy.DistanceDecayNm) + policy.LongRangeFloorWeight;
             var routeWeight = 1 + policy.EstablishedRouteBoost * destination.RouteStrength;
             var relationshipWeight = 1 + policy.RelationshipBoost * destination.RelationshipStrength;
-            var suitability = DistanceSuitability(kind, destination.DistanceNm);
-            var weight = distanceWeight * routeWeight * relationshipWeight * destination.MarketAttractiveness * suitability;
+            var kindDistanceSuitability = DistanceSuitability(kind, destination.DistanceNm);
+            var durationSuitability = policy.DurationSuitability(
+                kind,
+                destination.EstimatedFlightHours,
+                request.EffectiveCareerStanding.Level);
+            var weight = distanceWeight
+                * routeWeight
+                * relationshipWeight
+                * destination.MarketAttractiveness
+                * kindDistanceSuitability
+                * durationSuitability;
             if (weight <= 0 || !double.IsFinite(weight))
                 continue;
 
             var choice = new DestinationChoice(
                 icao,
                 destination.DistanceNm,
+                destination.EstimatedFlightHours,
                 destination.RouteStrength,
                 destination.RelationshipStrength,
                 weight);
@@ -262,6 +320,7 @@ public static class JobMarketGenerator
     private sealed record DestinationChoice(
         string Icao,
         double DistanceNm,
+        double? EstimatedFlightHours,
         double RouteStrength,
         double RelationshipStrength,
         double Weight);
