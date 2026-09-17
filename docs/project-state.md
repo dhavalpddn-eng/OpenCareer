@@ -12,6 +12,12 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 - UI target/spec: `docs/ui-concept.md`; refined lightweight preview: `docs/assets/opencareer-dashboard-concept-v2.svg`.
 - Verify remote branch head before edits because other chats may change it.
 
+### Parallel gameplay branches
+
+- `feature/job-market-foundation` contains the isolated airport/job-market/cargo/passenger/social-feed work.
+- `feature/conflict-simulation-foundation` forks from that branch and adds deterministic regional conflict escalation, bounded player influence and conflict-stage aviation demand. Read `docs/conflict-simulation.md` only when working on that subsystem.
+- These parallel branches are intentionally **not** the Astra/SimConnect branch. Rebase against the current `feature/m1-simulation-core` head before any merge.
+
 ## Fixed direction
 
 Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI 3/Windows App SDK, isolated SimConnect boundary, SQLite, deterministic/testable domain. No aircraft whitelist. AI is optional and never authoritative for money, ownership, mission completion or critical state.
