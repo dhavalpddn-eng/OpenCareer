@@ -2,78 +2,96 @@
 
 Updated 2026-09-17. Read `AGENTS.md` and `docs/project-state.md` first. Read this file only when working on airport/job-market/career-economy generation.
 
-## Why this branch exists
+## Parallel branch
 
-Parallel work for the local airport/job-market loop lives on `feature/job-market-foundation` so Astra can continue telemetry/SimConnect work without editing the same files. Merge/rebase only after checking the current `feature/m1-simulation-core` head.
+Work lives on `feature/job-market-foundation` so Astra can continue telemetry/SimConnect work without editing the same files. Rebase/merge only after checking the current `feature/m1-simulation-core` head and rerunning both CI paths.
 
-## Player intent already fixed
+## Accepted player decisions
 
-- Career starts from a meaningful home airport; no free company teleporting.
-- KRME Griffiss International is the first calibration hub and must stay mixed civilian/government/defense/UAS rather than being treated as purely military.
-- Military-heavy airports should create substantially more military/government opportunities than ordinary public airports while retaining appropriate civilian work.
-- Jobs should help build geographic connections, employer/customer relationships and later base/storage expansion.
-- First used light-aircraft ownership should become reasonably attainable around 50–80 real flying hours through economics, not an hour unlock.
-- Typical sessions are 1–3 hours and may extend to about six.
+- **Starter board:** level 1 exposes only **1–2 jobs**.
+- **Airport cap:** career level expands visibility up to an airport-specific mature capacity. Current scale presets are Local 10, Small 16, Regional 20, Large 35, MajorHub 45, MegaHub 60. These are game-design capacities, not claims about real daily flights.
+- **Meaningful levels:** level is a meta-progression summary derived from verified flying/contracts/routes/trust/qualifications. It may reveal more work/convenience/prestige but never bypasses licenses, ratings, aircraft capability, military authorization, employer trust, affordability or dispatch feasibility.
+- **Early duration:** early-career boards favor jobs estimated around **2–4 flight hours**, with mission-type exceptions such as ferry/reposition work.
+- **Employer trust:** repeated successful, safe, on-time work builds persistent trust. Real company names may be used only when their real airport presence/service is sourced. Large employers can later provide duty deadhead when the relationship permits it.
+- **Airport specialization:** airport/company/job mix should reflect real airport roles: airline hubs, cargo hubs, military/government activity, UAS/research, skydiving, GA, medical, tourism, etc. Specialties are strong tendencies rather than a generic board.
+- **Military/security events:** regional security phases can shift work toward military/government missions, including transport, surveillance/recon, patrol, medevac, evacuation and logistics. Severe active conflict can suppress ordinary civilian work. Ceasefire/recovery immediately refreshes toward humanitarian, cargo, medical, survey and infrastructure-recovery work.
+- **Dream jobs:** show at most **1–2 aspirational locked jobs**. They never grant access.
+- **Route familiarity:** repeated service progresses Untried -> Discovered -> Familiar -> Established -> Preferred -> Core. Current successful-flight thresholds are 1 / 2 / 5 / 12 / 25.
+- **Pay direction:** base pay should primarily reflect time + distance + payload, then market supply/demand, urgency, scarcity, difficulty, employer relationship and operating costs. Final settlement is not implemented yet.
+- **Cargo/passenger economy:** cargo goods and passenger route trends must affect demand. Popular destinations, seasonal travel and local shortages can move job frequency/pay.
+- **Deadhead/travel:** player may pay to travel without their aircraft; the aircraft remains where it physically is. Some large-company duty assignments may provide employer-paid deadhead.
+- **Refresh behavior:** jobs expire/replenish individually at deterministic random times. Internal generation buckets are an implementation aid, not a whole-board wipe. Major world/security transitions can force an immediate relevant-board rebuild.
+- **World/social feed:** optional online GPT/news-assisted feed is allowed for flavor and validated external signals, but it is never authoritative for money, mission completion, ownership, access or airspace state. Persist normalized signals/posts in SQLite; deterministic game logic decides effects.
 
-## Implemented in this branch
+## Implemented on this branch
 
-New domain-only, deterministic job-board foundation:
+### Job visibility and level
 
-- `JobMarketPolicy`: tuning surface for board size, refresh cycle, range bias, locked previews, route/relationship boosts, military/government weighting and UAS specialty weighting.
-- `JobMarketAccess`: controls which service tracks are currently actionable without weakening authoritative `JobContract` dispatch validation.
-- `JobMarketDestination`: candidate destination with distance, route strength, relationship strength and market attractiveness.
-- `JobMarketGenerator`: stable seeded generation by airport + market cycle; produces offer drafts only, not settled contracts or money.
-- UAS-heavy airports boost survey/photography/surveillance-style opportunities.
-- Established routes and relationships increase destination selection probability.
-- Local-capable job types may remain at the origin instead of creating fake cross-country travel.
-- Locked jobs can be shown at reduced weight or hidden by policy; a preview never grants access.
+- `CareerProgressEvidence`, `CareerLevelSnapshot`, `CareerLevelPolicy`.
+- Default max level: 50.
+- Current merit sources: verified flight hours, completed contracts, route milestones, employer-trust milestones and qualifications.
+- Board growth uses a smooth level curve and an airport mature-capacity ceiling.
+- Wolfram design check for the chosen curve (`cap=60`) produced approximately: level 1 = 2, level 5 = 9, level 10 = 16, level 20 = 28, level 30 = 40, level 40 = 50, level 50 = 60. Actual level-1 count is deterministically 1 or 2.
 
-Tests cover deterministic replay, cycle changes, locked visibility, KRME-vs-low-defense military mix, relationship/route weighting, UAS specialization and invalid inputs.
+### Airport/job board
 
-## Provisional defaults awaiting player answers
+- `AirportMarketCapacity` separates career-market size from runway feasibility.
+- `JobMarketPolicy`, `JobMarketAccess`, `JobMarketDestination`, `JobMarketGenerator`.
+- deterministic generation by career seed + airport + generation bucket;
+- randomized per-offer expiry rather than a single board expiry;
+- early 2–4-hour preference;
+- 1–2 locked dream previews as the board grows;
+- route/relationship weighting;
+- stronger UAS/research weighting for survey/photography/surveillance;
+- local-capable jobs can remain at the origin.
 
-These are deliberately policy knobs, not final design promises:
+### Relationships and network
 
-- 8–12 offers per board.
-- 8-hour market refresh.
-- 250 NM distance decay with a small long-range floor; hard generation ceiling 1,200 NM.
-- Established-route boost +60%; relationship boost +75% at full strength.
-- Government track multiplier 1.35; military multiplier 1.80.
-- Locked previews enabled but downweighted to 15% of their normal selection weight.
-- Civilian market split: 60% employee / 25% independent / 15% company before access filtering.
+- `EmployerTrustState` with New / Known / Trusted / Preferred / Partner tiers.
+- failures and accepted-job cancellations reduce trust.
+- large-company deadhead eligibility is relationship-dependent.
+- `RouteExperience` requires repeated successful service before a route becomes established/preferred/core.
 
-With current KRME demand values, Wolfram's simple normalized track check gives about 27.1% civilian, 35.1% government and 37.7% military before locked-access suppression. In an illustrative low-defense mixed public airport (82% civilian, 15% government, 5% military demand), the same policy gives ~8.1% military, so KRME's military share is about 4.7x higher. This is a tuning diagnostic, **not a claim about real Griffiss sortie proportions**.
+### Regional security / recovery
 
-The current acquisition example needs $64,000 cash/reserve. Wolfram confirms that reaching it in 50–80 flight hours requires average net savings of roughly $1,280/hour at 50h, $985/hour at 65h, or $800/hour at 80h. Actual job pay is intentionally not coded here yet; settlement needs the real career/economy pipeline and playtesting.
+- `RegionalSecurityState`: Normal, ElevatedTension, ActiveConflict, Ceasefire, Recovery.
+- state can be Simulated or `CuratedLiveSignal`; a live signal must include source provenance.
+- severe conflict can suppress civilian-track selection and heavily boost government/military tracks.
+- ceasefire/recovery boosts cargo, humanitarian, medical, survey and recovery work.
+- `JobScenarioKind` includes Standard, OrganTransport, TroopMovement, HumanitarianAirlift, ConflictReconnaissance, RecoverySupply and InfrastructureAssessment.
+- scenario generation is deterministic. External AI does not decide eligibility or rewards.
 
-## Ten decisions requested from the player
+## Calibration notes
 
-1. Board density: 15–25 jobs or a tighter 6–12?
-2. Early range: mainly 100–250 NM or occasional 500–1,000+ NM immediately?
-3. Employer relationships: strong exclusive chains or modest bonuses?
-4. Airport specialties: hard specialties or soft tendencies?
-5. Military-heavy weighting: roughly 3x, 5x, 10x+ versus normal public airports?
-6. Show aspirational locked jobs or only actionable jobs?
-7. Establish a route after one flight or after repeated service (e.g. 3–5)?
-8. Pay priority: time/distance/payload/risk versus scarcity/urgency dominating special cases?
-9. Allow paid passenger/deadhead travel to another market, or mostly require flying jobs?
-10. Continuous job creation or market-cycle refresh (e.g. 6–12 hours)?
+The airport-capacity curve was checked with Wolfram before implementation. Current UAS specialization was increased after CI showed the original multiplier produced too little observable separation; this is gameplay tuning rather than a real-world statistic.
 
-When answers arrive, change policy values/relationship rules rather than rewriting the generator.
+The existing first-aircraft example needs $64,000 cash/reserve. The prior Wolfram calibration implies average net savings around $1,280/flight-hour for 50h, $985/hour for 65h, or $800/hour for 80h. Actual job pay is intentionally not finalized until the job/cargo/passenger economy and one-time ledger settlement are connected.
 
-## Data-source boundary
+## Real-data boundary
 
-Official MSFS 2024 SimConnect facility APIs can provide airport identity/position plus physical data such as runway counts/details, starts, approaches, taxi parking, helipads and jetways. That is useful for feasibility/capacity. The documented airport facility members do **not** provide career-economic labels such as "military-heavy", "cargo hub", "tourism" or "UAS research". Keep those classifications in OpenCareer's airport/economic data layer and source/curate them separately; never infer them from runway size alone.
+Official MSFS 2024 SimConnect facility APIs can provide physical airport data such as position, runways, starts, approaches, taxi parking, helipads and jetways. They do **not** provide economic labels such as cargo hub, airline hub, military-heavy, tourism or UAS-research. Keep those in OpenCareer's sourced airport/economic data layer.
 
-Official SDK reference: `SimConnect_AddToFacilityDefinition`, `SimConnect_RequestAllFacilities`, and `SIMCONNECT_FACILITY_LIST_TYPE_AIRPORT` in the MSFS 2024 SDK.
+For U.S. airports, preferred external calibration sources are:
 
-## Not implemented yet
+- FAA passenger enplanement and all-cargo datasets for airport scale/cargo intensity;
+- BTS T-100 segment/market data for carrier presence, routes, passengers, freight/mail, capacity, departures and aircraft hours;
+- airport/operator/DoD/government official sources for specialty roles that traffic datasets do not describe.
 
-- No dollars/pay quotes or ledger settlement.
-- No generated `JobContract` requirements; aircraft/qualification/authorization rules remain authoritative downstream.
-- No persistence of board snapshots or accepted offers.
-- No deadhead travel, employer chains or route service-count state yet.
-- No broad airport classification dataset yet.
-- No UI binding yet.
+Do not infer a military base, airline base, cargo operator or employer relationship solely from runway dimensions.
 
-Those should follow the player's ten answers and the playable telemetry/flight foundation.
+## Real-mission inspiration rule
+
+Use documented historical mission patterns as inspiration, not literal reenactments of tragedies. Examples already verified from official U.S. military sources include an FB-111A donor-heart transport in 1986, C-17 troop/equipment airlift supporting an African Union mission in 2014, and C-17 ECMO medical evacuation. Preserve the *operational pattern* (urgent organ lift, troop/logistics movement, specialized medevac), while the generated OpenCareer contract remains fictional unless a live-data feature explicitly labels factual information with provenance.
+
+## Still not implemented
+
+- persistent SQLite board service that keeps surviving offers and replenishes only expired/consumed slots;
+- real employer/airport classification dataset and licensing/attribution review;
+- commodity-level cargo economy and passenger-trend engine;
+- pay quote + authoritative one-time ledger settlement;
+- paid personal deadhead quote/settlement and employer-issued duty deadhead orders;
+- online signal collector / GPT world-feed integration and SQLite feed persistence;
+- conversion of offer drafts into fully validated `JobContract` requirements;
+- UI binding.
+
+Next job-market work should build the persistent board lifecycle plus cargo/passenger demand signals, then hook those outputs into authoritative contract generation after Astra's playable flight foundation is ready.
