@@ -24,6 +24,8 @@ Status: next chapter; not implemented.
 
 Purpose: launch a usable companion without requiring MSFS.
 
+Visual reference: [dashboard concept](ui-concept.md). Read only for UI tasks; the populated concept is a later target, while this chapter implements the shell and empty/disconnected states.
+
 Tasks:
 - Create OpenCareer.App using WinUI 3, .NET 10 and Windows x64.
 - Add NavigationView, connection status and an empty Current Flight screen.

@@ -70,3 +70,7 @@ Then: isolated SimConnect connection/reconnect boundary → normalized telemetry
 - [SDK strategy](msfs-sdk-strategy.md): verified SDK direction and integration limitations.
 - [Simulation model](simulation-model.md): deterministic invariants.
 - [Instruction alignment](instruction-alignment.md): earlier architecture review; historical status, not current implementation inventory.
+
+## Visual reference
+
+[UI concept and preview](ui-concept.md) — optional reading for UI/design tasks only. Keep the SVG/image out of routine context. Concept uses sample data; no implemented-screen claim.
