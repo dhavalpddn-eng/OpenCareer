@@ -1,0 +1,28 @@
+<Page
+    x:Class="OpenCareer.App.Views.CurrentFlightPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid>
+        <Border HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                MaxWidth="620"
+                Background="{StaticResource AppSurfaceBrush}"
+                BorderBrush="{StaticResource AppBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="14"
+                Padding="36">
+            <StackPanel Spacing="12" HorizontalAlignment="Center">
+                <TextBlock Text="No active flight" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding ConnectionStatus}"
+                           Foreground="{StaticResource AppAccentBrush}"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="When MSFS is connected and a flight session begins, this page will show mission progress, flight state, telemetry summary and recoverable session status."
+                           Foreground="{StaticResource AppMutedTextBrush}"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>
