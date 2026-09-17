@@ -1,3 +1,4 @@
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Events;
 
 namespace OpenCareer.Domain.Careers;
@@ -8,7 +9,8 @@ public sealed record JobMarketDestination(
     double RouteStrength = 0,
     double RelationshipStrength = 0,
     double MarketAttractiveness = 1,
-    double? EstimatedFlightHours = null)
+    double? EstimatedFlightHours = null,
+    RouteDemandProfile? DemandProfile = null)
 {
     public string NormalizedIcao => JobMarketIcao.Normalize(Icao);
 
@@ -23,6 +25,7 @@ public sealed record JobMarketDestination(
             throw new ArgumentOutOfRangeException(nameof(MarketAttractiveness));
         if (EstimatedFlightHours is { } hours && (!double.IsFinite(hours) || hours < 0))
             throw new ArgumentOutOfRangeException(nameof(EstimatedFlightHours));
+        DemandProfile?.Validate();
     }
 
     private static void ValidateUnit(double value, string name)
@@ -60,8 +63,22 @@ public sealed record JobMarketGenerationRequest(
             throw new ArgumentOutOfRangeException(nameof(CareerStanding));
         if (Destinations.Count == 0)
             throw new ArgumentException("At least one destination is required.", nameof(Destinations));
+
+        var originIcao = JobMarketIcao.Normalize(Origin.Icao);
         foreach (var destination in Destinations)
+        {
             destination.Validate();
+            if (destination.DemandProfile is not { } demand)
+                continue;
+
+            if (!string.Equals(demand.OriginIcao, originIcao, StringComparison.Ordinal)
+                || !string.Equals(demand.DestinationIcao, destination.NormalizedIcao, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Route demand profile must match the job-market origin and destination.",
+                    nameof(Destinations));
+            }
+        }
     }
 }
 
