@@ -25,7 +25,11 @@ public partial class App : Microsoft.UI.Xaml.Application
             builder.AddDebug();
             builder.SetMinimumLevel(LogLevel.Information);
         });
-        services.AddSingleton<ISimulatorConnection, SimConnectConnection>();
+        services.AddSingleton<SimConnectConnection>();
+        services.AddSingleton<ISimulatorConnection>(provider =>
+            provider.GetRequiredService<SimConnectConnection>());
+        services.AddSingleton<ISimulatorTelemetrySource>(provider =>
+            provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<MainWindow>();
 

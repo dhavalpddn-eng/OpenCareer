@@ -1,10 +1,11 @@
 using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Telemetry;
 using OpenCareer.SimConnect.Native;
 
 namespace OpenCareer.SimConnect;
 
-public sealed class SimConnectConnection : ISimulatorConnection
+public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelemetrySource
 {
     private readonly object _lifecycleGate = new();
     private readonly ISimConnectApi _api;
@@ -12,6 +13,7 @@ public sealed class SimConnectConnection : ISimulatorConnection
     private readonly SimConnectConnectionOptions _options;
     private readonly TimeProvider _clock;
     private SimulatorConnectionSnapshot _current = new(SimulatorConnectionState.Disconnected);
+    private AircraftTelemetrySnapshot? _latestTelemetry;
     private CancellationTokenSource? _stop;
     private Task _worker = Task.CompletedTask;
     private bool _disposed;
@@ -34,6 +36,7 @@ public sealed class SimConnectConnection : ISimulatorConnection
     }
 
     public SimulatorConnectionSnapshot Current => Volatile.Read(ref _current);
+    public AircraftTelemetrySnapshot? Latest => Volatile.Read(ref _latestTelemetry);
 
     public void Start()
     {
@@ -83,6 +86,7 @@ public sealed class SimConnectConnection : ISimulatorConnection
     {
         bool everConnected = false;
         int failures = 0;
+        PublishTelemetry(null);
         Publish(new(SimulatorConnectionState.WaitingForSimulator));
         try
         {
@@ -92,6 +96,7 @@ public sealed class SimConnectConnection : ISimulatorConnection
                 try
                 {
                     var issue = RunSession(token, ref everConnected, ref failures);
+                    PublishTelemetry(null);
                     if (token.IsCancellationRequested)
                         break;
 
@@ -104,6 +109,7 @@ public sealed class SimConnectConnection : ISimulatorConnection
                 catch (Exception ex) when (ex is DllNotFoundException or BadImageFormatException
                     or EntryPointNotFoundException or PlatformNotSupportedException)
                 {
+                    PublishTelemetry(null);
                     var issue = ex switch
                     {
                         DllNotFoundException => SimulatorConnectionIssue.RuntimeMissing,
@@ -122,11 +128,13 @@ public sealed class SimConnectConnection : ISimulatorConnection
         }
         catch (Exception ex)
         {
+            PublishTelemetry(null);
             _logger.LogError(ex, "SimConnect connection worker stopped unexpectedly.");
             Publish(new(SimulatorConnectionState.Faulted, SimulatorConnectionIssue.UnexpectedError));
         }
         finally
         {
+            PublishTelemetry(null);
             if (token.IsCancellationRequested)
                 Publish(new(SimulatorConnectionState.Disconnected));
         }
@@ -155,6 +163,7 @@ public sealed class SimConnectConnection : ISimulatorConnection
             uint nextRequestId = 1;
             uint? pendingHeartbeat = null;
             bool acknowledged = false;
+            bool paused = false;
             var messages = new List<SimConnectMessage>();
             Exception? callbackError = null;
             DispatchCallback callback = (data, size, _) =>
@@ -188,6 +197,9 @@ public sealed class SimConnectConnection : ISimulatorConnection
                     switch (message.Kind)
                     {
                         case SimConnectMessageKind.Open when !acknowledged:
+                            if (!ConfigureTelemetry(handle))
+                                return SimulatorConnectionIssue.SimulatorError;
+
                             acknowledged = true;
                             everConnected = true;
                             failures = 0;
@@ -196,6 +208,29 @@ public sealed class SimConnectConnection : ISimulatorConnection
                             break;
                         case SimConnectMessageKind.Quit:
                             return SimulatorConnectionIssue.ConnectionLost;
+                        case SimConnectMessageKind.Event
+                            when acknowledged && message.EventId == SimConnectTelemetryDefinition.PauseEventId:
+                            paused = message.EventData != 0;
+                            if (Latest is { } currentTelemetry)
+                                PublishTelemetry(currentTelemetry with
+                                {
+                                    Timestamp = _clock.GetUtcNow(),
+                                    Paused = paused
+                                });
+                            break;
+                        case SimConnectMessageKind.SimObjectData
+                            when acknowledged
+                                && message.RequestId == SimConnectTelemetryDefinition.RequestId
+                                && message.DefinitionId == SimConnectTelemetryDefinition.DefinitionId:
+                            var telemetry = SimConnectTelemetryMapper.Map(
+                                message.Data,
+                                _clock.GetUtcNow(),
+                                paused);
+                            if (telemetry is not null)
+                                PublishTelemetry(telemetry);
+                            else
+                                _logger.LogDebug("Ignored invalid aircraft telemetry packet.");
+                            break;
                         case SimConnectMessageKind.SystemState when pendingHeartbeat == message.RequestId:
                             pendingHeartbeat = null;
                             break;
@@ -237,6 +272,53 @@ public sealed class SimConnectConnection : ISimulatorConnection
         }
     }
 
+    private bool ConfigureTelemetry(nint handle)
+    {
+        foreach (var datum in SimConnectTelemetryDefinition.Data)
+        {
+            int result = _api.AddToDataDefinition(
+                handle,
+                SimConnectTelemetryDefinition.DefinitionId,
+                datum.Name,
+                datum.Units);
+            if (result < 0)
+            {
+                _logger.LogWarning(
+                    "SimConnect rejected telemetry definition {Datum} with HRESULT {HResult:X8}.",
+                    datum.Name,
+                    result);
+                return false;
+            }
+        }
+
+        int subscribeResult = _api.SubscribeToSystemEvent(
+            handle,
+            SimConnectTelemetryDefinition.PauseEventId,
+            "Pause_EX1");
+        if (subscribeResult < 0)
+        {
+            _logger.LogWarning(
+                "SimConnect rejected Pause_EX1 subscription with HRESULT {HResult:X8}.",
+                subscribeResult);
+            return false;
+        }
+
+        int requestResult = _api.RequestDataOnUserAircraft(
+            handle,
+            SimConnectTelemetryDefinition.RequestId,
+            SimConnectTelemetryDefinition.DefinitionId,
+            SimConnectPeriod.Second);
+        if (requestResult < 0)
+        {
+            _logger.LogWarning(
+                "SimConnect rejected aircraft telemetry request with HRESULT {HResult:X8}.",
+                requestResult);
+            return false;
+        }
+
+        return true;
+    }
+
     private void Close(nint handle)
     {
         try
@@ -259,4 +341,7 @@ public sealed class SimConnectConnection : ISimulatorConnection
         Volatile.Write(ref _current, snapshot);
         _logger.LogInformation("Simulator connection: {State}; issue: {Issue}.", snapshot.State, snapshot.Issue);
     }
+
+    private void PublishTelemetry(AircraftTelemetrySnapshot? snapshot) =>
+        Volatile.Write(ref _latestTelemetry, snapshot);
 }

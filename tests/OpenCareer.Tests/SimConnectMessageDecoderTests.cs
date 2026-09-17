@@ -24,11 +24,41 @@ public sealed class SimConnectMessageDecoderTests
         Assert.Equal(4u, message.ParameterIndex);
     }
 
+    [Fact]
+    public void EventDecodesClientEventIdAndData()
+    {
+        var message = Decode(SimConnectPackets.Event(77, 9));
+        Assert.Equal(SimConnectMessageKind.Event, message.Kind);
+        Assert.Equal(77u, message.EventId);
+        Assert.Equal(9u, message.EventData);
+    }
+
+    [Fact]
+    public void SimObjectDataCopiesFloat64Payload()
+    {
+        double[] values = [1.25, -2.5, 99.75];
+        var message = Decode(SimConnectPackets.SimObjectData(101, 202, values));
+        Assert.Equal(SimConnectMessageKind.SimObjectData, message.Kind);
+        Assert.Equal(101u, message.RequestId);
+        Assert.Equal(202u, message.DefinitionId);
+        Assert.Equal(values, message.Data);
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(8)]
     public void TruncatedKnownMessagesAreRejected(uint kind) =>
         Assert.Throws<InvalidDataException>(() => Decode(SimConnectPackets.Header(kind)));
+
+    [Fact]
+    public void SimObjectDataRejectsCountBeyondPacket()
+    {
+        var packet = SimConnectPackets.SimObjectData(1, 2, [3.0]);
+        BitConverter.GetBytes(2u).CopyTo(packet, 36);
+        Assert.Throws<InvalidDataException>(() => Decode(packet));
+    }
 
     [Fact]
     public void InvalidHeaderSizesAndNullPointersAreRejected()

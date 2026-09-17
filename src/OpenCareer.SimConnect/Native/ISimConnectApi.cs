@@ -5,11 +5,23 @@ namespace OpenCareer.SimConnect.Native;
 [UnmanagedFunctionPointer(CallingConvention.StdCall)]
 internal delegate void DispatchCallback(nint data, uint size, nint context);
 
-// Every call, including Close, belongs to the connection's single worker thread.
+internal enum SimConnectPeriod : uint
+{
+    Never = 0,
+    Once = 1,
+    VisualFrame = 2,
+    SimFrame = 3,
+    Second = 4
+}
+
+// Every call, including subscriptions and Close, belongs to the connection's single worker thread.
 internal interface ISimConnectApi
 {
     int Open(out nint handle, nint notificationEvent);
     int CallDispatch(nint handle, DispatchCallback callback);
+    int AddToDataDefinition(nint handle, uint definitionId, string datumName, string unitsName);
+    int RequestDataOnUserAircraft(nint handle, uint requestId, uint definitionId, SimConnectPeriod period);
+    int SubscribeToSystemEvent(nint handle, uint eventId, string eventName);
     int RequestSystemState(nint handle, uint requestId);
     int Close(nint handle);
 }

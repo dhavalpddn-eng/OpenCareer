@@ -27,6 +27,12 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
     internal int[] ThreadIds => _threads.Distinct().ToArray();
     internal ConcurrentQueue<uint> Heartbeats { get; } = new();
     internal int HeartbeatResult { get; set; }
+    internal ConcurrentQueue<(uint DefinitionId, string DatumName, string Units)> DataDefinitions { get; } = new();
+    internal int AddDefinitionResult { get; set; }
+    internal ConcurrentQueue<(uint RequestId, uint DefinitionId, SimConnectPeriod Period)> TelemetryRequests { get; } = new();
+    internal int TelemetryRequestResult { get; set; }
+    internal ConcurrentQueue<(uint EventId, string EventName)> SystemEvents { get; } = new();
+    internal int SubscribeResult { get; set; }
 
     internal void Enqueue(byte[]? packet = null, int result = 0, Action? action = null) =>
         _dispatch.Enqueue((packet, result, action));
@@ -68,6 +74,43 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
             Interlocked.Increment(ref _dispatched);
             Exit();
         }
+    }
+
+    public int AddToDataDefinition(nint handle, uint definitionId, string datumName, string unitsName)
+    {
+        Enter();
+        try
+        {
+            DataDefinitions.Enqueue((definitionId, datumName, unitsName));
+            return AddDefinitionResult;
+        }
+        finally { Exit(); }
+    }
+
+    public int RequestDataOnUserAircraft(
+        nint handle,
+        uint requestId,
+        uint definitionId,
+        SimConnectPeriod period)
+    {
+        Enter();
+        try
+        {
+            TelemetryRequests.Enqueue((requestId, definitionId, period));
+            return TelemetryRequestResult;
+        }
+        finally { Exit(); }
+    }
+
+    public int SubscribeToSystemEvent(nint handle, uint eventId, string eventName)
+    {
+        Enter();
+        try
+        {
+            SystemEvents.Enqueue((eventId, eventName));
+            return SubscribeResult;
+        }
+        finally { Exit(); }
     }
 
     public int Close(nint handle)
@@ -129,6 +172,25 @@ internal static class SimConnectPackets
         BitConverter.GetBytes(code).CopyTo(bytes, 12);
         BitConverter.GetBytes(19u).CopyTo(bytes, 16);
         BitConverter.GetBytes(4u).CopyTo(bytes, 20);
+        return bytes;
+    }
+
+    internal static byte[] Event(uint eventId, uint data)
+    {
+        byte[] bytes = Header(4, 24);
+        BitConverter.GetBytes(eventId).CopyTo(bytes, 16);
+        BitConverter.GetBytes(data).CopyTo(bytes, 20);
+        return bytes;
+    }
+
+    internal static byte[] SimObjectData(uint requestId, uint definitionId, IReadOnlyList<double> values)
+    {
+        byte[] bytes = Header(8, 40 + values.Count * sizeof(double));
+        BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
+        BitConverter.GetBytes(definitionId).CopyTo(bytes, 20);
+        BitConverter.GetBytes((uint)values.Count).CopyTo(bytes, 36);
+        for (int i = 0; i < values.Count; i++)
+            BitConverter.GetBytes(values[i]).CopyTo(bytes, 40 + i * sizeof(double));
         return bytes;
     }
 

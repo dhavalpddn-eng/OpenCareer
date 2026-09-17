@@ -9,6 +9,8 @@ internal static class SimConnectMessageDecoder
     private const int HeaderSize = 12;
     private const int OpenSize = HeaderSize + 256 + 10 * sizeof(uint);
     private const int ExceptionSize = HeaderSize + 3 * sizeof(uint);
+    private const int EventSize = HeaderSize + 3 * sizeof(uint);
+    private const int SimObjectDataHeaderSize = HeaderSize + 7 * sizeof(uint);
 
     internal static SimConnectMessage Decode(nint data, uint bufferSize)
     {
@@ -25,6 +27,8 @@ internal static class SimConnectMessageDecoder
             SimConnectMessageKind.Open => DecodeOpen(data, declaredSize),
             SimConnectMessageKind.Exception => DecodeException(data, declaredSize),
             SimConnectMessageKind.Quit => new(kind),
+            SimConnectMessageKind.Event => DecodeEvent(data, declaredSize),
+            SimConnectMessageKind.SimObjectData => DecodeSimObjectData(data, declaredSize),
             SimConnectMessageKind.SystemState => DecodeSystemState(data, declaredSize),
             _ => new(SimConnectMessageKind.None)
         };
@@ -51,6 +55,39 @@ internal static class SimConnectMessageDecoder
             ExceptionCode: unchecked((uint)Marshal.ReadInt32(data, 12)),
             SendId: unchecked((uint)Marshal.ReadInt32(data, 16)),
             ParameterIndex: unchecked((uint)Marshal.ReadInt32(data, 20)));
+    }
+
+    private static SimConnectMessage DecodeEvent(nint data, uint size)
+    {
+        RequireSize(size, EventSize);
+        return new(SimConnectMessageKind.Event,
+            EventId: unchecked((uint)Marshal.ReadInt32(data, 16)),
+            EventData: unchecked((uint)Marshal.ReadInt32(data, 20)));
+    }
+
+    private static SimConnectMessage DecodeSimObjectData(nint data, uint size)
+    {
+        RequireSize(size, SimObjectDataHeaderSize);
+        uint requestId = unchecked((uint)Marshal.ReadInt32(data, 12));
+        uint definitionId = unchecked((uint)Marshal.ReadInt32(data, 20));
+        uint defineCount = unchecked((uint)Marshal.ReadInt32(data, 36));
+
+        long requiredSize = SimObjectDataHeaderSize + (long)defineCount * sizeof(double);
+        if (requiredSize > size || defineCount > int.MaxValue)
+            throw new InvalidDataException("Truncated SimConnect object data.");
+
+        int count = checked((int)defineCount);
+        var values = new double[count];
+        for (int i = 0; i < count; i++)
+        {
+            long bits = Marshal.ReadInt64(data, SimObjectDataHeaderSize + i * sizeof(double));
+            values[i] = BitConverter.Int64BitsToDouble(bits);
+        }
+
+        return new(SimConnectMessageKind.SimObjectData,
+            RequestId: requestId,
+            DefinitionId: definitionId,
+            Data: values);
     }
 
     private static Version ReadVersion(ReadOnlySpan<byte> data)

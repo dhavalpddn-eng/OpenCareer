@@ -1,31 +1,68 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.App.ViewModels;
 
-public sealed class ShellViewModel(ISimulatorConnection connection) : INotifyPropertyChanged
+public sealed class ShellViewModel(
+    ISimulatorConnection connection,
+    ISimulatorTelemetrySource telemetrySource) : INotifyPropertyChanged
 {
-    private SimulatorConnectionSnapshot? _lastSnapshot;
+    private SimulatorConnectionSnapshot? _lastConnectionSnapshot;
+    private AircraftTelemetrySnapshot? _lastTelemetry;
     private string _connectionStatus = "Waiting for MSFS 2024";
     private string _connectionDetail = "OpenCareer will connect automatically when the simulator is available.";
     private string _aircraftStatus = "No aircraft connected";
+    private string _positionSummary = "—";
+    private string _altitudeSummary = "—";
+    private string _speedSummary = "—";
+    private string _verticalSpeedSummary = "—";
+    private string _headingSummary = "—";
+    private string _attitudeSummary = "—";
+    private string _aircraftStateSummary = "—";
+    private string _configurationSummary = "—";
+    private string _loadSummary = "—";
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string ConnectionStatus => _connectionStatus;
     public string ConnectionDetail => _connectionDetail;
     public string AircraftStatus => _aircraftStatus;
+    public string PositionSummary => _positionSummary;
+    public string AltitudeSummary => _altitudeSummary;
+    public string SpeedSummary => _speedSummary;
+    public string VerticalSpeedSummary => _verticalSpeedSummary;
+    public string HeadingSummary => _headingSummary;
+    public string AttitudeSummary => _attitudeSummary;
+    public string AircraftStateSummary => _aircraftStateSummary;
+    public string ConfigurationSummary => _configurationSummary;
+    public string LoadSummary => _loadSummary;
     public bool IsSimulatorConnected { get; private set; }
+    public bool HasTelemetry { get; private set; }
 
     // The shell calls this on its dispatcher. Native callbacks never touch observable UI state.
     public void RefreshConnectionStatus()
     {
-        var snapshot = connection.Current;
-        if (snapshot == _lastSnapshot)
-            return;
-        _lastSnapshot = snapshot;
+        var connectionSnapshot = connection.Current;
+        if (connectionSnapshot != _lastConnectionSnapshot)
+        {
+            _lastConnectionSnapshot = connectionSnapshot;
+            RefreshConnection(connectionSnapshot);
+        }
 
+        AircraftTelemetrySnapshot? telemetry = connectionSnapshot.State == SimulatorConnectionState.Connected
+            ? telemetrySource.Latest
+            : null;
+        if (telemetry != _lastTelemetry)
+        {
+            _lastTelemetry = telemetry;
+            RefreshTelemetry(telemetry);
+        }
+    }
+
+    private void RefreshConnection(SimulatorConnectionSnapshot snapshot)
+    {
         bool connected = snapshot.State == SimulatorConnectionState.Connected;
         if (IsSimulatorConnected != connected)
         {
@@ -55,7 +92,7 @@ public sealed class ShellViewModel(ISimulatorConnection connection) : INotifyPro
             SimulatorConnectionIssue.InvalidResponse or SimulatorConnectionIssue.SimulatorError => "The simulator reported a connection error. OpenCareer will try again.",
             _ => snapshot.State switch
             {
-                SimulatorConnectionState.Connected => "Connection established. Flight tracking is not available in this build.",
+                SimulatorConnectionState.Connected => "Connection established. Live aircraft telemetry will appear when MSFS begins sending data.",
                 SimulatorConnectionState.Connecting => "Waiting for the simulator to acknowledge the connection.",
                 SimulatorConnectionState.Reconnecting => "The simulator connection was lost. OpenCareer will reconnect automatically.",
                 SimulatorConnectionState.Disconnected => "Simulator connection is stopped.",
@@ -65,7 +102,73 @@ public sealed class ShellViewModel(ISimulatorConnection connection) : INotifyPro
 
         SetField(ref _connectionStatus, status, nameof(ConnectionStatus));
         SetField(ref _connectionDetail, detail, nameof(ConnectionDetail));
-        SetField(ref _aircraftStatus, connected ? "Aircraft data unavailable" : "No aircraft connected", nameof(AircraftStatus));
+
+        if (!connected)
+            SetField(ref _aircraftStatus, "No aircraft connected", nameof(AircraftStatus));
+        else if (!HasTelemetry)
+            SetField(ref _aircraftStatus, "Waiting for aircraft telemetry", nameof(AircraftStatus));
+    }
+
+    private void RefreshTelemetry(AircraftTelemetrySnapshot? telemetry)
+    {
+        bool hasTelemetry = telemetry is not null;
+        if (HasTelemetry != hasTelemetry)
+        {
+            HasTelemetry = hasTelemetry;
+            OnPropertyChanged(nameof(HasTelemetry));
+        }
+
+        if (telemetry is null)
+        {
+            SetField(ref _aircraftStatus,
+                IsSimulatorConnected ? "Waiting for aircraft telemetry" : "No aircraft connected",
+                nameof(AircraftStatus));
+            SetField(ref _positionSummary, "—", nameof(PositionSummary));
+            SetField(ref _altitudeSummary, "—", nameof(AltitudeSummary));
+            SetField(ref _speedSummary, "—", nameof(SpeedSummary));
+            SetField(ref _verticalSpeedSummary, "—", nameof(VerticalSpeedSummary));
+            SetField(ref _headingSummary, "—", nameof(HeadingSummary));
+            SetField(ref _attitudeSummary, "—", nameof(AttitudeSummary));
+            SetField(ref _aircraftStateSummary, "—", nameof(AircraftStateSummary));
+            SetField(ref _configurationSummary, "—", nameof(ConfigurationSummary));
+            SetField(ref _loadSummary, "—", nameof(LoadSummary));
+            return;
+        }
+
+        SetField(ref _aircraftStatus, "Live aircraft telemetry", nameof(AircraftStatus));
+        SetField(ref _positionSummary,
+            FormattableString.Invariant($"{telemetry.LatitudeDegrees:0.00000}°, {telemetry.LongitudeDegrees:0.00000}°"),
+            nameof(PositionSummary));
+        SetField(ref _altitudeSummary,
+            FormattableString.Invariant($"{telemetry.AltitudeMslFeet:0} ft MSL / {telemetry.AltitudeAglFeet:0} ft AGL"),
+            nameof(AltitudeSummary));
+        SetField(ref _speedSummary,
+            FormattableString.Invariant($"{telemetry.IndicatedAirspeedKnots:0} kt IAS / {telemetry.GroundSpeedKnots:0} kt GS"),
+            nameof(SpeedSummary));
+        SetField(ref _verticalSpeedSummary,
+            FormattableString.Invariant($"{telemetry.VerticalSpeedFeetPerMinute:+0;-0;0} ft/min"),
+            nameof(VerticalSpeedSummary));
+        SetField(ref _headingSummary,
+            FormattableString.Invariant($"{telemetry.HeadingDegrees:000}° true"),
+            nameof(HeadingSummary));
+        SetField(ref _attitudeSummary,
+            FormattableString.Invariant($"{telemetry.PitchDegrees:+0.0;-0.0;0.0}° pitch / {telemetry.BankDegrees:+0.0;-0.0;0.0}° bank / {telemetry.NormalAccelerationG:0.00} G"),
+            nameof(AttitudeSummary));
+
+        string motionState = telemetry.SlewActive
+            ? "Slew active"
+            : telemetry.Paused
+                ? "Paused"
+                : telemetry.OnGround ? "On ground" : "Airborne";
+        SetField(ref _aircraftStateSummary, motionState, nameof(AircraftStateSummary));
+
+        string gear = telemetry.GearDown ? "Gear down" : "Gear up";
+        SetField(ref _configurationSummary,
+            FormattableString.Invariant($"{gear} / Flaps {telemetry.FlapsPositionPercent:0}% / {telemetry.EnginesRunning} engine(s) running"),
+            nameof(ConfigurationSummary));
+        SetField(ref _loadSummary,
+            FormattableString.Invariant($"{telemetry.FuelTotalPounds:0} lb fuel / {telemetry.PayloadPounds:0} lb payload"),
+            nameof(LoadSummary));
     }
 
     private void SetField(ref string field, string value, string propertyName)
