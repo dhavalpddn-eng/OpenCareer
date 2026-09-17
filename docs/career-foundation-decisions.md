@@ -4,9 +4,9 @@ Status: authoritative design baseline for implementation and balancing.
 
 ## Early progression
 
-The first personally owned used light aircraft should normally become financially reachable after roughly 50-80 real flying hours. These are fictional game calibration values, not real market prices or approved loan terms. The initial calibration uses a $60,000 representative used light aircraft, 10% down payment, $2,000 protected operating reserve, and about $125/hour net career savings. This models a financed purchase, not debt-free ownership. This produces an acquisition-cash target of $8,000 and a center point of 64 flying hours. Aircraft prices and financing remain market-driven; this is a tuning invariant, not a guaranteed unlock.
+The user clarified the 50–80 real-flight-hour target: a small aircraft bought outright or a larger aircraft financed, depending on career standing and affordability. There is no forced ownership hour gate. The default calibration now uses a fictional $60,000 used light aircraft, $4,000 reserve and $1,000 net savings per real flying hour: 64 hours to a cash purchase. A second calibration uses a $250,000 aircraft, 20% deposit and $14,000 reserve: also 64 hours. These are game tuning examples, not live wages/prices or guaranteed loans. Economy wage integration and end-to-end balance verification remain outstanding.
 
-The player may remain an employee, use employer aircraft, take independent work, finance earlier at greater risk, or wait longer and buy with a stronger balance sheet. There is no XP gate on ownership.
+Credit standing derives from flight experience, completed/failed jobs, safety, employer trust and repayment history. Affordability separately checks verified net income, existing debt payments, collateral, deposit and reserve. A larger aircraft is reachable only when both deposit savings and lender approval work. "Pilot level" is represented by career standing rather than a new XP grind. Full details: [credit and dealers](credit-and-dealers.md).
 
 ## Persistent world without absence punishment
 
@@ -64,4 +64,4 @@ Airport demand numbers are provisional game weights, not measured operation shar
 
 Next vertical slice: WinUI connection-status shell, isolated SimConnect adapter, normalized telemetry, reliable flight-state detection and versioned SQLite session recovery at KRME. Then wire these policies through a single mission/ledger transaction flow and run representative 1-, 3- and 6-hour job scenarios, long absence/reload cases, and economic balance simulations. Do not expand finance complexity before that loop works.
 
-Questions that refine later balancing (do not block foundation): which installed aircraft should be used first; whether the 50–80 hour target means financed or debt-free ownership; whether manual procedures should use self-confirmation where the aircraft exposes no telemetry. Protected absence is a reversible proposal because the user explicitly left that choice open.
+The first test aircraft is now the F-22 at KRME. The user confirmed both cash purchase and financing paths. Exact installed F-22 add-on identity/performance remains to be detected in MSFS; no fabricated performance profile is used. Manual-procedure evidence remains provisional where telemetry is unavailable. Protected absence is a reversible proposal because the user explicitly left that choice open.

@@ -12,9 +12,14 @@ public sealed record CareerProgressionPolicy(
         TargetOwnershipHoursLow: 50,
         TargetOwnershipHoursHigh: 80,
         TypicalUsedLightAircraftPrice: 60_000m,
-        MinimumDownPaymentRate: 0.10m,
-        MinimumOperatingReserve: 2_000m,
-        TargetNetSavingsPerFlightHour: 125m);
+        MinimumDownPaymentRate: 1m,
+        MinimumOperatingReserve: 4_000m,
+        TargetNetSavingsPerFlightHour: 1_000m);
+
+    // Alternative scenario: larger aircraft deposit plus a larger operating reserve.
+    // Credit approval and ongoing affordability are separate gates, never guaranteed at 64 hours.
+    public static CareerProgressionPolicy FinancedLargerAircraft { get; } = new(
+        50, 80, 250_000m, .20m, 14_000m, 1_000m);
 
     public decimal MinimumAcquisitionCash =>
         decimal.Round(TypicalUsedLightAircraftPrice * MinimumDownPaymentRate + MinimumOperatingReserve, 2);
@@ -27,7 +32,7 @@ public sealed record CareerProgressionPolicy(
     {
         if (!double.IsFinite(TargetOwnershipHoursLow) || !double.IsFinite(TargetOwnershipHoursHigh) || TargetOwnershipHoursLow <= 0 || TargetOwnershipHoursHigh < TargetOwnershipHoursLow)
             throw new ArgumentOutOfRangeException(nameof(TargetOwnershipHoursLow));
-        if (TypicalUsedLightAircraftPrice <= 0 || MinimumDownPaymentRate is <= 0 or >= 1 ||
+        if (TypicalUsedLightAircraftPrice <= 0 || MinimumDownPaymentRate is <= 0 or > 1 ||
             MinimumOperatingReserve < 0 || TargetNetSavingsPerFlightHour <= 0)
             throw new ArgumentOutOfRangeException(nameof(TypicalUsedLightAircraftPrice));
         if (ExpectedHoursToAcquisition < TargetOwnershipHoursLow || ExpectedHoursToAcquisition > TargetOwnershipHoursHigh)

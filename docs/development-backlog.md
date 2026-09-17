@@ -67,3 +67,8 @@ These answers guide later gameplay calibration. They are not prerequisites for t
 ## Answered career questions follow-through — 2026-09-17
 
 See [career foundation decisions](career-foundation-decisions.md) for the current rules, implementation boundaries, provisional assumptions and remaining questions. Protected absence supersedes the earlier grace/cap default. Home/current location, connection eligibility, session duration preferences and bankruptcy eligibility are now domain-tested; database, dispatch and UI integration remain open. Restore and retain the original 29 SimLab regressions in addition to xUnit career tests. The next implementation milestone remains the WinUI/SimConnect/session foundation specified by AGENTS.md.
+
+
+## Credit and dealer implementation — 2026-09-17
+
+Added career-derived credit score, lender-specific APR/loan limits, amortized affordability checks, new/used dealer profiles, per-listing seeded daily discounts, cash-purchase eligibility and dealer-to-loan quote composition. Updated the first-ownership target to cash-small / financed-larger paths and confirmed F-22 at KRME for first integration testing. See [credit and dealer design](credit-and-dealers.md). Still open: settled-history aggregation, persisted inventory/issued offers, atomic loan origination/purchase, repayment scheduler on protected career time, UI and live aircraft verification. These remain domain quotes, not funded loans or completed purchases.
