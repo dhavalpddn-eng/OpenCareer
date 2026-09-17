@@ -186,7 +186,7 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
             telemetry.BankDegrees,
             telemetry.NormalAccelerationG,
             telemetry.OnGround,
-            telemetry.ParkingBrake,
+            telemetry.ParkingBrakeSet,
             telemetry.EnginesRunning,
             telemetry.FuelTotalPounds,
             telemetry.PayloadPounds,
@@ -197,12 +197,7 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
         }).ConfigureAwait(false);
 
         string line = FormattableString.Invariant(
-            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] telemetry #{sequence} " +
-            $"lat={telemetry.LatitudeDegrees:0.00000} lon={telemetry.LongitudeDegrees:0.00000} " +
-            $"msl={telemetry.AltitudeMslFeet:0}ft agl={telemetry.AltitudeAglFeet:0}ft " +
-            $"ias={telemetry.IndicatedAirspeedKnots:0}kt gs={telemetry.GroundSpeedKnots:0}kt " +
-            $"vs={telemetry.VerticalSpeedFeetPerMinute:+0;-0;0}fpm hdg={telemetry.HeadingDegrees:000} " +
-            $"ground={telemetry.OnGround} paused={telemetry.Paused} slew={telemetry.SlewActive}");
+            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] telemetry #{sequence} lat={telemetry.LatitudeDegrees:0.00000} lon={telemetry.LongitudeDegrees:0.00000} msl={telemetry.AltitudeMslFeet:0}ft agl={telemetry.AltitudeAglFeet:0}ft ias={telemetry.IndicatedAirspeedKnots:0}kt gs={telemetry.GroundSpeedKnots:0}kt vs={telemetry.VerticalSpeedFeetPerMinute:+0;-0;0}fpm hdg={telemetry.HeadingDegrees:000} ground={telemetry.OnGround} paused={telemetry.Paused} slew={telemetry.SlewActive}");
         Console.WriteLine(line);
     }
 
