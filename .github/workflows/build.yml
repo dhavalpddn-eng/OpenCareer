@@ -12,6 +12,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6
@@ -27,5 +28,5 @@ jobs:
       - name: Build
         run: dotnet build src/OpenCareer.SimLab/OpenCareer.SimLab.csproj --configuration Release --no-restore
 
-      - name: Run deterministic simulation smoke test
+      - name: Run deterministic regression and stress scenarios
         run: dotnet run --project src/OpenCareer.SimLab/OpenCareer.SimLab.csproj --configuration Release --no-build

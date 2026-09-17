@@ -57,9 +57,22 @@ public sealed record AircraftCapabilityProfile(
     public bool Has(AircraftCapability capability) =>
         (Capabilities & capability) == capability;
 
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(AircraftId);
+        if (!double.IsFinite(MaximumPayloadPounds) || MaximumPayloadPounds < 0
+            || !double.IsFinite(MaximumRangeNauticalMiles) || MaximumRangeNauticalMiles < 0
+            || !double.IsFinite(TypicalCruiseKnots) || TypicalCruiseKnots < 0
+            || Seats < 0 || EngineCount < 0 || Access == AircraftAccess.None
+            || (Access & ~AircraftAccess.Any) != 0)
+            throw new ArgumentException("Invalid aircraft capability profile.");
+    }
+
     public bool Satisfies(AircraftMissionRequirements requirements)
     {
         ArgumentNullException.ThrowIfNull(requirements);
+        Validate();
+        requirements.Validate();
 
         return MaximumPayloadPounds >= requirements.MinimumPayloadPounds
             && MaximumRangeNauticalMiles >= requirements.MinimumRangeNauticalMiles
@@ -80,4 +93,15 @@ public sealed record AircraftMissionRequirements(
     double MinimumCruiseKnots = 0,
     int MinimumSeats = 1,
     bool RequiresIfr = false,
-    bool RequiresPressurization = false);
+    bool RequiresPressurization = false)
+{
+    public void Validate()
+    {
+        if (!double.IsFinite(MinimumPayloadPounds) || MinimumPayloadPounds < 0
+            || !double.IsFinite(MinimumRangeNauticalMiles) || MinimumRangeNauticalMiles < 0
+            || !double.IsFinite(MinimumCruiseKnots) || MinimumCruiseKnots < 0
+            || MinimumSeats < 0 || AllowedAccess == AircraftAccess.None
+            || (AllowedAccess & ~AircraftAccess.Any) != 0)
+            throw new ArgumentException("Invalid mission requirements.");
+    }
+}

@@ -45,4 +45,5 @@ public sealed record MarketParameters(
     double MinimumPriceToCostRatio = 0.65,
     double MaximumPriceToCostRatio = 5.0,
     double MaximumDailyCapacityChangeFraction = 0.01,
-    double MaximumStepDays = 1.0);
+    double MaximumStepDays = 1.0,
+    double BacklogClearanceHorizonDays = 1.0);

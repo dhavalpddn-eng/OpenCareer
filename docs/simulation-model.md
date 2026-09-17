@@ -1,81 +1,45 @@
 # OpenCareer simulation model
 
-This document records the first two design-review passes performed before the simulation core was committed.
+## Current invariants (audit correction, 2026-09-17)
 
-## Non-negotiable invariants
+1. Temporary restrictions do not directly overwrite structural capacity.
+2. Demand and capacity are rates; backlog is a stock. Backlog pressure is normalized by `BacklogClearanceHorizonDays`, independent of API update duration.
+3. The application uses `WorldSimulation.Advance`, an hourly UTC clock with stored pending time. Identical inputs/checkpoints produce identical results for daily, six-hour, five-minute and bulk requests on the tested runtime.
+4. `MarketTickEngine` and `EconomicCycleEngine` remain low-level numerical integrators. They are not an application clock and arbitrary caller-selected subdivisions are not guaranteed identical. Event boundaries are chosen by the world clock, never by the UI refresh cadence.
+5. Event starts and ends split only economically relevant intervals; irrelevant scopes, segments and mission-only events cannot add economic substeps. A 0.2-day outage lasts 4.8 hours.
+6. `GetOperationalEffects` projects restrictions at requested career time without consuming saved randomness, including the incomplete hour. Use this for dispatch checks rather than treating the last economic checkpoint as current operational state.
+7. Expansion uses actual served volume and realized contribution per structural capacity, with a smoothed investment signal. Zero service, nonpositive current margin or a finance freeze prevents positive expansion. This is an aggregate investment proxy; real company balance sheets, fixed costs, borrowing and aircraft delivery lead times remain future work.
+8. Independent event/scope random streams store their current state and next occurrence; regional RNG state is also checkpointed. Events use exponential waiting times after the previous instance ends. No duplicate overlapping instance is generated for one event/scope.
+9. Airport, region, nation, fleet and global scopes are separate. The current coordinator owns one market/location. A future shared world coordinator must own global/national schedules before many markets are run together.
+10. Civilian, government and military access are distinct. Dispatch receives explicit eligibility and route evidence; defaults deny unverified operations.
+11. Domain code receives career time explicitly and does not read the wall clock.
 
-1. Temporary airport, weather, airspace, or ground-service restrictions never directly overwrite permanent market capacity.
-2. Demand and capacity are rates; backlog is a stock.
-3. Multi-day catch-up is internally advanced in bounded substeps so a seven-day catch-up is equivalent to seven one-day advances for deterministic inputs.
-4. Prices can react quickly; permanent capacity reacts only to a smoothed investment signal.
-5. World events affect more than money: airspace, navigation, failure hazard, airport services, maintenance capacity, finance, and mission availability are independent dimensions.
-6. Random streams are derived by subsystem/entity from one career seed. Adding a new unrelated feature must not consume random values from an existing subsystem and reshuffle an established save.
-7. Civilian, government, and military aircraft access are separate concepts. A military-only F-22 can receive military missions without becoming a privately purchasable company asset.
-8. Domain logic receives time explicitly. It does not call `DateTime.UtcNow` or `DateTimeOffset.UtcNow` internally.
+## Implementation and verification
 
-## Audit pass 1
+Run:
 
-The original prototype had two defects:
+```sh
+dotnet run --project src/OpenCareer.SimLab/OpenCareer.SimLab.csproj --configuration Release
+```
 
-- `ElapsedDays` changed capacity response but not demand volume, backlog decay, or price response, so tick granularity could change outcomes.
-- A temporary `CapacityShock` was multiplied into capacity and then written back as the next permanent capacity. A one-day 50% availability shock cut structural capacity roughly in half and it recovered only slowly.
+The executable regression suite returns a nonzero exit code when a scenario fails. It covers request partitioning, repeated polling, JSON checkpoint/resume, PRNG resume, catalog ordering, unrelated-event independence, scope and segment isolation, exact event boundaries, pending-hour operational restrictions, long closures, finance freezes, finite input validation, contract authorization/deadlines/lifecycle timestamps, all 14 market segments over two three-year event paths, and a ten-year integrated path. CI runs the same command.
 
-The revised model separates structural capacity from available capacity and advances catch-up with <=1-day internal steps.
+Context7 checked official .NET documentation for positional-record JSON round trips. Wolfram independently confirmed that the new clearance horizon removes caller-duration scaling from backlog pressure and that realized contribution is zero with no service. Native C# regression checks establish the behavior of the implementation.
 
-Wolfram check:
+The older print-only single-seed demonstration and historical mathematical experiments are not the current acceptance gate. A successful build alone does not establish economic correctness. Numerical health checks do not establish gameplay balance or MSFS performance.
 
-- 210 days advanced daily vs. 30 x 7-day catch-up calls: difference norm `0` because both use the same bounded internal steps.
-- Structural capacity before a one-day 50% availability shock: about `102.79`.
-- Structural capacity immediately after that shock: about `102.87`, not ~`51`.
-- The disruption instead creates backlog, which the market subsequently works down.
+## Runtime and persistence boundaries
 
-## Audit pass 2
+- Pure domain simulation runs outside MSFS. Catch-up must run away from simulator callbacks and the UI thread.
+- Partial hours are intentionally retained rather than dropped or recomputed. The economic snapshot can lag requested time by less than one career hour; operational effects are available at the requested time.
+- Event/cycle/configuration state is serializable. Atomic file/SQLite storage, migration handling and crash-safe financial settlement are not implemented.
+- Runtime-specific floating-point behavior is not a cross-platform bitwise replay guarantee. Pin and version the simulation before production saves; test Windows/Linux replay before promising portability across implementations.
+- Telemetry sample targets and immutable telemetry models exist; the SimConnect adapter, bounded buffer, landing capture and WinUI shell do not.
 
-The second pass added:
+## Gameplay calibration
 
-- slow capacity-investment memory (21-day default half-life),
-- effective operating-cost shocks,
-- mean-reverting regional demand and cost cycles,
-- independent deterministic random streams,
-- non-economic world-event dimensions.
+Ordinary charter/cargo/reposition opportunities complement rare disruptions. Charter demand targets passenger/charter segments; cargo demand targets cargo segments. The local charter and reposition arrival rates sum to 42 per eligible airport per career year, about one arrival every 8.7 days before accounting for active-event duration and suppression. These are provisional economic-time settings, not guaranteed visible jobs or real-time notifications.
 
-Wolfram stochastic stress test:
+Wages, actual mission generation, purchases, maintenance, credit and persistent inflation are not connected yet. Preserve the agreed no-XP progression through qualifications, relationships, reputation, capital and access.
 
-- 40 independent paths,
-- 10 simulated years per path,
-- recurring temporary demand/capacity/cost shocks,
-- rare larger shocks.
-
-Observed summary:
-
-- median final backlog: `0`,
-- median worst temporary backlog: about `100.6`,
-- 95th percentile worst backlog: about `404.1`,
-- median final structural capacity: about `141.8`,
-- 5th-95th percentile final structural capacity: about `128.9`-`161.4`,
-- maximum capacity observed: about `169.4`,
-- minimum price observed: about `1.14`,
-- maximum price observed: about `2.56`,
-- no non-finite or negative terminal state was observed in the run.
-
-These values are calibration evidence, not final gameplay balance targets.
-
-## Runtime strategy
-
-OpenCareer should do as little work as possible while MSFS is actively rendering a flight.
-
-- Economy/world simulation uses coarse deterministic ticks and can be deferred during active flight.
-- On shutdown, elapsed career time can be caught up deterministically.
-- Live telemetry uses adaptive sampling: ~0.25 Hz parked/cold, 2 Hz taxi, 1-2 Hz cruise/descent, 5 Hz below 2,000 ft AGL, 10 Hz below 500 ft, and 20 Hz in the final 100 ft/touchdown window.
-- High-resolution landing samples belong in a bounded in-memory buffer and are persisted in batches after landing, not written to SQLite every frame.
-- The future SimConnect adapter should be a single-reader/single-writer boundary and should never block the simulator callback path.
-
-## Next mathematical layers
-
-- company competition and market share,
-- financing/credit cycles and public-company valuation,
-- insurance and component reliability hazard curves,
-- airport/ground-service queueing,
-- runway performance and dispatch feasibility,
-- military/government contract payout calibration,
-- market-information quality and imperfect competitor knowledge.
+See [development-backlog.md](development-backlog.md) for implementation gaps, acceptance criteria and the next milestone.

@@ -1,3 +1,5 @@
+using OpenCareer.Domain.Economy;
+
 namespace OpenCareer.Domain.Events;
 
 public enum WorldEventTier
@@ -46,6 +48,9 @@ public enum MissionOpportunity
     Evacuation = 1 << 3,
     SearchAndRescue = 1 << 4,
     AogCourier = 1 << 5,
+    Charter = 1 << 11,
+    Cargo = 1 << 12,
+    Reposition = 1 << 13,
     GovernmentCourier = 1 << 6,
     MilitaryIntercept = 1 << 7,
     MilitaryEscort = 1 << 8,
@@ -73,7 +78,8 @@ public sealed record WorldEventDefinition(
     double AnnualOccurrenceRatePerEligibleScope,
     double MinimumDurationDays,
     double MaximumDurationDays,
-    WorldEventEffects Effects);
+    WorldEventEffects Effects,
+    MarketSegment[]? AffectedMarketSegments = null);
 
 public sealed record WorldEventInstance(
     string InstanceId,
@@ -84,7 +90,8 @@ public sealed record WorldEventInstance(
     string? ScopeTarget,
     DateTimeOffset StartsAt,
     DateTimeOffset EndsAt,
-    WorldEventEffects Effects)
+    WorldEventEffects Effects,
+    MarketSegment[]? AffectedMarketSegments = null)
 {
     public bool IsActiveAt(DateTimeOffset time) =>
         StartsAt <= time && time < EndsAt;

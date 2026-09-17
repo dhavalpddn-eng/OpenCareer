@@ -13,6 +13,9 @@ public sealed class DeterministicRandom
         _state = seed;
     }
 
+    // Persist this value, not just the original seed, when restoring a stream.
+    public ulong State => _state;
+
     public ulong NextUInt64()
     {
         _state += 0x9E3779B97F4A7C15UL;

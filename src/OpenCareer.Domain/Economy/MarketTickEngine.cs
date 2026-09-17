@@ -4,7 +4,8 @@ public sealed record MarketTickContext(
     double ElapsedDays = 1.0,
     double DemandMultiplier = 1.0,
     double AvailableCapacityMultiplier = 1.0,
-    double OperatingCostMultiplier = 1.0);
+    double OperatingCostMultiplier = 1.0,
+    double FinanceLiquidityMultiplier = 1.0);
 
 public sealed record MarketTickResult(
     MarketState State,
@@ -43,7 +44,7 @@ public static class MarketTickEngine
         var finalMarkup = 0.0;
         var finalEffectiveCost = (double)state.ReferenceUnitCost * context.OperatingCostMultiplier;
 
-        while (remainingDays > Epsilon)
+        while (remainingDays > 0)
         {
             var stepDays = Math.Min(parameters.MaximumStepDays, remainingDays);
             var step = TickStep(
@@ -109,7 +110,7 @@ public static class MarketTickEngine
             : 0.0;
 
         var scarcityCapacityRate = Math.Max(effectiveCapacityRate, 0.001);
-        var backlogRateEquivalent = survivingBacklog / Math.Max(dt, Epsilon);
+        var backlogRateEquivalent = survivingBacklog / parameters.BacklogClearanceHorizonDays;
         var scarcityRatio = (
             freshDemandRate + parameters.BacklogPriceWeight * backlogRateEquivalent)
             / scarcityCapacityRate;
@@ -129,20 +130,17 @@ public static class MarketTickEngine
 
         var operatingMarkup = (nextPrice - effectiveUnitCost) / effectiveUnitCost;
 
-        // Permanent capacity reacts to normal demand and sustained economics, not directly
-        // to a temporary airport/airspace availability multiplier.
+        // Expansion follows realized contribution per unit of structural capacity.
+        // A high quoted price during a closure is not revenue or investable profit.
         var structuralCapacityVolume = state.StructuralCapacityPerDay * dt;
         var investmentUtilization = structuralCapacityVolume > Epsilon
-            ? Math.Clamp(
-                Math.Min(freshDemandVolume, structuralCapacityVolume)
-                / structuralCapacityVolume,
-                0.0,
-                1.0)
+            ? Math.Clamp(servedVolume / structuralCapacityVolume, 0.0, 1.0)
             : 0.0;
-
+        var realizedContribution = (currentPrice - effectiveUnitCost) / effectiveUnitCost
+            * investmentUtilization;
         var rawInvestmentSignal =
             (investmentUtilization - parameters.TargetUtilization)
-            + 0.5 * (operatingMarkup - parameters.TargetMarkup);
+            + 0.5 * (realizedContribution - parameters.TargetMarkup * parameters.TargetUtilization);
 
         var investmentSignalRetention = Math.Pow(
             0.5,
@@ -157,6 +155,13 @@ public static class MarketTickEngine
             * nextInvestmentSignal
             * dt;
 
+        if (capacityGrowthExponent > 0)
+        {
+            capacityGrowthExponent = servedVolume <= Epsilon || currentPrice <= effectiveUnitCost
+                ? 0.0
+                : capacityGrowthExponent * context.FinanceLiquidityMultiplier;
+        }
+
         capacityGrowthExponent = Math.Clamp(
             capacityGrowthExponent,
             -parameters.MaximumDailyCapacityChangeFraction * dt,
@@ -165,6 +170,14 @@ public static class MarketTickEngine
         var nextStructuralCapacity = Math.Max(
             0.001,
             state.StructuralCapacityPerDay * Math.Exp(capacityGrowthExponent));
+
+        if (!double.IsFinite(freshDemandRate) || !double.IsFinite(unservedVolume)
+            || !double.IsFinite(nextStructuralCapacity) || !double.IsFinite(nextInvestmentSignal)
+            || !double.IsFinite(nextPrice) || nextPrice < 0.0001
+            || nextPrice > (double)decimal.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(state), "Market calculation exceeded supported numeric limits.");
+        }
 
         var nextState = state with
         {
@@ -185,11 +198,14 @@ public static class MarketTickEngine
             effectiveUnitCost);
     }
 
-    private static void Validate(
+    public static void Validate(
         MarketState state,
         MarketParameters parameters,
         MarketTickContext context)
     {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(context);
         if (string.IsNullOrWhiteSpace(state.MarketId))
         {
             throw new ArgumentException("MarketId is required.", nameof(state));
@@ -225,15 +241,31 @@ public static class MarketTickEngine
             || !double.IsFinite(context.DemandMultiplier)
             || !double.IsFinite(context.AvailableCapacityMultiplier)
             || !double.IsFinite(context.OperatingCostMultiplier)
+            || !double.IsFinite(context.FinanceLiquidityMultiplier)
             || context.ElapsedDays <= 0
             || context.DemandMultiplier < 0
             || context.AvailableCapacityMultiplier < 0
-            || context.OperatingCostMultiplier <= 0)
+            || context.OperatingCostMultiplier <= 0
+            || context.FinanceLiquidityMultiplier < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(context), "Market tick context is invalid.");
         }
 
-        if (parameters.PriceElasticity < 0
+        if (!double.IsFinite(parameters.PriceElasticity)
+            || !double.IsFinite(parameters.BacklogRetentionPerDay)
+            || !double.IsFinite(parameters.PriceHalfLifeDays)
+            || !double.IsFinite(parameters.CapacityInvestmentSignalHalfLifeDays)
+            || !double.IsFinite(parameters.BacklogPriceWeight)
+            || !double.IsFinite(parameters.CapacityResponsePer30Days)
+            || !double.IsFinite(parameters.TargetUtilization)
+            || !double.IsFinite(parameters.TargetMarkup)
+            || !double.IsFinite(parameters.MinimumPriceToCostRatio)
+            || !double.IsFinite(parameters.MaximumPriceToCostRatio)
+            || !double.IsFinite(parameters.MaximumDailyCapacityChangeFraction)
+            || !double.IsFinite(parameters.MaximumStepDays)
+            || !double.IsFinite(parameters.BacklogClearanceHorizonDays)
+            || parameters.BacklogClearanceHorizonDays <= 0
+            || parameters.PriceElasticity < 0
             || parameters.BacklogRetentionPerDay is < 0 or > 1
             || parameters.PriceHalfLifeDays <= 0
             || parameters.CapacityInvestmentSignalHalfLifeDays <= 0

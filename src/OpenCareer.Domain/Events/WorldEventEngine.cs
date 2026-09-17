@@ -1,4 +1,5 @@
 using System.Globalization;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Simulation;
 
 namespace OpenCareer.Domain.Events;
@@ -42,6 +43,12 @@ public static class WorldEventEngine
         ArgumentNullException.ThrowIfNull(random);
         ValidateDefinition(definition);
 
+        if (definition.Scope == WorldEventScope.Global)
+        {
+            if (scopeTarget is not null) throw new ArgumentException("Global events have no target.", nameof(scopeTarget));
+        }
+        else ArgumentException.ThrowIfNullOrWhiteSpace(scopeTarget);
+
         var duration = definition.MinimumDurationDays == definition.MaximumDurationDays
             ? definition.MinimumDurationDays
             : random.NextDouble(
@@ -62,12 +69,15 @@ public static class WorldEventEngine
             scopeTarget,
             startsAt,
             startsAt.AddDays(duration),
-            definition.Effects);
+            definition.Effects,
+            definition.AffectedMarketSegments);
     }
 
     public static WorldEventEffects Aggregate(
         IEnumerable<WorldEventInstance> relevantEvents,
-        DateTimeOffset time)
+        DateTimeOffset time,
+        WorldEventLocation? location = null,
+        MarketSegment? segment = null)
     {
         ArgumentNullException.ThrowIfNull(relevantEvents);
 
@@ -82,9 +92,11 @@ public static class WorldEventEngine
         var navigation = NavigationAvailability.Normal;
         var missions = MissionOpportunity.None;
 
-        foreach (var worldEvent in relevantEvents)
+        foreach (var worldEvent in relevantEvents.OrderBy(e => e.InstanceId, StringComparer.Ordinal))
         {
-            if (!worldEvent.IsActiveAt(time))
+            ValidateInstance(worldEvent);
+            if (!worldEvent.IsActiveAt(time) || (location is not null && !location.Matches(worldEvent))
+                || (segment is { } marketSegment && !MatchesSegment(worldEvent, marketSegment)))
             {
                 continue;
             }
@@ -115,9 +127,43 @@ public static class WorldEventEngine
             MissionOpportunities: missions);
     }
 
-    private static void ValidateDefinition(WorldEventDefinition definition)
+    public static bool MatchesSegment(WorldEventInstance instance, MarketSegment segment) =>
+        instance.AffectedMarketSegments is null || instance.AffectedMarketSegments.Contains(segment);
+
+    public static void ValidateEffects(WorldEventEffects effects)
     {
-        if (string.IsNullOrWhiteSpace(definition.EventId)
+        ArgumentNullException.ThrowIfNull(effects);
+        var nonnegative = new[] { effects.DemandMultiplier, effects.CapacityMultiplier,
+            effects.AirportServiceCapacityMultiplier, effects.MaintenanceCapacityMultiplier,
+            effects.FinanceLiquidityMultiplier };
+        if (nonnegative.Any(v => !double.IsFinite(v) || v < 0 || v > 10)
+            || !double.IsFinite(effects.OperatingCostMultiplier) || effects.OperatingCostMultiplier is <= 0 or > 10
+            || !double.IsFinite(effects.AircraftFailureHazardMultiplier) || effects.AircraftFailureHazardMultiplier is <= 0 or > 50
+            || !Enum.IsDefined(effects.AirspaceRestriction) || !Enum.IsDefined(effects.NavigationAvailability))
+            throw new ArgumentOutOfRangeException(nameof(effects), "Event effects are invalid.");
+    }
+
+    public static void ValidateInstance(WorldEventInstance instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+        ArgumentException.ThrowIfNullOrWhiteSpace(instance.InstanceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(instance.DefinitionId);
+        if (!Enum.IsDefined(instance.Scope) || !Enum.IsDefined(instance.Tier) || instance.EndsAt <= instance.StartsAt
+            || (instance.Scope == WorldEventScope.Global ? instance.ScopeTarget is not null : string.IsNullOrWhiteSpace(instance.ScopeTarget)))
+            throw new ArgumentException("Event instance or scope is invalid.", nameof(instance));
+        ValidateEffects(instance.Effects);
+        if (instance.AffectedMarketSegments is { } segments && (segments.Length == 0 || segments.Any(s => !Enum.IsDefined(s))))
+            throw new ArgumentException("Invalid event segment filter.");
+    }
+
+    public static void ValidateDefinition(WorldEventDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        ValidateEffects(definition.Effects);
+        if (definition.AffectedMarketSegments is { } segments && (segments.Length == 0 || segments.Any(s => !Enum.IsDefined(s))))
+            throw new ArgumentException("Invalid event segment filter.");
+        if (!Enum.IsDefined(definition.Scope) || !Enum.IsDefined(definition.Tier)
+            || string.IsNullOrWhiteSpace(definition.EventId)
             || string.IsNullOrWhiteSpace(definition.Name)
             || !double.IsFinite(definition.AnnualOccurrenceRatePerEligibleScope)
             || !double.IsFinite(definition.MinimumDurationDays)

@@ -1,3 +1,5 @@
+using OpenCareer.Domain.Economy;
+
 namespace OpenCareer.Domain.Events;
 
 public static class WorldEventCatalog
@@ -5,6 +7,18 @@ public static class WorldEventCatalog
     public static IReadOnlyList<WorldEventDefinition> Definitions { get; } = Array.AsReadOnly(
         new WorldEventDefinition[]
         {
+            // Provisional opportunity cadence, measured in career time per eligible scope.
+            new("local-charter-demand", "Local Charter Demand", WorldEventTier.LocalOperational,
+                WorldEventScope.Airport, 18, 0.5, 2,
+                new WorldEventEffects(DemandMultiplier: 1.12, MissionOpportunities: MissionOpportunity.Charter),
+                new[] { MarketSegment.GeneralPassenger, MarketSegment.BusinessCharter, MarketSegment.LeisureCharter }),
+            new("regional-cargo-surge", "Regional Cargo Surge", WorldEventTier.LocalOperational,
+                WorldEventScope.Region, 12, 1, 3,
+                new WorldEventEffects(DemandMultiplier: 1.15, MissionOpportunities: MissionOpportunity.Cargo),
+                new[] { MarketSegment.GeneralCargo, MarketSegment.ExpressCargo }),
+            new("operator-reposition-request", "Operator Repositioning Request", WorldEventTier.LocalOperational,
+                WorldEventScope.Airport, 24, 0.25, 1,
+                new WorldEventEffects(MissionOpportunities: MissionOpportunity.Reposition)),
             new(
                 "market-crash",
                 "Global Market Crash",
