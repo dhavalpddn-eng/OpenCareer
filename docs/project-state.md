@@ -6,9 +6,9 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Chapter 2 is in progress: real WinUI 3 shell exists under `src/OpenCareer.App`.
-- Windows UI build workflow: `.github/workflows/winui-build.yml`.
-- Windows CI run `35268157690` passed restore + Release build on `windows-latest`.
+- Latest implementation: `0b211b3d0fde731fa3e3ae773fcf3a96615e1663` (isolated SimConnect connection/reconnect). This handoff is a later documentation change.
+- WinUI 3 shell and connection boundary are implemented; live simulator validation remains open.
+- Windows Release build and all **63 tests passed**: [CI run 35275477791](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35275477791). Linux tests/SimLab also passed: [CI run 35275477782](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35275477782). Both tested implementation `0b211b3`; documentation-only follow-ups do not imply new live verification.
 - UI target/spec: `docs/ui-concept.md`; refined lightweight preview: `docs/assets/opencareer-dashboard-concept-v2.svg`.
 - Verify remote branch head before edits because other chats may change it.
 
@@ -35,7 +35,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Protected-absence policy, session preferences, bankruptcy stages and bounded manual-ground reward quotes.
 - Career-derived credit model, fictional lenders, affordability/debt-service checks.
 - Fictional aircraft dealers, seeded offers/discounts, stock validation and cash/finance eligibility.
-- Last verified domain baseline: **35 xUnit tests** plus **29 deterministic SimLab scenarios** after dealer-validation correction.
+- Domain baseline remains **35 xUnit tests** plus **29 deterministic SimLab scenarios**. Connection/decoder/ViewModel additions bring the current test total to **63 passing locally in Release**, with all **29 SimLab scenarios passing**.
 
 ## Chapter 2 shell verified
 
@@ -50,18 +50,27 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - placeholders for later sections,
 - Windows GitHub Actions build workflow.
 
-Windows CI confirms the current shell compiles in Release. It has **no SimConnect implementation yet**; `Waiting for MSFS 2024` is intentional. Compilation does not prove live MSFS behavior.
+The shell now starts the connection service, refreshes status on its dispatcher and awaits asynchronous cleanup on window close. A connection alone never claims an aircraft or active flight.
+
+## Connection boundary implemented
+
+- `src/OpenCareer.Application/Simulator`: `ISimulatorConnection` and immutable state/identity snapshots, independent of WinUI/SDK/domain rules.
+- `src/OpenCareer.SimConnect`: four documented native calls through P/Invoke, owned by one dedicated worker; open acknowledgement, quit/disconnect, bounded retries, cancellation, timeout, runtime/version failures and clean close.
+- Correlated `RequestSystemState("Sim")` checks liveness every five seconds, with a 30-second response timeout. Menus are valid responses. Empty dispatch is not proof of a disconnect.
+- Tests inject native-call results/raw callback buffers; native DLL execution is **not** tested by these mocks.
+- Runtime: supply the installed MSFS 2024 SDK's x64 `SimConnect.dll` through `MSFS2024_SDK` or `-p:SimConnectNativePath=...`. It is copied beside the app, never committed. A build without the DLL launches with connection unavailable; with the DLL and MSFS closed it should show Waiting for MSFS.
+- Exact setup, SDK references and remaining Windows live checks: `docs/simulator-connection.md`.
 
 ## Material limits
 
-No live SimConnect verification, telemetry detector, durable SQLite flight recovery, installed-aircraft registry, dispatch/runway planner or market-driven job generator yet. Loan/dealer/manual-ground outputs remain quotes until authoritative persistence and one-time settlement exist. Ownership balance numbers are provisional until real job income is wired and playtested.
+No live native SimConnect/UI interaction verification, aircraft telemetry, flight detector, durable SQLite flight recovery, installed-aircraft registry, dispatch/runway planner or market-driven job generator yet. Long simulator stalls may cause a safe reconnect; native calls themselves cannot be forcibly interrupted. Loan/dealer/manual-ground outputs remain quotes until authoritative persistence and one-time settlement exist. Ownership balance numbers are provisional until real job income is wired and playtested.
 
 ## Next bounded work
 
-1. Add isolated `ISimulatorConnection` / SimConnect connection + safe reconnect.
-2. Normalize first telemetry fields.
-3. Build flight-state detection and recoverable FlightSession persistence.
-4. Then connect registry/runway feasibility/jobs/economy settlement.
+1. Normalize first aircraft telemetry fields behind an isolated source interface; inspect existing `Domain/Telemetry` models before extending them. Confirm current official SDK SimVars/units and keep native subscriptions on the connection worker. Display core telemetry without claiming an active FlightSession.
+2. Validate the actual SDK runtime on Windows: launch without MSFS, connect, menus/pause, quit/restart, abrupt simulator exit and application shutdown. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first flight test.
+3. Build robust flight-state detection, then versioned SQLite FlightSession save/recovery.
+4. Connect registry/runway feasibility/jobs/economy settlement.
 
 Do **not** expand finance complexity before the playable flight foundation unless explicitly requested.
 
@@ -71,6 +80,7 @@ Do **not** expand finance complexity before the playable flight foundation unles
 - `docs/career-foundation-decisions.md` — accepted gameplay/base decisions.
 - `docs/credit-and-dealers.md` — finance/dealer model.
 - `docs/msfs-sdk-strategy.md` — verified SDK boundaries.
+- `docs/simulator-connection.md` — implemented connection boundary, runtime setup and pending live checks.
 - `docs/simulation-model.md` — deterministic simulation invariants.
 - `docs/development-workflow.md` — chapter order/exit gates.
 - `docs/current-review.md` — latest review findings before Chapter 2.
