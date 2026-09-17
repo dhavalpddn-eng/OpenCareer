@@ -62,3 +62,8 @@ Build the ledger and reservation logic together before connecting player jobs to
 6. **Management and procedures:** should maintenance/financing/ground tasks be mostly automatic with exceptions, or require detailed hands-on decisions? This sets how much management surrounds each flight.
 
 These answers guide later gameplay calibration. They are not prerequisites for the immediate WinUI 3/SimConnect/flight-session foundation. Previously agreed WinUI 3, single-player, offline-first and no-XP-grind choices remain in force.
+
+
+## Answered career questions follow-through — 2026-09-17
+
+See [career foundation decisions](career-foundation-decisions.md) for the current rules, implementation boundaries, provisional assumptions and remaining questions. Protected absence supersedes the earlier grace/cap default. Home/current location, connection eligibility, session duration preferences and bankruptcy eligibility are now domain-tested; database, dispatch and UI integration remain open. Restore and retain the original 29 SimLab regressions in addition to xUnit career tests. The next implementation milestone remains the WinUI/SimConnect/session foundation specified by AGENTS.md.

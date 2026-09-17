@@ -34,13 +34,25 @@ public sealed record AirportCareerProfile(
         if (MonthlyStorageCostIndex <= 0) throw new ArgumentOutOfRangeException(nameof(MonthlyStorageCostIndex));
     }
 
-    public double DemandFor(ServiceTrack track) => track switch
+    public double DemandFor(ServiceTrack track)
     {
+        Validate();
+        var required = track switch
+        {
+            ServiceTrack.CivilianEmployment or ServiceTrack.IndependentContract or ServiceTrack.CompanyContract => AirportOpportunity.Civilian,
+            ServiceTrack.GovernmentContract => AirportOpportunity.Government,
+            ServiceTrack.MilitaryService => AirportOpportunity.Military,
+            _ => AirportOpportunity.None
+        };
+        if (required == AirportOpportunity.None || !Opportunities.HasFlag(required)) return 0;
+        return track switch
+        {
         ServiceTrack.CivilianEmployment or ServiceTrack.IndependentContract or ServiceTrack.CompanyContract => CivilianDemand,
         ServiceTrack.GovernmentContract => GovernmentDemand,
         ServiceTrack.MilitaryService => MilitaryDemand,
         _ => 0
-    };
+        };
+    }
 
     private static void ValidateUnit(double value, string name)
     {

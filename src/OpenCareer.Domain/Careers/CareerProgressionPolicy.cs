@@ -25,7 +25,7 @@ public sealed record CareerProgressionPolicy(
 
     public void Validate()
     {
-        if (TargetOwnershipHoursLow <= 0 || TargetOwnershipHoursHigh < TargetOwnershipHoursLow)
+        if (!double.IsFinite(TargetOwnershipHoursLow) || !double.IsFinite(TargetOwnershipHoursHigh) || TargetOwnershipHoursLow <= 0 || TargetOwnershipHoursHigh < TargetOwnershipHoursLow)
             throw new ArgumentOutOfRangeException(nameof(TargetOwnershipHoursLow));
         if (TypicalUsedLightAircraftPrice <= 0 || MinimumDownPaymentRate is <= 0 or >= 1 ||
             MinimumOperatingReserve < 0 || TargetNetSavingsPerFlightHour <= 0)

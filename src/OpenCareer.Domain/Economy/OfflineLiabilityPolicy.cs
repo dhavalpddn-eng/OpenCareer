@@ -6,9 +6,9 @@ public sealed record OfflineLiabilityPolicy(
     TimeSpan StaffedAccrualCap)
 {
     public static OfflineLiabilityPolicy Default { get; } = new(
-        TimeSpan.FromDays(3),
-        TimeSpan.FromDays(30),
-        TimeSpan.FromDays(90));
+        TimeSpan.Zero,
+        TimeSpan.Zero,
+        TimeSpan.Zero);
 
     public OfflineLiabilityAssessment Assess(
         DateTimeOffset lastActiveAt,
@@ -16,6 +16,8 @@ public sealed record OfflineLiabilityPolicy(
         decimal monthlyFixedLiabilities,
         bool hasPassiveOperations)
     {
+        if (GracePeriod < TimeSpan.Zero || SoloAccrualCap < TimeSpan.Zero || StaffedAccrualCap < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(GracePeriod));
         if (currentTime < lastActiveAt)
             throw new ArgumentOutOfRangeException(nameof(currentTime));
         if (monthlyFixedLiabilities < 0)
@@ -28,8 +30,8 @@ public sealed record OfflineLiabilityPolicy(
             : TimeSpan.FromTicks(Math.Min((elapsed - GracePeriod).Ticks, cap.Ticks));
 
         // A 30-day accounting month keeps offline settlement deterministic.
-        var accrued = monthlyFixedLiabilities * (decimal)(billable.TotalDays / 30d);
-        var protectedTime = elapsed - GracePeriod - billable;
+        var accrued = monthlyFixedLiabilities * (decimal)billable.Ticks / (30m * TimeSpan.TicksPerDay);
+        var protectedTime = elapsed - billable;
         if (protectedTime < TimeSpan.Zero) protectedTime = TimeSpan.Zero;
 
         return new OfflineLiabilityAssessment(elapsed, billable, protectedTime, decimal.Round(accrued, 2));

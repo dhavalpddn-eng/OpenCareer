@@ -4,7 +4,7 @@ Status: authoritative design baseline for implementation and balancing.
 
 ## Early progression
 
-The first personally owned used light aircraft should normally become financially reachable after roughly 50-80 real flying hours. The initial calibration uses a $60,000 representative used light aircraft, 10% down payment, $2,000 protected operating reserve, and about $125/hour net career savings. This produces an acquisition-cash target of $8,000 and a center point of 64 flying hours. Aircraft prices and financing remain market-driven; this is a tuning invariant, not a guaranteed unlock.
+The first personally owned used light aircraft should normally become financially reachable after roughly 50-80 real flying hours. These are fictional game calibration values, not real market prices or approved loan terms. The initial calibration uses a $60,000 representative used light aircraft, 10% down payment, $2,000 protected operating reserve, and about $125/hour net career savings. This models a financed purchase, not debt-free ownership. This produces an acquisition-cash target of $8,000 and a center point of 64 flying hours. Aircraft prices and financing remain market-driven; this is a tuning invariant, not a guaranteed unlock.
 
 The player may remain an employee, use employer aircraft, take independent work, finance earlier at greater risk, or wait longer and buy with a stronger balance sheet. There is no XP gate on ownership.
 
@@ -12,9 +12,11 @@ The player may remain an employee, use employer aircraft, take independent work,
 
 Markets, employers, job supply, world events, maintenance queues, aircraft availability, relationships and other world state continue advancing while the app is closed.
 
-Fixed player liabilities use an inactivity settlement policy. The baseline gives three days of grace, then accrues solo fixed liabilities for at most 30 billable days during one absence. A staffed/passive operation can accrue for up to 90 days because it can also continue generating operational results. Time beyond the cap is recorded as protected inactive time rather than hidden debt.
+The provisional default is protected absence: world markets/events advance, but personal fixed bills and interest do not accrue while away, whether solo or staffed. Offline passive profits and maintenance progress must also pause for the protected operation to prevent free-income exploits. The previous three-day grace / 30-day solo / 90-day staffed cap is superseded as the default; custom capped assessment remains available as a pure quote, not a payment. Its protected duration now includes grace so durations reconcile exactly.
 
-This is not a bankruptcy shield during active play. Accepted contracts, deliberate purchases, active financing decisions, maintenance neglect, losses and other player-created obligations remain consequential. Bankruptcy should emerge from sustained poor decisions or excessive leverage, with employee work remaining a recovery path.
+A future opt-in funded-operations mode may operate only against a prepaid reserve, then enter protection. Hiring alone must never enable uncontrolled offline debt. This mode, interest integration, personal contract deadline suspension and the atomic settlement ledger are not implemented yet. Never sum cumulative assessments across repeated polls: settlement needs a persisted absence ID and one transactional reconciliation.
+
+Bankruptcy eligibility requires repeated active-play missed obligations, insolvency and an offered recovery path. The provisional threshold is three consecutive active misses. The domain now reports warning, restructuring and eligibility; it never liquidates a save automatically. Employee work remains the recovery path. Loans and asset liquidation still need application and persistence implementation.
 
 ## Geography and home base
 
@@ -36,7 +38,7 @@ The dominant flight length is 1-3 hours, with supported jobs extending to roughl
 
 ## Management depth
 
-Maintenance, financing, dispatch preparation and ground handling default to automation. Eligible manual ground procedures can provide a small bounded benefit. The initial manual reward policy caps direct reward at $35 per flight, rejects duplicates and requires a completed, high-confidence user-confirmed procedure. This makes manual handling meaningful without turning repetitive clicking into the dominant income source.
+Maintenance, financing, dispatch preparation and ground handling default to automation. Eligible manual ground procedures can provide a small bounded benefit. The initial manual reward policy caps direct reward at $35 per flight, deduplicates procedure kinds within one quote and requires a completed, high-confidence user-confirmed procedure. This is a quote only: self-confirmation is not independent simulator evidence, and cross-call/payment deduplication is not implemented. Before real payouts, require flight-scoped evidence of manual work, one transactional settlement per flight, and a cap relative to wages or saved service costs. Automated handling must not reduce baseline pay.
 
 ## Testing requirements
 
@@ -46,8 +48,20 @@ Time-dependent application code should depend on .NET `TimeProvider`; tests shou
 
 ## Real-world references
 
-- Oneida County, Griffiss International Airport overview and UAS program.
+- [Oneida County airport overview](https://oneidacountyny.gov/departments/airport/), checked 2026-09-17: civilian/government aviation and UAS test-site role.
 - Oneida County, FAA-designated New York UAS Test Site.
-- Eastern Air Defense Sector, About Us / 224th Air Defense Group.
+- [EADS About Us](https://www.eads.ang.af.mil/About-Us/), checked 2026-09-17: EADS and 224th ADG at Griffiss Business and Technology Park.
 
 Real-world classifications are provenance-bearing inputs and should be refreshed independently from save-state schema so later source changes do not corrupt existing careers.
+
+## Implementation boundary and next work — 2026-09-17
+
+Implemented as simulator-independent domain rules: ownership tuning validation, protected absence default, local acceptance/departure checks, completed-contract travel and connection history with replay protection, 1–3 hour preference / six-hour job-duration ceiling, recovery-stage eligibility, and bounded manual reward quotes. The prior 29 SimLab scenarios are restored; separate xUnit tests cover these additions. No existing contract API was removed. Application orchestration must use the location-aware methods; direct JobContract callers still need location checks at their boundary.
+
+Not yet playable: WinUI shell, SimConnect connection, flight detector, SQLite transactions/migrations, active-session checkpoints/resume, aircraft-location persistence, employer-paid passenger transfers, home-base relocation, route relationships, actual storage inventory/pricing/purchase, bankruptcy execution, reserve-pilot onboarding, mission-specific military objectives, and market-driven job generation. These require the foundation sequence in AGENTS.md. Serializing a domain record is not a crash-safe database save and does not restore an MSFS aircraft in flight.
+
+Airport demand numbers are provisional game weights, not measured operation shares. Heavy active military airports need sourced classifications and higher military weighting than ordinary public airports. KRME retains its civil mix; authorization tests are synthetic scenarios, not evidence that actual escort or intercept operations are offered there. Before offering jobs, dispatch must still verify the installed aircraft, runway, payload, fuel, weather and military qualifications. Distinct escort/training/ferry/recon success conditions remain to be implemented.
+
+Next vertical slice: WinUI connection-status shell, isolated SimConnect adapter, normalized telemetry, reliable flight-state detection and versioned SQLite session recovery at KRME. Then wire these policies through a single mission/ledger transaction flow and run representative 1-, 3- and 6-hour job scenarios, long absence/reload cases, and economic balance simulations. Do not expand finance complexity before that loop works.
+
+Questions that refine later balancing (do not block foundation): which installed aircraft should be used first; whether the 50–80 hour target means financed or debt-free ownership; whether manual procedures should use self-confirmation where the aircraft exposes no telemetry. Protected absence is a reversible proposal because the user explicitly left that choice open.

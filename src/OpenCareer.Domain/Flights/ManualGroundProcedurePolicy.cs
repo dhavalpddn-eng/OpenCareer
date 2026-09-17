@@ -4,10 +4,12 @@ public sealed record ManualGroundProcedurePolicy(decimal MaximumRewardPerFlight)
 {
     public static ManualGroundProcedurePolicy Default { get; } = new(35m);
 
+    // Quotes a total for one flight, not a payment. The ledger must settle once per flight ID.
     public decimal CalculateReward(IEnumerable<GroundProcedureEvent> events)
     {
         ArgumentNullException.ThrowIfNull(events);
 
+        if (MaximumRewardPerFlight < 0) throw new ArgumentOutOfRangeException(nameof(MaximumRewardPerFlight));
         decimal reward = 0;
         var rewarded = new HashSet<GroundProcedureKind>();
         foreach (var item in events)
