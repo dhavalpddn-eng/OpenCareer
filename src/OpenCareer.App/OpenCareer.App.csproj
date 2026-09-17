@@ -6,11 +6,13 @@
     <RootNamespace>OpenCareer.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <EnableMsixTooling>false</EnableMsixTooling>
     <SelfContained>false</SelfContained>
+    <SimConnectNativePath Condition="'$(SimConnectNativePath)' == '' and '$(MSFS2024_SDK)' != '' and Exists('$(MSFS2024_SDK)/SimConnect SDK/lib/SimConnect.dll')">$(MSFS2024_SDK)/SimConnect SDK/lib/SimConnect.dll</SimConnectNativePath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,4 +20,18 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OpenCareer.Application/OpenCareer.Application.csproj" />
+    <ProjectReference Include="../OpenCareer.SimConnect/OpenCareer.SimConnect.csproj" />
+    <Content Include="$(SimConnectNativePath)" Condition="'$(SimConnectNativePath)' != '' and Exists('$(SimConnectNativePath)')"
+             Link="SimConnect.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="ValidateSimConnectRuntimePath" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(SimConnectNativePath)' != '' and !Exists('$(SimConnectNativePath)')"
+           Text="SimConnectNativePath does not exist. Supply the x64 SimConnect.dll from the installed MSFS 2024 SDK." />
+    <Message Condition="'$(SimConnectNativePath)' == ''" Importance="high"
+             Text="Building without SimConnect.dll. The app will launch with connection unavailable; see docs/simulator-connection.md." />
+  </Target>
 </Project>

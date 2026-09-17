@@ -28,7 +28,7 @@
                                    Foreground="{StaticResource AppMutedTextBrush}"
                                    TextWrapping="Wrap"
                                    MaxWidth="700" />
-                        <TextBlock Text="The SimConnect service will be added behind an isolated integration boundary in the next chapter step."
+                        <TextBlock Text="Flight tracking will become available in a later build."
                                    Foreground="{StaticResource AppMutedTextBrush}"
                                    TextWrapping="Wrap"
                                    MaxWidth="700" />

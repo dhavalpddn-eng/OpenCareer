@@ -1,0 +1,21 @@
+using OpenCareer.Application.Simulator;
+
+namespace OpenCareer.SimConnect.Native;
+
+// Values and layouts are from the official MSFS 2024 SIMCONNECT_RECV* documentation.
+internal enum SimConnectMessageKind : uint
+{
+    None = 0,
+    Exception = 1,
+    Open = 2,
+    Quit = 3,
+    SystemState = 15
+}
+
+internal sealed record SimConnectMessage(
+    SimConnectMessageKind Kind,
+    SimulatorInfo? Simulator = null,
+    uint ExceptionCode = 0,
+    uint SendId = 0,
+    uint ParameterIndex = 0,
+    uint RequestId = 0);

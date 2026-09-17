@@ -1,13 +1,19 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Windowing;
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Simulator;
+using OpenCareer.SimConnect;
 
 namespace OpenCareer.App;
 
-public partial class App : Application
+public partial class App : Microsoft.UI.Xaml.Application
 {
     private readonly ServiceProvider _services;
+    private MainWindow? _window;
+    private bool _isShuttingDown;
+    private bool _shutdownComplete;
 
     public App()
     {
@@ -19,6 +25,7 @@ public partial class App : Application
             builder.AddDebug();
             builder.SetMinimumLevel(LogLevel.Information);
         });
+        services.AddSingleton<ISimulatorConnection, SimConnectConnection>();
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<MainWindow>();
 
@@ -28,8 +35,37 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        var window = _services.GetRequiredService<MainWindow>();
-        window.Activate();
+        _window = _services.GetRequiredService<MainWindow>();
+        _window.AppWindow.Closing += OnMainWindowClosing;
+        _window.Activate();
+        _services.GetRequiredService<ISimulatorConnection>().Start();
+    }
+
+    private async void OnMainWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_shutdownComplete)
+            return;
+
+        args.Cancel = true;
+        if (_isShuttingDown)
+            return;
+
+        _isShuttingDown = true;
+        _window?.StopStatusUpdates();
+        var logger = _services.GetRequiredService<ILogger<App>>();
+        try
+        {
+            await _services.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "OpenCareer shutdown failed.");
+        }
+        finally
+        {
+            _shutdownComplete = true;
+            _window?.Close();
+        }
     }
 
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)

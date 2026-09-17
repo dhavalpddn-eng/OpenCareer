@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Dispatching;
 using OpenCareer.App.ViewModels;
 using OpenCareer.App.Views;
 
@@ -7,6 +8,8 @@ namespace OpenCareer.App;
 
 public sealed partial class MainWindow : Window
 {
+    private readonly DispatcherQueueTimer _statusTimer;
+
     public MainWindow(ShellViewModel viewModel)
     {
         ViewModel = viewModel;
@@ -14,9 +17,22 @@ public sealed partial class MainWindow : Window
 
         NavView.SelectedItem = DashboardItem;
         ContentFrame.Navigate(typeof(DashboardPage), ViewModel);
+        _statusTimer = DispatcherQueue.CreateTimer();
+        _statusTimer.Interval = TimeSpan.FromMilliseconds(250);
+        _statusTimer.Tick += OnStatusTimerTick;
+        _statusTimer.Start();
+        Closed += (_, _) => StopStatusUpdates();
     }
 
     public ShellViewModel ViewModel { get; }
+
+    public void StopStatusUpdates()
+    {
+        _statusTimer.Stop();
+        _statusTimer.Tick -= OnStatusTimerTick;
+    }
+
+    private void OnStatusTimerTick(DispatcherQueueTimer sender, object args) => ViewModel.RefreshConnectionStatus();
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {

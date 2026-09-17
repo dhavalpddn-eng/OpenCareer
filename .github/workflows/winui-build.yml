@@ -6,15 +6,24 @@ on:
       - feature/**
     paths:
       - "src/OpenCareer.App/**"
+      - "src/OpenCareer.Application/**"
+      - "src/OpenCareer.SimConnect/**"
+      - "tests/OpenCareer.Tests/**"
+      - "Directory.Build.props"
       - ".github/workflows/winui-build.yml"
   pull_request:
     paths:
       - "src/OpenCareer.App/**"
+      - "src/OpenCareer.Application/**"
+      - "src/OpenCareer.SimConnect/**"
+      - "tests/OpenCareer.Tests/**"
+      - "Directory.Build.props"
       - ".github/workflows/winui-build.yml"
 
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -30,3 +39,6 @@ jobs:
 
       - name: Build WinUI app
         run: dotnet build src/OpenCareer.App/OpenCareer.App.csproj --configuration Release --no-restore -p:Platform=x64
+
+      - name: Test domain and simulator connection lifecycle
+        run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release
