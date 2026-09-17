@@ -76,7 +76,7 @@ public class JobMarketTests
     public void GriffissProducesFarMoreMilitaryWorkThanLowDefenseMixedAirport()
     {
         var lowDefense = new AirportCareerProfile(
-            "KTEST",
+            "KTST",
             "Low Defense Mixed Airport",
             AirportOpportunity.Civilian | AirportOpportunity.Government | AirportOpportunity.Military,
             CivilianDemand: 0.82,
