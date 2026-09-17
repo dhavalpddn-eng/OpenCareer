@@ -8,6 +8,8 @@ Work lives on `feature/job-market-foundation` so Astra can continue telemetry/Si
 
 Latest tested branch implementation: `50f4c783db6c44a2a4fe23860c1d2d5302518c86`. Linux CI run 35284265143 passed **105/105 xUnit tests + 29/29 SimLab scenarios**. Windows CI run 35284265147 passed the WinUI x64 Release build and the same test project.
 
+Conflict simulation work now continues on child branch `feature/conflict-simulation-foundation`. Its verified implementation commit `0204f8f40e45b3b7fd73b37f020f1047e5671a36` adds staged conflict escalation and raises the suite to **112/112 xUnit tests + 29/29 SimLab scenarios**. Read `docs/conflict-simulation.md` for that subsystem instead of rereading chat history.
+
 ## Accepted player decisions
 
 - **Starter board:** level 1 exposes only **1–2 jobs**.
