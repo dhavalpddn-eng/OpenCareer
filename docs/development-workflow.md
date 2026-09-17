@@ -20,7 +20,7 @@ Exit gate: a new chat can identify the current branch, implemented features, unr
 
 ## Chapter 2 — Windows application shell
 
-Status: next chapter; not implemented.
+Status: implemented in the feature branch; Windows CI build passes. Real local UI launch/interaction remains part of the live Windows acceptance work.
 
 Purpose: launch a usable companion without requiring MSFS.
 
@@ -37,7 +37,7 @@ Exit gate: build and launch on Windows with MSFS closed; navigation works; no st
 
 ## Chapter 3 — Simulator connection and telemetry
 
-Status: not implemented. Depends on Chapter 2.
+Status: resilient connection/reconnect and first normalized 1 Hz telemetry are implemented and CI-tested. Native MSFS 2024 runtime validation, aircraft identity, simulation-rate capture and adaptive/high-rate landing telemetry remain open.
 
 Purpose: reliably observe the installed simulator and aircraft.
 
@@ -52,14 +52,15 @@ Exit gate: connect, disconnect, restart MSFS and reconnect without duplicate sub
 
 ## Chapter 4 — Flight detection and durable session recovery
 
-Status: not implemented. Depends on Chapter 3.
+Status: accepted behavior is specified in [flight session design](flight-session-design.md); detector/persistence implementation is intentionally blocked until the Chapter 3 live-MSFS gate is observed. Depends on Chapter 3.
 
 Purpose: safely record long flights and interruptions.
 
 Tasks:
 - Implement explicit flight/ground states with hysteresis and multiple signals.
 - Handle bounce/recontact, pause, slew, aircraft changes and simulator faults.
-- Create FlightSession milestones and flight summaries.
+- Create FlightSession/FlightLeg milestones and flight summaries using the accepted load/movement/airborne/career-credit time split.
+- Support free/practice logbook commits, multi-leg jobs, touch-and-go/full-stop distinction, bounce hysteresis, safe diversion/go-around outcomes, simulation-rate accounting and assistance flags.
 - Add versioned SQLite schema, parameterized access, atomic checkpoints and previous-valid-save recovery.
 - Recover career/session state after app or simulator interruption without duplicate effects.
 

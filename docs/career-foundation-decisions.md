@@ -32,9 +32,19 @@ Therefore KRME is not modeled as a conventional active fighter base. It receives
 
 The KRME test matrix includes cargo, charter, utility, government courier, UAS/survey/surveillance, emergency/public-sector work, military training/readiness, patrol/surveillance, logistics, ferry/reposition, and authorized intercept/escort scenarios.
 
-## Long sessions and recovery
+## Long sessions, logging and recovery
 
 The dominant flight length is 1-3 hours, with supported jobs extending to roughly six hours. Active job/session state must be checkpointed periodically and at important state transitions. Resume must preserve contract identity, aircraft, origin/destination, timestamps, economics, telemetry-derived milestones and already-awarded effects. Completion remains evidence-driven after resume; restarting the app must never duplicate rewards.
+
+The player confirmed that OpenCareer should begin observing a session when the aircraft loads, with loading/stability grace, while loggable movement/flight time starts later. Free/practice flights can be voluntarily committed to the pilot logbook and can contribute to licensing and similar-aircraft experience. A FlightSession may contain multiple real-world-style legs; planned airline/cargo milk runs use explicit legs. Bounce recontacts are one landing episode, touch-and-go is distinct from full-stop, and safe go-arounds/diversions/emergency landings should be treated as operational judgment rather than automatic failure.
+
+Time acceleration is allowed but must not multiply qualifying career hours. Pause/slew does not accrue progress; material slew/position teleport cannot advance normal career jobs; changing aircraft during an active job is not allowed. Full design: [flight session design](flight-session-design.md).
+
+## Named cargo economy
+
+Cargo work must carry named goods rather than a generic weight-only cargo bucket. The accepted requirement includes coffee, phones, televisions, food, plants and an extensible data-driven catalog. Each shipment eventually carries quantity, weight/volume, handling/condition, declared value, origin/destination market snapshots and freight economics. Transport pay remains distinct from ownership/value of the goods. Full requirements: [named cargo and commodity markets](cargo-market-requirements.md).
+
+Implementation remains deferred until the flight/session/dispatch loop is playable; this requirement is recorded now so early APIs do not collapse all cargo into one anonymous field.
 
 ## Management depth
 
@@ -58,10 +68,10 @@ Real-world classifications are provenance-bearing inputs and should be refreshed
 
 Implemented as simulator-independent domain rules: ownership tuning validation, protected absence default, local acceptance/departure checks, completed-contract travel and connection history with replay protection, 1–3 hour preference / six-hour job-duration ceiling, recovery-stage eligibility, and bounded manual reward quotes. The prior 29 SimLab scenarios are restored; separate xUnit tests cover these additions. No existing contract API was removed. Application orchestration must use the location-aware methods; direct JobContract callers still need location checks at their boundary.
 
-Not yet playable: WinUI shell, SimConnect connection, flight detector, SQLite transactions/migrations, active-session checkpoints/resume, aircraft-location persistence, employer-paid passenger transfers, home-base relocation, route relationships, actual storage inventory/pricing/purchase, bankruptcy execution, reserve-pilot onboarding, mission-specific military objectives, and market-driven job generation. These require the foundation sequence in AGENTS.md. Serializing a domain record is not a crash-safe database save and does not restore an MSFS aircraft in flight.
+Not yet playable end-to-end: live native SimConnect/MSFS validation, flight detector, SQLite transactions/migrations, active-session checkpoints/resume, aircraft-location persistence, employer-paid passenger transfers, home-base relocation, route relationships, actual storage inventory/pricing/purchase, bankruptcy execution, reserve-pilot onboarding, mission-specific military objectives, and market-driven named-commodity job generation. The WinUI shell, resilient connection layer and first normalized telemetry path are implemented in the feature branch but still require the documented live Windows/MSFS gate. These require the foundation sequence in AGENTS.md. Serializing a domain record is not a crash-safe database save and does not restore an MSFS aircraft in flight.
 
 Airport demand numbers are provisional game weights, not measured operation shares. Heavy active military airports need sourced classifications and higher military weighting than ordinary public airports. KRME retains its civil mix; authorization tests are synthetic scenarios, not evidence that actual escort or intercept operations are offered there. Before offering jobs, dispatch must still verify the installed aircraft, runway, payload, fuel, weather and military qualifications. Distinct escort/training/ferry/recon success conditions remain to be implemented.
 
-Next vertical slice: WinUI connection-status shell, isolated SimConnect adapter, normalized telemetry, reliable flight-state detection and versioned SQLite session recovery at KRME. Then wire these policies through a single mission/ledger transaction flow and run representative 1-, 3- and 6-hour job scenarios, long absence/reload cases, and economic balance simulations. Do not expand finance complexity before that loop works.
+Next vertical slice: finish live Windows/MSFS validation of the existing WinUI/SimConnect/telemetry boundary, then implement the accepted flight-session/state/time rules and versioned SQLite session recovery at KRME. Then wire these policies through a single mission/ledger transaction flow and run representative 1-, 3- and 6-hour job scenarios, long absence/reload cases, and economic balance simulations. Do not expand finance complexity before that loop works.
 
 The first test aircraft is now the F-22 at KRME. The user confirmed both cash purchase and financing paths. Exact installed F-22 add-on identity/performance remains to be detected in MSFS; no fabricated performance profile is used. Manual-procedure evidence remains provisional where telemetry is unavailable. Protected absence is a reversible proposal because the user explicitly left that choice open.
