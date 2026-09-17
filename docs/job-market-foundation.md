@@ -6,7 +6,7 @@ Updated 2026-09-17. Read `AGENTS.md` and `docs/project-state.md` first. Read thi
 
 Work lives on `feature/job-market-foundation` so Astra can continue telemetry/SimConnect work without editing the same files. Rebase/merge only after checking the current `feature/m1-simulation-core` head and rerunning both CI paths.
 
-Latest tested branch implementation: `d32de9b88ed4dc9c34a2925cf9b2692cc1de14d1`. Linux CI run 35283739267 passed **104/104 xUnit tests + 29/29 SimLab scenarios**. Windows CI run 35283739417 passed the WinUI x64 Release build and the same test project.
+Latest tested branch implementation: `50f4c783db6c44a2a4fe23860c1d2d5302518c86`. Linux CI run 35284265143 passed **105/105 xUnit tests + 29/29 SimLab scenarios**. Windows CI run 35284265147 passed the WinUI x64 Release build and the same test project.
 
 ## Accepted player decisions
 
@@ -81,8 +81,8 @@ Latest tested branch implementation: `d32de9b88ed4dc9c34a2925cf9b2692cc1de14d1`.
 - every AI post must reference supplied fact keys; unknown facts invalidate the response.
 - `DeterministicWorldFeedNarrator` is the zero-network fallback.
 - `WorldFeedNarrationService` automatically falls back when the AI path times out, errors or returns invalid data.
-- `SqliteWorldFeedPostStore` persists active feed history with parameterized SQL.
-- `WorldFeedCoordinator` throttles ordinary generation, carries recent posts forward for continuity and supports forced refresh after major simulated world transitions.
+- `SqliteWorldFeedPostStore` persists the feed timeline with parameterized SQL. Active reads hide expired posts while historical reads retain them.
+- `WorldFeedCoordinator` throttles ordinary generation, carries historical context forward for continuity, preserves expired posts and supports forced refresh after major simulated world transitions.
 - AI-generated posts are explicitly disclosed as generated from OpenCareer simulated state with no live web/news collection.
 - See `docs/live-world-feed.md` for the runtime boundary and future WinUI composition steps.
 
