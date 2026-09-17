@@ -2,6 +2,8 @@
 
 Updated 2026-09-17.
 
+Implementation commit `0204f8f40e45b3b7fd73b37f020f1047e5671a36` is verified by Linux CI run 35287170350 (**112/112 xUnit tests + 29/29 SimLab scenarios**) and Windows CI run 35287170323 (WinUI x64 Release build + test project passed).
+
 This system implements the player decisions for dynamic geopolitical/security simulation without making AI authoritative.
 
 ## Player direction encoded
