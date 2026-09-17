@@ -8,7 +8,18 @@ namespace OpenCareer.Domain.Dealers;
 
 public enum AircraftCondition { New, Used }
 public sealed record DealerStock(string ListingId, AircraftCapabilityProfile Aircraft, AircraftCondition Condition,
-    decimal AskingPrice, decimal AppraisedValue, decimal ConditionPercent, bool CivilianSaleAuthorized);
+    decimal AskingPrice, decimal AppraisedValue, decimal ConditionPercent, bool CivilianSaleAuthorized)
+{
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ListingId);
+        ArgumentNullException.ThrowIfNull(Aircraft);
+        Aircraft.Validate();
+        if (!Enum.IsDefined(Condition) || AskingPrice <= 0 || AppraisedValue <= 0 ||
+            ConditionPercent is <= 0 or > 100 || (Condition == AircraftCondition.New && ConditionPercent != 100))
+            throw new ArgumentException("Invalid dealer stock.");
+    }
+}
 public sealed record DealerProfile(string Id, string Name, string AirportIcao, bool SellsNew, bool SellsUsed,
     decimal MaximumListingPrice, decimal MarkupRate, decimal PromotionChance, decimal MaximumDiscountRate)
 {
@@ -40,11 +51,8 @@ public static class AircraftDealer
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var stock in inventory.OrderBy(x => x.ListingId, StringComparer.Ordinal))
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(stock.ListingId);
-            stock.Aircraft.Validate();
-            if (!ids.Add(stock.ListingId) || !Enum.IsDefined(stock.Condition) || stock.AskingPrice <= 0 || stock.AppraisedValue <= 0 ||
-                stock.ConditionPercent is <= 0 or > 100 || (stock.Condition == AircraftCondition.New && stock.ConditionPercent != 100))
-                throw new ArgumentException("Invalid or duplicate dealer stock.");
+            stock.Validate();
+            if (!ids.Add(stock.ListingId)) throw new ArgumentException("Duplicate dealer stock.");
             if (!stock.CivilianSaleAuthorized || !stock.Aircraft.Access.HasFlag(AircraftAccess.Civilian) ||
                 stock.AskingPrice > dealer.MaximumListingPrice ||
                 (stock.Condition == AircraftCondition.New ? !dealer.SellsNew : !dealer.SellsUsed)) continue;
@@ -78,9 +86,13 @@ public static class AircraftDealer
 
     private static void ValidateCurrentOffer(DealerOffer offer, DealerStock currentStock, DateTimeOffset time)
     {
-        currentStock.Aircraft.Validate();
+        ArgumentNullException.ThrowIfNull(offer);
+        ArgumentNullException.ThrowIfNull(currentStock);
+        currentStock.Validate();
+        ArgumentException.ThrowIfNullOrWhiteSpace(offer.DealerId);
         if (offer.SalePrice <= 0 || offer.ListPrice < offer.SalePrice || offer.DiscountRate is < 0 or > .25m ||
-            offer.ExpiresAt <= offer.IssuedAt || offer.Condition != currentStock.Condition)
+            offer.ExpiresAt <= offer.IssuedAt || offer.Condition != currentStock.Condition ||
+            offer.SalePrice != decimal.Round(offer.ListPrice * (1m - offer.DiscountRate), 2))
             throw new ArgumentException("Invalid dealer offer.");
         if (time < offer.IssuedAt || time >= offer.ExpiresAt || offer.ListingId != currentStock.ListingId || offer.AircraftId != currentStock.Aircraft.AircraftId)
             throw new InvalidOperationException("Offer expired or inventory does not match.");

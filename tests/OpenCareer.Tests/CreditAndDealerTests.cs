@@ -152,4 +152,12 @@ public class CreditAndDealerTests
         Assert.Equal(666.67m, result.MonthlyPayment);
         Assert.InRange((Good with { MissedPayments = int.MaxValue, CompletedJobs = int.MaxValue, FailedJobs = int.MaxValue }).CreditScore, 300, 850);
     }
+    [Fact]
+    public void PurchaseQuotesRejectInconsistentPriceAndInvalidCurrentStock()
+    {
+        var offer = AircraftDealer.QuoteInventory(InitialDealers.UsedLocal, [Used], Good, 0, 42, Day)[0];
+        Assert.Throws<ArgumentException>(() => AircraftDealer.CanBuyWithCash(offer with { SalePrice = 1m }, Used, Good, Day));
+        Assert.Throws<ArgumentException>(() => AircraftDealer.CanBuyWithCash(offer, Used with { ConditionPercent = 0 }, Good, Day));
+        Assert.Throws<ArgumentException>(() => AircraftDealer.QuoteFinancing(offer, Used with { AppraisedValue = -1 }, Good, InitialLenders.Community, 20000, 120, Day));
+    }
 }
