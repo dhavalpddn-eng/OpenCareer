@@ -46,6 +46,9 @@ public sealed record SimulatedEngagementResult(
     double MissionDisruption,
     double AircraftStressIndex)
 {
+    // Compatibility alias: this value is gameplay wear/stress exposure, not literal combat damage.
+    public double OperationalStressIndex => AircraftStressIndex;
+
     public void Validate()
     {
         if (!Enum.IsDefined(Outcome))
@@ -76,26 +79,27 @@ public static class SimulatedCombatEngine
             request.CareerSeed,
             $"military-engagement:{request.EngagementKey}");
 
-        var variation = random.NextDouble(-0.06, 0.06);
+        double effectivenessVariation = random.NextDouble(-0.06, 0.06);
+        double disruptionVariation = random.NextDouble(-0.04, 0.04);
 
-        var effectiveness = Math.Clamp(
+        double effectiveness = Math.Clamp(
             (0.55 * request.MissionExecutionQuality)
             + (0.25 * request.AircraftReadiness)
             + (0.20 * request.SupportFactor)
             - (0.35 * request.ThreatExposure)
-            + variation,
+            + effectivenessVariation,
             0,
             1);
 
-        var disruption = Math.Clamp(
+        double disruption = Math.Clamp(
             (0.65 * request.ThreatExposure)
             + (0.20 * (1 - request.AircraftReadiness))
             - (0.15 * request.SupportFactor)
-            + random.NextDouble(0, 0.08),
+            + disruptionVariation,
             0,
             1);
 
-        var stress = Math.Clamp(
+        double stress = Math.Clamp(
             request.ThreatExposure
             * disruption
             * (1.05 - (0.55 * request.AircraftReadiness))

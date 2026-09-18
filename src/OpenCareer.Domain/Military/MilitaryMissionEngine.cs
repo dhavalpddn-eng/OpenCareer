@@ -11,8 +11,12 @@ public sealed record MilitaryMissionEvidence(
     bool ParkedAndSecured,
     bool AbortRequested = false,
     bool FailureDetected = false,
-    double DeltaSeconds = 0)
+    double DeltaSeconds = 0,
+    MilitaryObjectiveAssessment? ObjectiveAssessment = null)
 {
+    public bool ObjectiveSatisfied =>
+        ObjectiveAssessment?.IsSatisfied ?? ObjectiveActionVerified;
+
     public void Validate(DateTimeOffset previousTime)
     {
         if (Time < previousTime)
@@ -26,6 +30,8 @@ public sealed record MilitaryMissionEvidence(
 
         if (ParkedAndSecured && Airborne)
             throw new ArgumentException("A parked aircraft cannot also be airborne.");
+
+        ObjectiveAssessment?.Validate();
     }
 }
 
@@ -151,12 +157,12 @@ public static class MilitaryMissionEngine
             case MilitaryOperationPhase.EnRoute:
                 if (evidence.InObjectiveArea && evidence.Airborne)
                 {
-                    var dwell = Math.Max(0, evidence.DeltaSeconds);
+                    double dwell = Math.Max(0, evidence.DeltaSeconds);
                     next = next with
                     {
                         Phase = MilitaryOperationPhase.OnStation,
                         OnStationSeconds = dwell,
-                        ObjectiveActionVerified = evidence.ObjectiveActionVerified
+                        ObjectiveActionVerified = evidence.ObjectiveSatisfied
                     };
                 }
                 return TryAdvanceOnStation(plan, next);
@@ -168,7 +174,7 @@ public static class MilitaryMissionEngine
                     {
                         OnStationSeconds = progress.OnStationSeconds + evidence.DeltaSeconds,
                         ObjectiveActionVerified =
-                            progress.ObjectiveActionVerified || evidence.ObjectiveActionVerified
+                            progress.ObjectiveActionVerified || evidence.ObjectiveSatisfied
                     };
                 }
 
@@ -196,8 +202,8 @@ public static class MilitaryMissionEngine
         MilitaryOperationPlan plan,
         MilitaryMissionProgress progress)
     {
-        var dwellSatisfied = progress.OnStationSeconds >= plan.MinimumOnStationSeconds;
-        var actionSatisfied = !plan.RequiresObjectiveAction || progress.ObjectiveActionVerified;
+        bool dwellSatisfied = progress.OnStationSeconds >= plan.MinimumOnStationSeconds;
+        bool actionSatisfied = !plan.RequiresObjectiveAction || progress.ObjectiveActionVerified;
 
         return dwellSatisfied && actionSatisfied
             ? progress with { Phase = MilitaryOperationPhase.Objective }

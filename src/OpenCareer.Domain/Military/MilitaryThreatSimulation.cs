@@ -146,6 +146,7 @@ public sealed record MilitaryThreatExposureSummary(
 public static class MilitaryThreatEvaluator
 {
     private const double EarthRadiusNauticalMiles = 3440.065;
+    private const double CorrelatedThreatAccumulation = 1.5;
 
     public static MilitaryThreatExposure Evaluate(
         MilitaryThreatSample sample,
@@ -156,7 +157,7 @@ public static class MilitaryThreatEvaluator
 
         sample.Validate();
 
-        var complement = 1.0;
+        var pressuresByCategory = new Dictionary<SimulatedThreatCategory, List<double>>();
         var contributors = new List<string>();
 
         foreach (var zone in zones)
@@ -166,7 +167,7 @@ public static class MilitaryThreatEvaluator
             if (!zone.IsActive(sample.Time) || !zone.ContainsAltitude(sample.AltitudeFeet))
                 continue;
 
-            var distance = DistanceNauticalMiles(
+            double distance = DistanceNauticalMiles(
                 sample.LatitudeDegrees,
                 sample.LongitudeDegrees,
                 zone.LatitudeDegrees,
@@ -175,8 +176,8 @@ public static class MilitaryThreatEvaluator
             if (distance >= zone.RadiusNauticalMiles)
                 continue;
 
-            var radialFactor = 1 - (distance / zone.RadiusNauticalMiles);
-            var pressure = Math.Clamp(
+            double radialFactor = 1 - (distance / zone.RadiusNauticalMiles);
+            double pressure = Math.Clamp(
                 zone.Severity * zone.Confidence * radialFactor,
                 0,
                 1);
@@ -184,11 +185,24 @@ public static class MilitaryThreatEvaluator
             if (pressure <= 0)
                 continue;
 
-            complement *= 1 - pressure;
+            if (!pressuresByCategory.TryGetValue(zone.Category, out var categoryPressures))
+            {
+                categoryPressures = [];
+                pressuresByCategory.Add(zone.Category, categoryPressures);
+            }
+
+            categoryPressures.Add(pressure);
             contributors.Add(zone.ThreatId);
         }
 
-        var combined = Math.Clamp(1 - complement, 0, 1);
+        double independentCategoryComplement = 1.0;
+        foreach (var categoryPressures in pressuresByCategory.Values)
+        {
+            double categoryPressure = CombineCorrelatedCategory(categoryPressures);
+            independentCategoryComplement *= 1 - categoryPressure;
+        }
+
+        double combined = Math.Clamp(1 - independentCategoryComplement, 0, 1);
         var result = new MilitaryThreatExposure(
             combined,
             LevelFor(combined),
@@ -206,10 +220,10 @@ public static class MilitaryThreatEvaluator
         if (samples.Count == 0)
             return new MilitaryThreatExposureSummary(0, 0, 0, 0, 0);
 
-        var totalSeconds = 0.0;
-        var weightedPressure = 0.0;
-        var exposedSeconds = 0.0;
-        var peak = 0.0;
+        double totalSeconds = 0;
+        double weightedPressure = 0;
+        double exposedSeconds = 0;
+        double peak = 0;
 
         foreach (var (exposure, seconds) in samples)
         {
@@ -226,8 +240,8 @@ public static class MilitaryThreatEvaluator
             peak = Math.Max(peak, exposure.Pressure);
         }
 
-        var mean = totalSeconds <= 0 ? 0 : weightedPressure / totalSeconds;
-        var risk = Math.Clamp((0.65 * mean) + (0.35 * peak), 0, 1);
+        double mean = totalSeconds <= 0 ? 0 : weightedPressure / totalSeconds;
+        double risk = Math.Clamp((0.65 * mean) + (0.35 * peak), 0, 1);
 
         var result = new MilitaryThreatExposureSummary(
             mean,
@@ -238,6 +252,25 @@ public static class MilitaryThreatEvaluator
 
         result.Validate();
         return result;
+    }
+
+    private static double CombineCorrelatedCategory(IReadOnlyList<double> pressures)
+    {
+        if (pressures.Count == 0)
+            return 0;
+
+        double maximum = pressures.Max();
+        double squaredTotal = pressures.Sum(pressure => pressure * pressure);
+        double remainderSquared = Math.Max(0, squaredTotal - (maximum * maximum));
+
+        // Similar threats are correlated, so weak duplicates add diminishing pressure instead
+        // of behaving like statistically independent hazards and saturating unrealistically.
+        return Math.Clamp(
+            maximum
+            + ((1 - maximum)
+                * (1 - Math.Exp(-CorrelatedThreatAccumulation * remainderSquared))),
+            0,
+            1);
     }
 
     private static SimulatedThreatLevel LevelFor(double pressure) =>
@@ -256,16 +289,16 @@ public static class MilitaryThreatEvaluator
         double latitudeB,
         double longitudeB)
     {
-        var lat1 = DegreesToRadians(latitudeA);
-        var lat2 = DegreesToRadians(latitudeB);
-        var deltaLat = DegreesToRadians(latitudeB - latitudeA);
-        var deltaLon = DegreesToRadians(longitudeB - longitudeA);
+        double lat1 = DegreesToRadians(latitudeA);
+        double lat2 = DegreesToRadians(latitudeB);
+        double deltaLat = DegreesToRadians(latitudeB - latitudeA);
+        double deltaLon = DegreesToRadians(longitudeB - longitudeA);
 
-        var a = Math.Sin(deltaLat / 2) * Math.Sin(deltaLat / 2)
+        double a = Math.Sin(deltaLat / 2) * Math.Sin(deltaLat / 2)
             + Math.Cos(lat1) * Math.Cos(lat2)
             * Math.Sin(deltaLon / 2) * Math.Sin(deltaLon / 2);
 
-        var centralAngle = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        double centralAngle = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
         return EarthRadiusNauticalMiles * centralAngle;
     }
 
