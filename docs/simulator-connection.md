@@ -80,6 +80,8 @@ The probe prints connection transitions and compact telemetry lines, and writes 
 
 The probe must be run on the user's Windows machine with the real SDK runtime and MSFS 2024. A successful CI build only proves the tool compiles.
 
+Analyze a saved capture with [OpenCareer.TraceAnalysis](../tools/OpenCareer.TraceAnalysis/README.md). It runs without MSFS on Windows/Linux and reports observed snapshot cadence, field ranges, connection/pause/clearing evidence and malformed or incomplete records. A structurally clean report does not replace instrument comparison or the manual acceptance checklist below.
+
 ## CI verification
 
 Tested implementation/tooling head: `2f63e56a8da585c7cbab4eb2d53d4a6b19a1b404`. Production telemetry implementation: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.

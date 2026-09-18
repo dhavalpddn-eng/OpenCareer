@@ -28,3 +28,5 @@ Optional arguments:
 The default trace location is `%LOCALAPPDATA%\OpenCareer\Diagnostics\simconnect-live-<timestamp>.jsonl`.
 
 Use the trace to verify simulator absence, connection acknowledgement, 1 Hz aircraft telemetry, pause/resume, menu/loading transitions, graceful quit, abrupt simulator exit, reconnect and final telemetry clearing. Do not interpret the trace as a FlightSession or takeoff/landing detector.
+
+After capture, use [OpenCareer.TraceAnalysis](../OpenCareer.TraceAnalysis/README.md) to summarize cadence, numeric ranges, connection/pause observations and structural problems on Windows or Linux. The report supports manual review; it does not certify the live acceptance gate or calibrate flight thresholds.
