@@ -14,6 +14,16 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 - UI target/spec: `docs/ui-design-system.md` + `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
 - Verify remote branch head before edits because other chats may change it.
 
+## Runnable integration branch
+
+- Test-integration branch: `feature/runnable-integration`, created from shared telemetry head `1a0209bead0f21e353e64903263f289c7638e885`.
+- Latest tested code commit: `b9a6ab874e9f6363fc1fd885fa9a26db238f7e89`; documentation/data follow-up head: `d99f5113fc83baa11966c6d055518db3eed7911e`.
+- Linux CI run 35295851862 passed **136/136 xUnit tests + 29/29 deterministic SimLab scenarios**.
+- Windows CI run 35295851864 passed the WinUI x64 Release build, the live SimConnect probe build and **136/136 xUnit tests**.
+- This branch combines the current WinUI/SimConnect/telemetry baseline with the deterministic job market, regional conflict simulation, persistent world feed, curated-conflict provenance boundary and airfield-control/operation-eligibility foundation.
+- The remaining hard gate is **live Windows/MSFS validation** using `./tools/run-live-probe.ps1`; CI compilation and mocks are not a substitute for observing the installed MSFS 2024 runtime.
+- Notion mirror: `OpenCareer Runnable Integration Test Plan — 2026-09-17`. GitHub remains authoritative.
+
 ## Fixed direction
 
 Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI 3/Windows App SDK, isolated SimConnect boundary, SQLite, deterministic/testable domain. No aircraft whitelist. AI is optional and never authoritative for money, ownership, mission completion or critical state.
