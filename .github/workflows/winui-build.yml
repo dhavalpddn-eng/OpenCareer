@@ -12,7 +12,7 @@ on:
       - "src/OpenCareer.SimConnect/**"
       - "tests/OpenCareer.Tests/**"
       - "tools/OpenCareer.LiveProbe/**"
-      - "tools/run-live-probe.ps1"
+      - "tools/run-live-probe.ps1"\n      - "tools/run-runnable-test.ps1"
       - "Directory.Build.props"
       - ".github/workflows/winui-build.yml"
   pull_request:
@@ -24,7 +24,7 @@ on:
       - "src/OpenCareer.SimConnect/**"
       - "tests/OpenCareer.Tests/**"
       - "tools/OpenCareer.LiveProbe/**"
-      - "tools/run-live-probe.ps1"
+      - "tools/run-live-probe.ps1"\n      - "tools/run-runnable-test.ps1"
       - "Directory.Build.props"
       - ".github/workflows/winui-build.yml"
 
