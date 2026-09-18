@@ -456,12 +456,9 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
                 $" sep={horizontalSeparationNm.Value:0.00}nm/{verticalSeparationFeet!.Value:0}ft")
             : string.Empty;
 
-        Console.WriteLine(
-            FormattableString.Invariant(
-                $"[{DateTimeOffset.Now:HH:mm:ss.fff}] escort id={actor.Handle.ObjectId} " +
-                $"lat={protectedAircraft.LatitudeDegrees:0.00000} lon={protectedAircraft.LongitudeDegrees:0.00000} " +
-                $"agl={protectedAircraft.AltitudeAglFeet:0}ft gs={protectedAircraft.GroundSpeedKnots:0}kt " +
-                $"ground={protectedAircraft.OnGround}{separation}"));
+        string escortLine = FormattableString.Invariant(
+            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] escort id={actor.Handle.ObjectId} lat={protectedAircraft.LatitudeDegrees:0.00000} lon={protectedAircraft.LongitudeDegrees:0.00000} agl={protectedAircraft.AltitudeAglFeet:0}ft gs={protectedAircraft.GroundSpeedKnots:0}kt ground={protectedAircraft.OnGround}{separation}");
+        Console.WriteLine(escortLine);
     }
 
     private async Task TryRemoveEscortAsync(StreamWriter writer)
