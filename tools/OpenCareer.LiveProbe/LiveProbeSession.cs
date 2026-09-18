@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 using OpenCareer.SimConnect;
 
@@ -18,6 +20,11 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
     private int _connectionTransitions;
     private int _reconnectTransitions;
     private bool _sawConnected;
+    private readonly FlightEvidenceProcessor _flightEvidenceProcessor = new();
+    private FlightTrackingSnapshot? _flightTracking;
+    private SimulatorMissionActorHandle? _escortActor;
+    private AircraftTelemetrySnapshot? _lastEscortTelemetry;
+    private bool _escortSpawnAttempted;
 
     internal async Task<int> RunAsync()
     {
@@ -58,7 +65,20 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
                 os = RuntimeInformation.OSDescription,
                 processArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),
                 framework = RuntimeInformation.FrameworkDescription,
-                processId = Environment.ProcessId
+                processId = Environment.ProcessId,
+                sideWorkEscortTest = options.Escort is not null,
+                escort = options.Escort is null
+                    ? null
+                    : new
+                    {
+                        options.Escort.ContainerTitle,
+                        options.Escort.Livery,
+                        options.Escort.TailNumber,
+                        options.Escort.FlightNumber,
+                        options.Escort.FlightPlanPath,
+                        options.Escort.FlightPlanPosition,
+                        options.Escort.TouchAndGo
+                    }
             }).ConfigureAwait(false);
 
             connection.Start();
@@ -70,6 +90,7 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
         finally
         {
             Console.CancelKeyPress -= cancelHandler;
+            await TryRemoveEscortAsync(writer).ConfigureAwait(false);
             await connection.StopAsync().ConfigureAwait(false);
             elapsed.Stop();
 
@@ -107,9 +128,20 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
             SimulatorConnectionSnapshot current = connection.Current;
             if (current != lastConnection)
             {
+                if (lastConnection?.State == SimulatorConnectionState.Connected
+                    && current.State != SimulatorConnectionState.Connected)
+                {
+                    _escortActor = null;
+                    _lastEscortTelemetry = null;
+                    _escortSpawnAttempted = false;
+                }
+
                 await RecordConnectionAsync(writer, current).ConfigureAwait(false);
                 lastConnection = current;
             }
+
+            if (current.State == SimulatorConnectionState.Connected)
+                await TrySpawnEscortAsync(writer, cancellationToken).ConfigureAwait(false);
 
             AircraftTelemetrySnapshot? telemetry = connection.Latest;
             if (telemetry is null)
@@ -131,6 +163,8 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
                 await RecordTelemetryAsync(writer, telemetry).ConfigureAwait(false);
                 lastTelemetry = telemetry;
             }
+
+            await RecordEscortTelemetryIfChangedAsync(writer, telemetry).ConfigureAwait(false);
 
             await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
         }
@@ -193,12 +227,318 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
             telemetry.FlapsPositionPercent,
             telemetry.GearDown,
             telemetry.Paused,
-            telemetry.SlewActive
+            telemetry.SlewActive,
+            telemetry.GearRetractable,
+            telemetry.GearCenterPositionPercent,
+            telemetry.GearLeftPositionPercent,
+            telemetry.GearRightPositionPercent
         }).ConfigureAwait(false);
 
         string line = FormattableString.Invariant(
-            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] telemetry #{sequence} lat={telemetry.LatitudeDegrees:0.00000} lon={telemetry.LongitudeDegrees:0.00000} msl={telemetry.AltitudeMslFeet:0}ft agl={telemetry.AltitudeAglFeet:0}ft ias={telemetry.IndicatedAirspeedKnots:0}kt gs={telemetry.GroundSpeedKnots:0}kt vs={telemetry.VerticalSpeedFeetPerMinute:+0;-0;0}fpm hdg={telemetry.HeadingDegrees:000} ground={telemetry.OnGround} paused={telemetry.Paused} slew={telemetry.SlewActive}");
+            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] telemetry #{sequence} lat={telemetry.LatitudeDegrees:0.00000} lon={telemetry.LongitudeDegrees:0.00000} msl={telemetry.AltitudeMslFeet:0}ft agl={telemetry.AltitudeAglFeet:0}ft ias={telemetry.IndicatedAirspeedKnots:0}kt gs={telemetry.GroundSpeedKnots:0}kt vs={telemetry.VerticalSpeedFeetPerMinute:+0;-0;0}fpm hdg={telemetry.HeadingDegrees:000} ground={telemetry.OnGround} gear={telemetry.GearDown} gearRaw={telemetry.GearCenterPositionPercent:0}/{telemetry.GearLeftPositionPercent:0}/{telemetry.GearRightPositionPercent:0} retr={telemetry.GearRetractable} paused={telemetry.Paused} slew={telemetry.SlewActive}");
         Console.WriteLine(line);
+
+        await RecordFlightEvidenceAsync(writer, telemetry).ConfigureAwait(false);
+    }
+
+    private async Task RecordFlightEvidenceAsync(
+        StreamWriter writer,
+        AircraftTelemetrySnapshot telemetry)
+    {
+        var evidence = _flightEvidenceProcessor.Process(
+            connected: true,
+            telemetry,
+            telemetry.Timestamp);
+
+        _flightTracking ??= FlightTrackingSnapshot.Start(evidence.Timestamp);
+        FlightTrackingSnapshot previous = _flightTracking;
+        FlightTrackingSnapshot next =
+            FlightTrackingStateMachine.Advance(previous, evidence);
+        _flightTracking = next;
+
+        bool noteworthy =
+            next.State != previous.State
+            || evidence.EngineStartObserved
+            || evidence.TakeoffCandidate
+            || evidence.RejectedTakeoffConfirmed
+            || evidence.AirborneConfirmed
+            || evidence.ApproachConfirmed
+            || evidence.TouchdownConfirmed
+            || evidence.BounceRecontact
+            || evidence.GoAroundConfirmed
+            || evidence.TouchAndGoConfirmed
+            || evidence.LandingRolloutConfirmed
+            || evidence.ParkingConfirmed;
+
+        if (!noteworthy)
+            return;
+
+        await WriteJsonAsync(writer, new
+        {
+            type = "flightEvidence",
+            observedAtUtc = DateTimeOffset.UtcNow,
+            sampleTimestampUtc = telemetry.Timestamp,
+            previousState = previous.State.ToString(),
+            state = next.State.ToString(),
+            next.TakeoffCount,
+            next.LandingEpisodeCount,
+            next.BounceCount,
+            next.TouchAndGoCount,
+            next.RejectedTakeoffCount,
+            evidence.StableTelemetry,
+            evidence.ValidLoadedAircraft,
+            evidence.EngineStartObserved,
+            evidence.SelfPoweredMovementForFlight,
+            evidence.TakeoffCandidate,
+            evidence.RejectedTakeoffConfirmed,
+            evidence.AirborneConfirmed,
+            evidence.ApproachConfirmed,
+            evidence.TouchdownConfirmed,
+            evidence.BounceRecontact,
+            evidence.GoAroundConfirmed,
+            evidence.TouchAndGoConfirmed,
+            evidence.LandingRolloutConfirmed,
+            evidence.ParkingConfirmed
+        }).ConfigureAwait(false);
+
+        Console.WriteLine(
+            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] flight {previous.State} -> {next.State}" +
+            $" takeoffs={next.TakeoffCount} landings={next.LandingEpisodeCount}" +
+            $" bounces={next.BounceCount} rejected={next.RejectedTakeoffCount}");
+    }
+
+
+    private async Task TrySpawnEscortAsync(
+        StreamWriter writer,
+        CancellationToken cancellationToken)
+    {
+        if (options.Escort is null
+            || _escortActor is not null
+            || _escortSpawnAttempted
+            || connection.Latest is null
+            || _flightTracking is null
+            || _flightTracking.State == FlightTrackingState.Observing)
+        {
+            return;
+        }
+
+        _escortSpawnAttempted = true;
+        SimulatorMissionAircraftSpawnRequest request =
+            options.Escort.ToSpawnRequest();
+
+        await WriteJsonAsync(writer, new
+        {
+            type = "escortSpawnRequested",
+            observedAtUtc = DateTimeOffset.UtcNow,
+            request.ActorKey,
+            request.ContainerTitle,
+            request.Livery,
+            request.TailNumber,
+            request.FlightNumber,
+            request.FlightPlanPath,
+            request.FlightPlanPosition,
+            request.TouchAndGo
+        }).ConfigureAwait(false);
+
+        Console.WriteLine(
+            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] Side Work: spawning protected aircraft \"{request.ContainerTitle}\".");
+
+        try
+        {
+            SimulatorMissionActorHandle actor =
+                await connection
+                    .SpawnEnrouteAircraftAsync(request)
+                    .WaitAsync(TimeSpan.FromSeconds(30), cancellationToken)
+                    .ConfigureAwait(false);
+
+            _escortActor = actor;
+            await WriteJsonAsync(writer, new
+            {
+                type = "escortSpawned",
+                observedAtUtc = DateTimeOffset.UtcNow,
+                actor.ActorKey,
+                actor.ObjectId
+            }).ConfigureAwait(false);
+
+            Console.WriteLine(
+                $"[{DateTimeOffset.Now:HH:mm:ss.fff}] Side Work: protected aircraft spawned objectId={actor.ObjectId}.");
+        }
+        catch (Exception ex) when (
+            ex is not OperationCanceledException
+            || !cancellationToken.IsCancellationRequested)
+        {
+            await WriteJsonAsync(writer, new
+            {
+                type = "escortSpawnFailed",
+                observedAtUtc = DateTimeOffset.UtcNow,
+                exceptionType = ex.GetType().FullName,
+                ex.Message
+            }).ConfigureAwait(false);
+
+            Console.Error.WriteLine(
+                $"[{DateTimeOffset.Now:HH:mm:ss.fff}] Side Work: protected aircraft spawn FAILED: {ex.Message}");
+        }
+    }
+
+    private async Task RecordEscortTelemetryIfChangedAsync(
+        StreamWriter writer,
+        AircraftTelemetrySnapshot? player)
+    {
+        if (_escortActor is null)
+            return;
+
+        SimulatorMissionActorSnapshot? actor =
+            connection.Actors.FirstOrDefault(
+                candidate =>
+                    candidate.Handle.ObjectId == _escortActor.ObjectId
+                    && string.Equals(
+                        candidate.Handle.ActorKey,
+                        _escortActor.ActorKey,
+                        StringComparison.Ordinal));
+
+        AircraftTelemetrySnapshot? protectedAircraft =
+            actor?.Telemetry;
+
+        if (protectedAircraft is null
+            || protectedAircraft == _lastEscortTelemetry)
+        {
+            return;
+        }
+
+        _lastEscortTelemetry = protectedAircraft;
+
+        double? horizontalSeparationNm = null;
+        double? verticalSeparationFeet = null;
+        double? groundSpeedDifferenceKnots = null;
+
+        if (player is not null)
+        {
+            horizontalSeparationNm = DistanceNauticalMiles(
+                player.LatitudeDegrees,
+                player.LongitudeDegrees,
+                protectedAircraft.LatitudeDegrees,
+                protectedAircraft.LongitudeDegrees);
+            verticalSeparationFeet =
+                Math.Abs(
+                    player.AltitudeMslFeet
+                    - protectedAircraft.AltitudeMslFeet);
+            groundSpeedDifferenceKnots =
+                Math.Abs(
+                    player.GroundSpeedKnots
+                    - protectedAircraft.GroundSpeedKnots);
+        }
+
+        await WriteJsonAsync(writer, new
+        {
+            type = "escortTelemetry",
+            observedAtUtc = DateTimeOffset.UtcNow,
+            actorKey = actor!.Handle.ActorKey,
+            actorObjectId = actor.Handle.ObjectId,
+            sampleTimestampUtc = protectedAircraft.Timestamp,
+            protectedAircraft.LatitudeDegrees,
+            protectedAircraft.LongitudeDegrees,
+            protectedAircraft.AltitudeMslFeet,
+            protectedAircraft.AltitudeAglFeet,
+            protectedAircraft.IndicatedAirspeedKnots,
+            protectedAircraft.GroundSpeedKnots,
+            protectedAircraft.VerticalSpeedFeetPerMinute,
+            protectedAircraft.HeadingDegrees,
+            protectedAircraft.OnGround,
+            protectedAircraft.GearDown,
+            protectedAircraft.GearRetractable,
+            protectedAircraft.GearCenterPositionPercent,
+            protectedAircraft.GearLeftPositionPercent,
+            protectedAircraft.GearRightPositionPercent,
+            horizontalSeparationNm,
+            verticalSeparationFeet,
+            groundSpeedDifferenceKnots
+        }).ConfigureAwait(false);
+
+        string separation = horizontalSeparationNm.HasValue
+            ? FormattableString.Invariant(
+                $" sep={horizontalSeparationNm.Value:0.00}nm/{verticalSeparationFeet!.Value:0}ft")
+            : string.Empty;
+
+        string escortLine = FormattableString.Invariant(
+            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] escort id={actor.Handle.ObjectId} lat={protectedAircraft.LatitudeDegrees:0.00000} lon={protectedAircraft.LongitudeDegrees:0.00000} agl={protectedAircraft.AltitudeAglFeet:0}ft gs={protectedAircraft.GroundSpeedKnots:0}kt ground={protectedAircraft.OnGround}{separation}");
+        Console.WriteLine(escortLine);
+    }
+
+    private async Task TryRemoveEscortAsync(StreamWriter writer)
+    {
+        if (_escortActor is null)
+            return;
+
+        SimulatorMissionActorHandle actor = _escortActor;
+        _escortActor = null;
+
+        if (connection.Current.State != SimulatorConnectionState.Connected)
+            return;
+
+        try
+        {
+            await connection
+                .RemoveActorAsync(actor)
+                .WaitAsync(TimeSpan.FromSeconds(10))
+                .ConfigureAwait(false);
+
+            await WriteJsonAsync(writer, new
+            {
+                type = "escortRemoved",
+                observedAtUtc = DateTimeOffset.UtcNow,
+                actor.ActorKey,
+                actor.ObjectId
+            }).ConfigureAwait(false);
+
+            Console.WriteLine(
+                $"[{DateTimeOffset.Now:HH:mm:ss.fff}] Side Work: protected aircraft removed.");
+        }
+        catch (Exception ex)
+        {
+            await WriteJsonAsync(writer, new
+            {
+                type = "escortRemoveFailed",
+                observedAtUtc = DateTimeOffset.UtcNow,
+                actor.ActorKey,
+                actor.ObjectId,
+                exceptionType = ex.GetType().FullName,
+                ex.Message
+            }).ConfigureAwait(false);
+
+            Console.Error.WriteLine(
+                $"[{DateTimeOffset.Now:HH:mm:ss.fff}] Side Work: protected aircraft cleanup failed: {ex.Message}");
+        }
+    }
+
+    private static double DistanceNauticalMiles(
+        double latitudeA,
+        double longitudeA,
+        double latitudeB,
+        double longitudeB)
+    {
+        const double EarthRadiusNauticalMiles = 3_440.065;
+
+        static double ToRadians(double degrees) =>
+            degrees * Math.PI / 180d;
+
+        double lat1 = ToRadians(latitudeA);
+        double lat2 = ToRadians(latitudeB);
+        double deltaLat = ToRadians(latitudeB - latitudeA);
+        double deltaLon = ToRadians(longitudeB - longitudeA);
+
+        double a =
+            Math.Sin(deltaLat / 2) * Math.Sin(deltaLat / 2)
+            + Math.Cos(lat1)
+            * Math.Cos(lat2)
+            * Math.Sin(deltaLon / 2)
+            * Math.Sin(deltaLon / 2);
+
+        double centralAngle =
+            2 * Math.Atan2(
+                Math.Sqrt(a),
+                Math.Sqrt(Math.Max(0, 1 - a)));
+
+        return EarthRadiusNauticalMiles * centralAngle;
     }
 
     private static async Task WriteJsonAsync(StreamWriter writer, object value)

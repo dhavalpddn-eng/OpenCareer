@@ -3,7 +3,16 @@ param(
     [string]$SimConnectNativePath = "",
     [string]$Output = "",
     [ValidateRange(0, 86400)]
-    [int]$DurationSeconds = 0
+    [int]$DurationSeconds = 0,
+
+    [string]$EscortContainerTitle = "",
+    [string]$EscortFlightPlan = "",
+    [string]$EscortLivery = "",
+    [string]$EscortTailNumber = "OC001",
+    [int]$EscortFlightNumber = -1,
+    [ValidateRange(0, 1000000)]
+    [double]$EscortFlightPlanPosition = 0.5,
+    [switch]$EscortTouchAndGo
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +34,12 @@ if (-not (Test-Path -LiteralPath $SimConnectNativePath -PathType Leaf)) {
     throw "SimConnect.dll was not found at: $SimConnectNativePath"
 }
 
+$hasEscortTitle = -not [string]::IsNullOrWhiteSpace($EscortContainerTitle)
+$hasEscortPlan = -not [string]::IsNullOrWhiteSpace($EscortFlightPlan)
+if ($hasEscortTitle -ne $hasEscortPlan) {
+    throw "EscortContainerTitle and EscortFlightPlan must be supplied together."
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repoRoot "tools\OpenCareer.LiveProbe\OpenCareer.LiveProbe.csproj"
 
@@ -43,6 +58,24 @@ if (-not [string]::IsNullOrWhiteSpace($Output)) {
 
 if ($DurationSeconds -gt 0) {
     $dotnetArgs += @("--duration-seconds", $DurationSeconds.ToString([System.Globalization.CultureInfo]::InvariantCulture))
+}
+
+if ($hasEscortTitle) {
+    $dotnetArgs += @(
+        "--escort-container-title", $EscortContainerTitle,
+        "--escort-flight-plan", [System.IO.Path]::GetFullPath($EscortFlightPlan),
+        "--escort-tail", $EscortTailNumber,
+        "--escort-flight-number", $EscortFlightNumber.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+        "--escort-position", $EscortFlightPlanPosition.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($EscortLivery)) {
+        $dotnetArgs += @("--escort-livery", $EscortLivery)
+    }
+
+    if ($EscortTouchAndGo) {
+        $dotnetArgs += "--escort-touch-and-go"
+    }
 }
 
 & dotnet @dotnetArgs

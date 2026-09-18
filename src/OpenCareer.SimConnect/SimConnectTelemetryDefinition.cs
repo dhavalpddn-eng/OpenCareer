@@ -27,6 +27,10 @@ internal enum SimConnectTelemetryValue
     EmptyWeight,
     FlapsHandlePercentOver100,
     GearTotalPercent,
+    GearRetractable,
+    GearCenterPositionOver100,
+    GearLeftPositionOver100,
+    GearRightPositionOver100,
     SlewActive
 }
 
@@ -61,6 +65,10 @@ internal static class SimConnectTelemetryDefinition
         new("EMPTY WEIGHT", "pounds"),
         new("FLAPS HANDLE PERCENT", "percent over 100"),
         new("GEAR TOTAL PCT EXTENDED", "percent"),
+        new("IS GEAR RETRACTABLE", "bool"),
+        new("GEAR CENTER POSITION", "percent over 100"),
+        new("GEAR LEFT POSITION", "percent over 100"),
+        new("GEAR RIGHT POSITION", "percent over 100"),
         new("IS SLEW ACTIVE", "bool")
     ];
 

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Military;
 using OpenCareer.Application.Simulator;
 using OpenCareer.SimConnect;
 
@@ -30,7 +31,11 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ISimulatorTelemetrySource>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
+        services.AddSingleton<ISimulatorMissionActorService>(provider =>
+            provider.GetRequiredService<SimConnectConnection>());
+        services.AddSingleton<MilitaryEscortOperationCoordinator>();
         services.AddSingleton<ShellViewModel>();
+        services.AddSingleton<MilitaryOperationsViewModel>();
         services.AddSingleton<MainWindow>();
 
         _services = services.BuildServiceProvider();
@@ -45,7 +50,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         _services.GetRequiredService<ISimulatorConnection>().Start();
     }
 
-    private async void OnMainWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    private async void OnMainWindowClosing(
+        AppWindow sender,
+        AppWindowClosingEventArgs args)
     {
         if (_shutdownComplete)
             return;
@@ -63,7 +70,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "OpenCareer shutdown failed.");
+            logger.LogError(
+                ex,
+                "OpenCareer shutdown failed.");
         }
         finally
         {
@@ -72,9 +81,13 @@ public partial class App : Microsoft.UI.Xaml.Application
         }
     }
 
-    private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    private void OnUnhandledException(
+        object sender,
+        Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         var logger = _services.GetRequiredService<ILogger<App>>();
-        logger.LogError(e.Exception, "Unhandled OpenCareer UI exception.");
+        logger.LogError(
+            e.Exception,
+            "Unhandled OpenCareer UI exception.");
     }
 }

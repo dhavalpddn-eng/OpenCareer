@@ -7,7 +7,7 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
 - Latest tested implementation: `2f63e56a8da585c7cbab4eb2d53d4a6b19a1b404` (`fix: compile live SimConnect probe`). The production telemetry implementation remains `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
-- WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. **Live simulator/runtime validation remains open.**
+- WinUI 3 shell, resilient SimConnect connection/reconnect and normalized aircraft telemetry are implemented. **First live Windows/MSFS 2024 validation is now passed for native load, connection, ~1 Hz telemetry, pause, taxi, takeoff, airborne, landing, shutdown, telemetry clearing and one reconnect cycle.** Gear-state reliability and clean final probe shutdown remain open.
 - [Windows CI run 35283864087](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283864087): WinUI x64 Release build and the live SimConnect probe both succeeded with 0 warnings/errors; **74/74 xUnit tests passed**.
 - [Linux CI run 35283863937](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283863937): **74/74 xUnit tests** and **29/29 deterministic SimLab scenarios** passed.
 - Both CI runs tested `2f63e56`; compilation of the probe still does **not** imply live MSFS verification.
@@ -21,9 +21,18 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 - Linux CI run 35295851862 passed **136/136 xUnit tests + 29/29 deterministic SimLab scenarios**.
 - Windows CI run 35295851864 passed the WinUI x64 Release build, live SimConnect probe build and **136/136 xUnit tests**.
 - This branch combines current WinUI/SimConnect/telemetry with the deterministic job market, regional conflict simulation, persistent world feed, curated-conflict provenance boundary and airfield-control/operation-eligibility foundation.
-- The remaining hard gate is **live Windows/MSFS validation** using `./tools/run-live-probe.ps1`; CI compilation and mocks are not a substitute for observing the installed MSFS 2024 runtime.
+- The live Windows/MSFS gate is now partially closed by an uploaded real trace: production SimConnect load/connection, ~1 Hz telemetry, movement/takeoff/landing/shutdown, stale telemetry clearing and one reconnect cycle were observed. Remaining focused gaps are gear-state fallback validation, clean final probe shutdown, and broader aircraft calibration before generic flight-evidence thresholds are frozen.
 - Draft integration PR: #4 into `feature/m1-simulation-core`. Keep it draft until live validation.
 - Notion mirror: `OpenCareer Runnable Integration Test Plan — 2026-09-17`. GitHub remains authoritative.
+
+## Military / Government foundation branch
+
+- Active military branch: `feature/military-operations-foundation`, forked from runnable integration head `96427ae3eb33278a7c4cf2603e53138472f1eaf2`.
+- Implementation head `91d64533f16ef66acdd162118b306b21d22e94ec` adds capability/authorization gating, the MilitaryMissionEngine state machine, abstract bounded threat simulation, deterministic simulated engagement resolution and a real WinUI Military / Government page.
+- Linux CI 35302265454 passed **152/152 xUnit + 29/29 SimLab**; Windows CI 35302265455 passed the WinUI x64 Release build, live-probe build and **152/152 xUnit**, all with 0 build warnings/errors.
+- The five Military / Government checklist foundation items are now green: conflict UI design, simulated combat architecture, air-support mission flow, threat simulation and military operations screen.
+- Green means implemented/tested foundation, not a complete military career loop. Persistence, job-to-operation orchestration, live telemetry evidence, settlement and runtime map binding remain.
+- Detailed compact handoff: `docs/military-operations-foundation.md`.
 
 ## Fixed direction
 

@@ -31,6 +31,10 @@ public sealed class SimConnectTelemetryMapperTests
         Set(values, SimConnectTelemetryValue.EmptyWeight, 1_800);
         Set(values, SimConnectTelemetryValue.FlapsHandlePercentOver100, 0.25);
         Set(values, SimConnectTelemetryValue.GearTotalPercent, 99);
+        Set(values, SimConnectTelemetryValue.GearRetractable, 1);
+        Set(values, SimConnectTelemetryValue.GearCenterPositionOver100, 1);
+        Set(values, SimConnectTelemetryValue.GearLeftPositionOver100, 1);
+        Set(values, SimConnectTelemetryValue.GearRightPositionOver100, 1);
         Set(values, SimConnectTelemetryValue.SlewActive, -1);
 
         DateTimeOffset timestamp = new(2026, 9, 17, 21, 30, 0, TimeSpan.Zero);
@@ -47,9 +51,52 @@ public sealed class SimConnectTelemetryMapperTests
         Assert.Equal(600, snapshot.PayloadPounds);
         Assert.Equal(25, snapshot.FlapsPositionPercent);
         Assert.True(snapshot.GearDown);
+        Assert.True(snapshot.GearRetractable);
+        Assert.Equal(100, snapshot.GearCenterPositionPercent);
+        Assert.Equal(100, snapshot.GearLeftPositionPercent);
+        Assert.Equal(100, snapshot.GearRightPositionPercent);
         Assert.True(snapshot.Paused);
         Assert.True(snapshot.SlewActive);
         Assert.False(snapshot.OnGround);
+    }
+
+    [Fact]
+    public void GearFallbackUsesFixedGearOrIndividualPositions()
+    {
+        var fixedGear = new double[SimConnectTelemetryDefinition.ValueCount];
+        var fixedSnapshot = SimConnectTelemetryMapper.Map(
+            fixedGear,
+            DateTimeOffset.UtcNow,
+            paused: false);
+
+        Assert.NotNull(fixedSnapshot);
+        Assert.False(fixedSnapshot.GearRetractable);
+        Assert.True(fixedSnapshot.GearDown);
+
+        var retractable = new double[SimConnectTelemetryDefinition.ValueCount];
+        Set(retractable, SimConnectTelemetryValue.GearRetractable, 1);
+        Set(retractable, SimConnectTelemetryValue.GearTotalPercent, 0);
+        Set(retractable, SimConnectTelemetryValue.GearLeftPositionOver100, 1);
+        Set(retractable, SimConnectTelemetryValue.GearRightPositionOver100, 1);
+
+        var fallbackSnapshot = SimConnectTelemetryMapper.Map(
+            retractable,
+            DateTimeOffset.UtcNow,
+            paused: false);
+
+        Assert.NotNull(fallbackSnapshot);
+        Assert.True(fallbackSnapshot.GearDown);
+        Assert.Equal(100, fallbackSnapshot.GearLeftPositionPercent);
+        Assert.Equal(100, fallbackSnapshot.GearRightPositionPercent);
+
+        Set(retractable, SimConnectTelemetryValue.GearRightPositionOver100, 0);
+        var partialSnapshot = SimConnectTelemetryMapper.Map(
+            retractable,
+            DateTimeOffset.UtcNow,
+            paused: false);
+
+        Assert.NotNull(partialSnapshot);
+        Assert.False(partialSnapshot.GearDown);
     }
 
     [Fact]
@@ -71,6 +118,7 @@ public sealed class SimConnectTelemetryMapperTests
         Set(values, SimConnectTelemetryValue.EmptyWeight, 500);
         Set(values, SimConnectTelemetryValue.FlapsHandlePercentOver100, 2);
         Set(values, SimConnectTelemetryValue.GearTotalPercent, 94.9);
+        Set(values, SimConnectTelemetryValue.GearRetractable, 1);
 
         var snapshot = SimConnectTelemetryMapper.Map(values, DateTimeOffset.UtcNow, paused: false);
 
