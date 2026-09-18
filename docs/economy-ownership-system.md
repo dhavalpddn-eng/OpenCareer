@@ -23,8 +23,9 @@ Implemented deterministic airframe/engine/gear wear, discrete damage, hard-landi
 Downstream: verified live telemetry binding, simulator-native component state where supported, MRO/parts depth and maintenance UI.
 
 ## Verification
-- 117/117 xUnit tests passed.
-- 29/29 deterministic SimLab scenarios passed.
-- Linux Release restore/build passed with warnings-as-errors.
+- **129/129 xUnit tests passed** on Linux and Windows.
+- **29/29 deterministic SimLab scenarios passed**.
+- Windows WinUI Release build and live-probe build passed.
+- Economy exploit coverage now includes repeat-job farming, short-flight bonus farming, credit-job-count farming, high-value cargo farming, sim-rate earnings, dealer-discount pacing and used-aircraft maintenance reset.
 - The first SQLite package selection failed NuGet security audit; the dependency was upgraded to Microsoft.Data.Sqlite 10.0.12 rather than suppressing the warning.
-- Windows CI verified the WinUI Release build, live-probe build and **117/117 xUnit tests** after the Windows SQLite pooling cleanup fix. The high-level roadmap image may now mark all five Economy & Ownership core boxes complete.
+- See [economy balance and exploit audit](economy-balance-audit.md) for the current numeric invariants and remaining end-to-end limits.
