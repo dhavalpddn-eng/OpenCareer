@@ -8,6 +8,7 @@ public sealed class SqliteEconomyLedgerStore : IEconomyLedgerStore
 {
     private readonly string _connectionString;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
     private bool _initialized;
 
     public SqliteEconomyLedgerStore(string databasePath)
@@ -35,47 +36,58 @@ public sealed class SqliteEconomyLedgerStore : IEconomyLedgerStore
         ArgumentNullException.ThrowIfNull(transaction);
         transaction.Validate();
 
-        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        await _writeGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
 
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await EnableForeignKeysAsync(connection, cancellationToken).ConfigureAwait(false);
-
-        using var sqliteTransaction = connection.BeginTransaction();
-
-        string? existingId = await FindExistingTransactionIdAsync(
-            connection,
-            sqliteTransaction,
-            transaction.TransactionId,
-            transaction.IdempotencyKey,
-            cancellationToken).ConfigureAwait(false);
-
-        if (existingId is not null)
+        try
         {
-            EconomyLedgerTransaction existing =
-                await ReadTransactionAsync(
-                    connection,
-                    sqliteTransaction,
-                    Guid.Parse(existingId),
-                    cancellationToken).ConfigureAwait(false);
+            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            if (!Equivalent(existing, transaction))
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await EnableForeignKeysAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            using var sqliteTransaction = connection.BeginTransaction();
+
+            string? existingId = await FindExistingTransactionIdAsync(
+                connection,
+                sqliteTransaction,
+                transaction.TransactionId,
+                transaction.IdempotencyKey,
+                cancellationToken).ConfigureAwait(false);
+
+            if (existingId is not null)
             {
-                throw new InvalidOperationException(
-                    "The ledger idempotency key or transaction ID already exists with different financial data.");
+                EconomyLedgerTransaction existing =
+                    await ReadTransactionAsync(
+                        connection,
+                        sqliteTransaction,
+                        Guid.Parse(existingId),
+                        cancellationToken).ConfigureAwait(false);
+
+                if (!Equivalent(existing, transaction))
+                {
+                    throw new InvalidOperationException(
+                        "The ledger idempotency key or transaction ID already exists with different financial data.");
+                }
+
+                return LedgerPostResult.AlreadyPosted;
             }
 
-            return LedgerPostResult.AlreadyPosted;
+            await InsertTransactionAsync(
+                connection,
+                sqliteTransaction,
+                transaction,
+                cancellationToken).ConfigureAwait(false);
+
+            sqliteTransaction.Commit();
+            return LedgerPostResult.Posted;
         }
-
-        await InsertTransactionAsync(
-            connection,
-            sqliteTransaction,
-            transaction,
-            cancellationToken).ConfigureAwait(false);
-
-        sqliteTransaction.Commit();
-        return LedgerPostResult.Posted;
+        finally
+        {
+            _writeGate.Release();
+        }
     }
 
     public async Task<decimal> ReadCashBalanceAsync(
