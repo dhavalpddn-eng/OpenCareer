@@ -59,15 +59,28 @@ public static class JobRepeatExposureCalculator
         var sameFamily = recent.Count(x =>
             JobEconomyBalancePolicy.FamilyFor(x.Kind) == family);
         var sameRoute = recent.Count(x =>
-            string.Equals(x.OriginIcao, originIcao, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(x.DestinationIcao, destinationIcao, StringComparison.OrdinalIgnoreCase));
+            IsSameRouteCorridor(
+                x.OriginIcao,
+                x.DestinationIcao,
+                originIcao,
+                destinationIcao));
         var sameMarket = string.IsNullOrWhiteSpace(marketId)
             ? 0
             : recent.Count(x =>
-                string.Equals(x.MarketId, marketId, StringComparison.Ordinal));
+                string.Equals(x.MarketId, marketId, StringComparison.OrdinalIgnoreCase));
 
         return new JobRepeatExposure(sameFamily, sameRoute, sameMarket);
     }
+
+    private static bool IsSameRouteCorridor(
+        string firstOrigin,
+        string firstDestination,
+        string secondOrigin,
+        string secondDestination) =>
+        (string.Equals(firstOrigin, secondOrigin, StringComparison.OrdinalIgnoreCase)
+         && string.Equals(firstDestination, secondDestination, StringComparison.OrdinalIgnoreCase))
+        || (string.Equals(firstOrigin, secondDestination, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(firstDestination, secondOrigin, StringComparison.OrdinalIgnoreCase));
 }
 
 public sealed record JobEconomyInput(
@@ -118,12 +131,14 @@ public sealed record JobEconomyBalancePolicy(
     decimal TargetNetPerCareerCreditHour,
     double MinimumFreshHourlyFactor,
     double MaximumFreshHourlyFactor,
+    double MaximumTotalPlayerNetFactor,
     double MaximumRepetitionPenalty)
 {
     public static JobEconomyBalancePolicy Default { get; } = new(
         CareerProgressionPolicy.Default.TargetNetSavingsPerFlightHour,
         MinimumFreshHourlyFactor: 0.85,
         MaximumFreshHourlyFactor: 1.15,
+        MaximumTotalPlayerNetFactor: 1.15,
         MaximumRepetitionPenalty: 0.30);
 
     public JobEconomyQuote Quote(JobEconomyInput input)
@@ -192,13 +207,15 @@ public sealed record JobEconomyBalancePolicy(
 
     public JobEconomySettlementQuote NormalizeForFlightTime(
         JobEconomyQuote quote,
-        FlightTimeLedger ledger)
+        FlightTimeLedger ledger,
+        decimal additionalPlayerBonuses = 0m)
     {
         ArgumentNullException.ThrowIfNull(quote);
         ArgumentNullException.ThrowIfNull(ledger);
 
         if (quote.TargetPlayerNet < 0
             || quote.RecommendedGrossRevenue < quote.TargetPlayerNet
+            || additionalPlayerBonuses < 0
             || ledger.MovementFlightTime < TimeSpan.Zero
             || ledger.CareerCreditTime < TimeSpan.Zero)
         {
@@ -213,10 +230,21 @@ public sealed record JobEconomyBalancePolicy(
 
         var directOperatingCostComponent =
             quote.RecommendedGrossRevenue - quote.TargetPlayerNet;
-        var playerNet = decimal.Round(
+        var normalizedBaseNet = decimal.Round(
             quote.TargetPlayerNet * (decimal)timeFactor,
             2,
             MidpointRounding.AwayFromZero);
+
+        var careerHours = (decimal)ledger.CareerCreditTime.TotalHours;
+        var actualCareerTimeCap = decimal.Round(
+            TargetNetPerCareerCreditHour
+            * careerHours
+            * (decimal)MaximumTotalPlayerNetFactor,
+            2,
+            MidpointRounding.AwayFromZero);
+
+        var requestedPlayerNet = normalizedBaseNet + additionalPlayerBonuses;
+        var playerNet = Math.Min(requestedPlayerNet, actualCareerTimeCap);
 
         return new JobEconomySettlementQuote(
             playerNet,
@@ -230,9 +258,11 @@ public sealed record JobEconomyBalancePolicy(
         if (TargetNetPerCareerCreditHour <= 0
             || !double.IsFinite(MinimumFreshHourlyFactor)
             || !double.IsFinite(MaximumFreshHourlyFactor)
+            || !double.IsFinite(MaximumTotalPlayerNetFactor)
             || !double.IsFinite(MaximumRepetitionPenalty)
             || MinimumFreshHourlyFactor <= 0
             || MaximumFreshHourlyFactor < MinimumFreshHourlyFactor
+            || MaximumTotalPlayerNetFactor < MaximumFreshHourlyFactor
             || MaximumRepetitionPenalty is < 0 or >= 1)
         {
             throw new ArgumentOutOfRangeException(nameof(JobEconomyBalancePolicy));
