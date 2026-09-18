@@ -31,5 +31,8 @@ jobs:
       - name: Run deterministic regression and stress scenarios
         run: dotnet run --project src/OpenCareer.SimLab/OpenCareer.SimLab.csproj --configuration Release --no-build
 
+      - name: Run adversarial economy balance lab
+        run: dotnet run --project tools/OpenCareer.BalanceLab/OpenCareer.BalanceLab.csproj --configuration Release
+
       - name: Run career unit tests
         run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release
