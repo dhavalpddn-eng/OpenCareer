@@ -79,7 +79,7 @@ internal static class SimConnectTelemetryMapper
             gearRetractable,
             gearCenterPercent,
             gearLeftPercent,
-            gearRightPercent));
+            gearRightPercent);
     }
 
     private static double Read(IReadOnlyList<double> values, SimConnectTelemetryValue index) =>
