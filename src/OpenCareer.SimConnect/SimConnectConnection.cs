@@ -229,9 +229,11 @@ public sealed class SimConnectConnection :
                     Publish(new(
                         SimulatorConnectionState.Unavailable,
                         issue));
-                    _logger.LogDebug(
+                    _logger.LogWarning(
                         ex,
-                        "SimConnect runtime unavailable.");
+                        "SimConnect runtime unavailable: {ExceptionType}: {Message}",
+                        ex.GetType().FullName,
+                        ex.Message);
                     delay = _options.RuntimeRetryDelay;
                 }
 

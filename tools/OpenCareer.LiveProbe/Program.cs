@@ -12,6 +12,8 @@ try
 {
     LiveProbeOptions options = LiveProbeOptions.Parse(args);
 
+    NativeRuntimeDiagnostics.ReportSimConnect();
+
     using ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
     {
         builder.SetMinimumLevel(LogLevel.Information);
