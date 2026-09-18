@@ -94,7 +94,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
     // The Windows application supplies the MSFS 2024 SDK's x64 SimConnect.dll beside its executable.
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory | DllImportSearchPath.System32)]
     private static extern int SimConnect_Open(
         out nint handle,
         string name,
@@ -104,7 +104,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         uint configIndex);
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory | DllImportSearchPath.System32)]
     private static extern int SimConnect_CallDispatch(
         nint handle,
         DispatchCallback callback,
@@ -112,7 +112,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory | DllImportSearchPath.System32)]
     private static extern int SimConnect_AddToDataDefinition(
         nint handle,
         uint definitionId,
@@ -123,7 +123,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         uint datumId);
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory | DllImportSearchPath.System32)]
     private static extern int SimConnect_RequestDataOnSimObject(
         nint handle,
         uint requestId,
@@ -137,7 +137,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory | DllImportSearchPath.System32)]
     private static extern int SimConnect_SubscribeToSystemEvent(
         nint handle,
         uint eventId,
@@ -145,7 +145,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory | DllImportSearchPath.System32)]
     private static extern int SimConnect_RequestSystemState(
         nint handle,
         uint requestId,
@@ -153,7 +153,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory | DllImportSearchPath.System32)]
     private static extern int SimConnect_AICreateEnrouteATCAircraft_EX1(
         nint handle,
         string containerTitle,
@@ -166,13 +166,13 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         uint requestId);
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory | DllImportSearchPath.System32)]
     private static extern int SimConnect_AIRemoveObject(
         nint handle,
         uint objectId,
         uint requestId);
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory | DllImportSearchPath.System32)]
     private static extern int SimConnect_Close(nint handle);
 }
