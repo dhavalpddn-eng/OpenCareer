@@ -105,9 +105,15 @@ Chapter status: **ACTIVE**
 - [x] Display normalized live telemetry when supplied by the simulator service.
 - [x] Ensure telemetry/connection state alone does not create a `FlightSession`.
 - [x] Add Windows CI build for the WinUI app.
+- [x] Define versioned full-product first-run tutorial behavior and copy in `docs/intro-tutorial.md`.
 
 ## Remaining
 
+- [ ] Implement tutorial catalog + feature-readiness boundary.
+- [ ] Implement WinUI first-run tutorial overlay with Back / Next / Skip / Finish.
+- [ ] Persist tutorial version/progress independently from authoritative career state.
+- [ ] Add Settings action to restart the intro tutorial.
+- [ ] Bind real focus targets only for implemented screens; label unfinished destinations Coming later.
 - [ ] Launch and inspect the production app locally on the user's Windows machine with MSFS closed.
 - [ ] Verify NavigationView interaction locally.
 - [ ] Verify resize/adaptive behavior on practical desktop window widths.
