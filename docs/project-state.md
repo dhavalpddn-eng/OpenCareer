@@ -1,6 +1,6 @@
 # OpenCareer project state
 
-Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history unless a required decision is missing.**
+**Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.\n\nUpdated: 2026-09-17. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
