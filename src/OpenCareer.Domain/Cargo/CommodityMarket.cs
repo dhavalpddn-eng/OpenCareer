@@ -263,11 +263,21 @@ public static class NamedCargoMarket
         // Cargo value can increase security/insurance exposure, but it must never dominate
         // the transport economics. This blocks tiny, high-value electronics from becoming
         // the obvious farmable cargo choice.
-        var declaredValueSurcharge = Math.Min(
-            rawDeclaredValueSurcharge,
-            transportPay * 0.25);
+        var transportPayAmount = decimal.Round(
+            (decimal)transportPay,
+            2,
+            MidpointRounding.AwayFromZero);
+        var rawValueSurchargeAmount = decimal.Round(
+            (decimal)rawDeclaredValueSurcharge,
+            2,
+            MidpointRounding.AwayFromZero);
+        var valueRiskCap = decimal.Floor(
+            transportPayAmount * 0.25m * 100m) / 100m;
+        var valueRiskSurcharge = Math.Min(
+            rawValueSurchargeAmount,
+            valueRiskCap);
 
-        var freightPay = decimal.Round((decimal)(transportPay + declaredValueSurcharge), 2);
+        var freightPay = transportPayAmount + valueRiskSurcharge;
         var spread = lot.DestinationMarketValue - lot.OriginMarketValue;
         var spreadPercent = lot.OriginMarketValue == 0
             ? 0
@@ -280,8 +290,8 @@ public static class NamedCargoMarket
             lot.DestinationMarketValue,
             spread,
             spreadPercent,
-            decimal.Round((decimal)transportPay, 2),
-            decimal.Round((decimal)declaredValueSurcharge, 2));
+            transportPayAmount,
+            valueRiskSurcharge);
     }
 }
 

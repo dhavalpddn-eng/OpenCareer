@@ -46,7 +46,10 @@ public sealed record ManualGroundProcedurePolicy(
             reward += RewardFor(item.Procedure);
         }
 
-        return Math.Min(reward, cap);
+        return decimal.Round(
+            Math.Min(reward, cap),
+            2,
+            MidpointRounding.AwayFromZero);
     }
 
     private static decimal RewardFor(GroundProcedureKind procedure) => procedure switch
