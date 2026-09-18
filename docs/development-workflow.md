@@ -1,6 +1,6 @@
 # OpenCareer development workflow
 
-Working sequence for bounded tasks and fresh chats. AGENTS.md governs architecture; [project state](project-state.md) records current progress; [backlog](development-backlog.md) holds detailed open items.
+Working sequence for bounded tasks and fresh chats. AGENTS.md governs architecture; the [master development checklist](development-master-checklist.md) is the living chapter/subsystem tracker; [project state](project-state.md) records the current handoff; [backlog](development-backlog.md) holds detailed open items.
 
 ## Chapter 1 — Project continuity and working rules
 
@@ -13,6 +13,7 @@ At the start of each task:
 4. Preserve unrelated work; use the feature branch.
 5. Implement, run relevant verification, and fix failures.
 6. Commit code and update project-state.md with results, limitations and the next task.
+7. When verified project status changes, update the master development checklist in the same change so its checkboxes and Mermaid graphics stay current.
 
 Keep one bounded task per chat where practical. Consult past chats only for necessary missing decisions. Do not repeat full-repository audits or unrelated tests without a concrete reason. Runtime/API changes require current official documentation. Use Wolfram for calculations that benefit from independent verification, not routine edits.
 

@@ -13,6 +13,7 @@ Updated: 2026-09-18. **Read this after `AGENTS.md` when deeper implementation co
 - [Windows CI run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135): WinUI x64 and live-probe Release builds passed with 0 warnings/errors; **104/104 xUnit tests passed**, including the compiled trace analyzer.
 - [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
 - Both CI runs tested `540029c`; probe/analyzer compilation and synthetic trace tests do **not** imply live MSFS verification.
+- Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
 - UI target/spec: `docs/ui-design-system.md` + `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
 - Verify remote branch head before edits because other chats may change it.
 
@@ -92,6 +93,7 @@ Do **not** expand finance complexity before the playable flight foundation unles
 
 ## Detail only when needed
 
+- `docs/development-master-checklist.md` — live master roadmap/checklist and progress graphics.
 - `docs/ui-concept.md` — short UI direction and level policy.
 - `docs/ui-design-system.md` — canonical shell, tokens, layout/adaptive/accessibility rules.
 - `docs/ui-screen-spec.md` — target UX for all 15 current navigation destinations, including Conflict Operations.
