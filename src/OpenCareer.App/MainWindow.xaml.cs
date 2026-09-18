@@ -9,10 +9,14 @@ namespace OpenCareer.App;
 public sealed partial class MainWindow : Window
 {
     private readonly DispatcherQueueTimer _statusTimer;
+    private readonly MilitaryOperationsViewModel _militaryOperationsViewModel;
 
-    public MainWindow(ShellViewModel viewModel)
+    public MainWindow(
+        ShellViewModel viewModel,
+        MilitaryOperationsViewModel militaryOperationsViewModel)
     {
         ViewModel = viewModel;
+        _militaryOperationsViewModel = militaryOperationsViewModel;
         InitializeComponent();
 
         NavView.SelectedItem = DashboardItem;
@@ -48,6 +52,9 @@ public sealed partial class MainWindow : Window
                 break;
             case "current-flight":
                 Navigate(typeof(CurrentFlightPage), ViewModel);
+                break;
+            case "military":
+                Navigate(typeof(MilitaryGovernmentPage), _militaryOperationsViewModel);
                 break;
             default:
                 Navigate(typeof(PlaceholderPage), args.SelectedItemContainer.Content?.ToString() ?? tag);

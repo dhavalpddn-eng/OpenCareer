@@ -1,0 +1,164 @@
+<Page
+    x:Class="OpenCareer.App.Views.MilitaryGovernmentPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel Margin="32" Spacing="20">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Military / Government" FontSize="30" FontWeight="SemiBold" />
+                <TextBlock Text="Authorization, readiness, simulated conflict operations and government flying."
+                           Foreground="{StaticResource AppMutedTextBrush}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Background="{StaticResource AppSurfaceBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="14"
+                        Padding="22">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="AUTHORIZATION"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   FontSize="11" />
+                        <TextBlock Text="{Binding AuthorizationStatus}"
+                                   FontSize="22"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding AuthorizationDetail}"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Background="{StaticResource AppSurfaceBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="14"
+                        Padding="22">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="ACTIVE OPERATION"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   FontSize="11" />
+                        <TextBlock Text="{Binding ActiveOperationStatus}"
+                                   FontSize="22"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding ActiveOperationDetail}"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid ColumnSpacing="16" RowSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border Background="{StaticResource AppSurfaceBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="20">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="{Binding ConflictSimulationStatus}"
+                                   Foreground="{StaticResource AppSuccessBrush}"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding ConflictSimulationDetail}"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Background="{StaticResource AppSurfaceBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="20">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="{Binding ThreatSimulationStatus}"
+                                   Foreground="{StaticResource AppSuccessBrush}"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding ThreatSimulationDetail}"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1"
+                        Background="{StaticResource AppSurfaceBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="20">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="{Binding MissionFlowStatus}"
+                                   Foreground="{StaticResource AppSuccessBrush}"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding MissionFlowDetail}"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1"
+                        Grid.Column="1"
+                        Background="{StaticResource AppSurfaceBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="20">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="{Binding EngagementSimulationStatus}"
+                                   Foreground="{StaticResource AppSuccessBrush}"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding EngagementSimulationDetail}"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Background="{StaticResource AppSurfaceBrush}"
+                    BorderBrush="{StaticResource AppBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="22">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Mission families" FontSize="20" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding MissionFamilies}"
+                               Foreground="{StaticResource AppMutedTextBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <Border Background="{StaticResource AppSurfaceAltBrush}"
+                    BorderBrush="{StaticResource AppBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="18">
+                <StackPanel Spacing="5">
+                    <TextBlock Text="Simulation boundary" FontWeight="SemiBold" />
+                    <TextBlock Text="MSFS supplies aircraft flight and telemetry. OpenCareer owns qualifications, mission state, simulated threats, conflict effects and outcomes."
+                               Foreground="{StaticResource AppMutedTextBrush}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="No live theater, enemy force or combat state is shown unless OpenCareer has an authoritative in-save state for it."
+                               Foreground="{StaticResource AppMutedTextBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

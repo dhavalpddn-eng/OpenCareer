@@ -31,6 +31,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ISimulatorTelemetrySource>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ShellViewModel>();
+        services.AddSingleton<MilitaryOperationsViewModel>();
         services.AddSingleton<MainWindow>();
 
         _services = services.BuildServiceProvider();
