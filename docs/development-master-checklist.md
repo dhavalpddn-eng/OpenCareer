@@ -479,7 +479,8 @@ Chapter status: **PLANNED / CONTINUOUS**
 - [ ] Test long absence/recovery.
 - [ ] Test strong/ordinary/struggling economy progression.
 - [x] Test deterministic core ownership pacing against current payout/dealer bounds.
-- [x] Add deterministic core exploit-loop regressions for repeat jobs, sim-rate, cargo value, credit farming, manual bonuses and maintenance reset.
+- [x] Add deterministic core exploit-loop regressions for repeat jobs, reverse-route shuttles, actual-vs-quoted duration, stacked bonuses, sim-rate, cargo value, credit farming, manual bonuses and maintenance reset.
+- [x] Add CI BalanceLab for adversarial strategy and synthetic greedy-career stress testing.
 - [ ] Test end-to-end ownership pacing with settled fuel/maintenance/insurance/storage/loan costs.
 - [ ] Test end-to-end exploit loops through the playable job/settlement system.
 - [ ] Profile CPU usage beside MSFS.
@@ -667,8 +668,8 @@ The high-level visual roadmap's **Economy & Ownership** panel is now **5/5 core 
 
 Verification for the final code head before this documentation update:
 
-- Linux: **129/129 xUnit + 29/29 SimLab**.
-- Windows: WinUI Release build **passed**, live SimConnect probe build **passed**, **129/129 xUnit passed**.
+- Linux: **132/132 xUnit + 29/29 SimLab + BalanceLab PASS**.
+- Windows: WinUI Release build **passed**, live SimConnect probe build **passed**, **132/132 xUnit passed**.
 - Core economy exploit/balance audit: **passed**; see `docs/economy-balance-audit.md`.
 
 This visual completion is intentionally broader than chapter exit gates. The strict checklist above still tracks downstream dealer/maintenance UI, recurring loan servicing/default/restructure, delivery/reposition logistics, cargo-to-job settlement, MRO/parts depth, live telemetry binding and balance/playtesting.

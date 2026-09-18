@@ -1,7 +1,7 @@
 # Economy balance and exploit audit
 
 Status: verified deterministic core on `feature/economy-ownership`.  
-Verified code head: `a1fb6b397d5cee59831049a810365ad86fd2fa2e`.
+Verified code head: `55708c7f20897fde71551a871abd2ed91240eab9`.
 
 This audit protects the economy foundation from obvious optimal-strategy exploits before the playable job/settlement loop exists. It does **not** certify the final game economy; fuel, recurring loan/insurance/storage execution, MRO/labor, live job supply and end-to-end settlement still need integration and playtesting.
 
@@ -22,8 +22,8 @@ Direct operating costs are added separately to recommended gross revenue. They a
 A candidate job derives repeat exposure from the **last 8 completed contracts**, not UI state:
 
 - same mission family: 4% penalty per recent match, counted to 5,
-- same route: 2% per recent match, counted to 5,
-- same market: 1% per recent match, counted to 5,
+- same route corridor: 2% per recent match, counted to 5; A→B and B→A are the same corridor,
+- same market: 1% per recent match, counted to 5, case-insensitive,
 - total repetition penalty capped at **30%**.
 
 Related variants share families. Cargo, Express Cargo and AOG Parts Delivery are all `CargoLogistics`, so changing the label does not reset the farm counter.
@@ -32,6 +32,17 @@ Regression coverage proves:
 - six identical 10-minute Express Cargo jobs pay less than 90% of one fresh 1-hour Express Cargo job,
 - the best single mission-kind spam over 64 hours earns less than a diversified neutral rotation,
 - fresh mission types cannot exceed the configured hourly envelope.
+
+## Total player-net ceiling
+
+All stackable player money is capped by **actual career-credit time**, not quoted mission duration:
+
+`max_player_net = $1,000 × actual_career_credit_hours × 1.15`
+
+This means:
+- completing a quoted long mission abnormally fast cannot turn it into a several-thousand-dollar-per-hour exploit,
+- manual/mission/other monetary bonuses must pass through the same settlement ceiling,
+- direct operating-cost reimbursement remains separate and cannot be counted as player profit.
 
 ## Time-acceleration protection
 
@@ -87,12 +98,28 @@ Manual procedure reward is capped at:
 
 Purchased condition creates an irreducible baseline wear floor. Routine service removes recoverable wear/damage but does not turn a 60%-condition or 82%-condition used aircraft into new condition.
 
+## Adversarial BalanceLab
+
+`tools/OpenCareer.BalanceLab` now runs in Linux CI and fails the build if core economy guardrails break.
+
+Current results:
+- adversarial max-context family rotation: **$73,600 / 64 h = $1,150/h**,
+- fastest cash acquisition under that strategy: **hour 51**,
+- fastest financed acquisition: **hour 52**,
+- best single mission-kind spam: **$59,570 / 64 h = $930.78/h**,
+- 10-minute same-route Express Cargo spam: **$51,674.60 / 64 h = $807.42/h**,
+- 1,000 greedy synthetic careers, six offers/hour: 64-hour net p05 **$68,665.35**, median **$69,046.24**, p95 **$69,398.51**,
+- synthetic ownership timing: p05 **54 h**, median **55 h**, p95 **55 h**.
+
+The synthetic Monte Carlo distribution is a stress fixture, not a claim about final live job availability.
+
 ## Verification
 
 Final audit head passed:
-- **129/129 xUnit** on Linux,
-- **129/129 xUnit** on Windows,
+- **132/132 xUnit** on Linux,
+- **132/132 xUnit** on Windows,
 - **29/29 SimLab** deterministic scenarios,
+- **BalanceLab PASS**,
 - Windows WinUI Release build,
 - Windows live-probe build.
 
