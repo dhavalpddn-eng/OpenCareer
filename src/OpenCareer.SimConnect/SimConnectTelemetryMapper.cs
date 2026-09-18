@@ -54,7 +54,7 @@ internal static class SimConnectTelemetryMapper
             fuelPounds,
             payloadPounds,
             Math.Clamp(Read(values, SimConnectTelemetryValue.FlapsHandlePercentOver100) * 100.0, 0, 100),
-            Read(values, SimConnectTelemetryValue.GearTotalPercent) >= 95.0,
+            IsGearDown(Read(values, SimConnectTelemetryValue.GearTotalPercent)),
             paused,
             IsTrue(Read(values, SimConnectTelemetryValue.SlewActive)));
     }
@@ -63,6 +63,9 @@ internal static class SimConnectTelemetryMapper
         values[(int)index];
 
     private static bool IsTrue(double value) => value != 0;
+
+    private static bool IsGearDown(double value) =>
+        value >= 95.0 || value is >= 0.95 and <= 1.0;
 
     private static double NormalizeHeading(double degrees)
     {

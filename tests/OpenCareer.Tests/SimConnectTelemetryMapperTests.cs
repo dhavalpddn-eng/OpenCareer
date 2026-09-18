@@ -52,6 +52,24 @@ public sealed class SimConnectTelemetryMapperTests
         Assert.False(snapshot.OnGround);
     }
 
+    [Theory]
+    [InlineData(1.0, true)]
+    [InlineData(0.95, true)]
+    [InlineData(0.94, false)]
+    [InlineData(100.0, true)]
+    [InlineData(95.0, true)]
+    [InlineData(94.9, false)]
+    public void GearExtensionAcceptsObservedAndDocumentedPercentScales(double rawValue, bool expectedDown)
+    {
+        var values = new double[SimConnectTelemetryDefinition.ValueCount];
+        Set(values, SimConnectTelemetryValue.GearTotalPercent, rawValue);
+
+        var snapshot = SimConnectTelemetryMapper.Map(values, DateTimeOffset.UtcNow, paused: false);
+
+        Assert.NotNull(snapshot);
+        Assert.Equal(expectedDown, snapshot.GearDown);
+    }
+
     [Fact]
     public void InvalidOrNonFinitePacketsAreRejected()
     {
