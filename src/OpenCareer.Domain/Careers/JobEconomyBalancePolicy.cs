@@ -1,3 +1,5 @@
+using OpenCareer.Domain.Flights;
+
 namespace OpenCareer.Domain.Careers;
 
 public enum MissionFamily
@@ -20,6 +22,41 @@ public sealed record JobRepeatExposure(
     int SameMarketRecent)
 {
     public static JobRepeatExposure None { get; } = new(0, 0, 0);
+
+    public JobEconomySettlementQuote NormalizeForFlightTime(
+        JobEconomyQuote quote,
+        FlightTimeLedger ledger)
+    {
+        ArgumentNullException.ThrowIfNull(quote);
+        ArgumentNullException.ThrowIfNull(ledger);
+
+        if (quote.TargetPlayerNet < 0
+            || quote.RecommendedGrossRevenue < quote.TargetPlayerNet
+            || ledger.MovementFlightTime < TimeSpan.Zero
+            || ledger.CareerCreditTime < TimeSpan.Zero)
+        {
+            throw new ArgumentException("Invalid economy quote or flight-time ledger.");
+        }
+
+        var movementSeconds = ledger.MovementFlightTime.TotalSeconds;
+        var careerSeconds = ledger.CareerCreditTime.TotalSeconds;
+        var timeFactor = movementSeconds <= 0
+            ? 0d
+            : Math.Clamp(careerSeconds / movementSeconds, 0d, 1d);
+
+        var directOperatingCostComponent =
+            quote.RecommendedGrossRevenue - quote.TargetPlayerNet;
+        var playerNet = decimal.Round(
+            quote.TargetPlayerNet * (decimal)timeFactor,
+            2,
+            MidpointRounding.AwayFromZero);
+
+        return new JobEconomySettlementQuote(
+            playerNet,
+            directOperatingCostComponent + playerNet,
+            directOperatingCostComponent,
+            timeFactor);
+    }
 
     public void Validate()
     {
@@ -65,6 +102,12 @@ public sealed record JobEconomyQuote(
     double FreshHourlyFactor,
     double RepetitionFactor,
     double ReputationReward);
+
+public sealed record JobEconomySettlementQuote(
+    decimal PlayerNet,
+    decimal RecommendedGrossRevenue,
+    decimal DirectOperatingCostComponent,
+    double TimeAccelerationFactor);
 
 public sealed record JobEconomyBalancePolicy(
     decimal TargetNetPerCareerCreditHour,
