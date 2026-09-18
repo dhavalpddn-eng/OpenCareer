@@ -23,7 +23,8 @@ public sealed class SqliteEconomyLedgerStore : IEconomyLedgerStore
         {
             DataSource = fullPath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared
+            Cache = SqliteCacheMode.Shared,
+            Pooling = false
         }.ToString();
     }
 
