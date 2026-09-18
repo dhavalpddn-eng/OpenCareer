@@ -15,6 +15,34 @@ Loading into the simulator may start observation and a provisional FlightSession
 
 A job landing never completes a mission by itself. The mission owns its completion profile and settlement remains a separate atomic operation.
 
+## Resolved operating rules — 2026-09-17
+
+The following player-facing rules are now accepted:
+
+- **Current Flight / In-Flight UX:** preflight opens on a contextual checklist, while the same workspace shifts emphasis to flight/mission status after departure. A future MSFS EFB surface mirrors a compact subset; see `docs/efb-integration.md`.
+- **Normal job spawn:** gate/parking, cold-and-dark, engines off. A mission profile may explicitly authorize a runway start for emergency/military work. Free/practice remains more permissive and records the start mode.
+- **Block versus pilot flight time:** pushback/tow may contribute to operation/block time but does not create pilot flight-hour credit.
+- **Commercial multi-leg turnaround:** standard passenger/cargo legs require parking, shutdown and required unload/load/refuel servicing before the next leg starts. Special military/emergency/rapid-turn profiles may override those terminal requirements.
+- **Rejected takeoff:** record a named rejected-takeoff event with no takeoff count and normal fuel/wear/brake consequences. Procedure scoring is aircraft-specific when trusted data exists; do not invent V-speeds. A credibly justified reject may receive a small bounded safety/performance benefit.
+- **Crash/reset:** preserve the partial session/incident. Insurance may later provide a redo entitlement. Eligible coverage grants at most one redo per real calendar day, never carries unused redos forward, and restarts from an appropriate preflight checkpoint rather than pretending the simulator continued in mid-air.
+- **Disconnect/reconnect:** connection loss alone never penalizes or expires the session. Suspended sessions have no short arbitrary timeout; resume when aircraft/location/session continuity is plausible, otherwise preserve an interrupted record.
+- **Simulation rate:** permitted in any phase. Merely using 2x/4x/8x is not a violation, but accelerated time never multiplies career/license/aircraft-experience credit.
+- **Safety decisions:** keep penalties low-strictness. Correct go-arounds, diversions and rejected takeoffs may earn small bounded positive performance credit. Safely handled serious failures such as engine failures may earn somewhat more, but self-created/farmed emergencies never generate rewards.
+- **Landing quality:** aircraft-relative whenever trusted aircraft/performance/gear data exists; conservative fallback rules with explicit confidence otherwise.
+- **Time/weather:** use simulator time/sun/weather, not the player's wall-clock environment. Jobs may occur at all hours/weather when dispatch is feasible. Conventional fixed-wing night work requires suitable runway/airport lighting unless a special operation explicitly permits otherwise.
+- **Instrument experience:** actual-instrument-like credit requires supported simulated IMC/visibility evidence; an IFR flight plan by itself is not actual instrument time.
+- **Cross-country progression:** use realistic but simplified FAA-inspired rules. Preserve raw route/landing evidence; for initial airplane certificate/rating progression, a >50 NM straight-line landing threshold is used where appropriate rather than reproducing every regulatory edge case.
+- **Licensing jurisdiction:** first release uses a U.S./FAA-style progression model worldwide; keep definitions data-driven for future regionalization.
+- **Aircraft experience:** deep layered progression across total, category/class, propulsion/complexity traits, family, exact model/type, recency and takeoff/landing experience.
+
+### Deterministic reducer boundary
+
+The first implementation deliberately separates **evidence classification** from **state reduction**.
+
+`FlightTrackingStateMachine` consumes already-classified evidence such as `TakeoffCandidate`, `AirborneConfirmed`, `TouchdownConfirmed`, `BounceRecontact` and `ContinuityPlausible`. It does **not** embed guessed IAS/AGL/time thresholds.
+
+That lets the pure reducer and time accounting be tested now while the raw-telemetry `FlightEvidenceProcessor` remains configurable until the live KRME/F-22 probe establishes real simulator behavior.
+
 ## Load-in and preflight grace
 
 The user wants tracking to begin when the aircraft loads, with tolerance for slow aircraft/scenery loading.

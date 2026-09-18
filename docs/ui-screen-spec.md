@@ -83,14 +83,22 @@ Purpose: lightweight operational awareness while MSFS renders the flight.
 
 ### Normal flight layout
 
-- Flight state / operation lifecycle.
-- Compact route/map.
-- Core telemetry only: position, altitude, speed, heading, vertical speed, configuration.
-- Current mission objectives.
-- Timeline/recent events.
-- Fuel/payload summary.
-- Arrival/parking/shutdown requirements.
-- Connection/recovery status.
+Treat Current Flight as the **In-Flight workspace**. It may use compact internal tabs/pivots without adding another top-level NavigationView destination:
+
+- **Checklist** — default before departure; contextual cold-and-dark/preflight/start/taxi/arrival/shutdown items.
+- **Flight** — current flight state, compact route/map and core telemetry only: position, altitude, speed, heading, vertical speed, configuration.
+- **Mission** — current objectives, passenger/cargo status and mission-specific constraints.
+- **Events** — recent takeoff/landing/go-around/rejected-takeoff/abnormal/recovery events.
+
+The header remains persistent across those views:
+
+- flight state / operation lifecycle,
+- aircraft and origin/destination,
+- fuel/payload summary,
+- connection/recovery status,
+- next required action.
+
+As phases change, emphasis may move automatically from Checklist -> Flight -> Arrival requirements, but the user can always switch views.
 
 ### Rules
 
@@ -99,6 +107,7 @@ Purpose: lightweight operational awareness while MSFS renders the flight.
 - Flight state comes from the application state machine, not a single SimVar.
 - Disconnect suspends/recovery state; it does not instantly discard a session.
 - Full mission completion remains mission-specific.
+- The optional MSFS 2024 EFB companion mirrors a small subset of this workspace; it does not replace or become authoritative over the Windows app. See `efb-integration.md`.
 
 ### Conflict flight state
 

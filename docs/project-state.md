@@ -37,6 +37,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 ## Implemented domain foundation
 
 - Deterministic economy/world events, replay/checkpoints, contract lifecycle/dispatch guards.
+- Pure Chapter 4 flight reducer foundation: `FlightTrackingStateMachine` consumes classified evidence without raw telemetry thresholds; `FlightTimeLedger` separates simulated/block/flight/career-credit/pause/slew/night/instrument time; conventional commercial leg terminal policy requires parking/shutdown/servicing. Synthetic xUnit coverage is included; live telemetry calibration remains open.
 - Location/home-base connection rules and travel-history guards.
 - Protected-absence policy, session preferences, bankruptcy stages and bounded manual-ground reward quotes.
 - Career-derived credit model, fictional lenders, affordability/debt-service checks.
@@ -78,10 +79,10 @@ No live native SimConnect/UI interaction verification, robust flight-state detec
 
 ## Next bounded work
 
-1. **Run the live probe on the user's Windows/MSFS machine before building flight-state logic.** From the repo root use `./tools/run-live-probe.ps1` (or pass `-SimConnectNativePath`). Verify simulator absence, 1 Hz telemetry, menus/pause/resume, quit/restart, abrupt simulator exit and final telemetry clearing. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first flight test.
+1. **Run the live probe on the user's Windows/MSFS machine before calibrating raw-telemetry detection thresholds.** From the repo root use `./tools/run-live-probe.ps1` (or pass `-SimConnectNativePath`). Verify simulator absence, 1 Hz telemetry, menus/pause/resume, quit/restart, abrupt simulator exit and final telemetry clearing. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first flight test.
 2. Correct any SimVar/unit/runtime discrepancy found by that live test without broadening scope.
-3. Build robust flight-state detection and time accounting from `docs/flight-session-design.md`, then versioned SQLite FlightSession/FlightLeg save/recovery. Keep load observation, movement/flight time, airborne time and anti-exploit career-credit time separate; preserve pilot-log dimensions, planned-vs-actual/diversion evidence and evidence confidence; use adaptive high-rate landing buffers rather than whole-flight high-frequency persistence.
-4. Connect registry/runway feasibility/jobs/economy settlement.
+3. Implement the `FlightEvidenceProcessor` that converts normalized telemetry/events into the already-tested reducer evidence, keeping all speed/AGL/hysteresis values configurable until live calibration.
+4. Add versioned SQLite FlightSession/FlightLeg checkpoint/recovery around the pure reducer/time ledger, then connect registry/runway feasibility/jobs/economy settlement.
 
 Do **not** expand finance complexity before the playable flight foundation unless explicitly requested.
 
@@ -96,6 +97,7 @@ Do **not** expand finance complexity before the playable flight foundation unles
 - `docs/simulator-connection.md` — implemented connection/telemetry boundary, runtime setup and pending live checks.
 - `docs/flight-session-design.md` — accepted load/flight/leg/time/landing/resume/free-flight/postflight rules for Chapter 4, including pilot-log dimensions, route/diversion evidence and adaptive telemetry.
 - `docs/flight-system-research-2026-09-17.md` — cross-plugin/real-world design review and cloud/AI boundary decisions.
+- `docs/efb-integration.md` — optional in-simulator EFB companion architecture using the official MSFS 2024 EFB + CommBus APIs.
 - `docs/cargo-market-requirements.md` — accepted named-commodity/market-value requirements for later cargo generation.
 - `docs/simulation-model.md` — deterministic simulation invariants.
 - `docs/development-workflow.md` — chapter order/exit gates.
