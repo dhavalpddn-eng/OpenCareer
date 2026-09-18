@@ -314,7 +314,10 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
     {
         if (options.Escort is null
             || _escortActor is not null
-            || _escortSpawnAttempted)
+            || _escortSpawnAttempted
+            || connection.Latest is null
+            || _flightTracking is null
+            || _flightTracking.State == FlightTrackingState.Observing)
         {
             return;
         }
