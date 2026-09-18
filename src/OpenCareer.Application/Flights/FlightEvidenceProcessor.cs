@@ -117,12 +117,10 @@ public sealed class FlightEvidenceProcessor
             && telemetry.OnGround
             && telemetry.GroundSpeedKnots >= _options.TakeoffRollGroundSpeedKnots;
         UpdateStreak(ref _takeoffRollSince, takeoffRollCondition, timestamp);
-        bool takeoffCandidate =
-            Held(
-                _takeoffRollSince,
-                timestamp,
-                _options.TakeoffRollConfirmationDuration)
-            && !_takeoffCandidateActive;
+        bool takeoffCandidate = Held(
+            _takeoffRollSince,
+            timestamp,
+            _options.TakeoffRollConfirmationDuration);
 
         if (takeoffCandidate)
             _takeoffCandidateActive = true;
@@ -133,12 +131,10 @@ public sealed class FlightEvidenceProcessor
             && telemetry.AltitudeAglFeet >= _options.AirborneMinimumAglFeet
             && telemetry.GroundSpeedKnots >= _options.AirborneGroundSpeedKnots;
         UpdateStreak(ref _airborneSince, airborneCondition, timestamp);
-        bool airborneConfirmed =
-            Held(
-                _airborneSince,
-                timestamp,
-                _options.AirborneConfirmationDuration)
-            && !_airborneEpisodeConfirmed;
+        bool airborneConfirmed = Held(
+            _airborneSince,
+            timestamp,
+            _options.AirborneConfirmationDuration);
 
         bool approachCondition =
             usable
@@ -148,12 +144,10 @@ public sealed class FlightEvidenceProcessor
             && telemetry.VerticalSpeedFeetPerMinute
                 <= _options.ApproachMaximumVerticalSpeedFpm;
         UpdateStreak(ref _approachSince, approachCondition, timestamp);
-        bool approachConfirmed =
-            Held(
-                _approachSince,
-                timestamp,
-                _options.ApproachConfirmationDuration)
-            && !_approachWasConfirmed;
+        bool approachConfirmed = Held(
+            _approachSince,
+            timestamp,
+            _options.ApproachConfirmationDuration);
 
         bool touchdownTransition =
             usable

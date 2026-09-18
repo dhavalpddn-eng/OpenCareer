@@ -118,6 +118,7 @@ public sealed class SimConnectTelemetryMapperTests
         Set(values, SimConnectTelemetryValue.EmptyWeight, 500);
         Set(values, SimConnectTelemetryValue.FlapsHandlePercentOver100, 2);
         Set(values, SimConnectTelemetryValue.GearTotalPercent, 94.9);
+        Set(values, SimConnectTelemetryValue.GearRetractable, 1);
 
         var snapshot = SimConnectTelemetryMapper.Map(values, DateTimeOffset.UtcNow, paused: false);
 
