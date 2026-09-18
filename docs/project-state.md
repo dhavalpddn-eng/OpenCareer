@@ -16,12 +16,13 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 
 ## Runnable integration branch
 
-- Test-integration branch: `feature/runnable-integration`, created from shared telemetry head `1a0209bead0f21e353e64903263f289c7638e885`.
-- Latest tested code commit: `b9a6ab874e9f6363fc1fd885fa9a26db238f7e89`; documentation/data follow-up head: `d99f5113fc83baa11966c6d055518db3eed7911e`.
+- Test-integration branch: `feature/runnable-integration`. It started from shared telemetry head `1a0209bead0f21e353e64903263f289c7638e885` and has now pulled forward the documentation changes from shared head `4618e115aed385fd83c11db45e5e361df9a9bf75`.
+- Latest tested code commit: `b9a6ab874e9f6363fc1fd885fa9a26db238f7e89`; later commits are documentation/data-only or shared-doc synchronization.
 - Linux CI run 35295851862 passed **136/136 xUnit tests + 29/29 deterministic SimLab scenarios**.
-- Windows CI run 35295851864 passed the WinUI x64 Release build, the live SimConnect probe build and **136/136 xUnit tests**.
-- This branch combines the current WinUI/SimConnect/telemetry baseline with the deterministic job market, regional conflict simulation, persistent world feed, curated-conflict provenance boundary and airfield-control/operation-eligibility foundation.
+- Windows CI run 35295851864 passed the WinUI x64 Release build, live SimConnect probe build and **136/136 xUnit tests**.
+- This branch combines current WinUI/SimConnect/telemetry with the deterministic job market, regional conflict simulation, persistent world feed, curated-conflict provenance boundary and airfield-control/operation-eligibility foundation.
 - The remaining hard gate is **live Windows/MSFS validation** using `./tools/run-live-probe.ps1`; CI compilation and mocks are not a substitute for observing the installed MSFS 2024 runtime.
+- Draft integration PR: #4 into `feature/m1-simulation-core`. Keep it draft until live validation.
 - Notion mirror: `OpenCareer Runnable Integration Test Plan — 2026-09-17`. GitHub remains authoritative.
 
 ## Fixed direction
@@ -42,6 +43,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Flight-session rules are now specified in `docs/flight-session-design.md`: tracking begins after aircraft load/stable telemetry, real-world-style movement time is distinct from load time, one session may contain multiple legs, bounce recontacts are one landing episode, touch-and-go is recorded distinctly from full-stop, safe diversions/go-arounds are not automatic failures, and conventional jobs default to destination parking + shutdown unless the mission defines another terminal condition.
 - Free/practice flights can be logged for pilot experience. Career-credit hours are distinct from accelerated simulated time so time acceleration remains usable without multiplying license/aircraft-experience progression. Material teleport/slew displacement and aircraft changes cannot advance normal career jobs.
 - Cargo requirements are now specified in `docs/cargo-market-requirements.md`: generated cargo work carries named commodity lots (coffee, phones, televisions, food, plants and an extensible catalog) with quantity, physical properties, declared/market value and origin/destination economics rather than anonymous cargo weight.
+- 2026-09-17 cross-plugin flight review is recorded in `docs/flight-system-research-2026-09-17.md`. It strengthens Chapter 4 with pilot-log dimensions (day/night/cross-country/instrument/event attributes), planned-vs-actual route/diversion evidence, evidence provenance/confidence and bounded adaptive landing telemetry. External cloud/AI services remain optional and non-authoritative.
 
 ## Implemented domain foundation
 
@@ -89,7 +91,7 @@ No live native SimConnect/UI interaction verification, robust flight-state detec
 
 1. **Run the live probe on the user's Windows/MSFS machine before building flight-state logic.** From the repo root use `./tools/run-live-probe.ps1` (or pass `-SimConnectNativePath`). Verify simulator absence, 1 Hz telemetry, menus/pause/resume, quit/restart, abrupt simulator exit and final telemetry clearing. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first flight test.
 2. Correct any SimVar/unit/runtime discrepancy found by that live test without broadening scope.
-3. Build robust flight-state detection and time accounting from `docs/flight-session-design.md`, then versioned SQLite FlightSession/FlightLeg save/recovery. Keep load observation, movement/flight time, airborne time and anti-exploit career-credit time separate.
+3. Build robust flight-state detection and time accounting from `docs/flight-session-design.md`, then versioned SQLite FlightSession/FlightLeg save/recovery. Keep load observation, movement/flight time, airborne time and anti-exploit career-credit time separate; preserve pilot-log dimensions, planned-vs-actual/diversion evidence and evidence confidence; use adaptive high-rate landing buffers rather than whole-flight high-frequency persistence.
 4. Connect registry/runway feasibility/jobs/economy settlement.
 
 Do **not** expand finance complexity before the playable flight foundation unless explicitly requested.
@@ -103,7 +105,8 @@ Do **not** expand finance complexity before the playable flight foundation unles
 - `docs/credit-and-dealers.md` — finance/dealer model.
 - `docs/msfs-sdk-strategy.md` — verified SDK boundaries.
 - `docs/simulator-connection.md` — implemented connection/telemetry boundary, runtime setup and pending live checks.
-- `docs/flight-session-design.md` — accepted load/flight/leg/time/landing/resume/free-flight/postflight rules for Chapter 4.
+- `docs/flight-session-design.md` — accepted load/flight/leg/time/landing/resume/free-flight/postflight rules for Chapter 4, including pilot-log dimensions, route/diversion evidence and adaptive telemetry.
+- `docs/flight-system-research-2026-09-17.md` — cross-plugin/real-world design review and cloud/AI boundary decisions.
 - `docs/cargo-market-requirements.md` — accepted named-commodity/market-value requirements for later cargo generation.
 - `docs/simulation-model.md` — deterministic simulation invariants.
 - `docs/development-workflow.md` — chapter order/exit gates.

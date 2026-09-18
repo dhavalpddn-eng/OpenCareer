@@ -265,6 +265,104 @@ This supports the user's goal that moving into a newer/larger/more complex aircr
 
 Experience may affect employer checkout, rental eligibility, insurance, financing or operational authorization. Buying an aircraft should not be blocked by an arbitrary level when a more realistic training/insurance/lender rule fits.
 
+## Pilot-log dimensions
+
+OpenCareer is **not** a certified legal logbook, but its experience ledger should preserve the same distinctions pilots actually care about instead of reducing every flight to one total-hours number.
+
+For every completed leg/session, derive or store separate dimensions when supported by evidence:
+
+- total movement/flight time,
+- career-credit time,
+- airborne time,
+- day time and night time,
+- cross-country-qualified time under OpenCareer progression rules,
+- actual-instrument-like time when simulator/weather evidence supports it,
+- simulated-instrument/training time when explicitly configured,
+- takeoff count,
+- landing count,
+- full-stop landing count,
+- touch-and-go/stop-and-go count,
+- towered/untowered airport context when trusted airport data is available,
+- aircraft category/class/family/model experience.
+
+These values are **independent dimensions**, not mutually exclusive buckets. One hour may simultaneously contribute to total, night, cross-country and a specific aircraft-family experience ledger.
+
+ForeFlight's current logbook data model independently tracks total, PIC, night, cross-country, actual instrument, simulated instrument, takeoffs and landings, and represents landing events with day/night, towered/untowered and full-stop attributes. OpenCareer should mirror the useful shape, not copy ForeFlight's product behavior.
+
+Do not award a legal-style category merely because a field is missing. Unknown/unverifiable remains unknown.
+
+## Planned route, actual route and diversion
+
+A FlightLeg should preserve both **intent** and **what actually happened**.
+
+Store:
+
+- planned origin,
+- planned destination,
+- planned route/waypoints when available,
+- planned alternate when applicable,
+- actual takeoff location/runway,
+- decimated actual route track,
+- actual arrival location/runway,
+- diversion airport/location if different,
+- diversion reason/evidence when known,
+- whether the mission accepted the diversion,
+- dispatch/mission outcome separately from flight-safety outcome.
+
+A safe diversion should therefore be representable as:
+
+- flight operation: valid/safely completed,
+- original schedule: not completed as planned,
+- mission: succeeded, partially succeeded, rerouted, or failed according to mission rules,
+- safety reputation: unaffected or positive when justified,
+- economics: recalculated according to the contract.
+
+This separation prevents "landed somewhere else" from being treated as either automatic success or automatic reckless failure.
+
+## Evidence quality and derived facts
+
+Every important derived fact should carry provenance/confidence where ambiguity is realistic.
+
+Examples:
+
+- `Observed` — direct normalized SimConnect value/event,
+- `DerivedHighConfidence` — deterministic result from several reliable signals,
+- `DerivedLowConfidence` — plausible but dependent on incomplete aircraft/airport data,
+- `MissionDeclared` — supplied by the accepted job/dispatch plan,
+- `ExternalReference` — trusted airport/performance/weather source,
+- `Unavailable` — not supported; never guessed.
+
+Use this for runway identification, predicted runway requirement, payload, aircraft subtype, weather-sensitive cargo condition and similar fields.
+
+Mission settlement may depend only on evidence types explicitly allowed by that rule.
+
+## Adaptive telemetry and event buffering
+
+Do not solve landing accuracy by running the entire simulator connection at touchdown frequency.
+
+Target adaptive rates remain:
+
+- parked/cold: about 0.25 Hz,
+- taxi: about 2 Hz,
+- climb/cruise: about 1 Hz,
+- descent: about 2 Hz,
+- below 2,000 ft AGL: about 5 Hz,
+- below 500 ft AGL: about 10 Hz,
+- final ~100 ft and touchdown/rollout window: up to about 20 Hz.
+
+Implementation shape:
+
+1. keep the current low-rate normalized telemetry boundary reliable first,
+2. let the flight processor request a higher sampling profile only when state/AGL requires it,
+3. place high-rate samples into a bounded in-memory circular buffer,
+4. freeze the relevant pre-touchdown/post-touchdown window when a landing episode opens,
+5. batch-persist only the event window plus the normal decimated route,
+6. drop back to the normal sampling profile after the landing episode is resolved.
+
+An illustrative six-hour profile using the rates above produces about **35,100 samples** versus **432,000 samples** at constant 20 Hz, an approximately **91.9% reduction**. At an illustrative 128–256 bytes per normalized stored sample, that is roughly 4.3–8.6 MiB rather than 52.7–105.5 MiB before database overhead/compression. These are sizing examples, not promises about final serialized size.
+
+Sampling frequency and persistence frequency are separate decisions. High-rate detection may consume more samples than it writes to SQLite.
+
 ## Postflight record
 
 The first durable `FlightSession` summary should preserve enough data to display:
@@ -281,7 +379,10 @@ The first durable `FlightSession` summary should preserve enough data to display
 - paused/accelerated/slew time,
 - flown distance,
 - route map/polyline,
-- departure/destination and intermediate legs.
+- planned route versus actual route,
+- planned alternate/diversion result when applicable,
+- departure/destination and intermediate legs,
+- day/night/cross-country/instrument experience dimensions where evidence supports them.
 
 Do not persist every high-rate telemetry frame. Keep a decimated route track plus high-resolution windows for takeoff/landing events.
 
@@ -301,6 +402,8 @@ Do not persist every high-rate telemetry frame. Keep a decimated route track plu
 - touchdown speed,
 - pitch/bank near touchdown,
 - bounce count within the landing episode,
+- full-stop/touch-and-go/stop-and-go classification,
+- day/night and towered/untowered event context when trusted airport data is available,
 - hard-landing classification,
 - maximum positive/negative G,
 - overspeed duration/events,
@@ -337,13 +440,15 @@ See `docs/cargo-market-requirements.md`.
 
 The current 1 Hz telemetry is only the first boundary. Chapter 4 will likely need additional verified evidence, including:
 
-- aircraft identity/title/type,
+- aircraft identity/title/type/tail number when available,
 - aircraft/flight loaded events,
 - `SimStart` / `SimStop`,
 - `PositionChanged`,
 - simulation speed,
 - crash/reset events where useful,
-- higher-rate landing telemetry,
+- day/night/environment evidence needed by progression rules,
+- airport/runway reference data from a trusted local/external source,
+- higher-rate landing telemetry with bounded event buffering,
 - additional speed/weight/control fields only when a concrete detector/scoring rule requires them.
 
 The official SDK documents `AircraftLoaded`, `FlightLoaded`, `PositionChanged`, `SimStart`, `SimStop`, `Crashed`, `Pause_EX1`, and frame simulation-speed data. Exact native behavior still requires the live Windows/MSFS test.
@@ -364,6 +469,8 @@ Automated tests must cover at least:
 - touch-and-go,
 - stop-and-go,
 - multi-leg job,
+- planned route versus actual route,
+- alternate/diversion with separate flight-safety and mission outcomes,
 - free flight log/discard,
 - pause and Active Pause,
 - 0.5x / 1x / 2x / 4x+ acceleration accounting,
@@ -374,6 +481,9 @@ Automated tests must cover at least:
 - app restart from checkpoint,
 - simulator crash/restart,
 - duplicate takeoff/landing packets,
+- day/night/full-stop log-dimension aggregation,
+- unavailable/low-confidence evidence never being promoted to authoritative mission proof,
+- adaptive sampling profile changes and bounded landing-buffer persistence,
 - mission completion requiring parking/shutdown,
 - idempotent settlement after resume.
 
@@ -384,5 +494,7 @@ Automated tests must cover at least:
 - FAA JO 7110.65BB, 2025, §3-8-2: touch-and-go is treated as an arriving aircraft until touchdown and thereafter as departing.
 - MSFS 2024 SDK `SimConnect_SubscribeToSystemEvent`: `AircraftLoaded`, `FlightLoaded`, `PositionChanged`, `Pause_EX1`, `SimStart`, `SimStop`, `Crashed`.
 - MSFS 2024 SDK `SIMCONNECT_RECV_EVENT_FRAME`: exposes `fSimSpeed`, e.g. 4.0 at 4x simulation rate.
+- MSFS 2024 SDK system events explicitly document `AircraftLoaded`, `FlightLoaded`, `Pause_EX1`, `PositionChanged`, `SimStart`/`SimStop`, `Crashed` and `CrashReset`; the SDK warns that some extra `SimStart`/`SimStop` pairs may occur, so they are evidence rather than a complete state machine.
+- ForeFlight's exposed logbook schema (connector model reviewed 2026-09-17) separately represents total/PIC/night/cross-country/actual-instrument/simulated-instrument time and landing events with day/night, towered/untowered and full-stop distinctions; OpenCareer uses that only as a modern pilot-log data-shape reference.
 
 These references inform game semantics. OpenCareer is not a certified logbook or legal-compliance system.
