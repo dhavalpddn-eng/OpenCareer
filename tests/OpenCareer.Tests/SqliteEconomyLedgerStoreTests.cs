@@ -240,6 +240,41 @@ public sealed class SqliteEconomyLedgerStoreTests : IDisposable
             await store.ReadRecentAsync(10));
     }
 
+    [Fact]
+    public async Task ConcurrentDuplicatePostsCreditCashOnlyOnce()
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+
+        var store =
+            new SqliteEconomyLedgerStore(databasePath);
+
+        var transaction =
+            CreateBalancedTransaction(
+                Guid.NewGuid(),
+                "concurrent-settlement",
+                750m,
+                "Concurrent settlement");
+
+        LedgerPostResult[] results =
+            await Task.WhenAll(
+                Enumerable.Range(0, 12)
+                    .Select(_ => store.PostAsync(transaction)));
+
+        Assert.Single(
+            results,
+            result => result == LedgerPostResult.Posted);
+        Assert.Equal(
+            11,
+            results.Count(
+                result => result == LedgerPostResult.AlreadyPosted));
+        Assert.Equal(
+            750m,
+            await store.ReadCashBalanceAsync());
+        Assert.Single(
+            await store.ReadRecentAsync(10));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))
