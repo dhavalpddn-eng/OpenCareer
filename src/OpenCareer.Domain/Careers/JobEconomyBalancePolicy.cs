@@ -65,6 +65,46 @@ public sealed record JobRepeatExposure(
     }
 }
 
+public static class JobRepeatExposureCalculator
+{
+    public const int DefaultRecentSettlementWindow = 8;
+
+    public static JobRepeatExposure FromCompletedContracts(
+        IEnumerable<JobContract> contracts,
+        ContractKind candidateKind,
+        string originIcao,
+        string destinationIcao,
+        string? marketId,
+        int windowSize = DefaultRecentSettlementWindow)
+    {
+        ArgumentNullException.ThrowIfNull(contracts);
+        ArgumentException.ThrowIfNullOrWhiteSpace(originIcao);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationIcao);
+        if (!Enum.IsDefined(candidateKind) || windowSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(windowSize));
+
+        var recent = contracts
+            .Where(x => x.Status == ContractStatus.Completed && x.CompletedAt is not null)
+            .OrderByDescending(x => x.CompletedAt)
+            .ThenByDescending(x => x.ContractId)
+            .Take(windowSize)
+            .ToArray();
+
+        var family = JobEconomyBalancePolicy.FamilyFor(candidateKind);
+        var sameFamily = recent.Count(x =>
+            JobEconomyBalancePolicy.FamilyFor(x.Kind) == family);
+        var sameRoute = recent.Count(x =>
+            string.Equals(x.OriginIcao, originIcao, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.DestinationIcao, destinationIcao, StringComparison.OrdinalIgnoreCase));
+        var sameMarket = string.IsNullOrWhiteSpace(marketId)
+            ? 0
+            : recent.Count(x =>
+                string.Equals(x.MarketId, marketId, StringComparison.Ordinal));
+
+        return new JobRepeatExposure(sameFamily, sameRoute, sameMarket);
+    }
+}
+
 public sealed record JobEconomyInput(
     ContractKind Kind,
     ServiceTrack ServiceTrack,
