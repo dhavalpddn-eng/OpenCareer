@@ -149,7 +149,9 @@ public sealed record FreightQuote(
     decimal OriginMarketValue,
     decimal DestinationMarketValue,
     decimal MarketSpread,
-    double MarketSpreadPercent);
+    double MarketSpreadPercent,
+    decimal TransportPay,
+    decimal ValueRiskSurcharge);
 
 public static class NamedCargoMarket
 {
@@ -243,18 +245,29 @@ public static class NamedCargoMarket
             + lot.MassPounds * 0.08
             + lot.VolumeCubicFeet * 0.75;
 
-        var riskFactor = 1.0
+        var riskFactor = Math.Clamp(
+            1.0
             + urgency * 0.75
             + handlingComplexity * 0.35
             + lot.Commodity.Perishability * 0.25
             + lot.Commodity.Fragility * 0.20
             + lot.Commodity.TheftRisk * 0.25
-            + customerRelationship / 1000.0;
+            + customerRelationship / 1000.0,
+            1.0,
+            1.75);
 
-        var declaredValueSurcharge = (double)lot.DeclaredValue
+        var transportPay = physicalBase * riskFactor;
+        var rawDeclaredValueSurcharge = (double)lot.DeclaredValue
             * (0.001 + 0.0015 * lot.Commodity.TheftRisk);
 
-        var freightPay = decimal.Round((decimal)(physicalBase * riskFactor + declaredValueSurcharge), 2);
+        // Cargo value can increase security/insurance exposure, but it must never dominate
+        // the transport economics. This blocks tiny, high-value electronics from becoming
+        // the obvious farmable cargo choice.
+        var declaredValueSurcharge = Math.Min(
+            rawDeclaredValueSurcharge,
+            transportPay * 0.25);
+
+        var freightPay = decimal.Round((decimal)(transportPay + declaredValueSurcharge), 2);
         var spread = lot.DestinationMarketValue - lot.OriginMarketValue;
         var spreadPercent = lot.OriginMarketValue == 0
             ? 0
@@ -266,7 +279,9 @@ public static class NamedCargoMarket
             lot.OriginMarketValue,
             lot.DestinationMarketValue,
             spread,
-            spreadPercent);
+            spreadPercent,
+            decimal.Round((decimal)transportPay, 2),
+            decimal.Round((decimal)declaredValueSurcharge, 2));
     }
 }
 

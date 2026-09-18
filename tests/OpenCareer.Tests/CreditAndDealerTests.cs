@@ -145,6 +145,26 @@ public class CreditAndDealerTests
     }
 
     [Fact]
+    public void TinyMissionSpamCannotInflateCreditReliabilityBeyondFlightHours()
+    {
+        var oneHourNormal = Good with
+        {
+            RealFlightHours = 1,
+            CompletedJobs = 2,
+            FailedJobs = 0,
+            OnTimePayments = 0,
+            SafetyScore = 70,
+            EmployerTrust = 50
+        };
+        var oneHourSpam = oneHourNormal with { CompletedJobs = 1000 };
+
+        Assert.Equal(oneHourNormal.CreditScore, oneHourSpam.CreditScore);
+
+        var moreVerifiedExperience = oneHourSpam with { RealFlightHours = 20 };
+        Assert.True(moreVerifiedExperience.CreditScore > oneHourSpam.CreditScore);
+    }
+
+    [Fact]
     public void NearZeroRateRemainsFiniteAndBadHistoryCannotOverflowScore()
     {
         var result = CareerCredit.Evaluate(Good, InitialLenders.Community with { BaseAnnualRate = .000000000000000000000000001m,

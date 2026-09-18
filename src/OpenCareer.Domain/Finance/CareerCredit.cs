@@ -20,8 +20,16 @@ public sealed record CareerCreditHistory(
         get
         {
             Validate();
+            // Job count is capped by verified flight-hour evidence so a player cannot boost
+            // underwriting by farming many tiny missions. At most two completions per real
+            // career-credit hour contribute to the reliability component.
+            var completionEvidenceLimit = RealFlightHours >= int.MaxValue / 2m
+                ? int.MaxValue
+                : (int)decimal.Floor(RealFlightHours * 2m);
+            var countedCompletedJobs = Math.Min(CompletedJobs, completionEvidenceLimit);
+
             // Priors stop a single successful flight/payment producing a perfect score.
-            var reliability = (CompletedJobs + 5m) / (CompletedJobs + (decimal)FailedJobs + 10m);
+            var reliability = (countedCompletedJobs + 5m) / (countedCompletedJobs + (decimal)FailedJobs + 10m);
             var paymentHistory = (OnTimePayments + 3m) / (OnTimePayments + (decimal)MissedPayments + 6m);
             var score = 300m + 150m * reliability + 150m * paymentHistory + SafetyScore + EmployerTrust +
                 50m * Math.Min(RealFlightHours / 80m, 1m) - Math.Min(MissedPayments * 25m, 150m);

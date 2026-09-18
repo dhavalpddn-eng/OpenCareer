@@ -1107,8 +1107,8 @@ public sealed class SqliteOwnershipStore : IOwnershipStore
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT m.ownership_id, m.tracked_airframe_hours, m.tracked_engine_hours, m.landing_cycles,
-                   m.airframe_wear, m.engine_wear, m.gear_wear, m.damage, m.next_inspection_hours,
-                   m.confidence, m.updated_at
+                   a.acquired_condition_percent, m.airframe_wear, m.engine_wear, m.gear_wear, m.damage,
+                   m.next_inspection_hours, m.confidence, m.updated_at
             FROM maintenance_state m
             JOIN owned_aircraft a ON a.ownership_id = m.ownership_id
             WHERE a.career_id = $career
@@ -1132,10 +1132,12 @@ public sealed class SqliteOwnershipStore : IOwnershipStore
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
-            SELECT ownership_id, tracked_airframe_hours, tracked_engine_hours, landing_cycles,
-                   airframe_wear, engine_wear, gear_wear, damage, next_inspection_hours, confidence, updated_at
-            FROM maintenance_state
-            WHERE ownership_id = $ownership;
+            SELECT m.ownership_id, m.tracked_airframe_hours, m.tracked_engine_hours, m.landing_cycles,
+                   a.acquired_condition_percent, m.airframe_wear, m.engine_wear, m.gear_wear, m.damage,
+                   m.next_inspection_hours, m.confidence, m.updated_at
+            FROM maintenance_state m
+            JOIN owned_aircraft a ON a.ownership_id = m.ownership_id
+            WHERE m.ownership_id = $ownership;
             """;
         command.Parameters.AddWithValue("$ownership", ownershipId);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -1150,13 +1152,14 @@ public sealed class SqliteOwnershipStore : IOwnershipStore
             reader.GetDouble(1),
             reader.GetDouble(2),
             reader.GetInt32(3),
-            reader.GetDouble(4),
+            100d - reader.GetDouble(4),
             reader.GetDouble(5),
             reader.GetDouble(6),
             reader.GetDouble(7),
             reader.GetDouble(8),
-            (MaintenanceDataConfidence)reader.GetInt32(9),
-            ParseTimestamp(reader.GetString(10)));
+            reader.GetDouble(9),
+            (MaintenanceDataConfidence)reader.GetInt32(10),
+            ParseTimestamp(reader.GetString(11)));
 
     private static async Task UpdateMaintenanceStateAsync(
         SqliteConnection connection,

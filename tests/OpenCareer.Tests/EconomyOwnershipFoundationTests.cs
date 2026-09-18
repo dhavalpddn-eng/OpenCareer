@@ -242,6 +242,21 @@ public class EconomyOwnershipFoundationTests
     }
 
     [Fact]
+    public void RoutineServiceCannotTurnUsedAircraftIntoNewCondition()
+    {
+        var program = InitialMaintenancePrograms.LightAircraftFallback;
+        var state = AircraftMaintenanceEngine.CreateInitial("used-1", 60m, program, Now);
+        var quote = AircraftMaintenanceEngine.QuoteService(state, program, Now);
+        var serviced = AircraftMaintenanceEngine.CompleteService(state, program, quote, Now.AddHours(1));
+
+        Assert.Equal(40, serviced.BaselineWearPercent);
+        Assert.Equal(40, serviced.AirframeWearPercent);
+        Assert.Equal(40, serviced.EngineWearPercent);
+        Assert.Equal(40, serviced.GearWearPercent);
+        Assert.Equal(program.BaseInspectionCost, quote.Cost);
+    }
+
+    [Fact]
     public void MaintenanceServiceResetsTrackedWearAndAdvancesInspectionWindow()
     {
         var program = InitialMaintenancePrograms.LightAircraftFallback;
@@ -255,9 +270,10 @@ public class EconomyOwnershipFoundationTests
         var quote = AircraftMaintenanceEngine.QuoteService(state, program, Now.AddHours(10));
         var serviced = AircraftMaintenanceEngine.CompleteService(state, program, quote, Now.AddHours(12));
 
-        Assert.Equal(0, serviced.AirframeWearPercent);
-        Assert.Equal(0, serviced.EngineWearPercent);
-        Assert.Equal(0, serviced.GearWearPercent);
+        Assert.Equal(20, serviced.BaselineWearPercent);
+        Assert.Equal(20, serviced.AirframeWearPercent);
+        Assert.Equal(20, serviced.EngineWearPercent);
+        Assert.Equal(20, serviced.GearWearPercent);
         Assert.Equal(0, serviced.DamagePercent);
         Assert.Equal(serviced.TrackedAirframeHours + program.InspectionIntervalHours, serviced.NextInspectionDueAtTrackedHours);
     }

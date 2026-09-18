@@ -105,9 +105,12 @@ public class CareerPolicyTests
             Epoch, kind, ProcedureOutcome.Completed, ProcedureObservationSource.UserConfirmed, 1)).ToArray();
         Assert.Equal(0m, policy.CalculateReward([]));
         Assert.Equal(35m, policy.CalculateReward(events.Concat(events)));
+        Assert.Equal(35m, policy.CalculateReward(events.Concat(events), 1m));
+        Assert.Equal(5.83m, policy.CalculateReward(events.Concat(events), 1m / 6m));
         Assert.Equal(8m, policy.CalculateReward([events[0], events[0]]));
         Assert.Equal(0m, policy.CalculateReward([events[0] with { Outcome = ProcedureOutcome.Skipped }]));
         Assert.Throws<ArgumentOutOfRangeException>(() => new ManualGroundProcedurePolicy(-1).CalculateReward([]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => policy.CalculateReward(events, 0));
     }
     [Fact]
     public void BankruptcyRequiresRepeatedActiveMissesInsolvencyAndRecoveryOffer()

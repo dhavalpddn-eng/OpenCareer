@@ -84,6 +84,7 @@ public sealed record AircraftMaintenanceState(
     double TrackedAirframeHours,
     double TrackedEngineHours,
     int LandingCycles,
+    double BaselineWearPercent,
     double AirframeWearPercent,
     double EngineWearPercent,
     double GearWearPercent,
@@ -98,9 +99,13 @@ public sealed record AircraftMaintenanceState(
         if (!double.IsFinite(TrackedAirframeHours) || TrackedAirframeHours < 0
             || !double.IsFinite(TrackedEngineHours) || TrackedEngineHours < 0
             || LandingCycles < 0
+            || !ValidPercent(BaselineWearPercent)
             || !ValidPercent(AirframeWearPercent)
             || !ValidPercent(EngineWearPercent)
             || !ValidPercent(GearWearPercent)
+            || AirframeWearPercent < BaselineWearPercent
+            || EngineWearPercent < BaselineWearPercent
+            || GearWearPercent < BaselineWearPercent
             || !ValidPercent(DamagePercent)
             || !double.IsFinite(NextInspectionDueAtTrackedHours) || NextInspectionDueAtTrackedHours < 0
             || !Enum.IsDefined(Confidence))
@@ -151,6 +156,7 @@ public static class AircraftMaintenanceEngine
             0,
             0,
             0,
+            inheritedWear,
             inheritedWear,
             inheritedWear,
             inheritedWear,
@@ -215,9 +221,13 @@ public static class AircraftMaintenanceEngine
         program.Validate();
 
         var inspectionDue = state.TrackedAirframeHours >= state.NextInspectionDueAtTrackedHours;
-        var wearTotal = state.AirframeWearPercent + state.EngineWearPercent + state.GearWearPercent;
+        var serviceableWear =
+            Math.Max(0, state.AirframeWearPercent - state.BaselineWearPercent)
+            + Math.Max(0, state.EngineWearPercent - state.BaselineWearPercent)
+            + Math.Max(0, state.GearWearPercent - state.BaselineWearPercent);
+
         var cost = program.BaseInspectionCost
-            + (decimal)wearTotal * program.CostPerWearPercent
+            + (decimal)serviceableWear * program.CostPerWearPercent
             + (decimal)state.DamagePercent * program.CostPerDamagePercent;
 
         var downtime = program.BaseDowntime
@@ -252,9 +262,9 @@ public static class AircraftMaintenanceEngine
 
         var next = state with
         {
-            AirframeWearPercent = 0,
-            EngineWearPercent = 0,
-            GearWearPercent = 0,
+            AirframeWearPercent = state.BaselineWearPercent,
+            EngineWearPercent = state.BaselineWearPercent,
+            GearWearPercent = state.BaselineWearPercent,
             DamagePercent = 0,
             NextInspectionDueAtTrackedHours = state.TrackedAirframeHours + program.InspectionIntervalHours,
             Confidence = program.Confidence,

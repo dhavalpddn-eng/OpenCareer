@@ -211,7 +211,8 @@ public class OwnershipPersistenceTests
         Assert.Equal(serviced, duplicateService);
         Assert.Equal(beforeService - quote.Cost, afterService);
         Assert.Equal(0, serviced.DamagePercent);
-        Assert.Equal(0, serviced.AirframeWearPercent);
+        Assert.Equal(15, serviced.BaselineWearPercent);
+        Assert.Equal(15, serviced.AirframeWearPercent);
     }
 
     [Fact]
