@@ -50,7 +50,7 @@ The first pass intentionally does not request aircraft title/type, autopilot det
 
 The adapter currently uses seven documented native exports through P/Invoke: Open, CallDispatch, AddToDataDefinition, RequestDataOnSimObject, SubscribeToSystemEvent, RequestSystemState and Close. This avoids binding .NET 10 to the SDK's legacy .NET Framework managed wrapper. Official ABI signatures/layouts are recorded in source and decoder tests.
 
-Supply the **x64 native `SimConnect.dll` from the installed MSFS 2024 SDK**. This is a runtime dependency, not a repository binary or a third-party NuGet wrapper. Search is restricted to the application directory. No SDK binaries are committed or downloaded by CI.
+Supply the **x64 native `SimConnect.dll` from the installed MSFS 2024 SDK**. This is a runtime dependency, not a repository binary or a third-party NuGet wrapper. Search is restricted to the application directory plus Windows System32 for SimConnect's native OS/runtime dependencies. No SDK binaries are committed or downloaded by CI.
 
 The app project uses `MSFS2024_SDK/SimConnect SDK/lib/SimConnect.dll` when that existing SDK environment path is available. An explicit path overrides it:
 
@@ -90,6 +90,29 @@ Tested implementation/tooling head: `2f63e56a8da585c7cbab4eb2d53d4a6b19a1b404`. 
 The tests inject native-call results and raw SDK-shaped callback buffers. Coverage includes simulator absence, acknowledgement, serialized ownership, quit/loss/retry, heartbeat failures, malformed messages, EVENT/SIMOBJECT_DATA decoding, telemetry setup failure, normalization, pause updates, stale-data clearing, restart/disposal and ViewModel display refresh.
 
 **Neither mock tests nor Windows compilation prove live SDK behavior.**
+
+## Live validation 2026-09-18
+
+A real Windows/MSFS 2024 trace from the production `SimConnectConnection` is now captured and reviewed.
+
+Observed:
+- native x64 `SimConnect.dll` load passed after allowing application-directory plus `System32` dependency resolution;
+- simulator connected and reported `SunRise`, app version `12.2.282174.999`, SimConnect `12.2.0.0`;
+- 4,280 telemetry samples were recorded with no sequence gaps;
+- steady-state sample interval median was ~1.000 s and p95 ~1.013 s;
+- parked telemetry was coherent for position, MSL/AGL altitude, IAS, ground speed, vertical speed, heading, engine count, fuel, parking brake, pause and slew;
+- `Pause_EX1` changed true/false without disconnect;
+- live taxi/takeoff/airborne/landing/shutdown evidence was observed;
+- a reconnect cycle cleared telemetry before reconnecting;
+- final simulator loss also cleared stale telemetry.
+
+Important findings:
+- loading/menu transitions produced false `OnGround=false` samples with zero speed at placeholder position near 0/90 and ~206 ft AGL. Flight-state logic must require stable loaded-aircraft evidence plus multiple movement signals; one `OnGround` edge is not enough.
+- `GearDown` stayed false for every sample, including while parked on the runway/ramp. `GEAR TOTAL PCT EXTENDED` is therefore not reliable enough by itself for this aircraft and needs an officially documented fallback/diagnostic before gear state is used for scoring or mission validation.
+- touchdown telemetry at 1 Hz is sufficient to prove a ground transition but not sufficient for authoritative landing-rate/G scoring. Keep the planned bounded high-rate landing buffer.
+- the trace contains no final `sessionEnd` record, so clean probe shutdown after the final simulator disconnect is still unverified.
+
+Trace SHA-256: `955fa7b5a68ffbdafdf59f72bc174e02c1c6f42846d5b059a08b3977df5d3e7a`.
 
 ## Remaining live acceptance gate
 
