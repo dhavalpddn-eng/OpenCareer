@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-17T00:00:00Z",
+  "sources": [
+    {
+      "sourceId": "ucdp-candidate-26.0.7",
+      "publisher": "Uppsala Conflict Data Program",
+      "dataset": "UCDP Candidate Events Dataset",
+      "version": "26.0.7",
+      "coverage": "July 2026 global candidate events",
+      "role": "Primary near-current organized-violence seed",
+      "license": "CC BY 4.0",
+      "reference": "https://ucdp.uu.se/downloads/",
+      "bundlingPolicy": "May be redistributed with required attribution; retain version and citation.",
+      "dataThrough": "2026-07-31T23:59:59Z",
+      "reviewStatus": "approved-primary"
+    },
+    {
+      "sourceId": "ucdp-prio-26.1",
+      "publisher": "Uppsala Conflict Data Program",
+      "dataset": "UCDP/PRIO Armed Conflict Dataset",
+      "version": "26.1",
+      "coverage": "1946-2025 conflict-year history",
+      "role": "Historical calibration for onset, recurrence and duration",
+      "license": "CC BY 4.0",
+      "reference": "https://ucdp.uu.se/downloads/",
+      "bundlingPolicy": "May be redistributed with required attribution; retain version and citation.",
+      "reviewStatus": "approved-calibration"
+    },
+    {
+      "sourceId": "acled-weekly-index",
+      "publisher": "ACLED",
+      "dataset": "Weekly Conflict Index",
+      "version": "rolling",
+      "coverage": "Global weekly conflict intensity",
+      "role": "Optional secondary calibration only",
+      "license": "Check current account/data terms before bundling",
+      "reference": "https://acleddata.com/platform/weekly-conflict-index",
+      "bundlingPolicy": "Do not ingest into shipping/commercial builds without a separate ACLED license review. ACLED's current EULA states commercial entities require a corporate license.",
+      "reviewStatus": "restricted-research-only"
+    },
+    {
+      "sourceId": "unhcr-operational-data",
+      "publisher": "UNHCR",
+      "dataset": "Operational Data Portal",
+      "version": "rolling",
+      "coverage": "Refugee and displacement emergencies",
+      "role": "Optional humanitarian/displacement pressure calibration",
+      "license": "CC BY 4.0 except where otherwise indicated",
+      "reference": "https://data.unhcr.org/",
+      "bundlingPolicy": "Dataset use may be CC BY 4.0 except where otherwise indicated; validate the specific resource's terms before bundling.",
+      "reviewStatus": "optional-secondary"
+    }
+  ]
+}

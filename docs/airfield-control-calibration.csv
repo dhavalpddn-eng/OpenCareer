@@ -1,0 +1,5 @@
+model,scenario,days,severity,damage_pressure,resilience,runway_p05,runway_median,runway_p95,services_p05,services_median,services_p95,closed_share
+old_no_active_repair,moderate,180,0.8,0.3,0.75,0.08926352,0.13601595,0.18184297,0.0,0.0494271,0.10331169,0.1054
+v2_active_repair,mild,180,0.4,0.1,0.9,1.0,1.0,1.0,1.0,1.0,1.0,0.0
+v2_active_repair,moderate,180,0.8,0.3,0.75,0.30083383,0.34655446,0.39183667,0.15162827,0.20748974,0.26199271,0.0
+v2_active_repair,severe,180,0.95,0.6,0.5,0.0,0.0,0.0,0.0,0.0,0.0,1.0

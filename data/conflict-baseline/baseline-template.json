@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "opencareer-conflict-baseline-YYYY-MM-DD",
+  "baselineAsOf": "2026-07-31T23:59:59Z",
+  "sources": [
+    {
+      "sourceId": "ucdp-candidate-26.0.7",
+      "publisher": "Uppsala Conflict Data Program",
+      "dataset": "UCDP Candidate Events Dataset",
+      "version": "26.0.7",
+      "dataThrough": "2026-07-31T23:59:59Z",
+      "publishedAt": null,
+      "reference": "https://ucdp.uu.se/downloads/",
+      "license": "CC BY 4.0"
+    }
+  ],
+  "regions": [],
+  "connections": [],
+  "activeCampaigns": []
+}
