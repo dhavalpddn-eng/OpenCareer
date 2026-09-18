@@ -207,9 +207,11 @@ public sealed record AircraftPurchasePlan(
     decimal CashDebit,
     LoanDecision? LoanDecision,
     string? LenderId,
+    int LoanTermMonths,
     AircraftStorageOffer Storage,
     AircraftStorageClass RequiredStorageClass,
     AircraftInsurancePlan Insurance,
+    MaintenanceProgram MaintenanceProgram,
     string DeliveryAirportIcao,
     DateTimeOffset PurchasedAt)
 {
@@ -230,6 +232,8 @@ public sealed record AircraftPurchasePlan(
         Storage.Validate(PurchasedAt);
         ArgumentNullException.ThrowIfNull(Insurance);
         Insurance.Validate();
+        ArgumentNullException.ThrowIfNull(MaintenanceProgram);
+        MaintenanceProgram.Validate();
         ArgumentException.ThrowIfNullOrWhiteSpace(DeliveryAirportIcao);
 
         if (!Enum.IsDefined(Method)
@@ -246,14 +250,15 @@ public sealed record AircraftPurchasePlan(
 
         if (Method == AircraftPurchaseMethod.Cash)
         {
-            if (LoanDecision is not null || LenderId is not null || LoanId is not null || Deposit != Offer.SalePrice)
+            if (LoanDecision is not null || LenderId is not null || LoanId is not null || LoanTermMonths != 0 || Deposit != Offer.SalePrice)
                 throw new ArgumentException("Cash purchase cannot contain financing.");
         }
         else
         {
             ArgumentNullException.ThrowIfNull(LoanDecision);
-            if (!LoanDecision.Approved || string.IsNullOrWhiteSpace(LenderId) || string.IsNullOrWhiteSpace(LoanId)
-                || Deposit <= 0 || LoanDecision.RequestedPrincipal != Offer.SalePrice - Deposit)
+            var decision = LoanDecision ?? throw new ArgumentException("Financed purchase requires an approved loan decision.");
+            if (!decision.Approved || string.IsNullOrWhiteSpace(LenderId) || string.IsNullOrWhiteSpace(LoanId)
+                || LoanTermMonths <= 0 || Deposit <= 0 || decision.RequestedPrincipal != Offer.SalePrice - Deposit)
                 throw new ArgumentException("Invalid financed purchase.");
         }
     }
@@ -291,7 +296,7 @@ public sealed record AircraftPurchasePlan(
             decision.RequestedPrincipal,
             decision.RequestedPrincipal,
             decision.AnnualRate,
-            GetTermMonths(decision.MonthlyPayment, decision.RequestedPrincipal, decision.AnnualRate),
+            LoanTermMonths,
             decision.MonthlyPayment,
             PurchasedAt,
             PurchasedAt.AddMonths(1),
@@ -299,24 +304,6 @@ public sealed record AircraftPurchasePlan(
             AircraftLoanStatus.Active);
         loan.Validate();
         return loan;
-    }
-
-    private int GetTermMonths(decimal monthlyPayment, decimal principal, decimal annualRate)
-    {
-        var balance = principal;
-        var monthlyRate = annualRate / 12m;
-        for (var month = 1; month <= 240; month++)
-        {
-            var interest = decimal.Round(balance * monthlyRate, 2);
-            var principalPaid = monthlyPayment - interest;
-            if (principalPaid <= 0)
-                break;
-            balance = decimal.Round(balance - principalPaid, 2);
-            if (balance <= 0)
-                return month;
-        }
-
-        throw new InvalidOperationException("Approved loan cannot be amortized with its quoted payment.");
     }
 }
 
@@ -342,6 +329,7 @@ public static class AircraftPurchasePlanner
         AircraftStorageOffer storage,
         AircraftStorageClass requiredStorageClass,
         AircraftInsurancePlan insurance,
+        MaintenanceProgram maintenanceProgram,
         DateTimeOffset time)
     {
         if (!AircraftDealer.CanBuyWithCash(offer, stock, history, time))
@@ -366,9 +354,11 @@ public static class AircraftPurchasePlanner
             cashDebit,
             null,
             null,
+            0,
             storage,
             requiredStorageClass,
             insurance,
+            maintenanceProgram,
             storage.AirportIcao,
             time);
         plan.Validate();
@@ -391,6 +381,7 @@ public static class AircraftPurchasePlanner
         AircraftStorageOffer storage,
         AircraftStorageClass requiredStorageClass,
         AircraftInsurancePlan insurance,
+        MaintenanceProgram maintenanceProgram,
         DateTimeOffset time,
         decimal marketRateAdjustment = 0m)
     {
@@ -426,9 +417,11 @@ public static class AircraftPurchasePlanner
             cashDebit,
             decision,
             lender.Id,
+            termMonths,
             storage,
             requiredStorageClass,
             insurance,
+            maintenanceProgram,
             storage.AirportIcao,
             time);
         plan.Validate();

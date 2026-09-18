@@ -244,7 +244,10 @@ public static class AircraftMaintenanceEngine
         state.Validate();
         program.Validate();
 
-        if (quote.OwnershipId != state.OwnershipId || completedAt < quote.QuotedAt || completedAt < state.UpdatedAt)
+        if (quote.OwnershipId != state.OwnershipId
+            || quote.QuotedAt < state.UpdatedAt
+            || completedAt < quote.QuotedAt
+            || completedAt < state.UpdatedAt)
             throw new InvalidOperationException("Maintenance quote does not match current aircraft state.");
 
         var next = state with

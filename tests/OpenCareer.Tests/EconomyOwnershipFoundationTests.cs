@@ -114,6 +114,7 @@ public class EconomyOwnershipFoundationTests
             Storage,
             AircraftStorageClass.Light,
             InitialAircraftInsurance.StandardHull,
+            InitialMaintenancePrograms.LightAircraftFallback,
             Now);
 
         Assert.Equal(AircraftPurchaseMethod.Cash, plan.Method);
@@ -142,6 +143,7 @@ public class EconomyOwnershipFoundationTests
             Storage,
             AircraftStorageClass.Light,
             InitialAircraftInsurance.StandardHull,
+            InitialMaintenancePrograms.LightAircraftFallback,
             Now);
 
         var loan = plan.CreateLoan()!;
@@ -190,6 +192,7 @@ public class EconomyOwnershipFoundationTests
             Storage with { StorageClass = AircraftStorageClass.Heavy },
             AircraftStorageClass.Light,
             InitialAircraftInsurance.StandardHull,
+            InitialMaintenancePrograms.LightAircraftFallback,
             Now));
 
         Assert.Throws<ArgumentException>(() => AircraftPurchasePlanner.PlanCash(
@@ -204,6 +207,7 @@ public class EconomyOwnershipFoundationTests
             Storage with { ExpiresAt = Now },
             AircraftStorageClass.Light,
             InitialAircraftInsurance.StandardHull,
+            InitialMaintenancePrograms.LightAircraftFallback,
             Now));
     }
 
