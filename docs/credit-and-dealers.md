@@ -1,6 +1,6 @@
 # Career credit and aircraft dealers
 
-Implemented 2026-09-17 as domain decisions and deterministic quotes, with xUnit coverage. User decision: F-22 at KRME is the first integration scenario; 50–80 real flying hours can fund either a small cash purchase or a larger financed purchase. The F-22 remains a military assignment, separate from civilian shopping. The specific installed add-on and its performance are not yet verified.
+Implemented initially 2026-09-17 as deterministic quote rules; expanded 2026-09-18 with transactional ownership persistence on `feature/economy-ownership`. User decision: F-22 at KRME is the first integration scenario; 50–80 real flying hours can fund either a small cash purchase or a larger financed purchase. The F-22 remains a military assignment, separate from civilian shopping. The specific installed add-on and its performance are not yet verified.
 
 ## Credit experience
 
@@ -30,7 +30,7 @@ These are fictional businesses anchored at KRME for initial testing, not claims 
 
 Discount chance and size improve with credit standing and dealer relationship. Seed includes career seed, dealer ID, listing ID and UTC day. Inventory ordering and screen refresh do not change a draw. Offers expire at next UTC midnight. Persist the offered terms and history snapshot; do not rebuild issued prices when career statistics update. Stable listing IDs must survive reload. Different days can have different promotions but a deal is never guaranteed. Maximum chance is 75%, and each dealer's discount cap is enforced.
 
-Cash buyers need enough available cash after operating reserve; credit-score approval is not required for cash. Financing quotes use discounted sale price and current appraisal. Neither quote transfers ownership or funds a loan. Remote offers may be browsed later, but purchase/delivery must use the existing geography rules; shopping must not teleport the pilot or aircraft. Military-only aircraft are filtered from civilian inventory and rejected by civilian underwriting.
+Cash buyers need enough available cash after operating reserve; credit-score approval is not required for cash. Financing quotes use discounted sale price and current appraisal. Quote generation remains side-effect free. The ownership transaction layer revalidates persisted stock, offer and storage evidence before transferring money or ownership atomically. Remote offers may be browsed later, but purchase/delivery must use the existing geography rules; shopping must not teleport the pilot or aircraft. Military-only aircraft are filtered from civilian inventory and rejected by civilian underwriting.
 
 ## Integration and data integrity work remaining
 
@@ -46,7 +46,7 @@ UI: dealer inventory/comparison, condition/appraisal, sale price/discount/expiry
 
 Events/failure cases: stock sold, expired offer, stale affordability, repayment due, paid/missed repayment, changed appraisal, default, recovery and world rate shock. Protected absence must remain protected. No random credit rejection or random default. Inventory refresh and loan acceptance must not reroll discounts.
 
-Acceptance gates: domain tests cover score/rate direction, zero and near-zero interest, independent amortization reference, affordability/reserve/collateral/default restrictions, both progression examples, different dealers, F-22 exclusion, bounded discounts, reload/order stability and expiry. Next integration tests must prove atomic purchase, duplicate purchase rejection, loan repayment/recovery and long-absence safety. Price/wage balancing over 50–80 actual flying hours is not yet proven.
+Acceptance gates now also cover atomic cash/financed purchase, duplicate purchase rejection, rollback, persisted loan schedules, insurance redo persistence and maintenance persistence. Actual recurring loan servicing/default/restructure and price/wage balancing over 50–80 settled flying hours remain downstream.
 
 ## Verification references
 
