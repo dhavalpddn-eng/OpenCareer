@@ -25,6 +25,15 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 - Draft integration PR: #4 into `feature/m1-simulation-core`. Keep it draft until live validation.
 - Notion mirror: `OpenCareer Runnable Integration Test Plan — 2026-09-17`. GitHub remains authoritative.
 
+## Military / Government foundation branch
+
+- Active military branch: `feature/military-operations-foundation`, forked from runnable integration head `96427ae3eb33278a7c4cf2603e53138472f1eaf2`.
+- Implementation head `91d64533f16ef66acdd162118b306b21d22e94ec` adds capability/authorization gating, the MilitaryMissionEngine state machine, abstract bounded threat simulation, deterministic simulated engagement resolution and a real WinUI Military / Government page.
+- Linux CI 35302265454 passed **152/152 xUnit + 29/29 SimLab**; Windows CI 35302265455 passed the WinUI x64 Release build, live-probe build and **152/152 xUnit**, all with 0 build warnings/errors.
+- The five Military / Government checklist foundation items are now green: conflict UI design, simulated combat architecture, air-support mission flow, threat simulation and military operations screen.
+- Green means implemented/tested foundation, not a complete military career loop. Persistence, job-to-operation orchestration, live telemetry evidence, settlement and runtime map binding remain.
+- Detailed compact handoff: `docs/military-operations-foundation.md`.
+
 ## Fixed direction
 
 Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI 3/Windows App SDK, isolated SimConnect boundary, SQLite, deterministic/testable domain. No aircraft whitelist. AI is optional and never authoritative for money, ownership, mission completion or critical state.
