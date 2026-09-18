@@ -27,4 +27,4 @@ Downstream: verified live telemetry binding, simulator-native component state wh
 - 29/29 deterministic SimLab scenarios passed.
 - Linux Release restore/build passed with warnings-as-errors.
 - The first SQLite package selection failed NuGet security audit; the dependency was upgraded to Microsoft.Data.Sqlite 10.0.12 rather than suppressing the warning.
-- Final Windows WinUI/probe/test CI is required before the roadmap image is updated.
+- Windows CI verified the WinUI Release build, live-probe build and **117/117 xUnit tests** after the Windows SQLite pooling cleanup fix. The high-level roadmap image may now mark all five Economy & Ownership core boxes complete.

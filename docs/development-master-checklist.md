@@ -649,3 +649,23 @@ Do not skip this order without an explicit reason:
 7. Build the first market-driven playable job and atomic settlement.
 
 The external aviation APIs, full conflict simulation, dealer expansion and rich production UI are valuable, but they do not replace this critical path.
+
+
+---
+
+## Visual roadmap status — Economy & Ownership
+
+The high-level visual roadmap's **Economy & Ownership** panel is now **5/5 core systems COMPLETE** on `feature/economy-ownership`:
+
+- [x] Deterministic economy foundation.
+- [x] Named cargo markets core.
+- [x] Credit model core.
+- [x] Dealers & ownership flow core backend.
+- [x] Maintenance systems core backend.
+
+Verification for the final code head before this documentation update:
+
+- Linux: **117/117 xUnit + 29/29 SimLab**.
+- Windows: WinUI Release build **passed**, live SimConnect probe build **passed**, **117/117 xUnit passed**.
+
+This visual completion is intentionally broader than chapter exit gates. The strict checklist above still tracks downstream dealer/maintenance UI, recurring loan servicing/default/restructure, delivery/reposition logistics, cargo-to-job settlement, MRO/parts depth, live telemetry binding and balance/playtesting.
