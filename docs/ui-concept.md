@@ -1,5 +1,7 @@
 # OpenCareer visual concept
 
+> Canonical implementation guidance now lives in [UI design system](ui-design-system.md) and [screen specification](ui-screen-spec.md). The [screen atlas](assets/opencareer-ui-screen-atlas.svg) shows the complete current navigation set; the [Conflict Operations reference](assets/opencareer-conflict-operations.svg) captures the approved in-war composition.
+
 ![Refined OpenCareer dashboard concept](assets/opencareer-dashboard-concept-v2.svg)
 
 Concept only: the production UI is only beginning with the Chapter 2 shell. All balances, hours, jobs and aircraft shown in the concept are illustrative. The region map is schematic and not for navigation.
@@ -51,5 +53,9 @@ Routine coding chats should read `AGENTS.md` and `docs/project-state.md` first, 
 
 Visual assets:
 
-- [current refined SVG](assets/opencareer-dashboard-concept-v2.svg)
+- [current refined dashboard SVG](assets/opencareer-dashboard-concept-v2.svg)
+- [complete UI screen atlas](assets/opencareer-ui-screen-atlas.svg)
+- [Conflict Operations reference](assets/opencareer-conflict-operations.svg)
 - [earlier SVG concept](assets/opencareer-dashboard-concept.svg)
+
+The approved conflict look is a state of the same OpenCareer shell, not a separate product. Military / Government owns the full Conflict Operations workspace; Current Flight may show a compact conflict strip during an accepted conflict mission. MSFS provides flight telemetry only; OpenCareer owns all simulated combat/threat/effect state.

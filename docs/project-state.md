@@ -11,7 +11,7 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 - [Windows CI run 35283864087](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283864087): WinUI x64 Release build and the live SimConnect probe both succeeded with 0 warnings/errors; **74/74 xUnit tests passed**.
 - [Linux CI run 35283863937](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283863937): **74/74 xUnit tests** and **29/29 deterministic SimLab scenarios** passed.
 - Both CI runs tested `2f63e56`; compilation of the probe still does **not** imply live MSFS verification.
-- UI target/spec: `docs/ui-concept.md`; refined lightweight preview: `docs/assets/opencareer-dashboard-concept-v2.svg`.
+- UI target/spec: `docs/ui-design-system.md` + `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
 - Verify remote branch head before edits because other chats may change it.
 
 ## Fixed direction
@@ -86,7 +86,9 @@ Do **not** expand finance complexity before the playable flight foundation unles
 
 ## Detail only when needed
 
-- `docs/ui-concept.md` — UI direction and level policy.
+- `docs/ui-concept.md` — short UI direction and level policy.
+- `docs/ui-design-system.md` — canonical shell, tokens, layout/adaptive/accessibility rules.
+- `docs/ui-screen-spec.md` — target UX for all 15 current navigation destinations, including Conflict Operations.
 - `docs/career-foundation-decisions.md` — accepted gameplay/base decisions.
 - `docs/credit-and-dealers.md` — finance/dealer model.
 - `docs/msfs-sdk-strategy.md` — verified SDK boundaries.
