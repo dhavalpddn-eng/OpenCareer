@@ -72,12 +72,20 @@ public sealed class FlightEvidenceProcessorTests
         Assert.Equal(FlightTrackingState.Airborne, state.State);
         Assert.Equal(1, state.TakeoffCount);
 
-        for (int second = 18; second <= 21; second++)
+        for (int second = 18; second <= 19; second++)
         {
             state = Step(
                 processor,
                 state,
-                Sample(second, fuel: 95, engines: 1, gs: 75, ias: 70, agl: 700, vs: -500, onGround: false));
+                Sample(second, fuel: 96, engines: 1, gs: 75, ias: 70, agl: 700, vs: 500, onGround: false));
+        }
+
+        for (int second = 20; second <= 23; second++)
+        {
+            state = Step(
+                processor,
+                state,
+                Sample(second, fuel: 95, engines: 1, gs: 75, ias: 70, agl: 350, vs: -500, onGround: false));
         }
 
         Assert.Equal(FlightTrackingState.Approach, state.State);
@@ -85,17 +93,17 @@ public sealed class FlightEvidenceProcessorTests
         state = Step(
             processor,
             state,
-            Sample(22, fuel: 94, engines: 1, gs: 55, ias: 50, agl: 5, onGround: true));
+            Sample(24, fuel: 94, engines: 1, gs: 55, ias: 50, agl: 5, onGround: true));
 
         Assert.Equal(FlightTrackingState.LandingEpisode, state.State);
         Assert.Equal(1, state.LandingEpisodeCount);
 
-        for (int second = 23; second <= 27; second++)
+        for (int second = 25; second <= 29; second++)
             state = Step(processor, state, Sample(second, fuel: 94, engines: 1, gs: 30, agl: 5));
 
         Assert.Equal(FlightTrackingState.TaxiIn, state.State);
 
-        for (int second = 28; second <= 32; second++)
+        for (int second = 30; second <= 34; second++)
         {
             state = Step(
                 processor,
