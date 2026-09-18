@@ -1,6 +1,6 @@
 # OpenCareer project state
 
-Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history unless a required decision is missing.**
+Updated: 2026-09-18. **Read this after `AGENTS.md`; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
@@ -33,6 +33,17 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 - The five Military / Government checklist foundation items are now green: conflict UI design, simulated combat architecture, air-support mission flow, threat simulation and military operations screen.
 - Green means implemented/tested foundation, not a complete military career loop. Persistence, job-to-operation orchestration, live telemetry evidence, settlement and runtime map binding remain.
 - Detailed compact handoff: `docs/military-operations-foundation.md`.
+
+## Economy / settlement foundation branch
+
+- Active economy branch: `feature/economy-ledger-settlement`, forked from the latest tested military/live-probe branch at `4ca6f8815581dd71a1e54a17da8c5da0cf41a0dd`.
+- Latest verified implementation: `d8b25f6b0820d831bd9a45c04894605294203dd3`.
+- Linux CI run 35331620111 passed **204/204 xUnit tests + 29/29 deterministic SimLab scenarios** with 0 warnings/errors.
+- Windows CI run 35331620076 passed the WinUI x64 Release build, live-probe build and **204/204 xUnit tests** with 0 warnings/errors.
+- New authoritative economy path: deterministic contract pay quote -> verified completed `JobContract` -> balanced ledger transaction -> SQLite atomic/idempotent post -> Finances UI.
+- Duplicate and even concurrent settlement attempts cannot credit the same contract twice in the current single-process application store.
+- Existing market simulation, route demand, economic cycles, bankruptcy/offline-liability policy, career credit and fictional aircraft-dealer quote systems are retained; this branch adds the missing authoritative money movement layer.
+- Detailed compact handoff: `docs/economy-foundation.md`.
 
 ## Fixed direction
 

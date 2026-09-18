@@ -21,7 +21,7 @@ Conflict simulation work now continues on child branch `feature/conflict-simulat
 - **Military/security events:** regional security phases can shift work toward military/government missions, including transport, surveillance/recon, patrol, medevac, evacuation and logistics. Severe active conflict can suppress ordinary civilian work. Ceasefire/recovery immediately refreshes toward humanitarian, cargo, medical, survey and infrastructure-recovery work.
 - **Dream jobs:** show at most **1–2 aspirational locked jobs**. They never grant access.
 - **Route familiarity:** repeated service progresses Untried -> Discovered -> Familiar -> Established -> Preferred -> Core. Current successful-flight thresholds are 1 / 2 / 5 / 12 / 25.
-- **Pay direction:** base pay should primarily reflect time + distance + payload, then market supply/demand, urgency, scarcity, difficulty, employer relationship and operating costs. Final settlement is not implemented yet.
+- **Pay direction:** base pay should primarily reflect time + distance + payload, then market supply/demand, urgency, scarcity, difficulty, employer relationship and operating costs. The deterministic quote engine and authoritative one-time SQLite settlement now exist on `feature/economy-ledger-settlement`; job-generation binding remains open.
 - **Cargo/passenger economy:** cargo goods and passenger route trends affect demand. Popular destinations, seasonality, capacity shortages and commodity pressure can move job frequency and later pay.
 - **Deadhead/travel:** player may pay to travel without their aircraft; the aircraft remains where it physically is. Some large-company duty assignments may provide employer-paid deadhead.
 - **Refresh behavior:** jobs expire/replenish individually at deterministic random times. Internal generation buckets are an implementation aid, not a whole-board wipe. Major world/security transitions can force an immediate relevant-board rebuild.
@@ -118,7 +118,7 @@ Use documented historical mission patterns as inspiration, not literal reenactme
 - persistence of normalized `WorldSignal` records if/when needed beyond the existing simulation save;
 - normalized real employer/airport data pack/importer and licensing/attribution review;
 - long-running passenger/cargo trend evolution layered over `RouteDemandProfile`;
-- pay quote + authoritative one-time ledger settlement;
+- bind the implemented pay quote + authoritative one-time ledger settlement into generated `JobContract` and verified `FlightSession` completion;
 - paid personal deadhead quote/settlement and employer-issued duty deadhead orders;
 - WinUI DI/configuration for the AI narrator, secure API-key loading and World/Network feed page;
 - conversion of offer drafts into fully validated `JobContract` requirements;
