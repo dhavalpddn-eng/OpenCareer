@@ -152,22 +152,22 @@ Chapter status: **GATED — implementation exists, live runtime acceptance is op
 
 ## Remaining / live gate
 
-- [ ] Run `./tools/run-live-probe.ps1` with MSFS 2024 on the user's Windows machine.
-- [ ] Verify simulator absent -> Waiting/Disconnected.
-- [ ] Verify native connection to MSFS 2024.
+- [x] Run `./tools/run-live-probe.ps1` with MSFS 2024 on the user's Windows machine.
+- [x] Verify simulator absent -> Waiting/Disconnected.
+- [x] Verify native connection to MSFS 2024.
 - [ ] Verify actual installed aircraft identity behavior.
-- [ ] Verify ~1 Hz values against the F-22/KRME validation flight.
-- [ ] Verify pause / resume.
-- [ ] Verify menus/loading behavior.
-- [ ] Verify taxi values.
-- [ ] Verify takeoff values.
-- [ ] Verify climb/cruise values.
-- [ ] Verify approach/landing values.
+- [x] Capture ~1 Hz F-22/KRME telemetry; instrument-by-instrument acceptance remains open.
+- [x] Capture pause / resume transitions.
+- [x] Capture menus/loading transitions, including placeholder coordinates that must not become flight evidence.
+- [x] Capture taxi values.
+- [x] Capture takeoff values.
+- [x] Capture climb/cruise values.
+- [x] Capture approach/landing values.
 - [ ] Verify normal simulator quit.
-- [ ] Verify abrupt simulator exit.
-- [ ] Verify telemetry clearing after disconnect.
-- [ ] Verify reconnect after MSFS restart.
-- [ ] Correct any real SimVar/unit discrepancy found by the live trace.
+- [x] Verify simulator connection loss and retry after exit/loss.
+- [x] Verify telemetry clearing after disconnect.
+- [x] Verify reconnect after MSFS restart.
+- [x] Correct observed gear-extension scale mismatch; live rerun verification remains required.
 - [ ] Add verified simulation-rate capture.
 - [ ] Add verified aircraft identity/title/type fields needed by the flight/session system.
 - [ ] Add bounded/adaptive telemetry sampling needed for landing detection/scoring.

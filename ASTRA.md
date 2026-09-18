@@ -6,7 +6,7 @@
 **Branch:** `feature/m1-simulation-core`  
 **PR:** #2 draft; keep `main` stable.  
 **Master tracker:** `docs/development-master-checklist.md` — update it whenever verified project status changes.  
-**Last implementation commit:** `540029c378a507f729dfe451db642eca4065ae65` (offline probe analysis).
+**Last implementation commit:** `2accedb67d60c0864a0529e32ced56955556c9ec` (live gear-scale normalization).
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
 
@@ -25,14 +25,14 @@ Accepted future thin UI:
 Windows app stays authoritative. See `docs/efb-integration.md`.
 
 ## HARD GATE
-**Live MSFS runtime validation is NOT done.** Do not freeze IAS/AGL/hysteresis thresholds or claim live correctness before the trace.
+**Live MSFS runtime validation is PARTIAL, not accepted.** The 2026-09-18 trace proved connection, telemetry, pause observations, clearing and reconnect, and exposed a gear-scale defect fixed in `2accedb6`. The capture had no clean session end and the gear correction still needs a short live rerun. Do not freeze IAS/AGL/hysteresis thresholds or claim full live correctness.
 
 Run: `./tools/run-live-probe.ps1`  
 First live validation fixture: **F-22 at KRME** (test only; not a career starting aircraft). Validate absent/connect/load/~1 Hz/pause/taxi/takeoff/landing/quit/restart/abrupt exit/telemetry clear/reconnect.
 
 ## Next
-1. Run/analyze live probe. Offline command: `dotnet run --project tools/OpenCareer.TraceAnalysis -c Release -- <trace.jsonl>`. See its README for findings/exit codes; a clean report is not live acceptance.
-2. Fix only concrete SimVar/unit/runtime issues.
+1. Rerun the live probe briefly and verify `gearDown` changes correctly on the ground and in flight; end the probe cleanly so `sessionEnd` is recorded.
+2. Analyze the rerun and fix only additional concrete SimVar/unit/runtime issues.
 3. Build configurable `FlightEvidenceProcessor` -> tested reducer evidence.
 4. Add versioned SQLite `FlightSession`/`FlightLeg` checkpoint/recovery.
 5. Then registry/runway feasibility -> jobs -> mission validation + atomic settlement.
