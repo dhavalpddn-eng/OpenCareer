@@ -21,4 +21,8 @@ public sealed record AircraftTelemetrySnapshot(
     double FlapsPositionPercent,
     bool GearDown,
     bool Paused,
-    bool SlewActive);
+    bool SlewActive,
+    bool GearRetractable = false,
+    double GearCenterPositionPercent = 0,
+    double GearLeftPositionPercent = 0,
+    double GearRightPositionPercent = 0);

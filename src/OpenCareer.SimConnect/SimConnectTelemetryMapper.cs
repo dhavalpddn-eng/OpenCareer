@@ -23,6 +23,24 @@ internal static class SimConnectTelemetryMapper
         double emptyWeight = Math.Max(0, Read(values, SimConnectTelemetryValue.EmptyWeight));
         double payloadPounds = Math.Max(0, totalWeight - emptyWeight - fuelPounds);
 
+        bool gearRetractable = IsTrue(Read(values, SimConnectTelemetryValue.GearRetractable));
+        double gearCenterPercent = NormalizePercentOver100(
+            Read(values, SimConnectTelemetryValue.GearCenterPositionOver100));
+        double gearLeftPercent = NormalizePercentOver100(
+            Read(values, SimConnectTelemetryValue.GearLeftPositionOver100));
+        double gearRightPercent = NormalizePercentOver100(
+            Read(values, SimConnectTelemetryValue.GearRightPositionOver100));
+        double gearTotalPercent = Math.Clamp(
+            Read(values, SimConnectTelemetryValue.GearTotalPercent),
+            0,
+            100);
+        bool gearDown = ResolveGearDown(
+            gearRetractable,
+            gearTotalPercent,
+            gearCenterPercent,
+            gearLeftPercent,
+            gearRightPercent);
+
         int installedEngines = Math.Clamp(
             (int)Math.Round(Read(values, SimConnectTelemetryValue.NumberOfEngines), MidpointRounding.AwayFromZero),
             0,
@@ -53,16 +71,45 @@ internal static class SimConnectTelemetryMapper
             enginesRunning,
             fuelPounds,
             payloadPounds,
-            Math.Clamp(Read(values, SimConnectTelemetryValue.FlapsHandlePercentOver100) * 100.0, 0, 100),
-            Read(values, SimConnectTelemetryValue.GearTotalPercent) >= 95.0,
+            NormalizePercentOver100(
+                Read(values, SimConnectTelemetryValue.FlapsHandlePercentOver100)),
+            gearDown,
             paused,
-            IsTrue(Read(values, SimConnectTelemetryValue.SlewActive)));
+            IsTrue(Read(values, SimConnectTelemetryValue.SlewActive)),
+            gearRetractable,
+            gearCenterPercent,
+            gearLeftPercent,
+            gearRightPercent));
     }
 
     private static double Read(IReadOnlyList<double> values, SimConnectTelemetryValue index) =>
         values[(int)index];
 
     private static bool IsTrue(double value) => value != 0;
+
+    private static double NormalizePercentOver100(double value) =>
+        Math.Clamp(value * 100.0, 0, 100);
+
+    private static bool ResolveGearDown(
+        bool retractable,
+        double totalPercent,
+        double centerPercent,
+        double leftPercent,
+        double rightPercent)
+    {
+        if (!retractable)
+            return true;
+
+        if (totalPercent >= 95.0)
+            return true;
+
+        int individuallyExtended = 0;
+        if (centerPercent >= 95.0) individuallyExtended++;
+        if (leftPercent >= 95.0) individuallyExtended++;
+        if (rightPercent >= 95.0) individuallyExtended++;
+
+        return individuallyExtended >= 2;
+    }
 
     private static double NormalizeHeading(double degrees)
     {

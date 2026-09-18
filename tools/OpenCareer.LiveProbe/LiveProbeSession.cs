@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 using OpenCareer.SimConnect;
 
@@ -18,6 +20,8 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
     private int _connectionTransitions;
     private int _reconnectTransitions;
     private bool _sawConnected;
+    private readonly FlightEvidenceProcessor _flightEvidenceProcessor = new();
+    private FlightTrackingSnapshot? _flightTracking;
 
     internal async Task<int> RunAsync()
     {
@@ -197,8 +201,76 @@ internal sealed class LiveProbeSession(SimConnectConnection connection, LiveProb
         }).ConfigureAwait(false);
 
         string line = FormattableString.Invariant(
-            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] telemetry #{sequence} lat={telemetry.LatitudeDegrees:0.00000} lon={telemetry.LongitudeDegrees:0.00000} msl={telemetry.AltitudeMslFeet:0}ft agl={telemetry.AltitudeAglFeet:0}ft ias={telemetry.IndicatedAirspeedKnots:0}kt gs={telemetry.GroundSpeedKnots:0}kt vs={telemetry.VerticalSpeedFeetPerMinute:+0;-0;0}fpm hdg={telemetry.HeadingDegrees:000} ground={telemetry.OnGround} paused={telemetry.Paused} slew={telemetry.SlewActive}");
+            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] telemetry #{sequence} lat={telemetry.LatitudeDegrees:0.00000} lon={telemetry.LongitudeDegrees:0.00000} msl={telemetry.AltitudeMslFeet:0}ft agl={telemetry.AltitudeAglFeet:0}ft ias={telemetry.IndicatedAirspeedKnots:0}kt gs={telemetry.GroundSpeedKnots:0}kt vs={telemetry.VerticalSpeedFeetPerMinute:+0;-0;0}fpm hdg={telemetry.HeadingDegrees:000} ground={telemetry.OnGround} gear={telemetry.GearDown} gearRaw={telemetry.GearCenterPositionPercent:0}/{telemetry.GearLeftPositionPercent:0}/{telemetry.GearRightPositionPercent:0} retr={telemetry.GearRetractable} paused={telemetry.Paused} slew={telemetry.SlewActive}");
         Console.WriteLine(line);
+
+        await RecordFlightEvidenceAsync(writer, telemetry).ConfigureAwait(false);
+    }
+
+    private async Task RecordFlightEvidenceAsync(
+        StreamWriter writer,
+        AircraftTelemetrySnapshot telemetry)
+    {
+        var evidence = _flightEvidenceProcessor.Process(
+            connected: true,
+            telemetry,
+            telemetry.Timestamp);
+
+        _flightTracking ??= FlightTrackingSnapshot.Start(evidence.Timestamp);
+        FlightTrackingSnapshot previous = _flightTracking;
+        FlightTrackingSnapshot next =
+            FlightTrackingStateMachine.Advance(previous, evidence);
+        _flightTracking = next;
+
+        bool noteworthy =
+            next.State != previous.State
+            || evidence.EngineStartObserved
+            || evidence.TakeoffCandidate
+            || evidence.RejectedTakeoffConfirmed
+            || evidence.AirborneConfirmed
+            || evidence.ApproachConfirmed
+            || evidence.TouchdownConfirmed
+            || evidence.BounceRecontact
+            || evidence.GoAroundConfirmed
+            || evidence.TouchAndGoConfirmed
+            || evidence.LandingRolloutConfirmed
+            || evidence.ParkingConfirmed;
+
+        if (!noteworthy)
+            return;
+
+        await WriteJsonAsync(writer, new
+        {
+            type = "flightEvidence",
+            observedAtUtc = DateTimeOffset.UtcNow,
+            sampleTimestampUtc = telemetry.Timestamp,
+            previousState = previous.State.ToString(),
+            state = next.State.ToString(),
+            next.TakeoffCount,
+            next.LandingEpisodeCount,
+            next.BounceCount,
+            next.TouchAndGoCount,
+            next.RejectedTakeoffCount,
+            evidence.StableTelemetry,
+            evidence.ValidLoadedAircraft,
+            evidence.EngineStartObserved,
+            evidence.SelfPoweredMovementForFlight,
+            evidence.TakeoffCandidate,
+            evidence.RejectedTakeoffConfirmed,
+            evidence.AirborneConfirmed,
+            evidence.ApproachConfirmed,
+            evidence.TouchdownConfirmed,
+            evidence.BounceRecontact,
+            evidence.GoAroundConfirmed,
+            evidence.TouchAndGoConfirmed,
+            evidence.LandingRolloutConfirmed,
+            evidence.ParkingConfirmed
+        }).ConfigureAwait(false);
+
+        Console.WriteLine(
+            $"[{DateTimeOffset.Now:HH:mm:ss.fff}] flight {previous.State} -> {next.State}" +
+            $" takeoffs={next.TakeoffCount} landings={next.LandingEpisodeCount}" +
+            $" bounces={next.BounceCount} rejected={next.RejectedTakeoffCount}");
     }
 
     private static async Task WriteJsonAsync(StreamWriter writer, object value)
