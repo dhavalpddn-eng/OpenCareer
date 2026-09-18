@@ -7,6 +7,8 @@ on:
     paths:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"
+      - "src/OpenCareer.Domain/**"
+      - "src/OpenCareer.Infrastructure/**"
       - "src/OpenCareer.SimConnect/**"
       - "tests/OpenCareer.Tests/**"
       - "tools/OpenCareer.LiveProbe/**"
@@ -17,6 +19,8 @@ on:
     paths:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"
+      - "src/OpenCareer.Domain/**"
+      - "src/OpenCareer.Infrastructure/**"
       - "src/OpenCareer.SimConnect/**"
       - "tests/OpenCareer.Tests/**"
       - "tools/OpenCareer.LiveProbe/**"
@@ -47,5 +51,5 @@ jobs:
       - name: Build live SimConnect probe
         run: dotnet build tools/OpenCareer.LiveProbe/OpenCareer.LiveProbe.csproj --configuration Release -p:Platform=x64
 
-      - name: Test domain and simulator connection lifecycle
+      - name: Test domain, market, world feed and simulator lifecycle
         run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release
