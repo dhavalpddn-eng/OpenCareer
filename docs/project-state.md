@@ -23,6 +23,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 ## Confirmed gameplay
 
 - First live test hub: **KRME Griffiss International**; mixed civilian/government/defense/UAS context. Do not invent a resident fighter wing or real-world missions that are not documented.
+- **F-22/KRME is only the first developer live-telemetry validation fixture. It is not the required career start.** A standard new career starts from scratch with no owned aircraft and no automatic military access. Early progression may use training, employer, rental or assigned aircraft appropriate to qualifications; ownership and military access are earned separately.
 - First owned used light aircraft should become reasonably attainable around **50–80 real flying hours** through actual savings/financing, not an hour unlock.
 - Typical sessions 1–3 hours; support up to ~6 and recover interrupted sessions where technically possible.
 - Home airport, local route connections, relationships, hangar/storage and additional bases matter; no teleporting the company around the map.
@@ -82,7 +83,7 @@ No live native SimConnect/UI interaction verification, robust flight-state detec
 
 ## Next bounded work
 
-1. **Run the live probe on the user's Windows/MSFS machine before calibrating raw-telemetry detection thresholds.** From the repo root use `./tools/run-live-probe.ps1` (or pass `-SimConnectNativePath`). Verify simulator absence, 1 Hz telemetry, menus/pause/resume, quit/restart, abrupt simulator exit and final telemetry clearing. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first flight test. Analyze the captured JSONL with `tools/OpenCareer.TraceAnalysis`; exit 0 means structural checks passed, not live acceptance. No real trace or Windows/MSFS runtime was available in the 2026-09-18 Linux work session.
+1. **Run the live probe on the user's Windows/MSFS machine before calibrating raw-telemetry detection thresholds.** From the repo root use `./tools/run-live-probe.ps1` (or pass `-SimConnectNativePath`). Verify simulator absence, 1 Hz telemetry, menus/pause/resume, quit/restart, abrupt simulator exit and final telemetry clearing. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first **developer validation test only**, not a player career-start requirement. Analyze the captured JSONL with `tools/OpenCareer.TraceAnalysis`; exit 0 means structural checks passed, not live acceptance. No real trace or Windows/MSFS runtime was available in the 2026-09-18 Linux work session.
 2. Correct any SimVar/unit/runtime discrepancy found by that live test without broadening scope.
 3. Implement the `FlightEvidenceProcessor` that converts normalized telemetry/events into the already-tested reducer evidence, keeping all speed/AGL/hysteresis values configurable until live calibration.
 4. Add versioned SQLite FlightSession/FlightLeg checkpoint/recovery around the pure reducer/time ledger, then connect registry/runway feasibility/jobs/economy settlement.

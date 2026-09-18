@@ -8,6 +8,12 @@ The user clarified the 50–80 real-flight-hour target: a small aircraft bought 
 
 Credit standing derives from flight experience, completed/failed jobs, safety, employer trust and repayment history. Affordability separately checks verified net income, existing debt payments, collateral, deposit and reserve. A larger aircraft is reachable only when both deposit savings and lender approval work. "Pilot level" is represented by career standing rather than a new XP grind. Full details: [credit and dealers](credit-and-dealers.md).
 
+### Fresh career start
+
+A standard new career starts from scratch. The player is **not** given or required to own an F-22, and military access is never implied by the test setup. Early flying can come from training, employer-provided, rented or assigned aircraft appropriate to the player's qualifications and relationships. Aircraft ownership is a later economic/progression outcome, with the first personally owned used light aircraft targeted as reasonably attainable around the established 50–80 real-flight-hour range through savings or financing.
+
+The F-22 at KRME is reserved as the first live SimConnect/telemetry validation fixture because it exercises a demanding aircraft/test scenario. It does not define the new-career starting state, starting inventory or starting mission access.
+
 ## Persistent world without absence punishment
 
 Markets, employers, job supply, world events, maintenance queues, aircraft availability, relationships and other world state continue advancing while the app is closed.
@@ -74,4 +80,4 @@ Airport demand numbers are provisional game weights, not measured operation shar
 
 Next vertical slice: finish live Windows/MSFS validation of the existing WinUI/SimConnect/telemetry boundary, then implement the accepted flight-session/state/time rules and versioned SQLite session recovery at KRME. Then wire these policies through a single mission/ledger transaction flow and run representative 1-, 3- and 6-hour job scenarios, long absence/reload cases, and economic balance simulations. Do not expand finance complexity before that loop works.
 
-The first test aircraft is now the F-22 at KRME. The user confirmed both cash purchase and financing paths. Exact installed F-22 add-on identity/performance remains to be detected in MSFS; no fabricated performance profile is used. Manual-procedure evidence remains provisional where telemetry is unavailable. Protected absence is a reversible proposal because the user explicitly left that choice open.
+The first **developer validation aircraft** is the F-22 at KRME; it is not a required career-start aircraft or starting asset. The user confirmed both cash purchase and financing paths for later career ownership where appropriate. Exact installed F-22 add-on identity/performance remains to be detected in MSFS; no fabricated performance profile is used. Manual-procedure evidence remains provisional where telemetry is unavailable. Protected absence is a reversible proposal because the user explicitly left that choice open.
