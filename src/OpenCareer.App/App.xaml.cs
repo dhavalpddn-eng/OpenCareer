@@ -3,8 +3,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Economy;
 using OpenCareer.Application.Military;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Infrastructure.Economy;
 using OpenCareer.SimConnect;
 
 namespace OpenCareer.App;
@@ -33,8 +35,20 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ISimulatorMissionActorService>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
+
+        string localAppData = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData);
+        string databasePath = Path.Combine(
+            localAppData,
+            "OpenCareer",
+            "opencareer.db");
+
+        services.AddSingleton<IEconomyLedgerStore>(
+            _ => new SqliteEconomyLedgerStore(databasePath));
+        services.AddSingleton<EconomySettlementService>();
         services.AddSingleton<MilitaryEscortOperationCoordinator>();
         services.AddSingleton<ShellViewModel>();
+        services.AddSingleton<FinancesViewModel>();
         services.AddSingleton<MilitaryOperationsViewModel>();
         services.AddSingleton<MainWindow>();
 
