@@ -107,6 +107,49 @@ public sealed class FlightEvidenceProcessorTests
     }
 
     [Fact]
+    public void InitialClimbSinkDoesNotPrematurelyArmApproach()
+    {
+        var processor = new FlightEvidenceProcessor();
+        var state = FlightTrackingSnapshot.Start(Epoch);
+
+        for (int second = 0; second <= 4; second++)
+            state = Step(processor, state, Sample(second, fuel: 100, engines: 1));
+
+        for (int second = 5; second <= 8; second++)
+            state = Step(processor, state, Sample(second, fuel: 100, engines: 1, gs: 35));
+
+        for (int second = 9; second <= 12; second++)
+        {
+            state = Step(
+                processor,
+                state,
+                Sample(second, fuel: 100, engines: 1, gs: 75, ias: 70, agl: 50 + (second - 9) * 100, vs: 900, onGround: false));
+        }
+
+        Assert.Equal(FlightTrackingState.Airborne, state.State);
+
+        for (int second = 13; second <= 16; second++)
+        {
+            state = Step(
+                processor,
+                state,
+                Sample(second, fuel: 98, engines: 1, gs: 75, ias: 70, agl: 380 - (second - 13) * 8, vs: -300, onGround: false));
+        }
+
+        Assert.Equal(FlightTrackingState.Airborne, state.State);
+
+        for (int second = 17; second <= 20; second++)
+        {
+            state = Step(
+                processor,
+                state,
+                Sample(second, fuel: 96, engines: 1, gs: 70, ias: 65, agl: 120, vs: -500, onGround: false));
+        }
+
+        Assert.Equal(FlightTrackingState.Approach, state.State);
+    }
+
+    [Fact]
     public void RejectedTakeoffDoesNotCreateTakeoff()
     {
         var processor = new FlightEvidenceProcessor();

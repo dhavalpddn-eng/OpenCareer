@@ -20,6 +20,7 @@ public sealed record FlightEvidenceProcessorOptions
     public double AirborneGroundSpeedKnots { get; init; } = 25;
     public double AirborneMinimumAglFeet { get; init; } = 15;
     public double ApproachMaximumAglFeet { get; init; } = 1_500;
+    public double ApproachMinimumDescentFromPeakFeet { get; init; } = 200;
     public double ApproachMaximumVerticalSpeedFpm { get; init; } = -150;
     public double GoAroundMinimumVerticalSpeedFpm { get; init; } = 300;
     public double LandingRolloutMaximumGroundSpeedKnots { get; init; } = 50;
@@ -60,6 +61,7 @@ public sealed record FlightEvidenceProcessorOptions
             AirborneGroundSpeedKnots,
             AirborneMinimumAglFeet,
             ApproachMaximumAglFeet,
+            ApproachMinimumDescentFromPeakFeet,
             GoAroundMinimumVerticalSpeedFpm,
             LandingRolloutMaximumGroundSpeedKnots,
             RejectedTakeoffMaximumGroundSpeedKnots,

@@ -28,6 +28,7 @@ public sealed class FlightEvidenceProcessor
     private bool _approachWasConfirmed;
     private bool _leftGroundAfterTouchdown;
     private bool _landingRolloutEmitted;
+    private double _highestAglSinceAirborne;
     private int _lastEnginesRunning;
 
     public FlightEvidenceProcessor(FlightEvidenceProcessorOptions? options = null)
@@ -136,10 +137,19 @@ public sealed class FlightEvidenceProcessor
             timestamp,
             _options.AirborneConfirmationDuration);
 
+        if (_airborneEpisodeConfirmed && usable && !telemetry.OnGround)
+        {
+            _highestAglSinceAirborne = Math.Max(
+                _highestAglSinceAirborne,
+                telemetry.AltitudeAglFeet);
+        }
+
         bool approachCondition =
             usable
             && !telemetry.OnGround
             && telemetry.AltitudeAglFeet <= _options.ApproachMaximumAglFeet
+            && _highestAglSinceAirborne - telemetry.AltitudeAglFeet
+                >= _options.ApproachMinimumDescentFromPeakFeet
             && telemetry.GroundSpeedKnots >= _options.AirborneGroundSpeedKnots
             && telemetry.VerticalSpeedFeetPerMinute
                 <= _options.ApproachMaximumVerticalSpeedFpm;
@@ -250,6 +260,9 @@ public sealed class FlightEvidenceProcessor
 
         if (airborneConfirmed)
         {
+            if (!_airborneEpisodeConfirmed)
+                _highestAglSinceAirborne = telemetry.AltitudeAglFeet;
+
             _airborneEpisodeConfirmed = true;
             _takeoffCandidateActive = false;
             _rejectedTakeoffSince = null;
@@ -261,6 +274,7 @@ public sealed class FlightEvidenceProcessor
         if (touchdownConfirmed)
         {
             _touchdownAt = timestamp;
+            _highestAglSinceAirborne = 0;
             _leftGroundAfterTouchdown = false;
             _landingRolloutEmitted = false;
             _landingRolloutSince = null;
@@ -272,6 +286,7 @@ public sealed class FlightEvidenceProcessor
         if (goAroundConfirmed)
         {
             _approachWasConfirmed = false;
+            _highestAglSinceAirborne = telemetry.AltitudeAglFeet;
             _goAroundSince = null;
         }
 
@@ -288,6 +303,7 @@ public sealed class FlightEvidenceProcessor
         if (touchAndGoConfirmed)
         {
             _touchdownAt = null;
+            _highestAglSinceAirborne = telemetry.AltitudeAglFeet;
             _leftGroundAfterTouchdown = false;
             _landingRolloutSince = null;
             _landingRolloutEmitted = false;
