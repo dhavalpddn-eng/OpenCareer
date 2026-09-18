@@ -1,16 +1,18 @@
 # OpenCareer project state
 
-**Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.\n\nUpdated: 2026-09-17. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
+**Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
+
+Updated: 2026-09-18. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Latest tested implementation: `2f63e56a8da585c7cbab4eb2d53d4a6b19a1b404` (`fix: compile live SimConnect probe`). The production telemetry implementation remains `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
+- Latest implementation: `540029c378a507f729dfe451db642eca4065ae65` (offline live-probe trace analysis). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 - WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. **Live simulator/runtime validation remains open.**
-- [Windows CI run 35283864087](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283864087): WinUI x64 Release build and the live SimConnect probe both succeeded with 0 warnings/errors; **74/74 xUnit tests passed**.
-- [Linux CI run 35283863937](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283863937): **74/74 xUnit tests** and **29/29 deterministic SimLab scenarios** passed.
-- Both CI runs tested `2f63e56`; compilation of the probe still does **not** imply live MSFS verification.
+- [Windows CI run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135): WinUI x64 and live-probe Release builds passed with 0 warnings/errors; **104/104 xUnit tests passed**, including the compiled trace analyzer.
+- [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
+- Both CI runs tested `540029c`; probe/analyzer compilation and synthetic trace tests do **not** imply live MSFS verification.
 - UI target/spec: `docs/ui-design-system.md` + `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
 - Verify remote branch head before edits because other chats may change it.
 
@@ -42,7 +44,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Protected-absence policy, session preferences, bankruptcy stages and bounded manual-ground reward quotes.
 - Career-derived credit model, fictional lenders, affordability/debt-service checks.
 - Fictional aircraft dealers, seeded offers/discounts, stock validation and cash/finance eligibility.
-- Domain baseline remains **35 xUnit tests** plus **29 deterministic SimLab scenarios**. Connection/telemetry/decoder/ViewModel additions bring the current xUnit total to **74 passing**.
+- Domain baseline remains **35 xUnit tests** plus **29 deterministic SimLab scenarios**. Connection/telemetry/decoder/ViewModel, flight-core and trace-analysis tests bring the current total to **104 passing locally and in Windows/Linux CI**.
 
 ## Chapter 2 shell and simulator boundary
 
@@ -72,6 +74,7 @@ The shell starts the simulator service, refreshes immutable connection/telemetry
 - Runtime: supply the installed MSFS 2024 SDK's x64 `SimConnect.dll` through `MSFS2024_SDK` or `-p:SimConnectNativePath=...`. It is copied beside the app, never committed. A build without the DLL launches with connection unavailable; with the DLL and MSFS closed it should show Waiting for MSFS.
 - Exact setup, SDK references, telemetry definitions and remaining Windows live checks: `docs/simulator-connection.md`.
 - `tools/OpenCareer.LiveProbe` reuses the production `SimConnectConnection` and writes connection/telemetry JSONL traces; `tools/run-live-probe.ps1` resolves the SDK DLL and launches it. This is validation tooling only and does not implement flight state.
+- `tools/OpenCareer.TraceAnalysis` reads those captures on Windows/Linux without the SDK. It reports connection/pause/clearing observations, field ranges, snapshot cadence and line-numbered integrity findings. Tests are synthetic; analysis changes no flight state, certifies no live behavior and calibrates no thresholds.
 
 ## Material limits
 
@@ -79,7 +82,7 @@ No live native SimConnect/UI interaction verification, robust flight-state detec
 
 ## Next bounded work
 
-1. **Run the live probe on the user's Windows/MSFS machine before calibrating raw-telemetry detection thresholds.** From the repo root use `./tools/run-live-probe.ps1` (or pass `-SimConnectNativePath`). Verify simulator absence, 1 Hz telemetry, menus/pause/resume, quit/restart, abrupt simulator exit and final telemetry clearing. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first flight test.
+1. **Run the live probe on the user's Windows/MSFS machine before calibrating raw-telemetry detection thresholds.** From the repo root use `./tools/run-live-probe.ps1` (or pass `-SimConnectNativePath`). Verify simulator absence, 1 Hz telemetry, menus/pause/resume, quit/restart, abrupt simulator exit and final telemetry clearing. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first flight test. Analyze the captured JSONL with `tools/OpenCareer.TraceAnalysis`; exit 0 means structural checks passed, not live acceptance. No real trace or Windows/MSFS runtime was available in the 2026-09-18 Linux work session.
 2. Correct any SimVar/unit/runtime discrepancy found by that live test without broadening scope.
 3. Implement the `FlightEvidenceProcessor` that converts normalized telemetry/events into the already-tested reducer evidence, keeping all speed/AGL/hysteresis values configurable until live calibration.
 4. Add versioned SQLite FlightSession/FlightLeg checkpoint/recovery around the pure reducer/time ledger, then connect registry/runway feasibility/jobs/economy settlement.
@@ -95,6 +98,7 @@ Do **not** expand finance complexity before the playable flight foundation unles
 - `docs/credit-and-dealers.md` — finance/dealer model.
 - `docs/msfs-sdk-strategy.md` — verified SDK boundaries.
 - `docs/simulator-connection.md` — implemented connection/telemetry boundary, runtime setup and pending live checks.
+- `tools/OpenCareer.TraceAnalysis/README.md` — offline trace report, invocation, exit codes and limits.
 - `docs/flight-session-design.md` — accepted load/flight/leg/time/landing/resume/free-flight/postflight rules for Chapter 4, including pilot-log dimensions, route/diversion evidence and adaptive telemetry.
 - `docs/flight-system-research-2026-09-17.md` — cross-plugin/real-world design review and cloud/AI boundary decisions.
 - `docs/efb-integration.md` — optional in-simulator EFB companion architecture using the official MSFS 2024 EFB + CommBus APIs.

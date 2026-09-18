@@ -84,12 +84,14 @@ Analyze a saved capture with [OpenCareer.TraceAnalysis](../tools/OpenCareer.Trac
 
 ## CI verification
 
-Tested implementation/tooling head: `2f63e56a8da585c7cbab4eb2d53d4a6b19a1b404`. Production telemetry implementation: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
+Tested implementation/tooling head: `540029c378a507f729dfe451db642eca4065ae65`. Production telemetry implementation: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 
-- Windows x64 Release: [run 35283864087](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283864087) — WinUI and `OpenCareer.LiveProbe` builds both succeeded with **0 warnings, 0 errors**; **74/74 xUnit tests passed**.
-- Linux: [run 35283863937](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35283863937) — **74/74 xUnit tests** and **29/29 SimLab scenarios** passed.
+- Windows x64 Release: [run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135) — WinUI and `OpenCareer.LiveProbe` builds both succeeded with **0 warnings, 0 errors**; **104/104 xUnit tests passed**, including trace-analyzer compilation and tests.
+- Linux: [run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186) — **104/104 xUnit tests** and **29/29 SimLab scenarios** passed.
 
 The tests inject native-call results and raw SDK-shaped callback buffers. Coverage includes simulator absence, acknowledgement, serialized ownership, quit/loss/retry, heartbeat failures, malformed messages, EVENT/SIMOBJECT_DATA decoding, telemetry setup failure, normalization, pause updates, stale-data clearing, restart/disposal and ViewModel display refresh.
+
+The suite also covers pure flight reducers and offline trace analysis. Analyzer fixtures are synthetic, covering cadence boundaries, missing/invalid data, truncated captures and cleanup/count consistency. Local CLI checks verify JSON output, exit codes and preservation of the input file.
 
 **Neither mock tests nor Windows compilation prove live SDK behavior.**
 
