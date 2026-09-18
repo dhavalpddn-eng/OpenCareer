@@ -123,7 +123,7 @@ public sealed record JobEconomyBalancePolicy(
     public static JobEconomyBalancePolicy Default { get; } = new(
         CareerProgressionPolicy.Default.TargetNetSavingsPerFlightHour,
         MinimumFreshHourlyFactor: 0.85,
-        MaximumFreshHourlyFactor: 1.20,
+        MaximumFreshHourlyFactor: 1.15,
         MaximumRepetitionPenalty: 0.30);
 
     public JobEconomyQuote Quote(JobEconomyInput input)
