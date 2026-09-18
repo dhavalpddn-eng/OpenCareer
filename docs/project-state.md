@@ -14,6 +14,17 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 - UI target/spec: `docs/ui-design-system.md` + `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
 - Verify remote branch head before edits because other chats may change it.
 
+## Runnable integration branch
+
+- Test-integration branch: `feature/runnable-integration`. It started from shared telemetry head `1a0209bead0f21e353e64903263f289c7638e885` and has now pulled forward the documentation changes from shared head `4618e115aed385fd83c11db45e5e361df9a9bf75`.
+- Latest tested code commit: `b9a6ab874e9f6363fc1fd885fa9a26db238f7e89`; later commits are documentation/data-only or shared-doc synchronization.
+- Linux CI run 35295851862 passed **136/136 xUnit tests + 29/29 deterministic SimLab scenarios**.
+- Windows CI run 35295851864 passed the WinUI x64 Release build, live SimConnect probe build and **136/136 xUnit tests**.
+- This branch combines current WinUI/SimConnect/telemetry with the deterministic job market, regional conflict simulation, persistent world feed, curated-conflict provenance boundary and airfield-control/operation-eligibility foundation.
+- The remaining hard gate is **live Windows/MSFS validation** using `./tools/run-live-probe.ps1`; CI compilation and mocks are not a substitute for observing the installed MSFS 2024 runtime.
+- Draft integration PR: #4 into `feature/m1-simulation-core`. Keep it draft until live validation.
+- Notion mirror: `OpenCareer Runnable Integration Test Plan — 2026-09-17`. GitHub remains authoritative.
+
 ## Fixed direction
 
 Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI 3/Windows App SDK, isolated SimConnect boundary, SQLite, deterministic/testable domain. No aircraft whitelist. AI is optional and never authoritative for money, ownership, mission completion or critical state.
