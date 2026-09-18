@@ -20,19 +20,38 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         SimConnect_CallDispatch(handle, callback, nint.Zero);
 
     public int AddToDataDefinition(nint handle, uint definitionId, string datumName, string unitsName) =>
-        SimConnect_AddToDataDefinition(handle, definitionId, datumName, unitsName,
-            SimConnectDataTypeFloat64, 0, SimConnectUnused);
+        SimConnect_AddToDataDefinition(
+            handle,
+            definitionId,
+            datumName,
+            unitsName,
+            SimConnectDataTypeFloat64,
+            0,
+            SimConnectUnused);
 
     public int RequestDataOnUserAircraft(
         nint handle,
         uint requestId,
         uint definitionId,
         SimConnectPeriod period) =>
-        SimConnect_RequestDataOnSimObject(
+        RequestDataOnObject(
             handle,
             requestId,
             definitionId,
             SimConnectObjectIdUser,
+            period);
+
+    public int RequestDataOnObject(
+        nint handle,
+        uint requestId,
+        uint definitionId,
+        uint objectId,
+        SimConnectPeriod period) =>
+        SimConnect_RequestDataOnSimObject(
+            handle,
+            requestId,
+            definitionId,
+            objectId,
             (uint)period,
             0,
             0,
@@ -45,6 +64,30 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
     public int RequestSystemState(nint handle, uint requestId) =>
         SimConnect_RequestSystemState(handle, requestId, "Sim");
 
+    public int CreateEnrouteAtcAircraftEx1(
+        nint handle,
+        string containerTitle,
+        string livery,
+        string tailNumber,
+        int flightNumber,
+        string flightPlanPath,
+        double flightPlanPosition,
+        bool touchAndGo,
+        uint requestId) =>
+        SimConnect_AICreateEnrouteATCAircraft_EX1(
+            handle,
+            containerTitle,
+            livery,
+            tailNumber,
+            flightNumber,
+            flightPlanPath,
+            flightPlanPosition,
+            touchAndGo ? 1 : 0,
+            requestId);
+
+    public int RemoveObject(nint handle, uint objectId, uint requestId) =>
+        SimConnect_AIRemoveObject(handle, objectId, requestId);
+
     public int Close(nint handle) => SimConnect_Close(handle);
 
     // Official native ABI; no dependency on the legacy .NET Framework managed wrapper.
@@ -53,11 +96,19 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
     private static extern int SimConnect_Open(
-        out nint handle, string name, nint window, uint windowMessage, nint notificationEvent, uint configIndex);
+        out nint handle,
+        string name,
+        nint window,
+        uint windowMessage,
+        nint notificationEvent,
+        uint configIndex);
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
-    private static extern int SimConnect_CallDispatch(nint handle, DispatchCallback callback, nint context);
+    private static extern int SimConnect_CallDispatch(
+        nint handle,
+        DispatchCallback callback,
+        nint context);
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
@@ -88,12 +139,38 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
     private static extern int SimConnect_SubscribeToSystemEvent(
-        nint handle, uint eventId, string eventName);
+        nint handle,
+        uint eventId,
+        string eventName);
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
-    private static extern int SimConnect_RequestSystemState(nint handle, uint requestId, string state);
+    private static extern int SimConnect_RequestSystemState(
+        nint handle,
+        uint requestId,
+        string state);
+
+    [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
+        CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_AICreateEnrouteATCAircraft_EX1(
+        nint handle,
+        string containerTitle,
+        string livery,
+        string tailNumber,
+        int flightNumber,
+        string flightPlanPath,
+        double flightPlanPosition,
+        int touchAndGo,
+        uint requestId);
+
+    [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_AIRemoveObject(
+        nint handle,
+        uint objectId,
+        uint requestId);
 
     [DllImport("SimConnect.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]

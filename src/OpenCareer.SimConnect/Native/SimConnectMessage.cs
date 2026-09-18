@@ -11,6 +11,7 @@ internal enum SimConnectMessageKind : uint
     Quit = 3,
     Event = 4,
     SimObjectData = 8,
+    AssignedObjectId = 12,
     SystemState = 15
 }
 
@@ -24,4 +25,5 @@ internal sealed record SimConnectMessage(
     uint EventId = 0,
     uint EventData = 0,
     uint DefinitionId = 0,
+    uint ObjectId = 0,
     double[]? Data = null);
