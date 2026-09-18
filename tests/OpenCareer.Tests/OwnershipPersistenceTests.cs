@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using OpenCareer.Application.Ownership;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Dealers;
@@ -295,6 +296,9 @@ public class OwnershipPersistenceTests
 
         public ValueTask DisposeAsync()
         {
+            // Microsoft.Data.Sqlite pools native connections by default. Windows will not
+            // delete the temporary database while a pooled handle is still open.
+            SqliteConnection.ClearAllPools();
             TryDelete(_path);
             TryDelete(_path + "-wal");
             TryDelete(_path + "-shm");
