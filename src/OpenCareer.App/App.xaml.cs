@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Military;
 using OpenCareer.Application.Simulator;
 using OpenCareer.SimConnect;
 
@@ -32,6 +33,7 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ISimulatorMissionActorService>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
+        services.AddSingleton<MilitaryEscortOperationCoordinator>();
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<MilitaryOperationsViewModel>();
         services.AddSingleton<MainWindow>();
