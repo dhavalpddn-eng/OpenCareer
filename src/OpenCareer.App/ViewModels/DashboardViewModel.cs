@@ -9,6 +9,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     private readonly ShellViewModel _shell;
     private readonly IDashboardSnapshotSource _snapshotSource;
     private readonly DashboardGuidanceEngine _guidanceEngine;
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     private DashboardSnapshot _snapshot = DashboardSnapshot.Empty;
     private IReadOnlyList<DashboardOpportunityItemViewModel> _topOpportunities =
@@ -220,22 +221,36 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        _snapshot = await _snapshotSource.GetAsync(cancellationToken).ConfigureAwait(true);
+        if (!await _refreshGate.WaitAsync(0, cancellationToken).ConfigureAwait(true))
+            return;
 
-        _topOpportunities = DashboardOpportunitySelector
-            .SelectTopAvailable(_snapshot.Opportunities)
-            .Select(static opportunity => new DashboardOpportunityItemViewModel(opportunity))
-            .ToArray();
+        try
+        {
+            DashboardSnapshot snapshot =
+                await _snapshotSource.GetAsync(cancellationToken).ConfigureAwait(true);
 
-        _recentActivity = _snapshot.RecentActivity
-            .OrderByDescending(static item => item.Timestamp)
-            .Take(6)
-            .Select(static item => new DashboardActivityItemViewModel(item))
-            .ToArray();
+            cancellationToken.ThrowIfCancellationRequested();
+            _snapshot = snapshot;
 
-        ApplySocialFilter();
-        RefreshGuidance();
-        RaiseAll();
+            _topOpportunities = DashboardOpportunitySelector
+                .SelectTopAvailable(_snapshot.Opportunities)
+                .Select(static opportunity => new DashboardOpportunityItemViewModel(opportunity))
+                .ToArray();
+
+            _recentActivity = _snapshot.RecentActivity
+                .OrderByDescending(static item => item.Timestamp)
+                .Take(6)
+                .Select(static item => new DashboardActivityItemViewModel(item))
+                .ToArray();
+
+            ApplySocialFilter();
+            RefreshGuidance();
+            RaiseAll();
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
     }
 
     public void SetSocialSearch(string value)
