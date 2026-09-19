@@ -9,17 +9,18 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
     private const int CurrentSchemaVersion = 1;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly ILogger<JsonTutorialProgressStore> _logger;
-    private readonly string _filePath;
+    private readonly OpenCareerDataPaths _paths;
     private readonly JsonSerializerOptions _serializerOptions = new()
     {
         WriteIndented = true
     };
 
-    public JsonTutorialProgressStore(ILogger<JsonTutorialProgressStore> logger)
+    public JsonTutorialProgressStore(
+        ILogger<JsonTutorialProgressStore> logger,
+        OpenCareerDataPaths paths)
     {
         _logger = logger;
-        string root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        _filePath = Path.Combine(root, "OpenCareer", "ui-preferences.json");
+        _paths = paths;
     }
 
     public async Task<TutorialProgress> GetAsync(
@@ -59,12 +60,12 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
 
     private async Task<PreferencesDocument> ReadAsync(CancellationToken cancellationToken)
     {
-        if (!File.Exists(_filePath))
+        if (!File.Exists(_paths.TutorialPreferencesFile))
             return new PreferencesDocument();
 
         try
         {
-            await using FileStream stream = File.OpenRead(_filePath);
+            await using FileStream stream = File.OpenRead(_paths.TutorialPreferencesFile);
             PreferencesDocument? document = await JsonSerializer
                 .DeserializeAsync<PreferencesDocument>(
                     stream,
@@ -76,7 +77,7 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
             {
                 _logger.LogWarning(
                     "Ignoring unsupported tutorial preference schema at {Path}.",
-                    _filePath);
+                    _paths.TutorialPreferencesFile);
                 return new PreferencesDocument();
             }
 
@@ -84,17 +85,26 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Tutorial preference file is invalid: {Path}", _filePath);
+            _logger.LogWarning(
+                ex,
+                "Tutorial preference file is invalid: {Path}",
+                _paths.TutorialPreferencesFile);
             return new PreferencesDocument();
         }
         catch (IOException ex)
         {
-            _logger.LogWarning(ex, "Unable to read tutorial preferences: {Path}", _filePath);
+            _logger.LogWarning(
+                ex,
+                "Unable to read tutorial preferences: {Path}",
+                _paths.TutorialPreferencesFile);
             return new PreferencesDocument();
         }
         catch (UnauthorizedAccessException ex)
         {
-            _logger.LogWarning(ex, "Tutorial preferences are not readable: {Path}", _filePath);
+            _logger.LogWarning(
+                ex,
+                "Tutorial preferences are not readable: {Path}",
+                _paths.TutorialPreferencesFile);
             return new PreferencesDocument();
         }
     }
@@ -105,11 +115,9 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
     {
         try
         {
-            string? directory = Path.GetDirectoryName(_filePath);
-            if (!string.IsNullOrWhiteSpace(directory))
-                Directory.CreateDirectory(directory);
+            _paths.EnsureDirectories();
 
-            string tempPath = _filePath + ".tmp";
+            string tempPath = _paths.TutorialPreferencesFile + ".tmp";
             await using (FileStream stream = File.Create(tempPath))
             {
                 await JsonSerializer.SerializeAsync(
@@ -120,15 +128,21 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            File.Move(tempPath, _filePath, overwrite: true);
+            File.Move(tempPath, _paths.TutorialPreferencesFile, overwrite: true);
         }
         catch (IOException ex)
         {
-            _logger.LogWarning(ex, "Unable to save tutorial preferences: {Path}", _filePath);
+            _logger.LogWarning(
+                ex,
+                "Unable to save tutorial preferences: {Path}",
+                _paths.TutorialPreferencesFile);
         }
         catch (UnauthorizedAccessException ex)
         {
-            _logger.LogWarning(ex, "Tutorial preferences are not writable: {Path}", _filePath);
+            _logger.LogWarning(
+                ex,
+                "Tutorial preferences are not writable: {Path}",
+                _paths.TutorialPreferencesFile);
         }
     }
 

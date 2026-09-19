@@ -1,4 +1,5 @@
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Telemetry;
 
@@ -11,7 +12,7 @@ public sealed class ShellViewModelTests
     {
         var connection = new TestConnection { Current = new(SimulatorConnectionState.Connected) };
         var telemetry = new TestTelemetrySource();
-        var viewModel = new ShellViewModel(connection, telemetry);
+        var viewModel = new ShellViewModel(connection, telemetry, new TestSettingsService());
 
         viewModel.RefreshConnectionStatus();
 
@@ -25,8 +26,11 @@ public sealed class ShellViewModelTests
         viewModel.RefreshConnectionStatus();
         Assert.Empty(changed);
 
-        connection.Current = new(SimulatorConnectionState.Reconnecting, SimulatorConnectionIssue.ConnectionLost);
+        connection.Current = new(
+            SimulatorConnectionState.Reconnecting,
+            SimulatorConnectionIssue.ConnectionLost);
         viewModel.RefreshConnectionStatus();
+
         Assert.False(viewModel.IsSimulatorConnected);
         Assert.False(viewModel.HasTelemetry);
         Assert.Equal("No aircraft connected", viewModel.AircraftStatus);
@@ -36,10 +40,15 @@ public sealed class ShellViewModelTests
     [Fact]
     public void TelemetryRefreshesWhileConnectionSnapshotIsUnchanged()
     {
-        var connectionSnapshot = new SimulatorConnectionSnapshot(SimulatorConnectionState.Connected);
+        var connectionSnapshot = new SimulatorConnectionSnapshot(
+            SimulatorConnectionState.Connected);
         var connection = new TestConnection { Current = connectionSnapshot };
         var telemetry = new TestTelemetrySource();
-        var viewModel = new ShellViewModel(connection, telemetry);
+        var viewModel = new ShellViewModel(
+            connection,
+            telemetry,
+            new TestSettingsService());
+
         viewModel.RefreshConnectionStatus();
 
         telemetry.Latest = Snapshot(1_000, 110, -500, paused: false);
@@ -56,19 +65,60 @@ public sealed class ShellViewModelTests
 
         telemetry.Latest = Snapshot(1_050, 112, 0, paused: true);
         viewModel.RefreshConnectionStatus();
+
         Assert.Equal("Paused", viewModel.AircraftStateSummary);
         Assert.Equal("1050 ft MSL / 450 ft AGL", viewModel.AltitudeSummary);
     }
 
     [Fact]
+    public async Task ChangingUnitsReformatsExistingTelemetryWithoutNewSimulatorSample()
+    {
+        var connection = new TestConnection
+        {
+            Current = new SimulatorConnectionSnapshot(
+                SimulatorConnectionState.Connected)
+        };
+        var telemetry = new TestTelemetrySource
+        {
+            Latest = Snapshot(1_000, 110, -500, paused: false)
+        };
+        var settings = new TestSettingsService();
+        var viewModel = new ShellViewModel(connection, telemetry, settings);
+
+        viewModel.RefreshConnectionStatus();
+        Assert.Equal("1000 ft MSL / 450 ft AGL", viewModel.AltitudeSummary);
+
+        await settings.UpdateAsync(
+            settings.Current with
+            {
+                MeasurementSystem = MeasurementSystem.Metric
+            });
+
+        Assert.Equal("305 m MSL / 137 m AGL", viewModel.AltitudeSummary);
+        Assert.Equal("204 km/h IAS / 222 km/h GS", viewModel.SpeedSummary);
+        Assert.Equal("-2.5 m/s", viewModel.VerticalSpeedSummary);
+        Assert.Equal("136 kg fuel / 181 kg payload", viewModel.LoadSummary);
+    }
+
+    [Fact]
     public void MissingRuntimeIsDistinguishedFromWaitingForSimulator()
     {
-        var connection = new TestConnection { Current = new(SimulatorConnectionState.WaitingForSimulator) };
-        var viewModel = new ShellViewModel(connection, new TestTelemetrySource());
+        var connection = new TestConnection
+        {
+            Current = new SimulatorConnectionSnapshot(
+                SimulatorConnectionState.WaitingForSimulator)
+        };
+        var viewModel = new ShellViewModel(
+            connection,
+            new TestTelemetrySource(),
+            new TestSettingsService());
+
         viewModel.RefreshConnectionStatus();
         Assert.Equal("Waiting for MSFS 2024", viewModel.ConnectionStatus);
 
-        connection.Current = new(SimulatorConnectionState.Unavailable, SimulatorConnectionIssue.RuntimeMissing);
+        connection.Current = new(
+            SimulatorConnectionState.Unavailable,
+            SimulatorConnectionIssue.RuntimeMissing);
         viewModel.RefreshConnectionStatus();
 
         Assert.Equal("Simulator connection unavailable", viewModel.ConnectionStatus);
@@ -106,7 +156,9 @@ public sealed class ShellViewModelTests
 
     private sealed class TestConnection : ISimulatorConnection
     {
-        public SimulatorConnectionSnapshot Current { get; set; } = new(SimulatorConnectionState.Disconnected);
+        public SimulatorConnectionSnapshot Current { get; set; } =
+            new(SimulatorConnectionState.Disconnected);
+
         public void Start() { }
         public Task StopAsync() => Task.CompletedTask;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -115,5 +167,27 @@ public sealed class ShellViewModelTests
     private sealed class TestTelemetrySource : ISimulatorTelemetrySource
     {
         public AircraftTelemetrySnapshot? Latest { get; set; }
+    }
+
+    private sealed class TestSettingsService : IAppSettingsService
+    {
+        public AppPreferences Current { get; private set; } = AppPreferences.Default;
+
+        public event EventHandler? Changed;
+
+        public Task InitializeAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task UpdateAsync(
+            AppPreferences preferences,
+            CancellationToken cancellationToken = default)
+        {
+            Current = preferences;
+            Changed?.Invoke(this, EventArgs.Empty);
+            return Task.CompletedTask;
+        }
+
+        public Task ResetAsync(CancellationToken cancellationToken = default) =>
+            UpdateAsync(AppPreferences.Default, cancellationToken);
     }
 }
