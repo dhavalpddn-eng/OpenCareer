@@ -190,10 +190,26 @@ public sealed record JobMarketPolicy(
         Validate();
         if (estimatedFlightHours is null)
             return 1;
+
         var hours = estimatedFlightHours.Value;
         if (!double.IsFinite(hours) || hours < 0)
             throw new ArgumentOutOfRangeException(nameof(estimatedFlightHours));
-        if (careerLevel > EarlyCareerLevelCeiling || hours == 0)
+        if (hours == 0)
+            return 1;
+
+        bool extendedDurationMission = kind is
+            ContractKind.Ferry
+            or ContractKind.Reposition
+            or ContractKind.MilitaryFerry
+            or ContractKind.MilitaryTransport;
+
+        if (hours > CareerSessionPolicy.MaximumOfferedDuration.TotalHours
+            && !extendedDurationMission)
+        {
+            return 0;
+        }
+
+        if (careerLevel > EarlyCareerLevelCeiling)
             return 1;
         if (hours >= EarlyCareerPreferredMinHours && hours <= EarlyCareerPreferredMaxHours)
             return 1.35;
@@ -202,7 +218,7 @@ public sealed record JobMarketPolicy(
             ? EarlyCareerPreferredMinHours - hours
             : hours - EarlyCareerPreferredMaxHours;
         var weight = Math.Max(EarlyCareerOutOfBandWeight, Math.Exp(-distanceFromBand / 1.5));
-        if (kind is ContractKind.Ferry or ContractKind.Reposition or ContractKind.MilitaryFerry or ContractKind.MilitaryTransport)
+        if (extendedDurationMission)
             weight = Math.Max(weight, 0.60);
         return weight;
     }
