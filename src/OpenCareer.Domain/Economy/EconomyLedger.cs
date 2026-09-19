@@ -13,6 +13,7 @@ public enum LedgerAccountCode
     AirportFeesExpense,
     OtherOperatingExpense,
     InsuranceExpense,
+    StorageExpense,
     InterestExpense,
     AircraftAsset,
     LoanPayable
