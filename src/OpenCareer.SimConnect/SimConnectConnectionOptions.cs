@@ -23,10 +23,6 @@ public sealed record SimConnectConnectionOptions
             throw new ArgumentException("Maximum retry delay must not be shorter than the initial delay.");
     }
 
-    internal TimeSpan RetryDelay(int failures) => TimeSpan.FromMilliseconds(
-        Math.Min(MaximumRetryDelay.TotalMilliseconds,
-            InitialRetryDelay.TotalMilliseconds * Math.Pow(2, Math.Clamp(failures - 1, 0, 30))));
-
     private static void ValidateWait(TimeSpan value, string name)
     {
         if (value.TotalMilliseconds < 1 || value.TotalMilliseconds > int.MaxValue)
