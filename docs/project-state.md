@@ -96,6 +96,16 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - The temporary `UnavailableDashboardSnapshotSource` intentionally returns an empty snapshot. Later authoritative systems replace/wrap it without changing the Home page contract.
 - MBL-01 remains active until Jobs/Career/Company/Aircraft/Economy/World integrations and Windows visual/runtime acceptance are complete.
 
+## CI cost controls
+
+- Feature-branch pushes no longer run the same CI that an open pull request already runs.
+- Documentation-only changes do not trigger build workflows.
+- Pull-request concurrency cancels superseded runs.
+- Linux remains the automatic low-cost validation path for relevant code changes.
+- Windows hosted validation is skipped while the PR is draft and runs when the PR is marked ready for review or is manually dispatched for a milestone check.
+- Windows paths are limited to WinUI/Application/Domain/SimConnect/live-probe/workflow inputs rather than all tests/tools.
+- At `69a1a39`, Windows correctly reported **skipped** on the draft PR. Linux still failed before any workflow step was created and produced no logs, which is consistent with an account-side Actions quota/billing/hosted-runner gate rather than repository code execution.
+
 ## Chapter 2 shell and simulator boundary
 
 `src/OpenCareer.App` contains:
