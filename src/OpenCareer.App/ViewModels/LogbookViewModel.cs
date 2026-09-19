@@ -28,6 +28,8 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
         _selectedEntry?.Landings ?? Array.Empty<LogbookLandingItemViewModel>();
     public IReadOnlyList<LogbookEventItemViewModel> SelectedEvents =>
         _selectedEntry?.Events ?? Array.Empty<LogbookEventItemViewModel>();
+    public IReadOnlyList<LogbookLegItemViewModel> SelectedLegs =>
+        _selectedEntry?.Legs ?? Array.Empty<LogbookLegItemViewModel>();
 
     public string TotalFlightTimeText =>
         FormatDuration(_statistics.MovementFlightTime);
@@ -77,6 +79,18 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
 
     public string SelectedLandingSummary =>
         _selectedEntry?.LandingSummary ?? "Landings —";
+
+    public string SelectedFuelSummary =>
+        _selectedEntry?.FuelSummary ?? "Fuel —";
+
+    public string SelectedPayloadSummary =>
+        _selectedEntry?.PayloadSummary ?? "Payload —";
+
+    public string SelectedAssistanceSummary =>
+        _selectedEntry?.AssistanceSummary ?? "Assistance —";
+
+    public string SelectedLegSummary =>
+        _selectedEntry?.LegSummary ?? "Legs —";
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
@@ -149,6 +163,11 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SelectedLandingSummary));
         OnPropertyChanged(nameof(SelectedLandings));
         OnPropertyChanged(nameof(SelectedEvents));
+        OnPropertyChanged(nameof(SelectedLegs));
+        OnPropertyChanged(nameof(SelectedFuelSummary));
+        OnPropertyChanged(nameof(SelectedPayloadSummary));
+        OnPropertyChanged(nameof(SelectedAssistanceSummary));
+        OnPropertyChanged(nameof(SelectedLegSummary));
     }
 
     private static string FormatDuration(TimeSpan value) =>
@@ -175,10 +194,15 @@ public sealed class LogbookEntryItemViewModel
         Events = entry.Debrief.Events
             .Select(static item => new LogbookEventItemViewModel(item))
             .ToArray();
+
+        Legs = entry.Debrief.Legs
+            .Select(static leg => new LogbookLegItemViewModel(leg))
+            .ToArray();
     }
 
     public IReadOnlyList<LogbookLandingItemViewModel> Landings { get; }
     public IReadOnlyList<LogbookEventItemViewModel> Events { get; }
+    public IReadOnlyList<LogbookLegItemViewModel> Legs { get; }
 
     public Guid EntryId => _entry.EntryId;
 
@@ -237,6 +261,80 @@ public sealed class LogbookEntryItemViewModel
         _entry.Debrief.Events.Count == 0
             ? "No recorded incidents or notable events"
             : $"{_entry.Debrief.Events.Count} recorded event{(_entry.Debrief.Events.Count == 1 ? string.Empty : "s")}";
+
+    public string FuelSummary
+    {
+        get
+        {
+            FlightFuelDebrief fuel = _entry.Debrief.Fuel;
+            if (fuel.StartFuelPounds is null &&
+                fuel.EndFuelPounds is null &&
+                fuel.FuelUsedPounds is null)
+            {
+                return $"Fuel unavailable • {Friendly(fuel.EvidenceQuality)}";
+            }
+
+            var values = new List<string>();
+            if (fuel.StartFuelPounds is { } start)
+                values.Add($"Start {start:0} lb");
+            if (fuel.EndFuelPounds is { } end)
+                values.Add($"End {end:0} lb");
+            if (fuel.FuelUsedPounds is { } used)
+                values.Add($"Used {used:0} lb");
+
+            values.Add(Friendly(fuel.EvidenceQuality));
+            return string.Join(" • ", values);
+        }
+    }
+
+    public string PayloadSummary
+    {
+        get
+        {
+            PayloadDebrief payload = _entry.Debrief.Payload;
+            var values = new List<string>();
+
+            if (payload.PassengerCount is { } passengers)
+                values.Add($"{passengers} passenger{(passengers == 1 ? string.Empty : "s")}");
+            if (payload.CargoMassPounds is { } mass)
+                values.Add($"{mass:0} lb cargo");
+            if (!string.IsNullOrWhiteSpace(payload.CargoDescription))
+                values.Add(payload.CargoDescription);
+            if (!string.IsNullOrWhiteSpace(payload.Outcome))
+                values.Add(payload.Outcome);
+
+            return values.Count == 0
+                ? $"Payload unavailable • {Friendly(payload.EvidenceQuality)}"
+                : string.Join(" • ", values);
+        }
+    }
+
+    public string AssistanceSummary
+    {
+        get
+        {
+            FlightAssistanceDebrief assistance = _entry.Debrief.Assistance;
+            var flags = new List<string>();
+
+            if (assistance.PauseObserved)
+                flags.Add("pause");
+            if (assistance.TimeAccelerationObserved)
+                flags.Add("time acceleration");
+            if (assistance.SlewObserved)
+                flags.Add("slew");
+            if (assistance.PositionJumpObserved)
+                flags.Add("position change");
+            if (assistance.RouteEvidenceCompromised)
+                flags.Add("route evidence compromised");
+
+            return flags.Count == 0
+                ? "No assistance flags"
+                : string.Join(" • ", flags);
+        }
+    }
+
+    public string LegSummary =>
+        $"{Legs.Count} flight leg{(Legs.Count == 1 ? string.Empty : "s")}";
 
     public string LandingSummary =>
         $"{_entry.Debrief.Tracking.LandingEpisodeCount} landing episode{(_entry.Debrief.Tracking.LandingEpisodeCount == 1 ? string.Empty : "s")} • " +
@@ -339,4 +437,47 @@ public sealed class LogbookEventItemViewModel
     public string Severity { get; }
     public string Text { get; }
     public string Evidence { get; }
+}
+
+
+public sealed class LogbookLegItemViewModel
+{
+    public LogbookLegItemViewModel(FlightLegDebrief leg)
+    {
+        ArgumentNullException.ThrowIfNull(leg);
+
+        Sequence = $"LEG {leg.Sequence}";
+        string origin =
+            leg.Route.ActualDeparture ??
+            leg.Route.PlannedOrigin ??
+            "Unknown";
+        string destination =
+            leg.Route.ActualArrival ??
+            leg.Route.PlannedDestination ??
+            "Unknown";
+
+        Route = $"{origin} → {destination}";
+        Time =
+            $"Flight {FormatDuration(leg.Time.MovementFlightTime)} • " +
+            $"Airborne {FormatDuration(leg.Time.AirborneTime)}";
+        Track =
+            leg.RouteTrack.Count == 0
+                ? "Route track unavailable"
+                : $"{leg.RouteTrack.Count} decimated route points";
+        LandingReferences =
+            leg.LandingEpisodeNumbers.Count == 0
+                ? "No landing episodes"
+                : $"Landing episodes {string.Join(", ", leg.LandingEpisodeNumbers)}";
+    }
+
+    public string Sequence { get; }
+    public string Route { get; }
+    public string Time { get; }
+    public string Track { get; }
+    public string LandingReferences { get; }
+
+    private static string FormatDuration(TimeSpan value) =>
+        value.TotalHours >= 1
+            ? $"{(int)value.TotalHours}:{value.Minutes:00}"
+            : $"{value.Minutes}:{value.Seconds:00}";
 }

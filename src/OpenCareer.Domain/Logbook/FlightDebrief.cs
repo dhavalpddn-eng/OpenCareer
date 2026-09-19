@@ -247,6 +247,10 @@ public sealed record FlightDebriefDraft(
     AircraftDebrief Aircraft,
     FlightTimeLedger Time,
     FlightTrackingSnapshot Tracking,
+    IReadOnlyList<FlightLegDebrief> Legs,
+    FlightFuelDebrief Fuel,
+    PayloadDebrief Payload,
+    FlightAssistanceDebrief Assistance,
     FlightSafetyOutcome SafetyOutcome,
     MissionOutcome MissionOutcome,
     IReadOnlyList<LandingDebrief> Landings,
@@ -264,6 +268,10 @@ public sealed record FlightDebrief(
     AircraftDebrief Aircraft,
     FlightTimeLedger Time,
     FlightTrackingSnapshot Tracking,
+    IReadOnlyList<FlightLegDebrief> Legs,
+    FlightFuelDebrief Fuel,
+    PayloadDebrief Payload,
+    FlightAssistanceDebrief Assistance,
     FlightSafetyOutcome SafetyOutcome,
     MissionOutcome MissionOutcome,
     IReadOnlyList<LandingDebrief> Landings,
@@ -279,6 +287,10 @@ public static class FlightDebriefFactory
         ArgumentNullException.ThrowIfNull(draft.Aircraft);
         ArgumentNullException.ThrowIfNull(draft.Time);
         ArgumentNullException.ThrowIfNull(draft.Tracking);
+        ArgumentNullException.ThrowIfNull(draft.Legs);
+        ArgumentNullException.ThrowIfNull(draft.Fuel);
+        ArgumentNullException.ThrowIfNull(draft.Payload);
+        ArgumentNullException.ThrowIfNull(draft.Assistance);
         ArgumentNullException.ThrowIfNull(draft.Landings);
         ArgumentNullException.ThrowIfNull(draft.Events);
         ArgumentNullException.ThrowIfNull(draft.Settlement);
@@ -302,7 +314,35 @@ public static class FlightDebriefFactory
 
         draft.Route.Validate();
         draft.Aircraft.Validate();
+        draft.Fuel.Validate();
+        draft.Payload.Validate();
         draft.Settlement.Validate();
+
+        FlightLegDebrief[] legs = draft.Legs
+            .OrderBy(static leg => leg.Sequence)
+            .ToArray();
+
+        if (legs.Length == 0)
+            throw new InvalidOperationException(
+                "A completed debrief must contain at least one flight leg.");
+
+        if (legs.Select(static leg => leg.LegId).Distinct().Count() != legs.Length)
+            throw new InvalidOperationException("Flight leg ids must be unique.");
+
+        for (int index = 0; index < legs.Length; index++)
+        {
+            FlightLegDebrief leg = legs[index];
+            leg.Validate(draft.StartedAt, draft.EndedAt);
+
+            int expectedSequence = index + 1;
+            if (leg.Sequence != expectedSequence)
+                throw new InvalidOperationException(
+                    "Flight leg sequence must be contiguous and start at one.");
+
+            if (index > 0 && leg.StartedAt < legs[index - 1].EndedAt)
+                throw new InvalidOperationException(
+                    "Flight legs cannot overlap.");
+        }
 
         LandingDebrief[] landings = draft.Landings
             .OrderBy(static item => item.EpisodeNumber)
@@ -341,6 +381,20 @@ public static class FlightDebriefFactory
                 "Debrief event");
         }
 
+        int[] referencedEpisodes = legs
+            .SelectMany(static leg => leg.LandingEpisodeNumbers)
+            .OrderBy(static episode => episode)
+            .ToArray();
+
+        int[] actualEpisodes = landings
+            .Select(static landing => landing.EpisodeNumber)
+            .OrderBy(static episode => episode)
+            .ToArray();
+
+        if (!referencedEpisodes.SequenceEqual(actualEpisodes))
+            throw new InvalidOperationException(
+                "Flight-leg landing references must match the session landing summaries exactly.");
+
         if (draft.Settlement.SettledAt is { } settledAt &&
             settledAt < draft.EndedAt)
         {
@@ -359,6 +413,10 @@ public static class FlightDebriefFactory
             draft.Aircraft,
             draft.Time,
             draft.Tracking,
+            legs,
+            draft.Fuel,
+            draft.Payload,
+            draft.Assistance,
             draft.SafetyOutcome,
             draft.MissionOutcome,
             landings,

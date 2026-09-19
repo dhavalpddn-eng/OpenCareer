@@ -277,6 +277,62 @@ public sealed class LogbookDebriefTests
         Assert.Equal(0, stats.StopAndGoCount);
     }
 
+
+    [Fact]
+    public void DebriefPreservesFlightLegHierarchyAndRouteTrack()
+    {
+        FlightDebrief debrief = FlightDebriefFactory.Create(Draft());
+
+        FlightLegDebrief leg = Assert.Single(debrief.Legs);
+        Assert.Equal(1, leg.Sequence);
+        Assert.Equal("KAAA", leg.Route.ActualDeparture);
+        Assert.Equal("KBBB", leg.Route.ActualArrival);
+        Assert.Equal(3, leg.RouteTrack.Count);
+        Assert.Equal([1], leg.LandingEpisodeNumbers);
+    }
+
+    [Fact]
+    public void RouteTrackOutsideLegIntervalIsRejected()
+    {
+        FlightDebriefDraft draft = Draft();
+        FlightLegDebrief invalid = draft.Legs[0] with
+        {
+            RouteTrack =
+            [
+                new(Start.AddHours(2), 34.0, -97.0, 1200)
+            ]
+        };
+
+        Assert.Throws<InvalidOperationException>(
+            () => FlightDebriefFactory.Create(
+                draft with { Legs = [invalid] }));
+    }
+
+    [Fact]
+    public void LandingEpisodeMustBelongToExactlyOneLeg()
+    {
+        FlightDebriefDraft draft = Draft();
+        FlightLegDebrief missingLandingReference = draft.Legs[0] with
+        {
+            LandingEpisodeNumbers = Array.Empty<int>()
+        };
+
+        Assert.Throws<InvalidOperationException>(
+            () => FlightDebriefFactory.Create(
+                draft with { Legs = [missingLandingReference] }));
+    }
+
+    [Fact]
+    public void FuelPayloadAndAssistanceRemainFrozenFacts()
+    {
+        FlightDebrief debrief = FlightDebriefFactory.Create(Draft());
+
+        Assert.Equal(75, debrief.Fuel.FuelUsedPounds);
+        Assert.Equal(2, debrief.Payload.PassengerCount);
+        Assert.Equal(150, debrief.Payload.CargoMassPounds);
+        Assert.False(debrief.Assistance.RouteEvidenceCompromised);
+    }
+
     private static FlightDebriefDraft Draft(
         Guid? contractId = null,
         LogbookEntryKind entryKind = LogbookEntryKind.CareerJob,
@@ -322,6 +378,42 @@ public sealed class LogbookDebriefTests
                 0,
                 0,
                 false),
+            [
+                new(
+                    Guid.Parse("10000000-0000-0000-0000-000000000030"),
+                    1,
+                    Start,
+                    Start.AddMinutes(90),
+                    new("KAAA", "KBBB", "KAAA", "KBBB", null, 185),
+                    new(
+                        TimeSpan.FromMinutes(90),
+                        TimeSpan.FromMinutes(90),
+                        TimeSpan.FromMinutes(80),
+                        TimeSpan.FromMinutes(70),
+                        TimeSpan.FromMinutes(55),
+                        TimeSpan.FromMinutes(8),
+                        TimeSpan.FromMinutes(7),
+                        TimeSpan.FromMinutes(60),
+                        TimeSpan.Zero,
+                        TimeSpan.Zero,
+                        TimeSpan.Zero,
+                        TimeSpan.FromMinutes(20),
+                        TimeSpan.FromMinutes(12)),
+                    [
+                        new(Start.AddMinutes(5), 34.0, -97.0, 1200),
+                        new(Start.AddMinutes(45), 34.5, -96.5, 6500),
+                        new(Start.AddMinutes(85), 35.0, -96.0, 1400)
+                    ],
+                    [1])
+            ],
+            new(220, 145, 75, EvidenceQuality.Observed),
+            new(2, 150, "General cargo", "Delivered", EvidenceQuality.MissionDeclared),
+            new(
+                PauseObserved: false,
+                TimeAccelerationObserved: false,
+                SlewObserved: false,
+                PositionJumpObserved: false,
+                RouteEvidenceCompromised: false),
             FlightSafetyOutcome.CompletedNormally,
             missionOutcome,
             landings ?? [Landing(1, Start.AddMinutes(70))],
