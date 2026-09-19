@@ -216,7 +216,7 @@ public sealed class TwentyCareerBalanceReviewTests
         New("Financed light-jet owner", 260, 90, 1, 97, 95, 14, 0, 4, 10, 8, 10, 1_800, 3_000, 4, 85, 520_000, ReviewRole.Owner, ReviewOutcome.Balanced, 22),
         New("Regional-jet airline employee", 420, 145, 2, 97, 96, 18, 0, 5, 15, 12, 4, 900, 3_000, 6, 88, 1_150_000, ReviewRole.Employee, ReviewOutcome.Balanced, 28),
         New("Narrowbody airline captain", 520, 175, 2, 98, 98, 22, 0, 6, 18, 14, 8, 2_000, 8_000, 7, 90, 1_600_000, ReviewRole.Employee, ReviewOutcome.Balanced, 31),
-        New("Widebody endgame airline captain", 750, 240, 3, 98, 99, 28, 0, 7, 24, 18, 15, 5_500, 35_000, 8, 92, 2_500_000, ReviewRole.Employee, ReviewOutcome.Balanced, 36)
+        New("Widebody endgame airline captain", 750, 240, 3, 98, 99, 28, 0, 7, 24, 18, 15, 5_500, 35_000, 8, 92, 2_500_000, ReviewRole.Employee, ReviewOutcome.Balanced, 37)
     };
 
     [Theory]
