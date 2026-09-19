@@ -7,7 +7,7 @@
 **PR:** #2 draft; keep `main` stable.  
 **Master build list:** `docs/master-build-list.md` — active unfinished major systems sorted low-to-high by estimated remaining engineering effort; stable `MBL-xx` IDs remain unchanged; remove items only when fully implemented, integrated, tested and accepted.  
 **Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
-**Last implementation commit:** `ace1ed3adf365a8f784d2acb8b1aefd60010a0a0` (MBL-23 settings/diagnostics + hardened backup/export).
+**Last implementation commit:** `c4a52c955b080aceb73e0b1d762d90c8dbc54506` (MBL-23 settings/diagnostics; UI-thread-safe preference notifications).
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
 
