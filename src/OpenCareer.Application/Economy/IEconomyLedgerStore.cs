@@ -14,6 +14,10 @@ public interface IEconomyLedgerStore
         EconomyLedgerTransaction transaction,
         CancellationToken cancellationToken = default);
 
+    Task<EconomyLedgerTransaction?> FindByIdempotencyKeyAsync(
+        string idempotencyKey,
+        CancellationToken cancellationToken = default);
+
     Task<decimal> ReadCashBalanceAsync(
         CancellationToken cancellationToken = default);
 
