@@ -47,6 +47,15 @@ public sealed class TutorialViewModel : INotifyPropertyChanged
     public Task RestartIntroAsync(CancellationToken cancellationToken = default) =>
         _coordinator.RestartAsync(AppTutorialCatalog.AppIntroId, cancellationToken);
 
+    public Task PreviewBannerTowAsync(CancellationToken cancellationToken = default) =>
+        _coordinator.StartAsync(AppTutorialCatalog.BannerTowId, resume: false, cancellationToken);
+
+    public Task PreviewCarrierTakeoffAsync(CancellationToken cancellationToken = default) =>
+        _coordinator.StartAsync(AppTutorialCatalog.CarrierTakeoffId, resume: false, cancellationToken);
+
+    public Task PreviewCarrierLandingAsync(CancellationToken cancellationToken = default) =>
+        _coordinator.StartAsync(AppTutorialCatalog.CarrierLandingId, resume: false, cancellationToken);
+
     public Task NextAsync(CancellationToken cancellationToken = default) =>
         _coordinator.NextAsync(cancellationToken);
 
