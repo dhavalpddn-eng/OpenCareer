@@ -205,10 +205,32 @@ Purpose: the in-flight workspace.
 
 Teach four internal areas when implemented:
 
-- **Checklist** — contextual preflight/start/taxi/arrival/shutdown requirements.
+- **Checklist** — contextual preflight/start/taxi/takeoff/cruise/approach/landing/taxi-in/shutdown requirements. The player can enable **Show checklist every flight** so it appears for every operation.
 - **Flight** — current state, route/map and essential telemetry.
 - **Mission** — objectives, passenger/cargo status and constraints.
 - **Events** — takeoff, landing, go-around, rejected takeoff, abnormal and recovery events.
+
+Every actionable checklist row shows its controller instruction inline. There is no separate keybind list.
+
+```text
+[ ] Parking brake — Controller: [resolved binding]
+[ ] Landing lights — Controller: [resolved binding]
+[ ] Verify fuel — Controller: No input required
+[ ] Set cockpit-only selector — Controller: Cockpit only
+[ ] Unmapped action — Controller: UNBOUND
+```
+
+Controller status presentation:
+
+- **Resolved binding** — normal text plus the actual controller button/chord.
+- **UNBOUND** — always visible; never blank.
+- **UNBOUND** uses warning/amber/orange treatment by default.
+- **UNBOUND — REQUIRED** uses danger/red treatment when the missing mapping blocks a required or safety-critical checklist action.
+- **Cockpit only** — neutral informational state when no controller action is appropriate.
+- **Binding unavailable** — visible warning/amber state when OpenCareer cannot reliably resolve the player's configured binding.
+- Color is never the only signal; the text label/icon remains visible.
+
+Bindings are profile/device/aircraft sensitive. OpenCareer must not invent a controller button. It shows a verified configured binding only when a supported source or explicit user mapping supplies it.
 
 Persistent header teaches:
 
@@ -442,6 +464,8 @@ Teach:
 - save/backup/recovery status,
 - logs/build information,
 - optional online/AI services,
+- **Show checklist every flight**,
+- **Show controller binding on each checklist step**,
 - **Restart intro tutorial**.
 
 Dangerous reset/destructive actions require separate confirmation and are never bundled into the tutorial.
