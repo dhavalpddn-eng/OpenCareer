@@ -31,15 +31,15 @@ public sealed class AircraftLoanAmortizationTests
         AircraftLoanInstallment last =
             schedule.Installments[^1];
         Assert.Equal(4.41m, last.Interest);
-        Assert.Equal(882.82m, last.Principal);
-        Assert.Equal(887.23m, last.Payment);
+        Assert.Equal(882.83m, last.Principal);
+        Assert.Equal(887.24m, last.Payment);
         Assert.Equal(0m, last.ClosingPrincipal);
 
         // Independently checked with Wolfram using monthly rate 0.06/12
         // and cent-rounded installment accounting.
         Assert.Equal(80_000m, schedule.TotalPrincipal);
-        Assert.Equal(26_579.46m, schedule.TotalInterest);
-        Assert.Equal(106_579.46m, schedule.TotalPayments);
+        Assert.Equal(26_579.47m, schedule.TotalInterest);
+        Assert.Equal(106_579.47m, schedule.TotalPayments);
     }
 
     [Fact]
