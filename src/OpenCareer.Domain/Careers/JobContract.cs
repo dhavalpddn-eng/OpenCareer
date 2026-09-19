@@ -94,7 +94,8 @@ public sealed record JobContract(
     bool GovernmentAuthorizationRequired = false,
     DateTimeOffset? AcceptedAt = null,
     DateTimeOffset? StartedAt = null,
-    DateTimeOffset? CompletedAt = null)
+    DateTimeOffset? CompletedAt = null,
+    ContractEconomicSnapshot? EconomicSnapshot = null)
 {
     public JobContract Accept(ContractDispatchContext context)
     {
@@ -143,6 +144,14 @@ public sealed record JobContract(
         ArgumentNullException.ThrowIfNull(Compensation);
         ArgumentNullException.ThrowIfNull(AircraftRequirements);
         AircraftRequirements.Validate();
+        EconomicSnapshot?.Validate();
+
+        if (EconomicSnapshot is not null
+            && EconomicSnapshot.Compensation != Compensation)
+        {
+            throw new ArgumentException(
+                "Contract compensation must match the immutable quoted economic snapshot.");
+        }
         if ((AcceptedAt is { } accepted && accepted < OfferedAt)
             || (StartedAt is { } started && (AcceptedAt is not { } a || started < a))
             || (CompletedAt is { } completed && (StartedAt is not { } s || completed < s))
