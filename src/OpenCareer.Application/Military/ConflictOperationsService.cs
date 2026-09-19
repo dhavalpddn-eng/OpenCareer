@@ -11,6 +11,10 @@ public sealed record AcceptedAreaSupportMission(
     ConflictWorldState World,
     AreaSupportMission Mission);
 
+public sealed record AcceptedAirOperationMission(
+    ConflictWorldState World,
+    AirOperationMission Mission);
+
 public sealed record ConflictActionExecution(
     ConflictWorldState World,
     AirSupportMission Mission,
@@ -20,6 +24,11 @@ public sealed record CompletedAreaSupportMission(
     ConflictWorldState World,
     AreaSupportMission Mission,
     AreaMissionOutcomeResult Outcome);
+
+public sealed record InterceptActionExecution(
+    ConflictWorldState World,
+    AirOperationMission Mission,
+    InterceptActionResult Action);
 
 public sealed class ConflictOperationsService
 {
@@ -80,6 +89,32 @@ public sealed class ConflictOperationsService
             mission);
     }
 
+    public AcceptedAirOperationMission AcceptAirOperationRequest(
+        ConflictWorldState state,
+        string requestId,
+        Guid missionId,
+        DateTimeOffset acceptedAt)
+    {
+        ConflictValidation.Validate(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+
+        var reservedWorld = SupportRequestLifecycle.Reserve(
+            state,
+            requestId,
+            missionId,
+            acceptedAt);
+
+        var request = FindRequest(reservedWorld, requestId);
+        var mission = AirOperationMission.Accept(
+            request,
+            missionId,
+            acceptedAt);
+
+        return new AcceptedAirOperationMission(
+            reservedWorld,
+            mission);
+    }
+
     public AirSupportMissionTelemetryResult UpdateMission(
         AirSupportMission mission,
         AirSupportMissionProfile profile,
@@ -93,6 +128,19 @@ public sealed class ConflictOperationsService
         AircraftTelemetrySnapshot telemetry,
         DateTimeOffset now) =>
         AreaSupportMissionEngine.Update(mission, profile, telemetry, now);
+
+    public AirOperationMissionTelemetryResult UpdateAirOperationMission(
+        ConflictWorldState state,
+        AirOperationMission mission,
+        AirOperationMissionProfile profile,
+        AircraftTelemetrySnapshot telemetry,
+        DateTimeOffset now) =>
+        AirOperationMissionEngine.Update(
+            state,
+            mission,
+            profile,
+            telemetry,
+            now);
 
     public ConflictActionExecution ExecuteAuthorizedAction(
         ConflictWorldState state,
@@ -139,6 +187,54 @@ public sealed class ConflictOperationsService
             resolution.State,
             advancedMission,
             resolution.Result);
+    }
+
+    public InterceptActionExecution ExecuteInterceptAction(
+        ConflictWorldState state,
+        AirOperationMission mission,
+        string actionId,
+        InterceptActionKind kind,
+        double geometryQuality,
+        DateTimeOffset executedAt)
+    {
+        EnsureRequestReservedByMission(
+            state,
+            mission.SupportRequestId,
+            mission.MissionId);
+
+        var result = InterceptActionResolver.Apply(
+            state,
+            mission,
+            actionId,
+            kind,
+            geometryQuality);
+
+        var advancedMission = result.Applied
+            ? AirOperationMissionEngine.MarkActionApplied(
+                mission,
+                executedAt)
+            : mission;
+
+        return new InterceptActionExecution(
+            result.State,
+            advancedMission,
+            result);
+    }
+
+    public ConflictWorldState CompleteAirOperationMission(
+        ConflictWorldState state,
+        AirOperationMission mission,
+        DateTimeOffset completedAt)
+    {
+        if (mission.Stage != AirOperationMissionStage.ObjectiveComplete)
+            throw new InvalidOperationException("Air-operation mission objective is not complete.");
+
+        return SupportRequestLifecycle.Close(
+            state,
+            mission.SupportRequestId,
+            mission.MissionId,
+            SupportRequestStatus.Completed,
+            completedAt);
     }
 
     public ConflictWorldState CompleteCombatSupportMission(

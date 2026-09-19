@@ -16,6 +16,14 @@ public enum GroundUnitRole
     Command
 }
 
+public enum AirUnitRole
+{
+    Fighter,
+    Transport,
+    Surveillance,
+    Tanker
+}
+
 public enum AirThreatType
 {
     AirDefense,
@@ -30,6 +38,7 @@ public enum SupportRequestType
     Logistics,
     Patrol,
     Escort,
+    Intercept,
     Suppression
 }
 
@@ -136,6 +145,48 @@ public sealed record GroundUnitState(
     {
         if (!double.IsFinite(value) || value is < 0 or > 1)
             throw new ArgumentOutOfRangeException(name);
+    }
+}
+
+public sealed record SimulatedAirUnitState(
+    Guid UnitId,
+    ConflictSide Side,
+    AirUnitRole Role,
+    GeoPoint Position,
+    GeoPoint Destination,
+    double AltitudeFeet,
+    double GroundSpeedKnots,
+    double Strength,
+    double Readiness,
+    bool Active)
+{
+    public bool IsOperational =>
+        Active && Strength > 0.01 && Readiness > 0.01;
+
+    public void Validate()
+    {
+        if (UnitId == Guid.Empty)
+            throw new ArgumentException("Air-unit ID is required.", nameof(UnitId));
+
+        if (Side == ConflictSide.Neutral && Role == AirUnitRole.Fighter)
+            throw new ArgumentException("Neutral fighter units are not supported by the conflict model.");
+
+        ArgumentNullException.ThrowIfNull(Position);
+        ArgumentNullException.ThrowIfNull(Destination);
+        Position.Validate();
+        Destination.Validate();
+
+        if (!double.IsFinite(AltitudeFeet) || AltitudeFeet < 0)
+            throw new ArgumentOutOfRangeException(nameof(AltitudeFeet));
+
+        if (!double.IsFinite(GroundSpeedKnots) || GroundSpeedKnots < 0)
+            throw new ArgumentOutOfRangeException(nameof(GroundSpeedKnots));
+
+        if (!double.IsFinite(Strength) || Strength is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(Strength));
+
+        if (!double.IsFinite(Readiness) || Readiness is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(Readiness));
     }
 }
 
@@ -338,6 +389,7 @@ public sealed record ConflictWorldState(
     long Tick,
     DateTimeOffset UpdatedAt,
     GroundUnitState[] Units,
+    SimulatedAirUnitState[] AirUnits,
     ConflictSectorState[] Sectors,
     ThreatState[] Threats,
     AirSupportRequest[] SupportRequests,
@@ -349,7 +401,8 @@ public sealed record ConflictWorldState(
         DateTimeOffset updatedAt,
         IEnumerable<GroundUnitState> units,
         IEnumerable<ConflictSectorState> sectors,
-        IEnumerable<ThreatState>? threats = null)
+        IEnumerable<ThreatState>? threats = null,
+        IEnumerable<SimulatedAirUnitState>? airUnits = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(theaterId);
         ArgumentNullException.ThrowIfNull(units);
@@ -362,6 +415,7 @@ public sealed record ConflictWorldState(
             Tick: 0,
             updatedAt,
             units.ToArray(),
+            airUnits?.ToArray() ?? Array.Empty<SimulatedAirUnitState>(),
             sectors.ToArray(),
             threats?.ToArray() ?? Array.Empty<ThreatState>(),
             Array.Empty<AirSupportRequest>(),
@@ -474,6 +528,7 @@ public static class ConflictValidation
 
         ArgumentException.ThrowIfNullOrWhiteSpace(state.TheaterId);
         ArgumentNullException.ThrowIfNull(state.Units);
+        ArgumentNullException.ThrowIfNull(state.AirUnits);
         ArgumentNullException.ThrowIfNull(state.Sectors);
         ArgumentNullException.ThrowIfNull(state.Threats);
         ArgumentNullException.ThrowIfNull(state.SupportRequests);
@@ -481,6 +536,9 @@ public static class ConflictValidation
 
         foreach (var unit in state.Units)
             unit.Validate();
+
+        foreach (var airUnit in state.AirUnits)
+            airUnit.Validate();
 
         foreach (var sector in state.Sectors)
             sector.Validate();
@@ -493,6 +551,17 @@ public static class ConflictValidation
 
         if (state.Units.Select(unit => unit.UnitId).Distinct().Count() != state.Units.Length)
             throw new ArgumentException("Duplicate ground-unit IDs.");
+
+        if (state.AirUnits.Select(unit => unit.UnitId).Distinct().Count() != state.AirUnits.Length)
+            throw new ArgumentException("Duplicate simulated-air-unit IDs.");
+
+        var allUnitIds = state.Units
+            .Select(unit => unit.UnitId)
+            .Concat(state.AirUnits.Select(unit => unit.UnitId))
+            .ToArray();
+
+        if (allUnitIds.Distinct().Count() != allUnitIds.Length)
+            throw new ArgumentException("Ground and air units must use unique IDs.");
 
         if (state.Sectors.Select(sector => sector.SectorId).Distinct(StringComparer.Ordinal).Count() != state.Sectors.Length)
             throw new ArgumentException("Duplicate conflict-sector IDs.");
@@ -538,6 +607,51 @@ public static class ConflictGeometry
 
         var angle = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(Math.Max(0, 1 - a)));
         return EarthRadiusNauticalMiles * angle;
+    }
+
+    public static GeoPoint MoveToward(
+        GeoPoint from,
+        GeoPoint to,
+        double distanceNauticalMiles)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+        from.Validate();
+        to.Validate();
+
+        if (!double.IsFinite(distanceNauticalMiles) || distanceNauticalMiles < 0)
+            throw new ArgumentOutOfRangeException(nameof(distanceNauticalMiles));
+
+        var totalDistance = DistanceNauticalMiles(from, to);
+        if (totalDistance <= 0.000001 || distanceNauticalMiles >= totalDistance)
+            return to;
+
+        var lat1 = DegreesToRadians(from.LatitudeDegrees);
+        var lon1 = DegreesToRadians(from.LongitudeDegrees);
+        var lat2 = DegreesToRadians(to.LatitudeDegrees);
+        var lon2 = DegreesToRadians(to.LongitudeDegrees);
+
+        var deltaLon = lon2 - lon1;
+        var bearing = Math.Atan2(
+            Math.Sin(deltaLon) * Math.Cos(lat2),
+            Math.Cos(lat1) * Math.Sin(lat2)
+                - Math.Sin(lat1) * Math.Cos(lat2) * Math.Cos(deltaLon));
+
+        var angularDistance = distanceNauticalMiles / EarthRadiusNauticalMiles;
+
+        var movedLat = Math.Asin(
+            Math.Sin(lat1) * Math.Cos(angularDistance)
+            + Math.Cos(lat1) * Math.Sin(angularDistance) * Math.Cos(bearing));
+
+        var movedLon = lon1 + Math.Atan2(
+            Math.Sin(bearing) * Math.Sin(angularDistance) * Math.Cos(lat1),
+            Math.Cos(angularDistance) - Math.Sin(lat1) * Math.Sin(movedLat));
+
+        movedLon = (movedLon + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+
+        return new GeoPoint(
+            movedLat * 180d / Math.PI,
+            movedLon * 180d / Math.PI);
     }
 
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180d;

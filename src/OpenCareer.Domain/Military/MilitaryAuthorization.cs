@@ -156,7 +156,8 @@ public static class MilitaryAuthorizationPolicy
             && operationType is (
                 SupportRequestType.CloseAirSupport
                 or SupportRequestType.Suppression
-                or SupportRequestType.Escort))
+                or SupportRequestType.Escort
+                or SupportRequestType.Intercept))
         {
             return Blocked(
                 requiredQualification,
@@ -185,6 +186,8 @@ public static class MilitaryAuthorizationPolicy
                 MilitaryQualification.Patrol,
             SupportRequestType.Escort =>
                 MilitaryQualification.Escort,
+            SupportRequestType.Intercept =>
+                MilitaryQualification.Intercept,
             _ => throw new ArgumentOutOfRangeException(nameof(type))
         };
 
@@ -209,6 +212,8 @@ public static class MilitaryAuthorizationPolicy
                 || aircraft.Has(AircraftCapability.Surveillance)
                 || aircraft.Has(AircraftCapability.MaritimePatrol),
             SupportRequestType.Escort =>
+                aircraft.Has(AircraftCapability.Fighter),
+            SupportRequestType.Intercept =>
                 aircraft.Has(AircraftCapability.Fighter),
             _ => false
         };

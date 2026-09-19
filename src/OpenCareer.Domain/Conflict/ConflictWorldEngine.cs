@@ -26,12 +26,16 @@ public static class ConflictWorldEngine
             .Select(unit => AdvanceUnit(unit, state.Units, hours))
             .ToArray();
 
+        var airUnits = state.AirUnits
+            .Select(unit => AdvanceAirUnit(unit, hours))
+            .ToArray();
+
         var sectors = state.Sectors
             .Select(sector => AdvanceSector(sector, units, hours))
             .ToArray();
 
         var threats = state.Threats
-            .Select(threat => SynchronizeThreat(threat, units))
+            .Select(threat => SynchronizeThreat(threat, units, airUnits))
             .ToArray();
 
         var advanced = state with
@@ -39,6 +43,7 @@ public static class ConflictWorldEngine
             Tick = checked(state.Tick + 1),
             UpdatedAt = through,
             Units = units,
+            AirUnits = airUnits,
             Sectors = sectors,
             Threats = threats,
             SupportRequests = state.SupportRequests
@@ -63,7 +68,7 @@ public static class ConflictWorldEngine
             .ToArray();
 
         var threats = state.Threats
-            .Select(threat => SynchronizeThreat(threat, units))
+            .Select(threat => SynchronizeThreat(threat, units, state.AirUnits))
             .ToArray();
 
         return state with { Units = units, Threats = threats };
@@ -145,21 +150,67 @@ public static class ConflictWorldEngine
 
     private static ThreatState SynchronizeThreat(
         ThreatState threat,
-        IReadOnlyList<GroundUnitState> units)
+        IReadOnlyList<GroundUnitState> groundUnits,
+        IReadOnlyList<SimulatedAirUnitState> airUnits)
     {
         if (threat.SourceUnitId is not Guid sourceId)
             return threat;
 
-        var source = units.FirstOrDefault(unit => unit.UnitId == sourceId);
-        if (source is null)
+        var groundSource = groundUnits.FirstOrDefault(
+            unit => unit.UnitId == sourceId);
+
+        if (groundSource is not null)
+        {
+            var severity = Math.Clamp(
+                groundSource.Strength * groundSource.Readiness,
+                0,
+                1);
+
+            return threat with
+            {
+                Center = groundSource.Position,
+                Severity = severity,
+                Active = groundSource.IsOperational && severity > 0.05
+            };
+        }
+
+        var airSource = airUnits.FirstOrDefault(
+            unit => unit.UnitId == sourceId);
+
+        if (airSource is null)
             return threat with { Active = false, Severity = 0 };
 
-        var severity = Math.Clamp(source.Strength * source.Readiness, 0, 1);
+        var airSeverity = Math.Clamp(
+            airSource.Strength * airSource.Readiness,
+            0,
+            1);
+
         return threat with
         {
-            Center = source.Position,
-            Severity = severity,
-            Active = source.IsOperational && severity > 0.05
+            Center = airSource.Position,
+            Severity = airSeverity,
+            Active = airSource.IsOperational && airSeverity > 0.05
+        };
+    }
+
+    private static SimulatedAirUnitState AdvanceAirUnit(
+        SimulatedAirUnitState unit,
+        double hours)
+    {
+        if (!unit.IsOperational
+            || unit.GroundSpeedKnots <= 0
+            || unit.Position == unit.Destination)
+        {
+            return unit;
+        }
+
+        var distance = unit.GroundSpeedKnots * hours;
+        return unit with
+        {
+            Position = ConflictGeometry.MoveToward(
+                unit.Position,
+                unit.Destination,
+                distance)
         };
     }
 
@@ -189,7 +240,7 @@ public static class SupportRequestGenerator
         var tracked = state.SupportRequests
             .Select(request => request.IsPastOpenDeadline(now)
                 ? request.Expire(now)
-                : request)
+                : SynchronizeMovingTarget(request, state.AirUnits))
             .ToList();
 
         var activeKeys = tracked
@@ -201,6 +252,7 @@ public static class SupportRequestGenerator
         AddLogisticsRequests(state, now, tracked, activeKeys);
         AddReconnaissanceRequests(state, now, tracked, activeKeys);
         AddPatrolRequests(state, now, tracked, activeKeys);
+        AddAirOperationRequests(state, now, tracked, activeKeys);
 
         return state with
         {
@@ -368,6 +420,118 @@ public static class SupportRequestGenerator
                 SupportUrgency.Routine,
                 requiredEffect: 0.10);
         }
+    }
+
+    private static void AddAirOperationRequests(
+        ConflictWorldState state,
+        DateTimeOffset now,
+        ICollection<AirSupportRequest> tracked,
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+    {
+        var friendlyAir = state.AirUnits
+            .Where(unit => unit.Side == ConflictSide.Friendly && unit.IsOperational)
+            .ToArray();
+
+        var hostileFighters = state.AirUnits
+            .Where(unit => unit.Side == ConflictSide.Hostile
+                && unit.Role == AirUnitRole.Fighter
+                && unit.IsOperational)
+            .ToArray();
+
+        foreach (var hostile in hostileFighters
+            .OrderBy(unit => unit.UnitId))
+        {
+            var nearestFriendlyAirDistance = friendlyAir.Length == 0
+                ? double.MaxValue
+                : friendlyAir.Min(unit =>
+                    ConflictGeometry.DistanceNauticalMiles(
+                        hostile.Position,
+                        unit.Position));
+
+            var requester = NearestFriendly(state, hostile.Position);
+            if (requester is null)
+                continue;
+
+            var groundDistance = ConflictGeometry.DistanceNauticalMiles(
+                requester.Position,
+                hostile.Position);
+
+            var closestFriendlyAsset =
+                Math.Min(nearestFriendlyAirDistance, groundDistance);
+
+            if (closestFriendlyAsset > 120)
+                continue;
+
+            AddRequestIfNeeded(
+                tracked,
+                activeKeys,
+                state,
+                now,
+                requester,
+                hostile.UnitId,
+                hostile.Position,
+                SupportRequestType.Intercept,
+                closestFriendlyAsset <= 45
+                    ? SupportUrgency.Priority
+                    : SupportUrgency.Routine,
+                requiredEffect: 0.20);
+        }
+
+        foreach (var package in friendlyAir
+            .Where(unit => unit.Role is (
+                AirUnitRole.Transport
+                or AirUnitRole.Surveillance
+                or AirUnitRole.Tanker))
+            .OrderBy(unit => unit.UnitId))
+        {
+            var nearestThreat = hostileFighters
+                .Select(hostile => ConflictGeometry.DistanceNauticalMiles(
+                    package.Position,
+                    hostile.Position))
+                .DefaultIfEmpty(double.MaxValue)
+                .Min();
+
+            if (nearestThreat > 100)
+                continue;
+
+            var requester = NearestFriendly(state, package.Position);
+            if (requester is null)
+                continue;
+
+            AddRequestIfNeeded(
+                tracked,
+                activeKeys,
+                state,
+                now,
+                requester,
+                package.UnitId,
+                package.Position,
+                SupportRequestType.Escort,
+                nearestThreat <= 40
+                    ? SupportUrgency.Priority
+                    : SupportUrgency.Routine,
+                requiredEffect: 0.15);
+        }
+    }
+
+    private static AirSupportRequest SynchronizeMovingTarget(
+        AirSupportRequest request,
+        IReadOnlyList<SimulatedAirUnitState> airUnits)
+    {
+        if (request.TargetUnitId is not Guid targetId
+            || request.Type is not (
+                SupportRequestType.Escort
+                or SupportRequestType.Intercept))
+        {
+            return request;
+        }
+
+        var target = airUnits.FirstOrDefault(
+            unit => unit.UnitId == targetId);
+
+        return target is null
+            ? request
+            : request with { TargetPosition = target.Position };
     }
 
     private static GroundUnitState? NearestFriendly(
