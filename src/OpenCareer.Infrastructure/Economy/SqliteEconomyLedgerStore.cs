@@ -1,5 +1,8 @@
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Economy;
+using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Finance;
 
@@ -7,8 +10,12 @@ namespace OpenCareer.Infrastructure.Economy;
 
 public sealed class SqliteEconomyLedgerStore :
     IAircraftAcquisitionStore,
-    ICashGuardedEconomyLedgerStore
+    ICashGuardedEconomyLedgerStore,
+    IJobContractStore
 {
+    private static readonly JsonSerializerOptions ContractJsonOptions =
+        new(JsonSerializerDefaults.Web);
+
     private readonly string _connectionString;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
     private readonly SemaphoreSlim _writeGate = new(1, 1);
@@ -30,6 +37,161 @@ public sealed class SqliteEconomyLedgerStore :
             Cache = SqliteCacheMode.Shared,
             Pooling = false
         }.ToString();
+    }
+
+    public async Task<PersistedJobContract?> ReadJobContractAsync(
+        Guid contractId,
+        CancellationToken cancellationToken = default)
+    {
+        if (contractId == Guid.Empty)
+            throw new ArgumentException("Contract ID is required.", nameof(contractId));
+
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        return await ReadJobContractAsync(
+            connection,
+            sqliteTransaction: null,
+            contractId,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<JobContractSaveResult> CreateJobContractAsync(
+        JobContract contract,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+        contract.Validate();
+
+        if (contract.Status != ContractStatus.Offered)
+        {
+            throw new InvalidOperationException(
+                "A new persisted job contract must begin in Offered state.");
+        }
+
+        await _writeGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+            using var sqliteTransaction = connection.BeginTransaction();
+
+            PersistedJobContract? existing =
+                await ReadJobContractAsync(
+                    connection,
+                    sqliteTransaction,
+                    contract.ContractId,
+                    cancellationToken).ConfigureAwait(false);
+
+            if (existing is not null)
+            {
+                if (existing.Contract == contract)
+                    return JobContractSaveResult.AlreadySaved;
+
+                throw new InvalidOperationException(
+                    "A different job contract already exists under this contract ID.");
+            }
+
+            await InsertJobContractAsync(
+                connection,
+                sqliteTransaction,
+                contract,
+                version: 0,
+                cancellationToken).ConfigureAwait(false);
+
+            sqliteTransaction.Commit();
+            return JobContractSaveResult.Created;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    public async Task<JobContractSaveResult> UpdateJobContractAsync(
+        JobContract contract,
+        long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+        contract.Validate();
+
+        if (expectedVersion < 0)
+            throw new ArgumentOutOfRangeException(nameof(expectedVersion));
+
+        await _writeGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+            using var sqliteTransaction = connection.BeginTransaction();
+
+            PersistedJobContract existing =
+                await ReadJobContractAsync(
+                    connection,
+                    sqliteTransaction,
+                    contract.ContractId,
+                    cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException(
+                    "Job contract does not exist.");
+
+            if (existing.Contract == contract)
+                return JobContractSaveResult.AlreadySaved;
+
+            if (existing.Version != expectedVersion)
+            {
+                throw new InvalidOperationException(
+                    "Job contract changed before this update could be saved. Re-read and retry.");
+            }
+
+            if (!EquivalentImmutableContract(
+                    existing.Contract,
+                    contract))
+            {
+                throw new InvalidOperationException(
+                    "Persisted job-contract economic or dispatch terms are immutable.");
+            }
+
+            if (!AllowedContractTransition(
+                    existing.Contract.Status,
+                    contract.Status))
+            {
+                throw new InvalidOperationException(
+                    $"Persisted job contract cannot transition from {existing.Contract.Status} to {contract.Status}.");
+            }
+
+            long nextVersion =
+                checked(existing.Version + 1);
+
+            await UpdateJobContractRowAsync(
+                connection,
+                sqliteTransaction,
+                contract,
+                nextVersion,
+                expectedVersion,
+                cancellationToken).ConfigureAwait(false);
+
+            sqliteTransaction.Commit();
+            return JobContractSaveResult.Updated;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
     }
 
     public async Task<LedgerPostResult> PostAsync(
@@ -667,6 +829,17 @@ public sealed class SqliteEconomyLedgerStore :
             await using var command = connection.CreateCommand();
             command.CommandText =
                 """
+                CREATE TABLE IF NOT EXISTS JobContracts (
+                    ContractId TEXT NOT NULL PRIMARY KEY,
+                    ContractJson TEXT NOT NULL,
+                    Status INTEGER NOT NULL,
+                    Version INTEGER NOT NULL CHECK (Version >= 0),
+                    UpdatedAtUtcTicks INTEGER NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS IX_JobContracts_Status_Updated
+                    ON JobContracts (Status, UpdatedAtUtcTicks DESC);
+
                 CREATE TABLE IF NOT EXISTS EconomyLedgerTransactions (
                     TransactionId TEXT NOT NULL PRIMARY KEY,
                     IdempotencyKey TEXT NOT NULL UNIQUE,
@@ -763,6 +936,200 @@ public sealed class SqliteEconomyLedgerStore :
             _initializationGate.Release();
         }
     }
+
+    private static async Task<PersistedJobContract?> ReadJobContractAsync(
+        SqliteConnection connection,
+        SqliteTransaction? sqliteTransaction,
+        Guid contractId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            SELECT ContractJson, Version
+            FROM JobContracts
+            WHERE ContractId = $contractId;
+            """;
+        command.Parameters.AddWithValue(
+            "$contractId",
+            contractId.ToString("D"));
+
+        await using var reader =
+            await command
+                .ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        JobContract contract =
+            JsonSerializer.Deserialize<JobContract>(
+                reader.GetString(0),
+                ContractJsonOptions)
+            ?? throw new InvalidDataException(
+                "Persisted job contract JSON was empty.");
+
+        contract.Validate();
+
+        if (contract.ContractId != contractId)
+        {
+            throw new InvalidDataException(
+                "Persisted job contract ID does not match its database key.");
+        }
+
+        var result =
+            new PersistedJobContract(
+                contract,
+                reader.GetInt64(1));
+        result.Validate();
+        return result;
+    }
+
+    private static async Task InsertJobContractAsync(
+        SqliteConnection connection,
+        SqliteTransaction sqliteTransaction,
+        JobContract contract,
+        long version,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            INSERT INTO JobContracts (
+                ContractId,
+                ContractJson,
+                Status,
+                Version,
+                UpdatedAtUtcTicks)
+            VALUES (
+                $contractId,
+                $contractJson,
+                $status,
+                $version,
+                $updatedAt);
+            """;
+        command.Parameters.AddWithValue(
+            "$contractId",
+            contract.ContractId.ToString("D"));
+        command.Parameters.AddWithValue(
+            "$contractJson",
+            JsonSerializer.Serialize(
+                contract,
+                ContractJsonOptions));
+        command.Parameters.AddWithValue(
+            "$status",
+            (int)contract.Status);
+        command.Parameters.AddWithValue(
+            "$version",
+            version);
+        command.Parameters.AddWithValue(
+            "$updatedAt",
+            ContractUpdatedAt(contract).UtcTicks);
+
+        await command
+            .ExecuteNonQueryAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task UpdateJobContractRowAsync(
+        SqliteConnection connection,
+        SqliteTransaction sqliteTransaction,
+        JobContract contract,
+        long version,
+        long expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            UPDATE JobContracts
+            SET ContractJson = $contractJson,
+                Status = $status,
+                Version = $version,
+                UpdatedAtUtcTicks = $updatedAt
+            WHERE ContractId = $contractId
+              AND Version = $expectedVersion;
+            """;
+        command.Parameters.AddWithValue(
+            "$contractJson",
+            JsonSerializer.Serialize(
+                contract,
+                ContractJsonOptions));
+        command.Parameters.AddWithValue(
+            "$status",
+            (int)contract.Status);
+        command.Parameters.AddWithValue(
+            "$version",
+            version);
+        command.Parameters.AddWithValue(
+            "$updatedAt",
+            ContractUpdatedAt(contract).UtcTicks);
+        command.Parameters.AddWithValue(
+            "$contractId",
+            contract.ContractId.ToString("D"));
+        command.Parameters.AddWithValue(
+            "$expectedVersion",
+            expectedVersion);
+
+        int affected =
+            await command
+                .ExecuteNonQueryAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (affected != 1)
+        {
+            throw new InvalidOperationException(
+                "Job contract optimistic-concurrency update failed.");
+        }
+    }
+
+    private static bool EquivalentImmutableContract(
+        JobContract left,
+        JobContract right) =>
+        left.ContractId == right.ContractId
+        && left.EmployerId == right.EmployerId
+        && left.Kind == right.Kind
+        && left.ServiceTrack == right.ServiceTrack
+        && string.Equals(left.OriginIcao, right.OriginIcao, StringComparison.Ordinal)
+        && string.Equals(left.DestinationIcao, right.DestinationIcao, StringComparison.Ordinal)
+        && left.Compensation == right.Compensation
+        && left.OfferedAt == right.OfferedAt
+        && left.MustAcceptBy == right.MustAcceptBy
+        && left.MustStartBy == right.MustStartBy
+        && left.MustCompleteBy == right.MustCompleteBy
+        && left.AircraftRequirements == right.AircraftRequirements
+        && left.ReputationReward.Equals(right.ReputationReward)
+        && left.ReputationPenalty.Equals(right.ReputationPenalty)
+        && string.Equals(left.MarketId, right.MarketId, StringComparison.Ordinal)
+        && string.Equals(left.WorldEventId, right.WorldEventId, StringComparison.Ordinal)
+        && left.GovernmentAuthorizationRequired == right.GovernmentAuthorizationRequired
+        && left.EconomicSnapshot == right.EconomicSnapshot;
+
+    private static bool AllowedContractTransition(
+        ContractStatus from,
+        ContractStatus to) =>
+        (from, to) switch
+        {
+            (ContractStatus.Offered, ContractStatus.Accepted) => true,
+            (ContractStatus.Offered, ContractStatus.Cancelled) => true,
+            (ContractStatus.Offered, ContractStatus.Expired) => true,
+            (ContractStatus.Accepted, ContractStatus.InProgress) => true,
+            (ContractStatus.Accepted, ContractStatus.Failed) => true,
+            (ContractStatus.Accepted, ContractStatus.Cancelled) => true,
+            (ContractStatus.InProgress, ContractStatus.Completed) => true,
+            (ContractStatus.InProgress, ContractStatus.Failed) => true,
+            _ => false
+        };
+
+    private static DateTimeOffset ContractUpdatedAt(
+        JobContract contract) =>
+        contract.CompletedAt
+        ?? contract.StartedAt
+        ?? contract.AcceptedAt
+        ?? contract.OfferedAt;
 
     private static async Task<ActivePlayBillingState?> ReadBillingStateAsync(
         SqliteConnection connection,
