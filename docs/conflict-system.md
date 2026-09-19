@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: first deterministic implementation on `feature/military-conflict-system`.
+Status: first deterministic implementation on `feature/military-conflict-system`, draft PR #10. The PR is mergeable. GitHub Actions currently fails before runner steps begin, so compilation/test execution remains pending rather than reported as a code failure.
 
 ## Boundary
 
@@ -36,7 +36,7 @@ OpenCareer does not assume native MSFS weapons, targets, hit events or aircraft 
 - linked air-defense threat degradation after suppression,
 - deterministic simulated threat resolution against a separate OpenCareer player-damage state,
 - no mutation of MSFS aircraft state,
-- deterministic xUnit coverage.
+- deterministic xUnit tests added for support generation, idempotency, CAS lifecycle, recon, suppression, threat exposure/damage and sector movement.
 
 ## Deliberately abstract
 

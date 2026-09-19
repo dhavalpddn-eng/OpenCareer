@@ -183,10 +183,12 @@ MSFS SDK/version-sensitive behavior is the largest uncertainty.
 
 Optional business ownership, contracts, routes, utilization, staff, margins and expansion while preserving employee-only play.
 
-### MBL-19 — Military / Government career system
-**Estimated effort: ~15–30 developer days**
+### MBL-19 — Military / Government career system — CONFLICT FOUNDATION IN PROGRESS
+**Estimated remaining effort: ~12–25 developer days**
 
-Separate qualifications, assigned aircraft, patrol/surveillance/logistics/intercept/escort and later fictionalized conflict operations.
+Draft PR #10 now provides the first deterministic conflict foundation: ground units/pressure, sector control/intelligence, linked air-defense threats, CAS + suppression support requests, CAS telemetry lifecycle, virtual precision/suppression/recon effects, simulated player threat/damage state and deterministic tests. MSFS remains flight/telemetry only.
+
+Remaining major work includes persistence/recovery, campaign/theater generation, simulated air units, dedicated recon/logistics/patrol/intercept/escort/SEAD mission families, qualifications/assigned-aircraft career progression, authoritative job/economy integration, production Military/Government UI and large-scale balance/playtesting.
 
 ### MBL-11 — Specialized mission framework
 **Estimated effort: ~20–40+ developer days for the full planned family set**

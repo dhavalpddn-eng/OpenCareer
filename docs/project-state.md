@@ -15,6 +15,7 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 - Tutorial-engine CI at `f6b1cc7`: **118/118 xUnit + 29/29 SimLab passed**, and the Windows WinUI app/live-probe build passed. Automated UI compilation does not replace local interactive/visual acceptance or live MSFS verification.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
 - UI visual language: `docs/ui-design-language.md` is canonical for palette/material/aesthetic; implementation tokens/layout remain in `docs/ui-design-system.md`, and screen behavior in `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
+- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. First conflict foundation commit `2d0b58d1`, synced with the current integration branch at merge commit `c98f5178`. See `docs/conflict-system.md`. Current Actions attempts fail before runner steps, so code/test execution remains unverified rather than failed.
 - Verify remote branch head before edits because other chats may change it.
 
 ## Fixed direction
@@ -49,6 +50,17 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Career-derived credit model, fictional lenders, affordability/debt-service checks.
 - Fictional aircraft dealers, seeded offers/discounts, stock validation and cash/finance eligibility.
 - Domain baseline remains **35 xUnit tests** plus **29 deterministic SimLab scenarios**. Connection/telemetry/decoder/ViewModel, flight-core, trace-analysis and tutorial-engine coverage bring the current total to **118 passing in CI**, plus **29/29 SimLab**.
+
+## Military/conflict implementation (parallel PR #10)
+
+- `OpenCareer.Domain/Conflict` now contains a versioned deterministic conflict state with ground units, sector control/intelligence, linked air-defense threats, battlefield pressure and support-request generation.
+- Ground pressure can create separate CAS and suppression needs instead of treating every request as the same mission.
+- `AirSupportMissionEngine` consumes normalized `AircraftTelemetrySnapshot` only; pause, slew and on-ground state cannot advance an attack objective.
+- `ConflictActionResolver` applies abstract precision/suppression/recon effects with idempotency and feeds consequences back into unit strength/readiness, sector control/intelligence and threat severity.
+- `ThreatExposureEvaluator` and `ThreatEngagementResolver` simulate player threat exposure/damage deterministically in OpenCareer state; they do not rely on or mutate MSFS combat/damage systems.
+- `OpenCareer.Application/Military/ConflictOperationsService` provides the application boundary for world advance, support acceptance, telemetry updates, authorized actions and threat resolution.
+- `ConflictSystemTests` covers deterministic support generation, duplicate protection, CAS lifecycle, suppression, recon, threat exposure/damage and sector movement. Current GitHub runner failures occur before any job step starts, so these tests are added but not yet execution-verified.
+- Still open: conflict persistence, active-request reservation/reload, simulated air units, dedicated recon/logistics/patrol/intercept/escort/SEAD mission families, military qualifications, campaign generation/balance and production UI wiring.
 
 ## Tutorial engine implementation
 
@@ -128,6 +140,7 @@ Do **not** expand finance complexity before the playable flight foundation unles
 ## Detail only when needed
 
 - `docs/development-master-checklist.md` — live master roadmap/checklist and progress graphics.
+- `docs/conflict-system.md` — deterministic military/conflict foundation, MSFS boundary and remaining conflict work.
 - `docs/ui-concept.md` — short UI direction and level policy.
 - `docs/ui-design-system.md` — canonical shell, tokens, layout/adaptive/accessibility rules.
 - `docs/ui-screen-spec.md` — target UX for all 15 current navigation destinations, including Conflict Operations.

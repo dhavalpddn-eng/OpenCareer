@@ -7,6 +7,7 @@
 **PR:** #2 draft; keep `main` stable.  
 **Master build list:** `docs/master-build-list.md` — active unfinished major systems sorted low-to-high by estimated remaining engineering effort; stable `MBL-xx` IDs remain unchanged; remove items only when fully implemented, integrated, tested and accepted.  
 **Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
+**Parallel military branch:** `feature/military-conflict-system`, draft PR #10 -> `feature/m1-simulation-core`; deterministic conflict/CAS/threat foundation is implemented there, with CI execution pending because Actions currently fails before runner steps.  
 **Last implementation commit:** `c4a52c955b080aceb73e0b1d762d90c8dbc54506` (MBL-23 settings/diagnostics; UI-thread-safe preference notifications).
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
@@ -19,6 +20,7 @@
 **Tutorial engine:** MBL-03 is in progress. The versioned coordinator, persistent progress/resume/skip, first-run WinUI overlay/navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews are implemented and CI-green. Current automated baseline is **118/118 xUnit + 29/29 SimLab**, with Windows WinUI/probe build green. MBL-03 remains until local interactive/visual acceptance and automatic future job/mission trigger integration are verified.
 
 ## Built
+**Parallel conflict foundation (PR #10):** deterministic conflict world/ground pressure/sector control, CAS + suppression support requests, CAS telemetry lifecycle, virtual precision/suppression/recon effects, threat exposure/resolution, OpenCareer-only simulated damage and deterministic tests are implemented on `feature/military-conflict-system`. Persistence, other mission families, qualifications, campaign generation and production UI remain.
 WinUI shell; resilient serialized SimConnect connect/reconnect; ~1 Hz normalized telemetry; Windows live probe; pure `FlightTrackingStateMachine`; `FlightTimeLedger`; conventional park/shutdown/servicing terminal policy; offline JSONL trace analyzer. CI at `540029c`: **104/104 xUnit + 29/29 SimLab; Windows WinUI/probe green**. Analyzer fixtures are synthetic; live validation remains open.
 
 ## Career start
@@ -47,4 +49,4 @@ First live validation fixture: **F-22 at KRME** (test only; not a career startin
 
 **Do not:** merge PR/main without explicit approval; expand finance/dealers before playable flight core; let AI/cloud become gameplay authority.
 
-Deep docs only if needed: `docs/ui-design-language.md`, `docs/development-master-checklist.md`, `docs/project-state.md`, `docs/simulator-connection.md`, `docs/flight-session-design.md`, `docs/efb-integration.md`, `docs/cargo-market-requirements.md`, `docs/ui-screen-spec.md`, `docs/development-workflow.md`.
+Deep docs only if needed: `docs/conflict-system.md`, `docs/ui-design-language.md`, `docs/development-master-checklist.md`, `docs/project-state.md`, `docs/simulator-connection.md`, `docs/flight-session-design.md`, `docs/efb-integration.md`, `docs/cargo-market-requirements.md`, `docs/ui-screen-spec.md`, `docs/development-workflow.md`.
