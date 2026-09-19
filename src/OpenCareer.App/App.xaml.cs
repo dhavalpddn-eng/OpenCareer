@@ -9,6 +9,7 @@ using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
+using OpenCareer.Domain.Flights;
 using OpenCareer.Infrastructure.Flights;
 using OpenCareer.SimConnect;
 
