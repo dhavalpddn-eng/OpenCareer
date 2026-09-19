@@ -38,6 +38,9 @@ This is the text source of truth for the visual roadmap. A green check means the
 - ✅ Exactly-once completed-contract settlement — Complete
 - ✅ Concurrent duplicate-settlement protection — Complete
 - ✅ Finances ledger screen — Complete (foundation)
+- ✅ Active-play recurring ownership-cost proration — Complete (foundation)
+- ✅ SQLite active billing-cycle progress + exactly-once recurring ledger posting — Complete (foundation)
+- ✅ Casual-session balance guards: 1–3h preferred, regular jobs capped at 6h, no offline catch-up bills — Complete (foundation)
 
 ### Economy integration still open
 
@@ -46,7 +49,8 @@ This is the text source of truth for the visual roadmap. A green check means the
 - ⬜ Career starting balance / opening transaction
 - ⬜ Aircraft cash purchase atomic ownership transfer
 - ⬜ Loan origination, amortization and repayment persistence
-- ⬜ Insurance / storage / maintenance liability settlement
+- ⬜ Ownership loan/insurance/storage schedule binding into active-play settlement and loan-state advancement
+- ⬜ Verified maintenance/service liability binding into authoritative settlement
 - ⬜ Paid personal deadhead and employer-duty deadhead settlement
 - ⬜ Company payroll and recurring operating costs
 - ⬜ Named commodity catalog / manifests / commodity market snapshots
