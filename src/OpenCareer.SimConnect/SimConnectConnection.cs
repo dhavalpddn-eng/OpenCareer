@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Telemetry;
 using OpenCareer.SimConnect.Native;
+using Polly;
+using Polly.Retry;
 
 namespace OpenCareer.SimConnect;
 
@@ -165,7 +167,9 @@ public sealed class SimConnectConnection :
     private void Run(CancellationToken token)
     {
         bool everConnected = false;
-        int failures = 0;
+        ResiliencePipeline<ConnectionAttemptResult> reconnectPipeline =
+            CreateReconnectPipeline();
+
         PublishTelemetry(null);
         PublishActors([]);
         Publish(new(SimulatorConnectionState.WaitingForSimulator));
@@ -174,72 +178,38 @@ public sealed class SimConnectConnection :
         {
             while (!token.IsCancellationRequested)
             {
-                TimeSpan delay;
-                try
-                {
-                    var issue = RunSession(
-                        token,
-                        ref everConnected,
-                        ref failures);
-                    PublishTelemetry(null);
-                    PublishActors([]);
+                ConnectionAttemptResult attempt =
+                    reconnectPipeline.Execute(
+                        cancellationToken =>
+                        {
+                            ConnectionAttemptResult result =
+                                RunConnectionAttempt(
+                                    cancellationToken,
+                                    everConnected);
+                            everConnected = result.EverConnected;
+                            return result;
+                        },
+                        token);
 
-                    if (token.IsCancellationRequested)
-                        break;
-
-                    bool incompatible =
-                        issue == SimulatorConnectionIssue.VersionMismatch;
-                    Publish(new(
-                        incompatible
-                            ? SimulatorConnectionState.Unavailable
-                            : everConnected
-                                ? SimulatorConnectionState.Reconnecting
-                                : SimulatorConnectionState.WaitingForSimulator,
-                        issue));
-                    FailQueuedActorCommands(
-                        new InvalidOperationException(
-                            "Simulator connection changed before the mission-actor command was processed."));
-
-                    failures = Math.Min(failures + 1, 31);
-                    delay = incompatible
-                        ? _options.RuntimeRetryDelay
-                        : _options.RetryDelay(failures);
-                }
-                catch (Exception ex) when (
-                    ex is DllNotFoundException
-                        or BadImageFormatException
-                        or EntryPointNotFoundException
-                        or PlatformNotSupportedException)
-                {
-                    PublishTelemetry(null);
-                    PublishActors([]);
-                    FailQueuedActorCommands(
-                        new InvalidOperationException(
-                            "SimConnect runtime is unavailable.",
-                            ex));
-
-                    var issue = ex switch
-                    {
-                        DllNotFoundException =>
-                            SimulatorConnectionIssue.RuntimeMissing,
-                        PlatformNotSupportedException =>
-                            SimulatorConnectionIssue.UnsupportedPlatform,
-                        _ => SimulatorConnectionIssue.RuntimeIncompatible
-                    };
-                    Publish(new(
-                        SimulatorConnectionState.Unavailable,
-                        issue));
-                    _logger.LogWarning(
-                        ex,
-                        "SimConnect runtime unavailable: {ExceptionType}: {Message}",
-                        ex.GetType().FullName,
-                        ex.Message);
-                    delay = _options.RuntimeRetryDelay;
-                }
-
-                if (token.WaitHandle.WaitOne(delay))
+                if (token.IsCancellationRequested)
                     break;
+
+                if (attempt.ConnectedThisSession)
+                {
+                    TimeSpan delay =
+                        attempt.Issue
+                            == SimulatorConnectionIssue.VersionMismatch
+                            ? _options.RuntimeRetryDelay
+                            : _options.InitialRetryDelay;
+
+                    if (token.WaitHandle.WaitOne(delay))
+                        break;
+                }
             }
+        }
+        catch (OperationCanceledException)
+            when (token.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
@@ -269,11 +239,136 @@ public sealed class SimConnectConnection :
         }
     }
 
+    private ResiliencePipeline<ConnectionAttemptResult>
+        CreateReconnectPipeline()
+    {
+        var retry = new RetryStrategyOptions<ConnectionAttemptResult>
+        {
+            ShouldHandle =
+                new PredicateBuilder<ConnectionAttemptResult>()
+                    .HandleResult(static result =>
+                        !result.ConnectedThisSession
+                        && result.Issue
+                            != SimulatorConnectionIssue.None)
+                    .Handle<DllNotFoundException>()
+                    .Handle<BadImageFormatException>()
+                    .Handle<EntryPointNotFoundException>()
+                    .Handle<PlatformNotSupportedException>(),
+            Delay = _options.InitialRetryDelay,
+            MaxDelay = _options.MaximumRetryDelay,
+            BackoffType = DelayBackoffType.Exponential,
+            UseJitter = true,
+            MaxRetryAttempts = int.MaxValue,
+            DelayGenerator = args =>
+            {
+                if (IsRuntimeFailure(args.Outcome.Exception)
+                    || (args.Outcome.Exception is null
+                        && args.Outcome.Result.Issue
+                            == SimulatorConnectionIssue.VersionMismatch))
+                {
+                    return new ValueTask<TimeSpan?>(
+                        _options.RuntimeRetryDelay);
+                }
+
+                return new ValueTask<TimeSpan?>((TimeSpan?)null);
+            }
+        };
+
+        return new ResiliencePipelineBuilder<ConnectionAttemptResult>()
+            .AddRetry(retry)
+            .Build();
+    }
+
+    private ConnectionAttemptResult RunConnectionAttempt(
+        CancellationToken token,
+        bool everConnected)
+    {
+        try
+        {
+            SimulatorConnectionIssue issue =
+                RunSession(
+                    token,
+                    out bool connectedThisSession);
+
+            bool hasEverConnected =
+                everConnected || connectedThisSession;
+
+            PublishTelemetry(null);
+            PublishActors([]);
+
+            if (!token.IsCancellationRequested)
+            {
+                bool incompatible =
+                    issue == SimulatorConnectionIssue.VersionMismatch;
+
+                Publish(new(
+                    incompatible
+                        ? SimulatorConnectionState.Unavailable
+                        : hasEverConnected
+                            ? SimulatorConnectionState.Reconnecting
+                            : SimulatorConnectionState.WaitingForSimulator,
+                    issue));
+
+                FailQueuedActorCommands(
+                    new InvalidOperationException(
+                        "Simulator connection changed before the mission-actor command was processed."));
+            }
+
+            return new ConnectionAttemptResult(
+                issue,
+                connectedThisSession,
+                hasEverConnected);
+        }
+        catch (Exception ex)
+            when (IsRuntimeFailure(ex))
+        {
+            PublishTelemetry(null);
+            PublishActors([]);
+            FailQueuedActorCommands(
+                new InvalidOperationException(
+                    "SimConnect runtime is unavailable.",
+                    ex));
+
+            SimulatorConnectionIssue issue =
+                MapRuntimeIssue(ex);
+
+            Publish(new(
+                SimulatorConnectionState.Unavailable,
+                issue));
+
+            _logger.LogWarning(
+                ex,
+                "SimConnect runtime unavailable: {ExceptionType}: {Message}",
+                ex.GetType().FullName,
+                ex.Message);
+
+            throw;
+        }
+    }
+
+    private static bool IsRuntimeFailure(Exception? exception) =>
+        exception is
+            DllNotFoundException
+            or BadImageFormatException
+            or EntryPointNotFoundException
+            or PlatformNotSupportedException;
+
+    private static SimulatorConnectionIssue MapRuntimeIssue(
+        Exception exception) =>
+        exception switch
+        {
+            DllNotFoundException =>
+                SimulatorConnectionIssue.RuntimeMissing,
+            PlatformNotSupportedException =>
+                SimulatorConnectionIssue.UnsupportedPlatform,
+            _ => SimulatorConnectionIssue.RuntimeIncompatible
+        };
+
     private SimulatorConnectionIssue RunSession(
         CancellationToken token,
-        ref bool everConnected,
-        ref int failures)
+        out bool connectedThisSession)
     {
+        connectedThisSession = false;
         using var notification = new AutoResetEvent(false);
         WaitHandle[] waits =
             [token.WaitHandle, notification, _missionActorSignal];
@@ -358,8 +453,7 @@ public sealed class SimConnectConnection :
                                 return SimulatorConnectionIssue.SimulatorError;
 
                             acknowledged = true;
-                            everConnected = true;
-                            failures = 0;
+                            connectedThisSession = true;
                             lastHeartbeatAt = _clock.GetTimestamp();
                             Publish(new(
                                 SimulatorConnectionState.Connected,
@@ -876,6 +970,11 @@ public sealed class SimConnectConnection :
             .ToArray();
         Volatile.Write(ref _actors, next);
     }
+
+    private readonly record struct ConnectionAttemptResult(
+        SimulatorConnectionIssue Issue,
+        bool ConnectedThisSession,
+        bool EverConnected);
 
     private abstract record MissionActorCommand
     {
