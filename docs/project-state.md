@@ -8,7 +8,7 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Latest implementation: `44cddd0804d1d09fc005794731c307a9c29f472f` (MBL-01 dynamic production Dashboard surface and routing foundation). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
+- Latest implementation: `73bb123b1fbd40b6690e50935d762375d74721c7` (MBL-12 Debrief + Logbook foundation, filters, multi-leg evidence, route projection and compile fix). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 - WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. A versioned tutorial engine is also implemented with persistent progress, first-run overlay navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews. **Live simulator/runtime validation remains open.**
 - [Windows CI run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135): WinUI x64 and live-probe Release builds passed with 0 warnings/errors; **104/104 xUnit tests passed**, including the compiled trace analyzer.
 - [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
@@ -99,15 +99,29 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - The temporary `UnavailableDashboardSnapshotSource` intentionally returns an empty snapshot. Later authoritative systems replace/wrap it without changing the Home page contract.
 - MBL-01 remains active until Jobs/Career/Company/Aircraft/Economy/World integrations and local visual/runtime acceptance are complete. Current public-repo CI passes Windows WinUI/live-probe and Linux/SimLab/unit-test validation.
 
+## Production Logbook / Debrief implementation
+
+- MBL-12 is **IN PROGRESS**.
+- `OpenCareer.Domain/Logbook` now defines frozen postflight snapshots rather than recalculating historical flights from future tuning.
+- Debriefs preserve FlightSession -> FlightLeg hierarchy, planned/actual route identity, decimated multi-leg route-track points, independent time/experience dimensions, aircraft identity, fuel, payload, assistance/route-integrity flags, landing episodes, incidents/events, evidence quality, separate safety/mission outcomes and authoritative settlement references.
+- Unknown landing/runway/fuel/payload evidence remains unavailable; the Logbook never manufactures legal-style credit or mission proof.
+- `LogbookStatisticsCalculator` aggregates committed records only.
+- `LogbookQuery` / `LogbookQueryMatcher` define search and type/outcome/date filters for the eventual SQLite implementation.
+- `LogbookCommitCoordinator` provides an exactly-once application boundary. Career entries derive idempotency from the authoritative settlement key; manual free/practice entries use the debrief id. A career entry cannot be committed while settlement is pending.
+- The top-level Logbook navigation destination is now a production WinUI page rather than a placeholder. It has committed-flight history, aggregate totals, search/filter controls, selected debrief details, flight-leg hierarchy, landing/event evidence and a projected multi-leg route-track schematic.
+- Production still uses `UnavailableLogbookSource` and therefore shows an honest empty state until MBL-07 supplies persistent FlightSession/FlightLeg storage and a real `ILogbookSource` / `ILogbookWriter`.
+- Remaining integration: completed FlightSession -> debrief mapping, SQLite persistence, career settlement -> commit, free/practice Log Flight/Discard, real persisted route/landing/fuel/payload evidence, and local visual acceptance.
+- Linux CI is green at `73bb123`. Latest Windows WinUI validation for that head is still running; earlier MBL-12 slices through `1f059ab` were Windows-green.
+
 ## CI cost controls
 
 - Feature-branch pushes no longer run the same CI that an open pull request already runs.
 - Documentation-only changes do not trigger build workflows.
-- Pull-request concurrency cancels superseded runs.
-- Linux remains the automatic low-cost validation path for relevant code changes.
-- Windows hosted validation is skipped while the PR is draft and runs when the PR is marked ready for review or is manually dispatched for a milestone check.
-- Windows paths are limited to WinUI/Application/Domain/SimConnect/live-probe/workflow inputs rather than all tests/tools.
-- At `69a1a39`, Windows correctly reported **skipped** on the draft PR. Linux still failed before any workflow step was created and produced no logs, which is consistent with an account-side Actions quota/billing/hosted-runner gate rather than repository code execution.
+- Feature-branch pushes do not duplicate open-PR validation.
+- Documentation-only updates are excluded from full code builds; a lightweight changed-files gate also prevents an open PR's cumulative diff from forcing irrelevant full validation.
+- Linux validates relevant domain/application/test changes; Windows validates WinUI/Application/Domain/SimConnect/live-probe changes.
+- Public-repository standard hosted runners are active, so the former private-repository minute gate no longer blocks jobs before step 1.
+- Relevant Windows and Linux validation run throughout the draft PR; no merge to main occurs without explicit user approval.
 
 ## Chapter 2 shell and simulator boundary
 

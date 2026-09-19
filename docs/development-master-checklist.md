@@ -299,7 +299,15 @@ Chapter status: **PLANNED, with contract/location foundations**
 - [ ] Implement mission-specific objective validation.
 - [ ] Require mission terminal conditions beyond landing.
 - [ ] Build result/debrief flow.
+  - [x] Define immutable FlightDebrief snapshot with separate flight-safety and mission outcomes.
+  - [x] Preserve multi-leg hierarchy, decimated route track, time/experience, fuel, payload, assistance, landing and event evidence.
+  - [x] Preserve evidence quality and unknown/unavailable values without fabrication.
+  - [ ] Map authoritative completed FlightSession data into the debrief automatically.
 - [ ] Add logbook commit flow.
+  - [x] Implement idempotent application-level LogbookCommitCoordinator.
+  - [x] Require final authoritative career settlement before automatic career log commit.
+  - [x] Keep manual free/practice logging separate from contract settlement.
+  - [ ] Implement persistent SQLite ILogbookWriter and wire settlement -> commit.
 - [ ] Atomically settle money once.
 - [ ] Atomically settle reputation/relationships once.
 - [ ] Atomically settle travel/location once.
@@ -556,7 +564,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement Finances screen.
 - [ ] Implement Markets screen.
 - [ ] Implement Military / Government screen.
-- [ ] Implement Logbook screen.
+- [x] Implement production Logbook / Debrief screen with committed-flight list, aggregate totals, filters, multi-leg detail, route-track rendering, landing evidence, incidents and settlement summary.
 - [ ] Implement Career screen.
 - [x] Implement production Settings screen.
 - [x] Persist versioned app preferences independently from career state.
