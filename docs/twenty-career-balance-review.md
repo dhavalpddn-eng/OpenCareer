@@ -61,9 +61,9 @@ For owner-operator scenarios, routine maintenance + repair reserve are passed th
 | 15 | Charter pilot not yet jet-qualified | 200 | 20 | 793 | Light jet; only 3/4 qualifications | **Blocked as intended** — high level/cash does not substitute for rating progression |
 | 16 | Light-jet-qualified employee | 240 | 22 | 808 | Light jet | **Balanced** — qualified employer-aircraft path remains viable without ownership grind |
 | 17 | Financed light-jet owner | 260 | 22 | 811 | Light jet at 85% | **Balanced** — payment about $9,376.83/cycle; owner net about $893/h; $40k repair shock fits $60k reserve |
-| 18 | Midsize access with repair stress | 420 | 28 | 818 | Midsize/regional at 72% | **Balanced for access, tight for ownership** — employee can fly it; projected $136.8k repair shock barely fits $140k reserve and current generic financing does not support an easy personal purchase |
-| 19 | Heavy-cargo veteran employee | 650 | 34 | 825 | Heavy transport | **Balanced for access** — qualification/employer path works; personal ownership is not required to unlock heavy-aircraft career gameplay |
-| 20 | Military fighter-qualified veteran | 350 | 25 | 807 | Military assignment aircraft | **Balanced** — military authorization/qualification path; aircraft remains excluded from civilian purchase |
+| 18 | Regional-jet airline employee | 420 | 28 | 818 | Regional jet | **Balanced** — employer-aircraft path opens airline flying without requiring ownership |
+| 19 | Narrowbody airline captain | 520 | 31 | 824 | 737/A320-class narrowbody | **Balanced** — endgame airline progression continues through employer qualifications/trust, not personal wealth |
+| 20 | Widebody endgame airline captain | 750 | 37 | 833 | Widebody airliner | **Balanced** — long-haul/widebody endgame is reachable as an airline employee without buying the airplane |
 
 ## Balance findings
 
@@ -115,3 +115,8 @@ This prevents the economy from requiring ownership of every aircraft class just 
 3. Starter financing still needs a pacing guard that preserves the 50–80h target without turning career level into an artificial license.
 4. Midsize/heavy personal ownership needs dedicated company/high-tier revenue economics. Current employee access is healthy, but generic individual financing is not intended to make an $4–8M aircraft trivial.
 5. Repair reserve should eventually be calculated from the actual owned aircraft, condition, use, incidents and component state rather than a static class table.
+
+
+## Explicit airline tiers
+
+The review now distinguishes **regional jet**, **narrowbody airliner** and **widebody airliner** instead of lumping all airline flying into a generic heavy-aircraft tier. See `docs/airline-career-path.md` for the employer-aircraft progression and company-system boundary.
