@@ -216,6 +216,30 @@ public sealed class FlightTelemetryEvidenceProcessor
         return evidence;
     }
 
+    public void RestoreContext(
+        FlightSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        Reset();
+
+        FlightTrackingState state =
+            session.Tracking.State
+                == FlightTrackingState.Suspended
+            && session.Tracking.SuspendedFrom is { } suspendedFrom
+                ? suspendedFrom
+                : session.Tracking.State;
+
+        _airborneConfirmedPreviously =
+            state
+                is FlightTrackingState.Airborne
+                    or FlightTrackingState.Approach
+                    or FlightTrackingState.LandingEpisode;
+
+        _takeoffCandidateActive =
+            state == FlightTrackingState.TakeoffRoll;
+    }
+
     public void Reset()
     {
         _previous = null;
