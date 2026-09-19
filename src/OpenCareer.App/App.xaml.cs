@@ -63,6 +63,9 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SimConnectConnection>());
 
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
+        services.AddSingleton<FlightSessionTutorialEvidenceSource>();
+        services.AddSingleton<ITutorialStepEvidenceSource>(provider =>
+            provider.GetRequiredService<FlightSessionTutorialEvidenceSource>());
         services.AddSingleton<ITutorialFeatureReadiness, CurrentTutorialFeatureReadiness>();
         services.AddSingleton<ITutorialProgressStore, JsonTutorialProgressStore>();
         services.AddSingleton<TutorialCoordinator>();
