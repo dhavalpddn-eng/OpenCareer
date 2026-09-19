@@ -123,12 +123,29 @@ BalanceLab now includes three explicit deterministic 80-hour career profiles. Th
 
 The gates require strong progression to land in 50–60 hours, ordinary in 55–70, struggling in 65–80, while preserving descending hourly earnings and the global player-net ceiling. This keeps legitimate weaker play recoverable without making optimized play skip the intended ownership window.
 
+## Ownership carrying-cost stress preview
+
+BalanceLab now also projects current light-aircraft carrying costs from existing domain values without claiming those recurring costs are settled in the playable career yet.
+
+Representative fixture:
+- standard hull insurance: **$420/month**,
+- light storage: **$250/month**,
+- cash ownership fixed carrying cost: **$670/month**,
+- representative 10-year Community Aviation Credit payment on a $40,000 principal: **$455.79/month**,
+- financed fixed carrying cost: **$1,125.79/month**,
+- normal 50-hour fallback maintenance on an 82%-condition used light aircraft with 50 ordinary landings: **$575**,
+- current minimum operating reserve used by the first-aircraft progression policy: **$4,000**.
+
+Calibration gates require the cash fixed cost to stay at or below 25% of reserve, financed fixed cost at or below 35%, normal 50-hour maintenance at or below 20%, and one financed billing cycle plus that maintenance event at or below 50%. Current values pass all four gates. Wolfram independently reproduces the representative loan payment at approximately **$455.78** before cent rounding and the maintenance quote at **$575**.
+
+This is deliberately a **projection stress test**, not the unchecked end-to-end settled-cost gate. Actual recurring loan/insurance/storage billing, fuel/service settlement and active-play accrual must exist before that stricter checklist item can be marked complete.
+
 ## Verification
 
 Verification state:
 - Existing Linux branch audit baseline: **132/132 xUnit + 29/29 SimLab + BalanceLab PASS**.
-- Latest Windows PR integration run **35411135793** at branch head `b097d79` against current `feature/m1-simulation-core`: **138/138 xUnit**, **BalanceLab PASS**, WinUI Release build passed and live-probe build passed.
-- The Windows BalanceLab result independently reproduced the progression figures above and all prior adversarial gates.
+- Latest Windows PR integration run **35411495605** at implementation head `bf81eee` against current `feature/m1-simulation-core`: **138/138 xUnit**, **BalanceLab PASS**, WinUI Release build passed and live-probe build passed.
+- The Windows BalanceLab result reproduced the progression figures above, the carrying-cost preview, and all prior adversarial gates.
 
 ## Still open before final economy certification
 
