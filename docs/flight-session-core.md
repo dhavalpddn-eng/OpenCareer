@@ -70,3 +70,30 @@ Do not claim green CI for this branch until Actions actually executes the build/
 4. Calibrate takeoff/landing thresholds against real MSFS traces when the user's PC is available.
 
 No merge is requested yet.
+## Telemetry evidence processor added
+
+The branch now also contains `FlightTelemetryEvidenceProcessor`, `FlightEvidenceObservation` and `FlightEvidenceProcessorOptions`.
+
+It converts normalized telemetry into conservative high-confidence evidence without exposing SimConnect types to flight logic.
+
+Current derived evidence includes:
+
+- stable telemetry sample streak;
+- valid loaded-aircraft readiness supplied explicitly by the application boundary;
+- engine-start transition;
+- self-powered taxi movement;
+- takeoff candidate;
+- rejected takeoff after a prior takeoff candidate;
+- airborne confirmation using multiple samples;
+- approach evidence from low descending airborne telemetry;
+- touchdown confirmation using multiple grounded samples after confirmed airborne flight;
+- parking confirmation from low speed + parking brake;
+- operation completion only when the application says terminal conditions are satisfied and telemetry confirms parked + engines off.
+
+Pause and slew suppress operational transitions. Invalid numeric telemetry cannot become stable evidence. Backward timestamps are rejected.
+
+Bounce, touch-and-go and go-around are intentionally still owned by the more detailed landing-event layer; this first processor does not pretend that 1 Hz generic telemetry is enough to classify every landing subtype.
+
+All thresholds are explicit options and remain provisional until broader real-aircraft MSFS calibration is available.
+
+`FlightTelemetryEvidenceProcessorTests` adds synthetic coverage for stable-sample arming, engine start/taxi, airborne hysteresis, touchdown hysteresis, rejected takeoff, pause/slew suppression, parking/completion, invalid telemetry, backward timestamps and disconnect streak reset.
