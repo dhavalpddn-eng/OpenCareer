@@ -186,6 +186,40 @@ public sealed class CareerBalanceScenarioReviewTests
     }
 
     [Fact]
+    public void MarathonOnlyControlStillRespectsFirstOwnershipWindow()
+    {
+        ContractPayQuote marathonJob =
+            EmployeeQuote(
+                ContractKind.Ferry,
+                hours: 15,
+                distanceNm: 1_500);
+
+        decimal cash = 0m;
+        double hours = 0;
+        double? acquisitionHour = null;
+
+        for (var i = 0; i < 4; i++)
+        {
+            cash += marathonJob.PilotCashCompensation;
+            hours += 15;
+
+            if (acquisitionHour is null
+                && cash >= CareerProgressionPolicy.Default.MinimumAcquisitionCash)
+            {
+                acquisitionHour = hours;
+            }
+        }
+
+        Assert.Equal(60d, hours);
+        Assert.Equal(72_198.12m, cash);
+        Assert.Equal(60d, acquisitionHour);
+        Assert.InRange(
+            acquisitionHour!.Value,
+            CareerProgressionPolicy.Default.TargetOwnershipHoursLow,
+            CareerProgressionPolicy.Default.TargetOwnershipHoursHigh);
+    }
+
+    [Fact]
     public void AllShortSessionControlAlsoReachesCashOwnershipInsideTargetWindow()
     {
         ContractPayQuote twoHourJob =
