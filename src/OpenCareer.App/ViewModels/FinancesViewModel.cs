@@ -23,6 +23,10 @@ public sealed class FinancesViewModel(
         logger ?? throw new ArgumentNullException(nameof(logger));
 
     private string _cashBalanceText = "$0.00";
+    private string _incomeText = "$0.00";
+    private string _operatingCostsText = "$0.00";
+    private string _aircraftAssetsText = "$0.00";
+    private string _loanBalanceText = "$0.00";
     private string _statusText = "Ledger ready";
     private string _statusDetail =
         "No settled transactions have been posted yet.";
@@ -33,6 +37,10 @@ public sealed class FinancesViewModel(
     public ObservableCollection<FinanceTransactionRow> RecentTransactions { get; } = [];
 
     public string CashBalanceText => _cashBalanceText;
+    public string IncomeText => _incomeText;
+    public string OperatingCostsText => _operatingCostsText;
+    public string AircraftAssetsText => _aircraftAssetsText;
+    public string LoanBalanceText => _loanBalanceText;
     public string StatusText => _statusText;
     public string StatusDetail => _statusDetail;
     public bool IsRefreshing => _isRefreshing;
@@ -51,6 +59,10 @@ public sealed class FinancesViewModel(
                 await _ledgerStore
                     .ReadCashBalanceAsync(cancellationToken);
 
+            IReadOnlyList<LedgerAccountBalance> accountBalances =
+                await _ledgerStore
+                    .ReadAccountBalancesAsync(cancellationToken);
+
             IReadOnlyList<EconomyLedgerTransaction> recent =
                 await _ledgerStore
                     .ReadRecentAsync(
@@ -61,6 +73,47 @@ public sealed class FinancesViewModel(
                 ref _cashBalanceText,
                 cash.ToString("C2", CurrencyCulture),
                 nameof(CashBalanceText));
+
+            decimal income = NetCredit(
+                accountBalances,
+                LedgerAccountCode.ContractRevenue,
+                LedgerAccountCode.WageIncome,
+                LedgerAccountCode.ReimbursementIncome);
+
+            decimal operatingCosts = NetDebit(
+                accountBalances,
+                LedgerAccountCode.FuelExpense,
+                LedgerAccountCode.MaintenanceExpense,
+                LedgerAccountCode.AirportFeesExpense,
+                LedgerAccountCode.OtherOperatingExpense,
+                LedgerAccountCode.InsuranceExpense,
+                LedgerAccountCode.InterestExpense,
+                LedgerAccountCode.StorageExpense);
+
+            decimal aircraftAssets = NetDebit(
+                accountBalances,
+                LedgerAccountCode.AircraftAsset);
+
+            decimal loanBalance = NetCredit(
+                accountBalances,
+                LedgerAccountCode.LoanPayable);
+
+            SetField(
+                ref _incomeText,
+                income.ToString("C2", CurrencyCulture),
+                nameof(IncomeText));
+            SetField(
+                ref _operatingCostsText,
+                operatingCosts.ToString("C2", CurrencyCulture),
+                nameof(OperatingCostsText));
+            SetField(
+                ref _aircraftAssetsText,
+                aircraftAssets.ToString("C2", CurrencyCulture),
+                nameof(AircraftAssetsText));
+            SetField(
+                ref _loanBalanceText,
+                loanBalance.ToString("C2", CurrencyCulture),
+                nameof(LoanBalanceText));
 
             RecentTransactions.Clear();
             foreach (EconomyLedgerTransaction transaction in recent)
@@ -116,6 +169,20 @@ public sealed class FinancesViewModel(
             SetRefreshing(false);
         }
     }
+
+    private static decimal NetDebit(
+        IReadOnlyList<LedgerAccountBalance> balances,
+        params LedgerAccountCode[] accounts) =>
+        balances
+            .Where(balance => accounts.Contains(balance.Account))
+            .Sum(balance => balance.NetDebit);
+
+    private static decimal NetCredit(
+        IReadOnlyList<LedgerAccountBalance> balances,
+        params LedgerAccountCode[] accounts) =>
+        balances
+            .Where(balance => accounts.Contains(balance.Account))
+            .Sum(balance => balance.NetCredit);
 
     private void SetRefreshing(bool value)
     {

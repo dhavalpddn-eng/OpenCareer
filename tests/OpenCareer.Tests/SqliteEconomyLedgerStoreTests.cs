@@ -286,6 +286,84 @@ public sealed class SqliteEconomyLedgerStoreTests : IDisposable
             await store.ReadRecentAsync(10));
     }
 
+    [Fact]
+    public async Task AccountBalancesExposeAssetsDebtIncomeAndExpenses()
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+
+        var store =
+            new SqliteEconomyLedgerStore(databasePath);
+
+        var transaction =
+            new EconomyLedgerTransaction(
+                Guid.NewGuid(),
+                "account-summary",
+                new DateTimeOffset(
+                    2026,
+                    9,
+                    19,
+                    12,
+                    0,
+                    0,
+                    TimeSpan.Zero),
+                "Account summary fixture",
+                "Test",
+                "summary",
+                [
+                    LedgerPosting.DebitTo(
+                        LedgerAccountCode.Cash,
+                        900m,
+                        "Cash"),
+                    LedgerPosting.DebitTo(
+                        LedgerAccountCode.FuelExpense,
+                        100m,
+                        "Fuel"),
+                    LedgerPosting.DebitTo(
+                        LedgerAccountCode.AircraftAsset,
+                        1_000m,
+                        "Aircraft"),
+                    LedgerPosting.CreditTo(
+                        LedgerAccountCode.WageIncome,
+                        1_000m,
+                        "Wages"),
+                    LedgerPosting.CreditTo(
+                        LedgerAccountCode.LoanPayable,
+                        1_000m,
+                        "Loan")
+                ]);
+
+        await store.PostAsync(transaction);
+
+        IReadOnlyList<LedgerAccountBalance> balances =
+            await store.ReadAccountBalancesAsync();
+
+        Assert.Equal(
+            1_000m,
+            balances.Single(
+                balance =>
+                    balance.Account == LedgerAccountCode.WageIncome)
+                .NetCredit);
+        Assert.Equal(
+            100m,
+            balances.Single(
+                balance =>
+                    balance.Account == LedgerAccountCode.FuelExpense)
+                .NetDebit);
+        Assert.Equal(
+            1_000m,
+            balances.Single(
+                balance =>
+                    balance.Account == LedgerAccountCode.AircraftAsset)
+                .NetDebit);
+        Assert.Equal(
+            1_000m,
+            balances.Single(
+                balance =>
+                    balance.Account == LedgerAccountCode.LoanPayable)
+                .NetCredit);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))

@@ -69,6 +69,78 @@
                 </Border>
             </Grid>
 
+            <Grid ColumnSpacing="12" RowSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Background="{StaticResource AppSurfaceAltBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="16">
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="SETTLED INCOME"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   FontSize="11" />
+                        <TextBlock Text="{Binding IncomeText}"
+                                   FontSize="20"
+                                   FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Background="{StaticResource AppSurfaceAltBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="16">
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="OPERATING COSTS"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   FontSize="11" />
+                        <TextBlock Text="{Binding OperatingCostsText}"
+                                   FontSize="20"
+                                   FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2"
+                        Background="{StaticResource AppSurfaceAltBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="16">
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="AIRCRAFT ASSETS"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   FontSize="11" />
+                        <TextBlock Text="{Binding AircraftAssetsText}"
+                                   FontSize="20"
+                                   FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="3"
+                        Background="{StaticResource AppSurfaceAltBrush}"
+                        BorderBrush="{StaticResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="16">
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="LOAN BALANCE"
+                                   Foreground="{StaticResource AppMutedTextBrush}"
+                                   FontSize="11" />
+                        <TextBlock Text="{Binding LoanBalanceText}"
+                                   FontSize="20"
+                                   FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
             <Border
                 Background="{StaticResource AppSurfaceBrush}"
                 BorderBrush="{StaticResource AppBorderBrush}"

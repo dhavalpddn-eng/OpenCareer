@@ -395,6 +395,46 @@ public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore, IA
         return FromCents(cents);
     }
 
+    public async Task<IReadOnlyList<LedgerAccountBalance>> ReadAccountBalancesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        var balances = new List<LedgerAccountBalance>();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT
+                AccountCode,
+                COALESCE(SUM(DebitCents), 0),
+                COALESCE(SUM(CreditCents), 0)
+            FROM EconomyLedgerPostings
+            GROUP BY AccountCode
+            ORDER BY AccountCode ASC;
+            """;
+
+        await using var reader =
+            await command
+                .ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var balance = new LedgerAccountBalance(
+                (LedgerAccountCode)reader.GetInt32(0),
+                FromCents(reader.GetInt64(1)),
+                FromCents(reader.GetInt64(2)));
+            balance.Validate();
+            balances.Add(balance);
+        }
+
+        return balances;
+    }
+
     public async Task<IReadOnlyList<EconomyLedgerTransaction>> ReadRecentAsync(
         int limit,
         CancellationToken cancellationToken = default)

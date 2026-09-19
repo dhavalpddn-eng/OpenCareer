@@ -21,6 +21,9 @@ public interface IEconomyLedgerStore
     Task<decimal> ReadCashBalanceAsync(
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<LedgerAccountBalance>> ReadAccountBalancesAsync(
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<EconomyLedgerTransaction>> ReadRecentAsync(
         int limit,
         CancellationToken cancellationToken = default);
