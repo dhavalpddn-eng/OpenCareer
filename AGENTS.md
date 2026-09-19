@@ -67,6 +67,8 @@ These current OpenCareer decisions override older generic guidance:
 
 Use **WinUI 3**, not WPF, for the production UI unless the user explicitly changes direction.
 
+The canonical visual language is `docs/ui-design-language.md`. All UI work must preserve its retro-modern aviation-operations identity: dark blue-gray riveted structure, vivid ivory information panels, realistic MSFS 2024 imagery, restrained navy/brass accents, and 1950s/60s aviation character. Do not revert to generic SaaS styling, olive/yellow wash, dominant sepia, neon, or frosted-glass UI.
+
 ### Progression
 
 Do **not** build the career around XP grinding or arbitrary pilot levels.
