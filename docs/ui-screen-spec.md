@@ -119,6 +119,8 @@ The header remains persistent across those views:
 
 As phases change, emphasis may move automatically from Checklist -> Flight -> Arrival requirements, but the user can always switch views.
 
+For the first use of a specialized mission family, Current Flight also hosts the mission-family guided tutorial. It uses the same live checklist surface but adds mission-specific instruction, recovery guidance, Controller/Keyboard bindings and auto-completion only for steps supported by trustworthy telemetry or authoritative OpenCareer mission state. Examples include banner pickup, carrier takeoff/landing, glider tow, skydiving, firefighting, survey and SAR. See `mission-tutorial-system.md`.
+
 ### Rules
 
 - No raw telemetry flood.
