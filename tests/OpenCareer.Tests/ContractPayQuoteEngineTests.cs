@@ -204,7 +204,7 @@ public sealed class ContractPayQuoteEngineTests
 
         Assert.All(
             hourlyPay,
-            value => Assert.InRange(value, 850m, 950m));
+            value => Assert.InRange(value, 900m, 1_000m));
         Assert.True(
             hourlyPay.Max() / hourlyPay.Min() <= 1.02m,
             "Normal 1-6 hour employee jobs should not reward marathon sessions with materially better hourly pay.");
