@@ -133,6 +133,50 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
             ? $"{obligations:C0} upcoming"
             : "Upcoming obligations —";
 
+    public bool HasActiveOperation => _snapshot.ActiveOperation is not null;
+
+    public string ActiveOperationTitleText =>
+        _snapshot.ActiveOperation?.Title ?? "No active operation";
+
+    public string ActiveOperationRouteText =>
+        _snapshot.ActiveOperation is { } operation
+            ? $"{operation.Origin} → {operation.Destination}"
+            : "Accept a job to create an active operation.";
+
+    public string ActiveOperationStageText =>
+        _snapshot.ActiveOperation?.Stage switch
+        {
+            ActiveOperationStage.Accepted => "ACCEPTED",
+            ActiveOperationStage.PreparationRequired => "PREPARATION REQUIRED",
+            ActiveOperationStage.ReadyToStart => "READY TO START",
+            ActiveOperationStage.InProgress => "IN PROGRESS",
+            ActiveOperationStage.PostFlight => "POST-FLIGHT",
+            ActiveOperationStage.AwaitingSettlement => "AWAITING SETTLEMENT",
+            _ => "NO ACTIVE OPERATION"
+        };
+
+    public string ActiveOperationDetailText =>
+        _snapshot.ActiveOperation?.BlockingReason ??
+        _snapshot.ActiveOperation?.Detail ??
+        "Your accepted job, checklist state and next required action will appear here.";
+
+    public string ActiveOperationChecklistText =>
+        _snapshot.ActiveOperation is null
+            ? "Checklist —"
+            : _snapshot.ActiveOperation.ChecklistRequired
+                ? "Checklist required"
+                : "No checklist requirement";
+
+    public string ActiveOperationPayText =>
+        _snapshot.ActiveOperation?.EstimatedNetPay is decimal net
+            ? $"{net:C0} est. net"
+            : _snapshot.ActiveOperation?.GrossPay is decimal gross
+                ? $"{gross:C0} gross"
+                : "Pay —";
+
+    public string ActiveOperationActionText =>
+        _snapshot.ActiveOperation?.NextActionTitle ?? "Open Jobs";
+
     public string AircraftNameText =>
         _snapshot.Aircraft?.AircraftName ?? "No career aircraft selected";
 
@@ -212,6 +256,14 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
             RequestNavigation(_primaryActionTarget);
     }
 
+    public void RequestActiveOperationAction()
+    {
+        DashboardActionTarget target =
+            _snapshot.ActiveOperation?.NextActionTarget ?? DashboardActionTarget.Jobs;
+
+        RequestNavigation(target);
+    }
+
     public void RequestNavigation(DashboardActionTarget target)
     {
         if (target == DashboardActionTarget.None)
@@ -225,6 +277,20 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     private void RefreshGuidance()
     {
         var candidates = new List<DashboardGuidanceCandidate>(_snapshot.Guidance);
+
+        if (_snapshot.ActiveOperation is { } operation &&
+            operation.NextActionTarget != DashboardActionTarget.None)
+        {
+            candidates.Add(new(
+                "active-operation",
+                operation.IsBlocked
+                    ? DashboardGuidancePriority.Critical
+                    : DashboardGuidancePriority.Important,
+                5,
+                operation.NextActionTarget,
+                operation.NextActionTitle,
+                operation.BlockingReason ?? operation.Detail));
+        }
 
         if (_snapshot.Aircraft?.ReadyForWork == false)
         {
@@ -369,6 +435,14 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
             nameof(CashText),
             nameof(TodayNetText),
             nameof(UpcomingObligationsText),
+            nameof(HasActiveOperation),
+            nameof(ActiveOperationTitleText),
+            nameof(ActiveOperationRouteText),
+            nameof(ActiveOperationStageText),
+            nameof(ActiveOperationDetailText),
+            nameof(ActiveOperationChecklistText),
+            nameof(ActiveOperationPayText),
+            nameof(ActiveOperationActionText),
             nameof(AircraftNameText),
             nameof(AircraftAccessText),
             nameof(AircraftReadinessText),
