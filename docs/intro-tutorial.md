@@ -210,19 +210,19 @@ Teach four internal areas when implemented:
 - **Mission** — objectives, passenger/cargo status and constraints.
 - **Events** — takeoff, landing, go-around, rejected takeoff, abnormal and recovery events.
 
-Every actionable checklist row shows its controller instruction inline. There is no separate keybind list.
+Every actionable checklist row shows its controller and keyboard instructions inline. There is no separate keybind list.
 
 ```text
-[ ] Parking brake — Controller: [resolved binding]
-[ ] Landing lights — Controller: [resolved binding]
-[ ] Verify fuel — Controller: No input required
-[ ] Set cockpit-only selector — Controller: Cockpit only
-[ ] Unmapped action — Controller: UNBOUND
+[ ] Parking brake — Controller: [resolved binding] | Keyboard: [resolved binding]
+[ ] Landing lights — Controller: [resolved binding] | Keyboard: [resolved binding]
+[ ] Verify fuel — Controller: No input required | Keyboard: No input required
+[ ] Set cockpit-only selector — Controller: Cockpit only | Keyboard: Cockpit only
+[ ] Unmapped action — Controller: UNBOUND | Keyboard: UNBOUND
 ```
 
 Controller status presentation:
 
-- **Resolved binding** — normal text plus the actual controller button/chord.
+- **Resolved binding** — normal text plus the actual controller or keyboard binding/chord.
 - **UNBOUND** — always visible; never blank.
 - **UNBOUND** uses warning/amber/orange treatment by default.
 - **UNBOUND — REQUIRED** uses danger/red treatment when the missing mapping blocks a required or safety-critical checklist action.
@@ -230,7 +230,7 @@ Controller status presentation:
 - **Binding unavailable** — visible warning/amber state when OpenCareer cannot reliably resolve the player's configured binding.
 - Color is never the only signal; the text label/icon remains visible.
 
-Bindings are profile/device/aircraft sensitive. OpenCareer must not invent a controller button. It shows a verified configured binding only when a supported source or explicit user mapping supplies it.
+Bindings are profile/device/aircraft sensitive. OpenCareer must not invent a controller or keyboard binding. It shows a verified configured binding only when a supported source or explicit user mapping supplies it.
 
 Persistent header teaches:
 
@@ -465,7 +465,7 @@ Teach:
 - logs/build information,
 - optional online/AI services,
 - **Show checklist every flight**,
-- **Show controller binding on each checklist step**,
+- **Show controller/keyboard bindings on each checklist step**,
 - **Restart intro tutorial**.
 
 Dangerous reset/destructive actions require separate confirmation and are never bundled into the tutorial.
