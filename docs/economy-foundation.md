@@ -114,6 +114,17 @@ A representative early employee job used in tests:
 
 Wolfram independently evaluates the current policy at approximately **$2,883.66 pilot cash pay**, or **$961.22 per flight hour**. At that unchanged illustrative rate, 65 hours would produce about **$62,479** before discretionary spending, close to the existing $64,000 cash/reserve first-aircraft tuning target. Real playtesting must still tune the distribution rather than one example.
 
+## Historical calibration reference
+
+FSEconomy is now available as a historical calibration input only.
+
+- methodology: `docs/economy-historical-calibration.md`
+- small representative aircraft sample: `data/calibration/fseconomy-aircraft-reference.csv`
+- OpenCareer progression and economy rules remain authoritative
+- no runtime API dependency is introduced
+- historical values are used to constrain relative aircraft/cost/earning relationships before simulation
+- broad scenario sweeps should follow focused calibration rather than discover baseline ratios from scratch
+
 ## Persistence behavior
 
 `SqliteEconomyLedgerStore`:
