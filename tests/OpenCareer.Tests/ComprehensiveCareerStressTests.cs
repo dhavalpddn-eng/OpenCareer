@@ -220,6 +220,31 @@ public sealed class ComprehensiveCareerStressTests
             string.Join(Environment.NewLine, issues.Take(200)));
     }
 
+    [Fact]
+    public void SixThousandFreshIndependentCareerScenariosConfirmTheTuning()
+    {
+        IReadOnlyList<ScenarioResult> results =
+            RunBatch(
+                seedOffset: 1_000_000,
+                seedsPerCombination: 20);
+
+        Assert.Equal(6_000, results.Count);
+
+        var issues =
+            results
+                .SelectMany(
+                    result => result.Issues.Select(
+                        issue =>
+                            $"{result.Path}/{result.Skill}/{result.Session}: {issue}"))
+                .ToList();
+
+        AddAggregateIssues(results, issues);
+
+        Assert.True(
+            issues.Count == 0,
+            string.Join(Environment.NewLine, issues.Take(200)));
+    }
+
     private static IReadOnlyList<ScenarioResult> RunBatch(
         int seedOffset,
         int seedsPerCombination)
