@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../OpenCareer.Application/OpenCareer.Application.csproj" />
+    <ProjectReference Include="../OpenCareer.Application/OpenCareer.Application.csproj" />\n    <ProjectReference Include="../OpenCareer.Infrastructure/OpenCareer.Infrastructure.csproj" />
     <ProjectReference Include="../OpenCareer.SimConnect/OpenCareer.SimConnect.csproj" />
     <Content Include="$(SimConnectNativePath)" Condition="'$(SimConnectNativePath)' != '' and Exists('$(SimConnectNativePath)')"
              Link="SimConnect.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
