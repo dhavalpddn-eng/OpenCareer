@@ -51,7 +51,7 @@ public sealed class JsonAppSettingsService : IAppSettingsService
         ArgumentNullException.ThrowIfNull(preferences);
 
         bool changed;
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken);
         try
         {
             changed = !Equals(_current, preferences);
@@ -63,7 +63,7 @@ public sealed class JsonAppSettingsService : IAppSettingsService
                 {
                     Preferences = preferences
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
             Volatile.Write(ref _current, preferences);
         }
