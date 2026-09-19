@@ -1,3 +1,4 @@
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Dealers;
 using OpenCareer.Domain.Finance;
 
@@ -44,7 +45,7 @@ public sealed record AircraftPurchaseAccountingRequest(
             PurchasedAt);
 
         if (!CurrentStock.CivilianSaleAuthorized
-            || !CurrentStock.Aircraft.Access.HasFlag(Aircraft.AircraftAccess.Civilian))
+            || !CurrentStock.Aircraft.Access.HasFlag(AircraftAccess.Civilian))
         {
             throw new InvalidOperationException("Aircraft is not eligible for civilian ownership.");
         }
@@ -76,9 +77,6 @@ public sealed record AircraftPurchaseAccountingRequest(
             throw new InvalidOperationException("Financed purchase requires an approved loan decision.");
         }
 
-        if (LoanId is null or { } when false)
-        {
-        }
 
         if (LoanId is null || LoanId == Guid.Empty)
             throw new ArgumentException("Financed purchase requires a loan ID.", nameof(LoanId));
