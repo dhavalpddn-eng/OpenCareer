@@ -1,7 +1,7 @@
 # Economy balance and exploit audit
 
 Status: verified deterministic core on `feature/economy-ownership`.  
-Verified implementation/CI head: `b097d79fb5161ed9d6e5e1556c32c66387aa9195`.
+Verified implementation/CI head: `325cf96650fb0bd85086fc9bc9a6a21eaa5b5a04`.
 
 This audit protects the economy foundation from obvious optimal-strategy exploits before the playable job/settlement loop exists. It does **not** certify the final game economy; fuel, recurring loan/insurance/storage execution, MRO/labor, live job supply and end-to-end settlement still need integration and playtesting.
 
@@ -125,7 +125,7 @@ The gates require strong progression to land in 50–60 hours, ordinary in 55–
 
 ## Ownership carrying-cost stress preview
 
-BalanceLab now also projects current light-aircraft carrying costs from existing domain values without claiming those recurring costs are settled in the playable career yet.
+BalanceLab now also projects current light-aircraft carrying costs from existing domain values without claiming those recurring costs are settled in the playable career yet. The projection now calls the production-domain `OwnershipRecurringCostCalculator`, which produces the next normal billing-cycle quote from active loan, insurance and storage state but performs no cash mutation or ledger posting. Defaulted/restructured loans deliberately refuse to invent normal terms.
 
 Representative fixture:
 - standard hull insurance: **$420/month**,
@@ -144,7 +144,7 @@ This is deliberately a **projection stress test**, not the unchecked end-to-end 
 
 Verification state:
 - Existing Linux branch audit baseline: **132/132 xUnit + 29/29 SimLab + BalanceLab PASS**.
-- Latest Windows PR integration run **35411495605** at implementation head `bf81eee` against current `feature/m1-simulation-core`: **138/138 xUnit**, **BalanceLab PASS**, WinUI Release build passed and live-probe build passed.
+- Latest Windows PR integration run **35411774172** at implementation head `325cf96` against current `feature/m1-simulation-core`: **140/140 xUnit**, **BalanceLab PASS**, WinUI Release build passed and live-probe build passed.
 - The Windows BalanceLab result reproduced the progression figures above, the carrying-cost preview, and all prior adversarial gates.
 
 ## Still open before final economy certification
