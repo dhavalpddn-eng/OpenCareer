@@ -245,7 +245,79 @@
                             Content="Go"
                             Style="{StaticResource OpenCareerPrimaryButtonStyle}"
                             VerticalAlignment="Center"
+                            IsEnabled="{Binding HasPrimaryAction}"
                             Click="PrimaryAction_Click" />
+                </Grid>
+            </Border>
+
+            <!-- Active accepted job / operation -->
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+                <Grid ColumnSpacing="18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Spacing="10">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="ACTIVE OPERATION"
+                                           Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                                <TextBlock Text="{Binding ActiveOperationTitleText}"
+                                           Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                                <TextBlock Text="{Binding ActiveOperationRouteText}"
+                                           Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                            </StackPanel>
+
+                            <Border Grid.Column="1"
+                                    Style="{StaticResource OpenCareerStatusBadgeStyle}"
+                                    VerticalAlignment="Top">
+                                <TextBlock Text="{Binding ActiveOperationStageText}"
+                                           Style="{StaticResource OpenCareerStatusBadgeTextStyle}" />
+                            </Border>
+                        </Grid>
+
+                        <TextBlock Text="{Binding ActiveOperationDetailText}"
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                        <Grid ColumnSpacing="18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="CHECKLIST"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                <TextBlock Text="{Binding ActiveOperationChecklistText}"
+                                           Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Text="CONTRACT"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                <TextBlock Text="{Binding ActiveOperationPayText}"
+                                           Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="2">
+                                <TextBlock Text="NEXT ACTION"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                <TextBlock Text="{Binding ActiveOperationActionText}"
+                                           Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <Button Grid.Column="1"
+                            Content="{Binding ActiveOperationActionText}"
+                            Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                            VerticalAlignment="Center"
+                            Margin="18,0,0,0"
+                            Click="ActiveOperationAction_Click" />
                 </Grid>
             </Border>
 
