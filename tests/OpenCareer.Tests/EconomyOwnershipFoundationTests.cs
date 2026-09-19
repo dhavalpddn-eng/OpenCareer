@@ -157,6 +157,82 @@ public class EconomyOwnershipFoundationTests
     }
 
     [Fact]
+    public void RecurringCostQuoteIncludesNextLoanInsuranceAndStorage()
+    {
+        var plan = AircraftPurchasePlanner.PlanFinanced(
+            "op-recurring",
+            "career-1",
+            "owned-recurring",
+            "policy-recurring",
+            "lease-recurring",
+            "loan-recurring",
+            Offer,
+            Stock,
+            StrongHistory,
+            InitialLenders.Community,
+            deposit: 20_000m,
+            termMonths: 120,
+            Storage,
+            AircraftStorageClass.Light,
+            InitialAircraftInsurance.StandardHull,
+            InitialMaintenancePrograms.LightAircraftFallback,
+            Now);
+
+        var loan = plan.CreateLoan()!;
+        var schedule = loan.BuildSchedule();
+        var quote = OwnershipRecurringCostCalculator.QuoteNextCycle(
+            plan.OwnershipId,
+            loan,
+            plan.CreateInsurancePolicy(),
+            plan.CreateStorageLease());
+
+        Assert.Equal(schedule[0].Payment, quote.LoanPayment);
+        Assert.Equal(1, quote.LoanPaymentSequence);
+        Assert.Equal(loan.NextPaymentDueAt, quote.LoanDueAt);
+        Assert.Equal(InitialAircraftInsurance.StandardHull.MonthlyPremium, quote.InsurancePremium);
+        Assert.Equal(Storage.MonthlyCost, quote.StorageCost);
+        Assert.Equal(schedule[0].Payment + Storage.MonthlyCost + InitialAircraftInsurance.StandardHull.MonthlyPremium, quote.Total);
+    }
+
+    [Fact]
+    public void RecurringCostQuoteDoesNotInventNormalTermsForDefaultedLoans()
+    {
+        var plan = AircraftPurchasePlanner.PlanFinanced(
+            "op-default-preview",
+            "career-1",
+            "owned-default-preview",
+            "policy-default-preview",
+            "lease-default-preview",
+            "loan-default-preview",
+            Offer,
+            Stock,
+            StrongHistory,
+            InitialLenders.Community,
+            deposit: 20_000m,
+            termMonths: 120,
+            Storage,
+            AircraftStorageClass.Light,
+            InitialAircraftInsurance.StandardHull,
+            InitialMaintenancePrograms.LightAircraftFallback,
+            Now);
+
+        var defaulted = plan.CreateLoan()! with { Status = AircraftLoanStatus.Defaulted };
+        Assert.Throws<InvalidOperationException>(() =>
+            OwnershipRecurringCostCalculator.QuoteNextCycle(
+                plan.OwnershipId,
+                defaulted,
+                plan.CreateInsurancePolicy(),
+                plan.CreateStorageLease()));
+
+        Assert.Throws<ArgumentException>(() =>
+            OwnershipRecurringCostCalculator.QuoteNextCycle(
+                "different-ownership",
+                null,
+                plan.CreateInsurancePolicy(),
+                plan.CreateStorageLease()));
+    }
+
+    [Fact]
     public void InsuranceRedoIsAtMostOncePerRealCalendarDayAndDoesNotCarryOver()
     {
         var policy = new AircraftInsurancePolicy(
