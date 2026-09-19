@@ -218,6 +218,65 @@ public sealed class LoanBalanceReviewTests
     }
 
     [Fact]
+    public void MaximumSupportedRateAndTermRemainFiniteAndAmortizeToZero()
+    {
+        var stressLender = new LenderProfile(
+            "stress",
+            "Stress Fixture",
+            MinimumScore: 300,
+            BaseAnnualRate: 0.50m,
+            MaximumRiskPremium: 0m,
+            MaximumLoanToValue: 1m,
+            MaximumDebtServiceRatio: 1m,
+            MaximumPrincipal: 1_000_000m,
+            MaximumTermMonths: 240);
+
+        CareerCreditHistory history =
+            CasualQualifiedHistory with
+            {
+                VerifiedMonthlyNetIncome = 1_000_000m,
+                ExistingMonthlyDebtPayments = 0m,
+                AvailableCash = 10_000m,
+                RequiredOperatingReserve = 0m
+            };
+
+        LoanDecision decision =
+            CareerCredit.Evaluate(
+                history,
+                stressLender,
+                new AircraftLoanRequest(
+                    Price: 100_001m,
+                    AppraisedValue: 100_001m,
+                    Deposit: 1m,
+                    TermMonths: 240,
+                    CivilianOwnershipEligible: true));
+
+        Assert.True(decision.Approved);
+        Assert.Equal(0.50m, decision.AnnualRate);
+        Assert.True(decision.MonthlyPayment > 0m);
+
+        var agreement = new AircraftLoanAgreement(
+            Guid.NewGuid(),
+            "owned-stress",
+            stressLender.Id,
+            decision.RequestedPrincipal,
+            decision.AnnualRate,
+            240,
+            decision.MonthlyPayment,
+            DateTimeOffset.UnixEpoch);
+
+        AircraftLoanAmortizationSchedule schedule =
+            AircraftLoanAmortization.Build(agreement);
+
+        Assert.Equal(240, schedule.Installments.Count);
+        Assert.Equal(100_000m, schedule.TotalPrincipal);
+        Assert.Equal(0m, schedule.Installments[^1].ClosingPrincipal);
+        Assert.All(
+            schedule.Installments,
+            installment => Assert.True(installment.Payment > 0m));
+    }
+
+    [Fact]
     public void AffordabilityInputMustBeNormalizedBeforeCallingCreditEngine()
     {
         AircraftLoanRequest request =
