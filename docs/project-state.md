@@ -2,17 +2,17 @@
 
 **Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
 
-Updated: 2026-09-18. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
+Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
 - Latest implementation: `540029c378a507f729dfe451db642eca4065ae65` (offline live-probe trace analysis). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
-- WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. **Live simulator/runtime validation remains open.**
+- WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. A versioned tutorial engine is also implemented with persistent progress, first-run overlay navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews. **Live simulator/runtime validation remains open.**
 - [Windows CI run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135): WinUI x64 and live-probe Release builds passed with 0 warnings/errors; **104/104 xUnit tests passed**, including the compiled trace analyzer.
 - [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
-- Both CI runs tested `540029c`; probe/analyzer compilation and synthetic trace tests do **not** imply live MSFS verification.
+- Tutorial-engine CI at `f6b1cc7`: **118/118 xUnit + 29/29 SimLab passed**, and the Windows WinUI app/live-probe build passed. Automated UI compilation does not replace local interactive/visual acceptance or live MSFS verification.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
 - UI visual language: `docs/ui-design-language.md` is canonical for palette/material/aesthetic; implementation tokens/layout remain in `docs/ui-design-system.md`, and screen behavior in `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
 - Verify remote branch head before edits because other chats may change it.
@@ -48,7 +48,16 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Protected-absence policy, session preferences, bankruptcy stages and bounded manual-ground reward quotes.
 - Career-derived credit model, fictional lenders, affordability/debt-service checks.
 - Fictional aircraft dealers, seeded offers/discounts, stock validation and cash/finance eligibility.
-- Domain baseline remains **35 xUnit tests** plus **29 deterministic SimLab scenarios**. Connection/telemetry/decoder/ViewModel, flight-core and trace-analysis tests bring the current total to **104 passing locally and in Windows/Linux CI**.
+- Domain baseline remains **35 xUnit tests** plus **29 deterministic SimLab scenarios**. Connection/telemetry/decoder/ViewModel, flight-core, trace-analysis and tutorial-engine coverage bring the current total to **118 passing in CI**, plus **29/29 SimLab**.
+
+## Tutorial engine implementation
+
+- `OpenCareer.Application/Tutorials` now contains generic versioned tutorial models, catalog/readiness/progress boundaries and a coordinator.
+- The application auto-launches the app-intro tutorial for a new/current tutorial version and persists resume, completed and skipped state outside authoritative career state.
+- The WinUI shell renders Back / Next / Finish / Skip and navigates to the relevant top-level destination while preserving explicit **Coming Later** readiness for unfinished features.
+- Settings can replay the app intro and preview the first-job, banner-tow, carrier-takeoff and carrier-landing walkthroughs.
+- Specialized previews are instructional only today; automatic first-use mission triggering and telemetry-driven mission-step completion wait on Jobs, specialized mission logic, live checklist and input-binding systems.
+- Local interactive/visual acceptance of the tutorial overlay is still open, so MBL-03 remains active.
 
 ## Chapter 2 shell and simulator boundary
 
