@@ -1,7 +1,7 @@
 # Economy balance and exploit audit
 
 Status: verified deterministic core on `feature/economy-ownership`.  
-Verified code head: `55708c7f20897fde71551a871abd2ed91240eab9`.
+Verified implementation/CI head: `b097d79fb5161ed9d6e5e1556c32c66387aa9195`.
 
 This audit protects the economy foundation from obvious optimal-strategy exploits before the playable job/settlement loop exists. It does **not** certify the final game economy; fuel, recurring loan/insurance/storage execution, MRO/labor, live job supply and end-to-end settlement still need integration and playtesting.
 
@@ -100,7 +100,7 @@ Purchased condition creates an irreducible baseline wear floor. Routine service 
 
 ## Adversarial BalanceLab
 
-`tools/OpenCareer.BalanceLab` now runs in Linux CI and fails the build if core economy guardrails break.
+`tools/OpenCareer.BalanceLab` now runs in both Linux and Windows CI and fails the build if core economy guardrails break.
 
 Current results:
 - adversarial max-context family rotation: **$73,600 / 64 h = $1,150/h**,
@@ -113,15 +113,22 @@ Current results:
 
 The synthetic Monte Carlo distribution is a stress fixture, not a claim about final live job availability.
 
+## Strong / ordinary / struggling progression calibration
+
+BalanceLab now includes three explicit deterministic 80-hour career profiles. They are calibration fixtures for payout/repetition behavior, not claims about final live job availability.
+
+- **Strong:** diversified higher-demand work, **$71,676.06 at 64 h = $1,119.94/h**, first current cash-ownership threshold at **hour 53**.
+- **Ordinary:** representative mixed work with moderate context/repetition, **$63,774.70 at 64 h = $996.48/h**, ownership at **hour 59**.
+- **Struggling:** lower-demand work with more repeated families/routes/markets, **$54,214.14 at 64 h = $847.10/h**, ownership at **hour 70**.
+
+The gates require strong progression to land in 50–60 hours, ordinary in 55–70, struggling in 65–80, while preserving descending hourly earnings and the global player-net ceiling. This keeps legitimate weaker play recoverable without making optimized play skip the intended ownership window.
+
 ## Verification
 
-Final audit head passed:
-- **132/132 xUnit** on Linux,
-- **132/132 xUnit** on Windows,
-- **29/29 SimLab** deterministic scenarios,
-- **BalanceLab PASS**,
-- Windows WinUI Release build,
-- Windows live-probe build.
+Verification state:
+- Existing Linux branch audit baseline: **132/132 xUnit + 29/29 SimLab + BalanceLab PASS**.
+- Latest Windows PR integration run **35411135793** at branch head `b097d79` against current `feature/m1-simulation-core`: **138/138 xUnit**, **BalanceLab PASS**, WinUI Release build passed and live-probe build passed.
+- The Windows BalanceLab result independently reproduced the progression figures above and all prior adversarial gates.
 
 ## Still open before final economy certification
 
