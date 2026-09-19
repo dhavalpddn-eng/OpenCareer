@@ -1,46 +1,78 @@
+using System.ComponentModel;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Dispatching;
 using OpenCareer.App.ViewModels;
 using OpenCareer.App.Views;
+using OpenCareer.Application.Tutorials;
 
 namespace OpenCareer.App;
 
 public sealed partial class MainWindow : Window
 {
     private readonly DispatcherQueueTimer _statusTimer;
+    private bool _tutorialInitialized;
 
-    public MainWindow(ShellViewModel viewModel)
+    public MainWindow(ShellViewModel viewModel, TutorialViewModel tutorial)
     {
         ViewModel = viewModel;
+        Tutorial = tutorial;
         InitializeComponent();
 
         NavView.SelectedItem = DashboardItem;
         ContentFrame.Navigate(typeof(DashboardPage), ViewModel);
+
+        Tutorial.PropertyChanged += OnTutorialPropertyChanged;
+        Tutorial.NavigationRequested += OnTutorialNavigationRequested;
+        Activated += OnWindowActivated;
+
         _statusTimer = DispatcherQueue.CreateTimer();
         _statusTimer.Interval = TimeSpan.FromMilliseconds(250);
         _statusTimer.Tick += OnStatusTimerTick;
         _statusTimer.Start();
+
         Closed += (_, _) => StopStatusUpdates();
     }
 
     public ShellViewModel ViewModel { get; }
+    public TutorialViewModel Tutorial { get; }
 
     public void StopStatusUpdates()
     {
         _statusTimer.Stop();
         _statusTimer.Tick -= OnStatusTimerTick;
+        Tutorial.PropertyChanged -= OnTutorialPropertyChanged;
+        Tutorial.NavigationRequested -= OnTutorialNavigationRequested;
+        Activated -= OnWindowActivated;
     }
 
-    private void OnStatusTimerTick(DispatcherQueueTimer sender, object args) => ViewModel.RefreshConnectionStatus();
+    private async void OnWindowActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (_tutorialInitialized)
+            return;
 
-    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+        _tutorialInitialized = true;
+        await Tutorial.InitializeAsync();
+        UpdateTutorialLayer();
+    }
+
+    private void OnStatusTimerTick(DispatcherQueueTimer sender, object args) =>
+        ViewModel.RefreshConnectionStatus();
+
+    private void NavView_SelectionChanged(
+        NavigationView sender,
+        NavigationViewSelectionChangedEventArgs args)
     {
         if (args.SelectedItemContainer?.Tag is not string tag)
-        {
             return;
-        }
 
+        NavigateToTag(
+            tag,
+            args.SelectedItemContainer.Content?.ToString() ?? tag);
+    }
+
+    private void NavigateToTag(string tag, string? displayName = null)
+    {
         switch (tag)
         {
             case "dashboard":
@@ -49,15 +81,72 @@ public sealed partial class MainWindow : Window
             case "current-flight":
                 Navigate(typeof(CurrentFlightPage), ViewModel);
                 break;
+            case "settings":
+                Navigate(typeof(SettingsPage), Tutorial);
+                break;
             default:
-                Navigate(typeof(PlaceholderPage), args.SelectedItemContainer.Content?.ToString() ?? tag);
+                Navigate(typeof(PlaceholderPage), displayName ?? tag);
                 break;
         }
     }
 
+    private void OnTutorialNavigationRequested(
+        object? sender,
+        TutorialNavigationRequestedEventArgs e)
+    {
+        NavigationViewItem? item = NavView.MenuItems
+            .OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate =>
+                string.Equals(
+                    candidate.Tag?.ToString(),
+                    e.NavigationTag,
+                    StringComparison.Ordinal));
+
+        if (item is null)
+            return;
+
+        if (!ReferenceEquals(NavView.SelectedItem, item))
+        {
+            NavView.SelectedItem = item;
+        }
+        else
+        {
+            NavigateToTag(e.NavigationTag, item.Content?.ToString());
+        }
+    }
+
+    private void OnTutorialPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TutorialViewModel.IsActive))
+            UpdateTutorialLayer();
+    }
+
+    private void UpdateTutorialLayer()
+    {
+        TutorialLayer.Visibility = Tutorial.IsActive
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        if (Tutorial.IsActive)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+                TutorialNextButton.Focus(FocusState.Programmatic));
+        }
+    }
+
+    private async void NextTutorial_Click(object sender, RoutedEventArgs e) =>
+        await Tutorial.NextAsync();
+
+    private async void BackTutorial_Click(object sender, RoutedEventArgs e) =>
+        await Tutorial.BackAsync();
+
+    private async void SkipTutorial_Click(object sender, RoutedEventArgs e) =>
+        await Tutorial.SkipAsync();
+
     private void Navigate(Type pageType, object parameter)
     {
-        if (ContentFrame.CurrentSourcePageType == pageType && pageType != typeof(PlaceholderPage))
+        if (ContentFrame.CurrentSourcePageType == pageType &&
+            pageType != typeof(PlaceholderPage))
         {
             return;
         }

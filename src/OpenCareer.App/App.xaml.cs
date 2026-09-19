@@ -2,8 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
+using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Application.Tutorials;
 using OpenCareer.SimConnect;
 
 namespace OpenCareer.App;
@@ -25,12 +27,20 @@ public partial class App : Microsoft.UI.Xaml.Application
             builder.AddDebug();
             builder.SetMinimumLevel(LogLevel.Information);
         });
+
         services.AddSingleton<SimConnectConnection>();
         services.AddSingleton<ISimulatorConnection>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ISimulatorTelemetrySource>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
+
+        services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
+        services.AddSingleton<ITutorialFeatureReadiness, CurrentTutorialFeatureReadiness>();
+        services.AddSingleton<ITutorialProgressStore, JsonTutorialProgressStore>();
+        services.AddSingleton<TutorialCoordinator>();
+
         services.AddSingleton<ShellViewModel>();
+        services.AddSingleton<TutorialViewModel>();
         services.AddSingleton<MainWindow>();
 
         _services = services.BuildServiceProvider();

@@ -73,5 +73,121 @@
 
             <Frame x:Name="ContentFrame" />
         </NavigationView>
+
+        <Grid x:Name="TutorialLayer"
+              Visibility="Collapsed"
+              Background="#B30A1118">
+            <Border Width="620"
+                    MaxHeight="760"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{StaticResource AppPaperBrush}"
+                    BorderBrush="{StaticResource AppBorderBrush}"
+                    BorderThickness="2"
+                    CornerRadius="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border Background="{StaticResource AppNavyBrush}"
+                            Padding="24,18"
+                            CornerRadius="6,6,0,0">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="OPENCAREER FLIGHT SCHOOL"
+                                           Foreground="{StaticResource AppPaperBrush}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           CharacterSpacing="120" />
+                                <TextBlock Text="{x:Bind Tutorial.CurrentTitle, Mode=OneWay}"
+                                           Foreground="White"
+                                           FontSize="26"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Bind Tutorial.StepPosition, Mode=OneWay}"
+                                       Foreground="{StaticResource AppPaperBrush}"
+                                       VerticalAlignment="Top"
+                                       FontWeight="SemiBold" />
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1"
+                                  MaxHeight="500"
+                                  VerticalScrollBarVisibility="Auto">
+                        <StackPanel Padding="26,24" Spacing="18">
+                            <TextBlock Text="{x:Bind Tutorial.CurrentBody, Mode=OneWay}"
+                                       Foreground="{StaticResource AppPaperTextBrush}"
+                                       FontSize="17"
+                                       LineHeight="26"
+                                       TextWrapping="Wrap" />
+
+                            <Border Background="{StaticResource AppPaperAltBrush}"
+                                    BorderBrush="#B6AE9F"
+                                    BorderThickness="1"
+                                    Padding="12,9"
+                                    CornerRadius="4"
+                                    HorizontalAlignment="Left">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="FEATURE STATUS"
+                                               Foreground="{StaticResource AppPaperTextBrush}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="{x:Bind Tutorial.FeatureStateText, Mode=OneWay}"
+                                               Foreground="{StaticResource AppPaperTextBrush}"
+                                               FontSize="11"
+                                               FontWeight="Bold" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="The walkthrough can explain unfinished areas, but it will never pretend a placeholder is usable."
+                                       Foreground="#5C6266"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Border Grid.Row="2"
+                            Background="{StaticResource AppPaperAltBrush}"
+                            BorderBrush="#C9C2B4"
+                            BorderThickness="0,1,0,0"
+                            Padding="20,14">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Button Content="Skip tutorial"
+                                    Click="SkipTutorial_Click" />
+
+                            <Button Grid.Column="2"
+                                    Content="Back"
+                                    IsEnabled="{x:Bind Tutorial.CanGoBack, Mode=OneWay}"
+                                    Click="BackTutorial_Click" />
+
+                            <Button x:Name="TutorialNextButton"
+                                    Grid.Column="3"
+                                    Content="{x:Bind Tutorial.NextButtonText, Mode=OneWay}"
+                                    Background="{StaticResource AppNavyBrush}"
+                                    Foreground="White"
+                                    Click="NextTutorial_Click" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

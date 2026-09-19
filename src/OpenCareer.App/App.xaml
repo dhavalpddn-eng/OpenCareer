@@ -10,7 +10,14 @@
             <SolidColorBrush x:Key="AppBorderBrush" Color="#294156" />
             <SolidColorBrush x:Key="AppAccentBrush" Color="#4EA8DE" />
             <SolidColorBrush x:Key="AppSuccessBrush" Color="#52D273" />
+            <SolidColorBrush x:Key="AppWarningBrush" Color="#D99A32" />
+            <SolidColorBrush x:Key="AppDangerBrush" Color="#C94A4A" />
             <SolidColorBrush x:Key="AppMutedTextBrush" Color="#9FB1C2" />
+
+            <SolidColorBrush x:Key="AppPaperBrush" Color="#F4F1E8" />
+            <SolidColorBrush x:Key="AppPaperAltBrush" Color="#E8E3D7" />
+            <SolidColorBrush x:Key="AppPaperTextBrush" Color="#18232C" />
+            <SolidColorBrush x:Key="AppNavyBrush" Color="#263D52" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>
