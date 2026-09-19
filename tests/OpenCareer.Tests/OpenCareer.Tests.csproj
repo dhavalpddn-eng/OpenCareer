@@ -23,6 +23,7 @@
     <ProjectReference Include="../../src/OpenCareer.Application/OpenCareer.Application.csproj" />
     <ProjectReference Include="../../src/OpenCareer.SimConnect/OpenCareer.SimConnect.csproj" />
     <ProjectReference Include="../../tools/OpenCareer.TraceAnalysis/OpenCareer.TraceAnalysis.csproj" />
+    <ProjectReference Include="../../src/OpenCareer.Infrastructure/OpenCareer.Infrastructure.csproj" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/ShellViewModel.cs" Link="ViewModels/ShellViewModel.cs" />
   </ItemGroup>
 

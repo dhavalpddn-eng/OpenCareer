@@ -54,6 +54,7 @@ inflation, WinUI 3 and SimConnect integration remain unfinished.
 - [Canonical project instructions](AGENTS.md)
 - [Instruction alignment review and foundation acceptance](docs/instruction-alignment.md)
 - [Current simulation rules and verification](docs/simulation-model.md)
+- [Offline OurAirports reference database and manual refresh](docs/aviation-reference-data.md)
 - [Remaining work, next milestone and gameplay decisions](docs/development-backlog.md)
 
 Run the same regression suite as CI:
