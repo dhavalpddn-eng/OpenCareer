@@ -78,10 +78,10 @@ public sealed class LongTermCareerBalanceSimulationTests
 
     private static readonly OwnerAircraftTier[] OwnerTiers =
     [
-        new("Basic piston", 1, 60_000m, 4_000m, 670m, 11.50m, 8m, 3_000m, 0.010m, null, 1m, 0),
-        new("Advanced twin", 2, 250_000m, 14_000m, 1_100m, 30m, 25m, 10_000m, 0.012m, InitialLenders.Commercial, 0.20m, 180),
-        new("Turboprop", 3, 650_000m, 25_000m, 1_800m, 70m, 55m, 18_000m, 0.014m, InitialLenders.Commercial, 0.20m, 180),
-        new("Light jet", 4, 1_500_000m, 60_000m, 3_000m, 140m, 110m, 40_000m, 0.016m, InitialLenders.Commercial, 0.20m, 180)
+        new("Basic piston", 1, 60_000m, 4_000m, 670m, 11.50m, 12m, 3_000m, 0.010m, null, 1m, 0),
+        new("Advanced twin", 2, 250_000m, 14_000m, 1_100m, 30m, 32m, 10_000m, 0.012m, InitialLenders.Commercial, 0.20m, 180),
+        new("Turboprop", 3, 650_000m, 25_000m, 1_800m, 70m, 70m, 18_000m, 0.014m, InitialLenders.Commercial, 0.20m, 180),
+        new("Light jet", 4, 1_500_000m, 60_000m, 3_000m, 140m, 140m, 40_000m, 0.016m, InitialLenders.Commercial, 0.20m, 180)
     ];
 
     [Fact]
@@ -712,15 +712,9 @@ public sealed class LongTermCareerBalanceSimulationTests
         if (qualifications < target.Qualification)
             return;
 
-        // Preserve the intended 50-80h first-aircraft pace through evidence,
-        // not a level gate: sufficient verified work history must exist before
-        // the player commits capital to ownership.
-        if (ownedTier is null
-            && (jobs < 18 || hours < 45))
-        {
-            return;
-        }
-
+        // First ownership is paced by earned cash/reserve plus qualification.
+        // Do not use raw completed-job count: that unfairly penalizes pilots
+        // who choose fewer, longer duties.
         decimal purchaseCash;
 
         LoanDecision? financing = null;
