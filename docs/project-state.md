@@ -88,13 +88,16 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - `DashboardOpportunitySelector` returns at most four **available** jobs, ordering by tier -> fit -> estimated net -> reposition distance -> stable ID.
 - Tiers are fixed as Green **Standard**, Blue **Specialist**, Purple **Elite**, Orange/Gold **Legendary**. The UI renders the tier name as well as color.
 - `DashboardViewModel` owns presentation/routing logic and consumes `IDashboardSnapshotSource`; no Jobs/Career/Company/Economy values are fabricated while those systems are unavailable.
+- The Dashboard now includes a first-class Active Operation panel for accepted work, stage, checklist requirement, contract economics, blockers and the next routed action.
+- Snapshot guidance is centralized in `DashboardGuidanceEngine`; active-operation, maintenance, company probation/suspension/termination and jobs guidance are domain-tested.
+- Home refreshes its snapshot every 10 seconds while visible, skips overlapping refreshes and cancels cleanly when navigating away.
 - The production Home layout contains split flight/career hero, daily P/L header, dynamic recommendation, Top Opportunities, career Level/XP/licenses/hours/owned count/next/recent, company rank/standing/employment state, aircraft readiness/location/distance, finance summary, recent activity, condensed world activity and searchable OpenCareer Network feed.
 - KRME was removed as a hard-coded production Home base. KRME/F-22 remains a developer validation fixture only.
 - Career Level + XP are now accepted as meta-progression but cannot bypass licenses/ratings, employer standing, military authorization, capability, affordability or dispatch/safety requirements.
 - Company employment is required to support deterministic rank/standing plus probation, demotion, suspension and firing/termination. Normal safety choices and one routine rough landing are not arbitrary termination triggers; other-employer/independent recovery paths remain available.
 - OpenCareer Network is an in-world simulated feed generated from structured career/world events. It is searchable by area/airport/company/text. Optional AI may phrase posts but cannot authoritatively create money, mission outcomes or reputation changes.
 - The temporary `UnavailableDashboardSnapshotSource` intentionally returns an empty snapshot. Later authoritative systems replace/wrap it without changing the Home page contract.
-- MBL-01 remains active until Jobs/Career/Company/Aircraft/Economy/World integrations and Windows visual/runtime acceptance are complete.
+- MBL-01 remains active until Jobs/Career/Company/Aircraft/Economy/World integrations and local visual/runtime acceptance are complete. Current public-repo CI passes Windows WinUI/live-probe and Linux/SimLab/unit-test validation.
 
 ## CI cost controls
 
