@@ -205,8 +205,9 @@ public sealed class SqliteLogbookStoreTests : IAsyncLifetime
 
         LogbookAppendResult[] results = await Task.WhenAll(attempts);
 
-        Assert.Single(results.Where(
-            static result => result.Disposition == LogbookAppendDisposition.Appended));
+        Assert.Single(
+            results,
+            static result => result.Disposition == LogbookAppendDisposition.Appended);
         Assert.Equal(
             11,
             results.Count(
