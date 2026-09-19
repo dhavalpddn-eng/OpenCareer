@@ -59,6 +59,15 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Specialized previews are instructional only today; automatic first-use mission triggering and telemetry-driven mission-step completion wait on Jobs, specialized mission logic, live checklist and input-binding systems.
 - Local interactive/visual acceptance of the tutorial overlay is still open, so MBL-03 remains active.
 
+## Reusable WinUI design system
+
+- `src/OpenCareer.App/Styles/DesignTokens.xaml` is the production Jet Age palette/brush authority used by WinUI.
+- `src/OpenCareer.App/Styles/ComponentStyles.xaml` provides reusable typography, paper/metal panels, buttons, form controls, toggles, tabs, lists, grid/ledger rows and semantic status styles.
+- Dashboard, Current Flight, Settings, placeholders, shell status surfaces and the tutorial overlay consume the shared resources.
+- Standard WinUI control templates remain intact so native focus, keyboard and high-contrast behavior are preserved rather than replaced by custom templates.
+- `UiDesignSystemContractTests` verifies the vivid ivory/cool shell palette, WCAG-style text contrast, required component keys and duplicate-resource protection.
+- MBL-02 is not removed yet: Windows XAML build verification and local interactive visual/accessibility acceptance remain. Current GitHub Actions jobs are failing before any runner step starts and therefore do not provide a compiler/test result.
+
 ## Chapter 2 shell and simulator boundary
 
 `src/OpenCareer.App` contains:
