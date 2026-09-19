@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-09-18 against branch head `155d5efe2103f24f5ce47317016a9546e1151adf`.
+Last reconciled: 2026-09-18 on `feature/economy-ownership` after verified economy/ownership core implementation. The strict chapter tracker remains more granular than the visual roadmap.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -44,9 +44,9 @@ flowchart LR
     classDef planned fill:#172737,stroke:#5d7285,color:#d8e2ea,stroke-width:1px;
 
     class C1 complete;
-    class C2,C4,C7,C8,C10 active;
+    class C2,C4,C7,C8,C9,C10 active;
     class C3 gated;
-    class C5,C6,C9,C11 planned;
+    class C5,C6,C11 planned;
 ```
 
 ## Current critical path
@@ -327,6 +327,10 @@ Chapter status: **ACTIVE FOUNDATION**
 - [x] Session preference policy.
 - [x] Bounded manual-ground reward quote model.
 - [x] Define named-commodity cargo requirements.
+- [x] Implement data-driven named commodity catalog with coffee, phones, televisions, fresh food and live plants.
+- [x] Implement deterministic airport/region commodity market snapshots.
+- [x] Implement immutable commodity-lot value snapshots.
+- [x] Implement deterministic freight quoting separate from cargo value.
 - [x] Separate freight compensation from cargo value.
 - [x] Define temporary shock vs structural-capacity distinction.
 
@@ -335,9 +339,7 @@ Chapter status: **ACTIVE FOUNDATION**
 - [ ] Persist authoritative world/economy state in production SQLite.
 - [ ] Connect world state to live job generation.
 - [ ] Connect fuel/service/MRO/labor pressure to operating costs.
-- [ ] Implement named commodity catalog.
-- [ ] Implement immutable accepted cargo manifests.
-- [ ] Implement airport/region commodity snapshots.
+- [ ] Bind immutable accepted cargo manifests into authoritative FlightSession/job settlement.
 - [ ] Generate cargo jobs from supply/demand/event state.
 - [ ] Implement cargo condition/outcome evidence only where supported.
 - [ ] Settle cargo freight/penalties atomically.
@@ -355,7 +357,7 @@ Exit gate: persistent world affects jobs/costs coherently and survives long abse
 
 Chapter status: **ACTIVE FOUNDATION**
 
-## Implemented foundation
+## Implemented core
 
 - [x] Career-derived credit model.
 - [x] Fictional lender model.
@@ -366,23 +368,26 @@ Chapter status: **ACTIVE FOUNDATION**
 - [x] Cash/finance eligibility quote foundation.
 - [x] Define 50–80 real-flight-hour ownership balancing target without hard unlock.
 - [x] Separate access/assignment from ownership.
+- [x] Persist dealer inventory, issued offers and used-aircraft condition in SQLite.
+- [x] Atomically consume dealer stock.
+- [x] Atomically debit cash/deposit plus initial storage/insurance costs.
+- [x] Originate persistent aircraft loans.
+- [x] Persist deterministic amortization schedules.
+- [x] Transfer aircraft ownership atomically.
+- [x] Prevent duplicate purchase/loan creation with idempotent operation IDs.
+- [x] Roll back money/stock/storage when a purchase fails.
+- [x] Implement insurance policy persistence and policy-dependent one-redo-per-real-day rule.
+- [x] Implement hangar/storage availability, first-period cost and slot occupancy.
+- [x] Persist ownership/loan/insurance/storage state across reload.
+- [x] Add deterministic next-cycle ownership cost quotes for active loan/insurance/storage state without performing settlement.
 
-## Remaining
+## Remaining / downstream integration
 
-- [ ] Persist lender/dealer state.
-- [ ] Persist dealer inventory and used-aircraft condition.
+- [ ] Persist mutable lender-market/profile state if lender terms become dynamic rather than configured profiles.
 - [ ] Add lender comparison UI.
 - [ ] Add dealer/aircraft purchase UI.
-- [ ] Atomically consume dealer stock.
-- [ ] Atomically debit cash/deposit.
-- [ ] Originate persistent loans.
-- [ ] Transfer aircraft ownership atomically.
-- [ ] Prevent duplicate purchase/loan creation.
-- [ ] Implement repayment schedules.
-- [ ] Implement default/restructuring behavior.
-- [ ] Implement insurance integration.
-- [ ] Implement hangar/storage availability and costs.
-- [ ] Implement delivery/reposition logistics.
+- [ ] Implement actual scheduled loan-payment execution and default/restructuring orchestration.
+- [ ] Implement delivery/reposition logistics beyond assigning the purchased aircraft to its accepted storage airport.
 - [ ] Balance ownership pacing using settled career income/costs.
 
 Exit gate: cash and financed aircraft purchases survive reload and cannot duplicate stock, money or loans.
@@ -391,16 +396,17 @@ Exit gate: cash and financed aircraft purchases survive reload and cannot duplic
 
 # Chapter 9 — Maintenance, company growth, bases and route expansion
 
-Chapter status: **PLANNED**
+Chapter status: **ACTIVE CORE**
 
-- [ ] Persist gradual wear separately from discrete damage.
+- [x] Persist gradual wear separately from discrete damage.
 - [ ] Use verified simulator wear/component state only where available.
-- [ ] Add fallback OpenCareer reliability state.
-- [ ] Implement component/service schedules.
-- [ ] Implement repair/maintenance cost and downtime.
+- [x] Add conservative OpenCareer fallback maintenance/reliability state with explicit confidence.
+- [x] Implement deterministic inspection/service schedules.
+- [x] Implement maintenance cost and downtime quotes.
 - [ ] Implement MRO/parts availability.
-- [ ] Implement maintenance history.
-- [ ] Connect hard-landing/abuse evidence to appropriate damage/wear logic.
+- [x] Implement persistent maintenance history with idempotent event IDs.
+- [x] Implement hard-landing, overspeed, engine-stress and excess-G wear/damage inputs.
+- [ ] Connect those abuse inputs to verified live FlightSession telemetry evidence.
 - [ ] Keep routine management automated by default.
 - [ ] Implement evidence-backed manual-ground actions with bounded one-time rewards.
 - [ ] Persist airport relationships.
@@ -478,9 +484,13 @@ Chapter status: **PLANNED / CONTINUOUS**
 - [ ] Run representative 3-hour missions.
 - [ ] Run representative 6-hour missions.
 - [ ] Test long absence/recovery.
-- [ ] Test strong/ordinary/struggling economy progression.
-- [ ] Test ownership pacing.
-- [ ] Test exploit loops.
+- [x] Test strong/ordinary/struggling economy progression.
+- [x] Test deterministic core ownership pacing against current payout/dealer bounds.
+- [x] Add deterministic core exploit-loop regressions for repeat jobs, reverse-route shuttles, actual-vs-quoted duration, stacked bonuses, sim-rate, cargo value, credit farming, manual bonuses and maintenance reset.
+- [x] Add CI BalanceLab for adversarial strategy and synthetic greedy-career stress testing.
+- [x] Add projected ownership carrying-cost stress preview using current loan/insurance/storage/maintenance quotes.
+- [ ] Test end-to-end ownership pacing with settled fuel/maintenance/insurance/storage/loan costs.
+- [ ] Test end-to-end exploit loops through the playable job/settlement system.
 - [ ] Profile CPU usage beside MSFS.
 - [ ] Profile memory usage beside MSFS.
 - [ ] Profile telemetry queues.
@@ -659,3 +669,26 @@ Do not skip this order without an explicit reason:
 7. Build the first market-driven playable job and atomic settlement.
 
 The external aviation APIs, full conflict simulation, dealer expansion and rich production UI are valuable, but they do not replace this critical path.
+
+
+---
+
+## Visual roadmap status — Economy & Ownership
+
+The high-level visual roadmap's **Economy & Ownership** panel is now **5/5 core systems COMPLETE** on `feature/economy-ownership`:
+
+- [x] Deterministic economy foundation.
+- [x] Named cargo markets core.
+- [x] Credit model core.
+- [x] Dealers & ownership flow core backend.
+- [x] Maintenance systems core backend.
+
+Verification for the final code head before this documentation update:
+
+- Linux branch audit baseline: **132/132 xUnit + 29/29 SimLab + BalanceLab PASS**.
+- Windows PR integration run **35411774172** at `325cf96` against the current `feature/m1-simulation-core` base: WinUI Release build **passed**, live SimConnect probe build **passed**, **140/140 xUnit passed**, **BalanceLab PASS**.
+- Progression calibration: strong **$1,119.94/h -> ownership hour 53**; ordinary **$996.48/h -> hour 59**; struggling **$847.10/h -> hour 70**.
+- Projected light-aircraft carrying-cost stress: cash fixed **$670/month**; financed fixed **$1,125.79/month** including a **$455.79** representative loan payment; routine 50-hour fallback maintenance **$575** versus the current **$4,000** operating reserve. This is a projection gate only, not recurring-cost settlement.
+- Core economy exploit/balance audit: **passed**; see `docs/economy-balance-audit.md`.
+
+This visual completion is intentionally broader than chapter exit gates. The strict checklist above still tracks downstream dealer/maintenance UI, recurring loan servicing/default/restructure, delivery/reposition logistics, cargo-to-job settlement, MRO/parts depth, live telemetry binding and balance/playtesting.

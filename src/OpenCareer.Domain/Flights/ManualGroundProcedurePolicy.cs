@@ -1,15 +1,39 @@
 namespace OpenCareer.Domain.Flights;
 
-public sealed record ManualGroundProcedurePolicy(decimal MaximumRewardPerFlight)
+public sealed record ManualGroundProcedurePolicy(
+    decimal MaximumRewardPerFlight,
+    decimal MaximumRewardPerCareerCreditHour = 35m)
 {
-    public static ManualGroundProcedurePolicy Default { get; } = new(35m);
+    public static ManualGroundProcedurePolicy Default { get; } = new(35m, 35m);
 
-    // Quotes a total for one flight, not a payment. The ledger must settle once per flight ID.
-    public decimal CalculateReward(IEnumerable<GroundProcedureEvent> events)
+    // Legacy quote helper: per-flight cap only. Actual settlement must use the
+    // career-credit-hour overload so short missions cannot farm fixed bonuses.
+    public decimal CalculateReward(IEnumerable<GroundProcedureEvent> events) =>
+        CalculateRewardInternal(events, MaximumRewardPerFlight);
+
+    public decimal CalculateReward(
+        IEnumerable<GroundProcedureEvent> events,
+        decimal careerCreditHours)
+    {
+        if (careerCreditHours <= 0)
+            throw new ArgumentOutOfRangeException(nameof(careerCreditHours));
+
+        var timeScaledCap = Math.Min(
+            MaximumRewardPerFlight,
+            MaximumRewardPerCareerCreditHour * careerCreditHours);
+
+        return CalculateRewardInternal(events, timeScaledCap);
+    }
+
+    private decimal CalculateRewardInternal(
+        IEnumerable<GroundProcedureEvent> events,
+        decimal cap)
     {
         ArgumentNullException.ThrowIfNull(events);
 
-        if (MaximumRewardPerFlight < 0) throw new ArgumentOutOfRangeException(nameof(MaximumRewardPerFlight));
+        if (MaximumRewardPerFlight < 0 || MaximumRewardPerCareerCreditHour < 0)
+            throw new ArgumentOutOfRangeException(nameof(MaximumRewardPerFlight));
+
         decimal reward = 0;
         var rewarded = new HashSet<GroundProcedureKind>();
         foreach (var item in events)
@@ -22,7 +46,10 @@ public sealed record ManualGroundProcedurePolicy(decimal MaximumRewardPerFlight)
             reward += RewardFor(item.Procedure);
         }
 
-        return Math.Min(reward, MaximumRewardPerFlight);
+        return decimal.Round(
+            Math.Min(reward, cap),
+            2,
+            MidpointRounding.AwayFromZero);
     }
 
     private static decimal RewardFor(GroundProcedureKind procedure) => procedure switch
