@@ -7,7 +7,8 @@
 **PR:** #2 draft; keep `main` stable.  
 **Master build list:** `docs/master-build-list.md` — active unfinished major systems sorted low-to-high by estimated remaining engineering effort; stable `MBL-xx` IDs remain unchanged; remove items only when fully implemented, integrated, tested and accepted.  
 **Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
-**Last implementation commit:** `44cddd0804d1d09fc005794731c307a9c29f472f` (MBL-01 dynamic production Dashboard surface).
+**CI policy:** feature-branch pushes no longer duplicate PR CI; docs-only changes do not run builds; superseded PR runs cancel; draft PRs use Linux validation only; Windows WinUI/SimConnect CI is reserved for ready-for-review or manual milestone validation. Current Linux hosted jobs still fail before step 1, indicating an account-side Actions availability/quota/billing gate rather than a compiler/test failure.  
+**Last implementation commit:** `44cddd0804d1d09fc005794731c307a9c29f472f` (MBL-01 dynamic production Dashboard surface). Latest CI configuration: `69a1a39f0ef56a1d1403027225dcf2378cc0e925`.
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
 
