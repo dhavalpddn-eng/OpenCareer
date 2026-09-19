@@ -128,3 +128,48 @@ The m1 branch remains active in other project chats, so PR CI/merge testing is t
 3. Add restart recovery UX/state for Active, Suspended and Interrupted sessions.
 4. Add route/leg summary fields needed by the later logbook without storing raw telemetry frames.
 5. Leave real-aircraft threshold calibration and live SimConnect validation for when the Windows/MSFS PC is available.
+
+## Restart, Current Flight and live tutorial integration
+
+- App startup restores the SQLite checkpoint before the WinUI shell is activated.
+- A recovered non-terminal Active checkpoint is immediately converted to `Suspended`; app restart therefore never implies continuity has already been proven.
+- App shutdown flushes the current in-memory session even when the normal steady-state checkpoint interval has not elapsed.
+- `OpenCareerDataPaths.CareerDatabaseFile` is now the canonical local `career.db` path.
+- Current Flight presents the authoritative FlightSession separately from raw/live telemetry: lifecycle status, recovery origin, career/airborne/block summaries, event counts and latest milestone.
+- Recovered sessions are visibly labeled **RESTORED FROM LOCAL SAVE**.
+- Interrupted sessions explicitly say that the partial flight was preserved and will not auto-complete.
+
+MBL-03 now has a generic `ITutorialStepEvidenceSource`. The FlightSession implementation supplies evidence for first-job prepare/fly/arrive and selected carrier/banner steps. The tutorial overlay displays live evidence state but does not auto-advance merely because evidence was satisfied; the player still controls the instructional walkthrough.
+
+## Runtime continuity guard
+
+`FlightSessionRuntime` is the application-layer pump from immutable normalized simulator snapshots into the FlightSession pipeline. It never creates a career session from telemetry alone.
+
+Recovery uses a persisted `FlightContinuityAnchor`:
+
+- ground checkpoints must remain in a tight local position/altitude envelope;
+- a grounded checkpoint cannot resume already airborne;
+- airborne checkpoints permit distance proportional to elapsed wall time and a conservative maximum travel speed;
+- implausible active-position jumps suspend the session before any new location is accepted;
+- stable implausible reconnect evidence converts the record to `Interrupted` instead of carrying mission progress through a teleport;
+- slew samples never replace the trustworthy continuity anchor.
+
+The continuity envelope is intentionally configurable and conservative. It is not a substitute for the future aircraft-identity evidence; aircraft identity still needs the verified simulator/registry work.
+
+## Hosted validation
+
+Temporary validation PR #12 targeted `main` solely to run workflows and was closed without merge.
+
+Code head `591ca18b6ef46e272fcf14f031e8f0275014a568` passed:
+
+- Linux: **29/29 deterministic SimLab scenarios**;
+- Linux: **186/186 xUnit**;
+- Windows: **WinUI x64 build**;
+- Windows: **LiveProbe build**;
+- Windows: **186/186 xUnit**.
+
+Draft implementation PR remains #11 into `feature/m1-simulation-core`. No merge is requested.
+
+## API-ready next seam
+
+External flight-information/airport/route APIs should feed later planning/reference adapters, not become authoritative FlightSession state. The next route/leg models should store provider-neutral planned/actual locations and evidence provenance so OurAirports, AirLabs or another approved source can enrich them without coupling the domain to one vendor.
