@@ -477,7 +477,7 @@ Chapter status: **PLANNED / CONTINUOUS**
 - [ ] Run representative 3-hour missions.
 - [ ] Run representative 6-hour missions.
 - [ ] Test long absence/recovery.
-- [ ] Test strong/ordinary/struggling economy progression.
+- [x] Test strong/ordinary/struggling economy progression.
 - [x] Test deterministic core ownership pacing against current payout/dealer bounds.
 - [x] Add deterministic core exploit-loop regressions for repeat jobs, reverse-route shuttles, actual-vs-quoted duration, stacked bonuses, sim-rate, cargo value, credit farming, manual bonuses and maintenance reset.
 - [x] Add CI BalanceLab for adversarial strategy and synthetic greedy-career stress testing.
@@ -668,8 +668,9 @@ The high-level visual roadmap's **Economy & Ownership** panel is now **5/5 core 
 
 Verification for the final code head before this documentation update:
 
-- Linux: **132/132 xUnit + 29/29 SimLab + BalanceLab PASS**.
-- Windows: WinUI Release build **passed**, live SimConnect probe build **passed**, **132/132 xUnit passed**.
+- Linux branch audit baseline: **132/132 xUnit + 29/29 SimLab + BalanceLab PASS**.
+- Windows PR integration at `b097d79` against the current `feature/m1-simulation-core` base: WinUI Release build **passed**, live SimConnect probe build **passed**, **138/138 xUnit passed**, **BalanceLab PASS**.
+- Progression calibration: strong **$1,119.94/h -> ownership hour 53**; ordinary **$996.48/h -> hour 59**; struggling **$847.10/h -> hour 70**.
 - Core economy exploit/balance audit: **passed**; see `docs/economy-balance-audit.md`.
 
 This visual completion is intentionally broader than chapter exit gates. The strict checklist above still tracks downstream dealer/maintenance UI, recurring loan servicing/default/restructure, delivery/reposition logistics, cargo-to-job settlement, MRO/parts depth, live telemetry binding and balance/playtesting.
