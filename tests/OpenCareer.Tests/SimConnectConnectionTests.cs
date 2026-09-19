@@ -197,14 +197,56 @@ public sealed class SimConnectConnectionTests
     }
 
     [Fact]
-    public void RetryBackoffIsBoundedAndInvalidWaitsAreRejected()
+    public void RetryConfigurationIsBoundedAndInvalidWaitsAreRejected()
     {
         var options = new SimConnectConnectionOptions();
-        Assert.Equal(new[] { 1, 2, 4, 8, 15, 15 }, Enumerable.Range(1, 6)
-            .Select(failure => (int)options.RetryDelay(failure).TotalSeconds));
-        Assert.Equal(TimeSpan.FromSeconds(15), options.RetryDelay(int.MaxValue));
-        Assert.Throws<ArgumentOutOfRangeException>(() => (options with { DispatchInterval = TimeSpan.Zero }).Validate());
-        Assert.Throws<ArgumentException>(() => (options with { MaximumRetryDelay = TimeSpan.FromMilliseconds(1) }).Validate());
+        options.Validate();
+
+        Assert.Equal(TimeSpan.FromSeconds(1), options.InitialRetryDelay);
+        Assert.Equal(TimeSpan.FromSeconds(15), options.MaximumRetryDelay);
+        Assert.Equal(TimeSpan.FromSeconds(30), options.RuntimeRetryDelay);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            (options with { DispatchInterval = TimeSpan.Zero }).Validate());
+        Assert.Throws<ArgumentException>(() =>
+            (options with
+            {
+                MaximumRetryDelay = TimeSpan.FromMilliseconds(1)
+            }).Validate());
+    }
+
+    [Fact]
+    public async Task RuntimeFailureRetriesThroughPollyAndRecovers()
+    {
+        var api = new SimConnectTestTransport
+        {
+            OpenException = new DllNotFoundException()
+        };
+
+        await using var connection = Create(
+            api,
+            FastOptions() with
+            {
+                RuntimeRetryDelay = TimeSpan.FromMilliseconds(10)
+            });
+
+        connection.Start();
+        await Until(() =>
+            api.Attempts >= 1
+            && connection.Current.State
+                == SimulatorConnectionState.Unavailable);
+
+        api.OpenException = null;
+        api.Enqueue(SimConnectPackets.Open("Recovered simulator"));
+
+        await Until(() =>
+            api.Attempts >= 2
+            && connection.Current.State
+                == SimulatorConnectionState.Connected);
+
+        Assert.Equal(
+            "Recovered simulator",
+            connection.Current.Simulator!.Name);
+        Assert.Single(api.ThreadIds);
     }
 
     private static SimConnectConnection Create(SimConnectTestTransport api,
