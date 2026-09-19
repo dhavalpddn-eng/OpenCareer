@@ -85,7 +85,14 @@ public sealed class LongTermCareerBalanceSimulationTests
     ];
 
     [Fact]
-    public void FiftyLongTermCareersHaveNoBalanceViolations()
+    public void FirstFiftyLongTermCareersHaveNoBalanceViolations() =>
+        AssertBatch(seedOffset: 0);
+
+    [Fact]
+    public void SecondIndependentFiftyLongTermCareersHaveNoBalanceViolations() =>
+        AssertBatch(seedOffset: 50_000);
+
+    private static void AssertBatch(int seedOffset)
     {
         var results = new List<Result>(50);
         var issues = new List<string>();
@@ -99,6 +106,7 @@ public sealed class LongTermCareerBalanceSimulationTests
                 {
                     Result result =
                         Simulate(
+                            seedOffset,
                             scenarioIndex++,
                             skill,
                             session,
@@ -146,6 +154,7 @@ public sealed class LongTermCareerBalanceSimulationTests
     }
 
     private static Result Simulate(
+        int seedOffset,
         int scenarioIndex,
         SkillProfile skill,
         SessionProfile sessions,
@@ -153,7 +162,7 @@ public sealed class LongTermCareerBalanceSimulationTests
     {
         var random =
             new DeterministicRandom(
-                unchecked((ulong)(0xA51C_0000 + scenarioIndex * 7919)));
+                unchecked((ulong)(0xA51C_0000 + seedOffset + scenarioIndex * 7919)));
 
         decimal cash = 0m;
         decimal lowestCash = 0m;
