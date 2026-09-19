@@ -84,6 +84,12 @@ public static class AircraftDealer
             offer.SalePrice <= Math.Max(0m, history.AvailableCash - history.RequiredOperatingReserve);
     }
 
+    public static void ValidateOfferForPurchase(
+        DealerOffer offer,
+        DealerStock currentStock,
+        DateTimeOffset time) =>
+        ValidateCurrentOffer(offer, currentStock, time);
+
     private static void ValidateCurrentOffer(DealerOffer offer, DealerStock currentStock, DateTimeOffset time)
     {
         ArgumentNullException.ThrowIfNull(offer);
