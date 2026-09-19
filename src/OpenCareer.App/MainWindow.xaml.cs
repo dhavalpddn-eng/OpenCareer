@@ -71,8 +71,11 @@ public sealed partial class MainWindow : Window
         UpdateTutorialLayer();
     }
 
-    private void OnStatusTimerTick(DispatcherQueueTimer sender, object args) =>
+    private void OnStatusTimerTick(DispatcherQueueTimer sender, object args)
+    {
         ViewModel.RefreshConnectionStatus();
+        Tutorial.RefreshLiveEvidence();
+    }
 
     private void NavView_SelectionChanged(
         NavigationView sender,
