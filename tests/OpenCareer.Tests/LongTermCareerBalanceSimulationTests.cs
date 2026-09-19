@@ -171,6 +171,7 @@ public sealed class LongTermCareerBalanceSimulationTests
         int onTimePayments = 0;
         int majorRepairs = 0;
         int uncoveredRepairs = 0;
+        int insolventRepairEvents = 0;
 
         decimal safety = skill.InitialSafety;
         var trust =
@@ -389,6 +390,9 @@ public sealed class LongTermCareerBalanceSimulationTests
 
                         if (uncovered > 0m)
                         {
+                            if (cash < uncovered)
+                                insolventRepairEvents++;
+
                             cash -= uncovered;
                             uncoveredRepairs++;
                         }
@@ -419,6 +423,9 @@ public sealed class LongTermCareerBalanceSimulationTests
 
                         if (uncovered > 0m)
                         {
+                            if (cash < uncovered)
+                                insolventRepairEvents++;
+
                             cash -= uncovered;
                             uncoveredRepairs++;
                         }
@@ -633,10 +640,10 @@ public sealed class LongTermCareerBalanceSimulationTests
                     $"First ownership arrived too early at {firstOwnershipHour:0.0}h.");
             }
 
-            if (uncoveredRepairs > 1)
+            if (insolventRepairEvents > 0)
             {
                 issues.Add(
-                    $"{uncoveredRepairs} repair events exceeded accumulated repair reserve.");
+                    $"{insolventRepairEvents} repair events exceeded both accumulated repair reserve and available operating cash.");
             }
 
             if (lowestCash < -5_000m)
