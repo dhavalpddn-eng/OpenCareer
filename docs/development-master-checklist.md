@@ -517,6 +517,10 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement production shell.
 - [x] Implement initial Dashboard.
 - [x] Implement initial Current Flight telemetry page.
+- [x] Define per-flight contextual checklist UX with inline controller binding state.
+- [ ] Implement per-flight checklist phases and **Show checklist every flight** setting.
+- [ ] Implement controller-binding resolution/profile source without guessed bindings.
+- [ ] Render missing mappings as visible amber/orange **UNBOUND** and required/critical missing mappings as red **UNBOUND — REQUIRED**.
 - [ ] Implement Dispatch screen against real dispatch services.
 - [ ] Implement Jobs screen against real job services.
 - [ ] Implement Map / World screen against real world state.
