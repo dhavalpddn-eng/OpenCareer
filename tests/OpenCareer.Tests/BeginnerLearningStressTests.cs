@@ -54,7 +54,7 @@ public sealed class BeginnerLearningStressTests
     ];
 
     [Fact]
-    public void InitialFiftyBeginnerCareersExposeHarshLearningEdges()
+    public void TunedFiftyBeginnerCareersHaveNoHarshLearningEdges()
     {
         BeginnerFlightSupportPolicy policy =
             BeginnerFlightSupportPolicy.Default;
@@ -89,12 +89,95 @@ public sealed class BeginnerLearningStressTests
             string.Join(Environment.NewLine, issues));
     }
 
+    [Fact]
+    public void FiftyNineFreshBeginnerCareersRemainLearnableAfterTuning()
+    {
+        var scenarios =
+            new List<(BeginnerProfile Profile, PlayStyle Style, string Name)>();
+
+        foreach (BeginnerProfile profile in Profiles)
+        {
+            foreach (PlayStyle style in Styles)
+            {
+                scenarios.Add(
+                    (profile, style, $"{profile.Name}/{style.Name}/fresh"));
+            }
+        }
+
+        BeginnerProfile[] extraProfiles =
+        [
+            new("NoTrimKnowledge", .50, .78, .09, .14, .025),
+            new("CannotFlareYet", .28, .96, .16, .18, .026),
+            new("TaxiAndRouteConfused", .88, .66, .08, .12, .024),
+            new("AutopilotButtonLearner", .55, .62, .06, .08, .032),
+            new("GoAroundEveryTime", .34, .70, .05, .55, .030),
+            new("OvercontrolsController", .46, .90, .14, .16, .024),
+            new("KeyboardNoRudder", .60, .88, .13, .12, .022),
+            new("LongBreakBetweenFlights", .64, .76, .10, .14, .020),
+            new("AirlinerGoalAbsoluteBeginner", .72, .86, .13, .16, .022)
+        ];
+
+        PlayStyle[] extraStyles =
+        [
+            Styles[0],
+            Styles[3],
+            Styles[2],
+            Styles[1],
+            Styles[3],
+            Styles[0],
+            Styles[4],
+            Styles[1],
+            Styles[4]
+        ];
+
+        for (var index = 0; index < extraProfiles.Length; index++)
+        {
+            scenarios.Add(
+                (
+                    extraProfiles[index],
+                    extraStyles[index],
+                    $"{extraProfiles[index].Name}/{extraStyles[index].Name}/fresh"));
+        }
+
+        Assert.Equal(59, scenarios.Count);
+        Assert.Equal(
+            59,
+            scenarios
+                .Select(item => item.Name)
+                .Distinct(StringComparer.Ordinal)
+                .Count());
+
+        var issues = new List<string>();
+
+        for (var index = 0; index < scenarios.Count; index++)
+        {
+            var scenario = scenarios[index];
+            BeginnerResult result =
+                Simulate(
+                    BeginnerFlightSupportPolicy.Default,
+                    scenario.Profile,
+                    scenario.Style,
+                    seed: 10_000 + index * 17,
+                    flights: 36,
+                    scenarioName: scenario.Name);
+
+            issues.AddRange(
+                result.Issues.Select(
+                    issue => $"{result.Name}: {issue}"));
+        }
+
+        Assert.True(
+            issues.Count == 0,
+            string.Join(Environment.NewLine, issues));
+    }
+
     private static BeginnerResult Simulate(
         BeginnerFlightSupportPolicy policy,
         BeginnerProfile profile,
         PlayStyle style,
         int seed,
-        int flights)
+        int flights,
+        string? scenarioName = null)
     {
         var random =
             new DeterministicRandom(
@@ -114,10 +197,15 @@ public sealed class BeginnerLearningStressTests
 
         for (var attemptIndex = 0; attemptIndex < flights; attemptIndex++)
         {
+            int recentDifficultyCount =
+                recentDifficulty.Count(value => value);
+
             BeginnerGuidanceIntensity guidance =
                 policy.GuidanceFor(
                     completed,
-                    hours);
+                    hours,
+                    recentDifficultyCount,
+                    recentDifficulty.Count);
 
             double progress =
                 Math.Min(
@@ -138,6 +226,14 @@ public sealed class BeginnerLearningStressTests
                     BeginnerGuidanceIntensity.Full => .72,
                     BeginnerGuidanceIntensity.Standard => .84,
                     _ => .95
+                };
+
+            double unsafeLandingMultiplier =
+                guidance switch
+                {
+                    BeginnerGuidanceIntensity.Full => .45,
+                    BeginnerGuidanceIntensity.Standard => .65,
+                    _ => .85
                 };
 
             double routeErrorChance =
@@ -163,7 +259,7 @@ public sealed class BeginnerLearningStressTests
                     profile.UnsafeLandingChance
                     * style.LandingLoad
                     * (1 - progress)
-                    * guidanceLandingMultiplier,
+                    * unsafeLandingMultiplier,
                     0,
                     .45);
 
@@ -175,9 +271,9 @@ public sealed class BeginnerLearningStressTests
                 || random.Chance(
                     guidance switch
                     {
-                        BeginnerGuidanceIntensity.Full => .82,
-                        BeginnerGuidanceIntensity.Standard => .62,
-                        _ => .38
+                        BeginnerGuidanceIntensity.Full => .92,
+                        BeginnerGuidanceIntensity.Standard => .78,
+                        _ => .55
                     });
 
             bool goAround =
@@ -196,7 +292,7 @@ public sealed class BeginnerLearningStressTests
                 new BeginnerFlightAttempt(
                     PriorCompletedFlights: completed,
                     PriorCareerCreditHours: hours,
-                    IsTrainingOrPractice: attemptIndex < 8,
+                    IsTrainingOrPractice: attemptIndex < 12,
                     ReachedPlannedDestination:
                         !routeError,
                     RecoveredToPlannedDestination:
@@ -286,25 +382,25 @@ public sealed class BeginnerLearningStressTests
         double completionRate =
             completed / (double)flights;
 
-        if (completionRate < .65)
+        if (completionRate < .70)
         {
             issues.Add(
                 $"completion rate {completionRate:P0} is too low for an assisted beginner.");
         }
 
-        if (retries > 8)
+        if (retries > 6)
         {
             issues.Add(
                 $"{retries} route-recovery retries are too taxing.");
         }
 
-        if (careerPenalties > 3)
+        if (careerPenalties > 2)
         {
             issues.Add(
                 $"{careerPenalties} punitive career consequences occurred during the learning run.");
         }
 
-        if (lightWhileStruggling > 2)
+        if (lightWhileStruggling > 0)
         {
             issues.Add(
                 $"guidance fell to Light while the player was still struggling on {lightWhileStruggling} attempts.");
@@ -318,7 +414,7 @@ public sealed class BeginnerLearningStressTests
         }
 
         return new BeginnerResult(
-            $"{profile.Name}/{style.Name}",
+            scenarioName ?? $"{profile.Name}/{style.Name}",
             completed,
             retries,
             unsafeFailures,
