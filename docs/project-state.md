@@ -14,12 +14,13 @@ Updated: 2026-09-18. **Read this after `AGENTS.md` when deeper implementation co
 - [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
 - Both CI runs tested `540029c`; probe/analyzer compilation and synthetic trace tests do **not** imply live MSFS verification.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
-- UI target/spec: `docs/ui-design-system.md` + `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
+- UI visual language: `docs/ui-design-language.md` is canonical for palette/material/aesthetic; implementation tokens/layout remain in `docs/ui-design-system.md`, and screen behavior in `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
 - Verify remote branch head before edits because other chats may change it.
 
 ## Fixed direction
 
 Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI 3/Windows App SDK, isolated SimConnect boundary, SQLite, deterministic/testable domain. No aircraft whitelist. AI is optional and never authoritative for money, ownership, mission completion or critical state.
+- UI identity is fixed as a retro-modern aviation operations interface: dark blue-gray riveted structure, vivid ivory briefing panels, realistic MSFS 2024 imagery, restrained navy/brass/status accents, and 1950s/60s aviation character without sepia/olive drift. See `docs/ui-design-language.md`.
 
 ## Confirmed gameplay
 
