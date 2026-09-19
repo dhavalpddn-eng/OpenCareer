@@ -35,10 +35,12 @@ Remaining before removal:
 - automatic specialized mission-family trigger when those mission families exist,
 - mission/checklist evidence integration.
 
-### MBL-02 — Reusable WinUI design system
-**Estimated effort: ~1–3 developer days**
+### MBL-02 — Reusable WinUI design system — IN PROGRESS
+**Estimated remaining effort: ~0.5–2 developer days**
 
-Production tokens/components for the retro-modern shell, vivid paper panels, controls, lists, status states, typography and accessibility.
+The application now has centralized Jet Age design tokens and reusable WinUI typography, paper/metal panel, button and status-badge styles. Dashboard, Current Flight, Settings, placeholders, shell surfaces and the tutorial overlay have begun migrating to the shared resources.
+
+Remaining before removal: successful Windows XAML build verification, local visual/accessibility acceptance, any missing reusable list/input/tab states, and removal of remaining page-level visual drift.
 
 ### MBL-23 — Settings / diagnostics system
 **Estimated effort: ~2–4 developer days**
