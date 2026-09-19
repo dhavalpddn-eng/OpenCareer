@@ -111,7 +111,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - The top-level Logbook navigation destination is now a production WinUI page rather than a placeholder. It has committed-flight history, aggregate totals, search/filter controls, selected debrief details, flight-leg hierarchy, landing/event evidence and a projected multi-leg route-track schematic.
 - Production still uses `UnavailableLogbookSource` and therefore shows an honest empty state until MBL-07 supplies persistent FlightSession/FlightLeg storage and a real `ILogbookSource` / `ILogbookWriter`.
 - Remaining integration: completed FlightSession -> debrief mapping, SQLite persistence, career settlement -> commit, free/practice Log Flight/Discard, real persisted route/landing/fuel/payload evidence, and local visual acceptance.
-- Linux CI is green at `73bb123`. Latest Windows WinUI validation for that head is still running; earlier MBL-12 slices through `1f059ab` were Windows-green.
+- CI at `73bb123` is green on both platforms: Linux build/SimLab/unit tests passed, and Windows WinUI/live-probe/unit-test validation passed.
 
 ## CI cost controls
 
