@@ -31,4 +31,22 @@ public sealed partial class SettingsPage : Page
         if (_tutorial is not null)
             await _tutorial.StartFirstJobAsync();
     }
+
+    private async void PreviewBannerTow_Click(object sender, RoutedEventArgs e)
+    {
+        if (_tutorial is not null)
+            await _tutorial.PreviewBannerTowAsync();
+    }
+
+    private async void PreviewCarrierTakeoff_Click(object sender, RoutedEventArgs e)
+    {
+        if (_tutorial is not null)
+            await _tutorial.PreviewCarrierTakeoffAsync();
+    }
+
+    private async void PreviewCarrierLanding_Click(object sender, RoutedEventArgs e)
+    {
+        if (_tutorial is not null)
+            await _tutorial.PreviewCarrierLandingAsync();
+    }
 }
