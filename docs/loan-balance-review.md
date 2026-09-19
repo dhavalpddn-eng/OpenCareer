@@ -104,6 +104,39 @@ Do not derive loan affordability from elapsed real-world calendar time under the
 
 A review test intentionally demonstrates this sensitivity so the integration boundary cannot be overlooked.
 
+## Progression bypass risk
+
+The current progression policy explicitly targets first ownership in the **50–80 career-credit-hour** range for both:
+
+- the $60,000 cash light-aircraft path plus $4,000 reserve;
+- the $250,000 larger-aircraft financed path with 20% down plus $14,000 reserve.
+
+The acquisition/credit engine itself does not enforce that policy. A cheaper financed aircraft can therefore bypass the intended progression window if it is surfaced by inventory.
+
+Illustrative current-engine case:
+
+- aircraft price: **$100,000**;
+- deposit: **$20,000**;
+- operating reserve: **$4,000**;
+- savings pace: **$1,000 per career-credit hour**;
+- cash gate is met at about **24 hours**;
+- an illustrative 24-hour / eight-job / no-failure history with safety 90 and trust 70 evaluates to about **658 credit**, already above the Community lender minimum of 600.
+
+That means a financeable $100,000 listing can become mechanically reachable around 24 hours if normalized income also passes underwriting. This does not break the loan math, but it can break the intended **50–80 hour first-aircraft progression**.
+
+### Required integration rule
+
+Do not treat every civilian dealer listing that passes generic underwriting as an equally valid first-aircraft path.
+
+Before finance is exposed in the playable dealer UI, bind one of these progression controls:
+
+- aircraft-class / career-tier finance eligibility;
+- minimum verified career standing for financed ownership;
+- tier-specific operating reserve / deposit targets;
+- or inventory gating that prevents cheaper financed aircraft from bypassing the intended ownership window.
+
+The existing `CareerProgressionPolicy.FinancedLargerAircraft` already encodes the intended 64-hour cash requirement; the acquisition path needs to consume an equivalent rule instead of leaving it as a calibration-only policy.
+
 ## Larger-loan stress reference
 
 Using current representative rates and the same $670 fixed insurance/storage plus $575-per-50h maintenance reserve:
