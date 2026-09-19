@@ -177,6 +177,27 @@ Before finance is exposed in the playable dealer UI, bind one of these progressi
 
 The existing `CareerProgressionPolicy.FinancedLargerAircraft` already encodes the intended 64-hour cash requirement; the acquisition path needs to consume an equivalent rule instead of leaving it as a calibration-only policy.
 
+## Marathon-flight reward rule
+
+Long flights should remain **optional, high-total-value work**, not a punishment and not a prerequisite.
+
+Current quote math already supports that for extended missions. Under equal moderate context, the reviewed 15-hour ferry fixture produces about:
+
+- 1-hour mission: **$977.29 total / $977.29 per hour**;
+- 15-hour mission: **$14,439.62 total / $962.64 per hour**.
+
+That is about **14.8x the total payout** while preserving roughly **98.5% of the short mission's hourly rate**. A regression test now protects this behavior.
+
+Design rule going forward:
+
+- marathon missions should pay **much more total cash** because the player committed much more active time;
+- a modest endurance / scarcity / difficulty premium is acceptable when justified;
+- long missions must not become the only efficient path to progression;
+- one- to three-hour players should retain competitive hourly progression;
+- experienced players should still have access to occasional long-haul cargo/passenger/ferry work rather than having every non-special mission above six hours hard-filtered forever.
+
+The current board policy still gives zero duration suitability to ordinary non-special jobs above six hours. That is intentionally flagged for later tuning: preserve the early-career short-job preference, but allow rare optional long-haul work at higher career standing.
+
 ## Larger-loan stress reference
 
 Using current representative rates and the same $670 fixed insurance/storage plus $575-per-50h maintenance reserve:
