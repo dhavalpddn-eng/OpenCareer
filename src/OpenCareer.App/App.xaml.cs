@@ -56,6 +56,8 @@ public partial class App : Microsoft.UI.Xaml.Application
                     .CareerDatabaseFile));
         services.AddSingleton<FlightSessionPersistenceService>();
         services.AddSingleton<FlightTelemetryEvidenceProcessor>();
+        services.AddSingleton<FlightContinuityPolicy>();
+        services.AddSingleton<FlightSessionRuntime>();
 
         services.AddSingleton<SimConnectConnection>();
         services.AddSingleton<ISimulatorConnection>(provider =>
