@@ -8,6 +8,7 @@ on:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"
       - "src/OpenCareer.Domain/**"
+      - "src/OpenCareer.Infrastructure/**"
       - "src/OpenCareer.SimConnect/**"
       - "tools/OpenCareer.LiveProbe/**"
       - "tools/run-live-probe.ps1"
@@ -62,7 +63,7 @@ jobs:
           FILES="$(git diff --name-only "$RANGE")"
           printf '%s\n' "$FILES"
 
-          if printf '%s\n' "$FILES" | grep -Eq '^(src/OpenCareer\.App/|src/OpenCareer\.Application/|src/OpenCareer\.Domain/|src/OpenCareer\.SimConnect/|tools/OpenCareer\.LiveProbe/|tools/run-live-probe\.ps1$|Directory\.Build\.props$|Directory\.Packages\.props$|\.github/workflows/winui-build\.yml$)'; then
+          if printf '%s\n' "$FILES" | grep -Eq '^(src/OpenCareer\.App/|src/OpenCareer\.Application/|src/OpenCareer\.Domain/|src/OpenCareer\.Infrastructure/|src/OpenCareer\.SimConnect/|tools/OpenCareer\.LiveProbe/|tools/run-live-probe\.ps1$|Directory\.Build\.props$|Directory\.Packages\.props$|\.github/workflows/winui-build\.yml$)'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
