@@ -110,6 +110,23 @@ public sealed class FlightSessionPersistenceService
         if (checkpoint is null)
             return null;
 
+        if (!checkpoint.IsTerminal
+            && checkpoint.Status == FlightSessionStatus.Active)
+        {
+            checkpoint =
+                FlightSessionEngine.Advance(
+                    checkpoint,
+                    new FlightSessionAdvance(
+                        new FlightStateEvidence(
+                            checkpoint.UpdatedAt,
+                            Connected: false,
+                            ContinuityPlausible: false)));
+
+            await _store
+                .SaveAsync(checkpoint, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         _lastPersisted = checkpoint;
         LastRecoveredSessionId = checkpoint.SessionId;
 
