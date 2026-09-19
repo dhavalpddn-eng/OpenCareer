@@ -508,6 +508,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 
 - [x] Create UI visual direction.
 - [x] Create canonical UI design system.
+- [x] Lock canonical retro-modern UI design language in `docs/ui-design-language.md`.
 - [x] Define all 15 current navigation destinations.
 - [x] Create dashboard concept.
 - [x] Create all-tab screen atlas.
