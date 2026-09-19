@@ -5,9 +5,11 @@ using Microsoft.UI.Windowing;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Dashboard;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
+using OpenCareer.Infrastructure.Flights;
 using OpenCareer.SimConnect;
 
 namespace OpenCareer.App;
@@ -43,6 +45,16 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<AppDataBackupService>();
         services.AddSingleton<DiagnosticBundleService>();
         services.AddSingleton<ShellOpenService>();
+
+        services.AddSingleton<FlightSessionCoordinator>();
+        services.AddSingleton(FlightSessionCheckpointPolicy.Default);
+        services.AddSingleton<IFlightSessionCheckpointStore>(provider =>
+            new SqliteFlightSessionCheckpointStore(
+                provider
+                    .GetRequiredService<OpenCareerDataPaths>()
+                    .CareerDatabaseFile));
+        services.AddSingleton<FlightSessionPersistenceService>();
+        services.AddSingleton<FlightTelemetryEvidenceProcessor>();
 
         services.AddSingleton<SimConnectConnection>();
         services.AddSingleton<ISimulatorConnection>(provider =>
@@ -80,6 +92,29 @@ public partial class App : Microsoft.UI.Xaml.Application
             logger.LogError(ex, "OpenCareer settings initialization failed; using defaults.");
         }
 
+        try
+        {
+            FlightSession? recovered =
+                await _services
+                    .GetRequiredService<FlightSessionPersistenceService>()
+                    .RecoverAsync();
+
+            if (recovered is not null)
+            {
+                logger.LogInformation(
+                    "Recovered flight session {SessionId} in {Status}/{OperationState}.",
+                    recovered.SessionId,
+                    recovered.Status,
+                    recovered.OperationState);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "FlightSession recovery failed. OpenCareer will continue without claiming a recovered active flight.");
+        }
+
         _window = _services.GetRequiredService<MainWindow>();
         _window.AppWindow.Closing += OnMainWindowClosing;
         _window.Activate();
@@ -103,6 +138,20 @@ public partial class App : Microsoft.UI.Xaml.Application
         try
         {
             logger.LogInformation("OpenCareer application shutting down.");
+
+            try
+            {
+                await _services
+                    .GetRequiredService<FlightSessionPersistenceService>()
+                    .FlushAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Final FlightSession checkpoint failed during shutdown.");
+            }
+
             await _services.DisposeAsync();
         }
         catch (Exception ex)
