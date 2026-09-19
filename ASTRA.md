@@ -10,6 +10,8 @@
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
 
+**Canonical UI language:** `docs/ui-design-language.md`. All screens must preserve the dark blue-gray riveted shell, vivid ivory paper panels, restrained navy/brass accents and retro-modern 1950s/60s aviation-operations character. Do not drift back to generic SaaS, olive/yellow wash, or sepia-heavy styling.
+
 ## Built
 WinUI shell; resilient serialized SimConnect connect/reconnect; ~1 Hz normalized telemetry; Windows live probe; pure `FlightTrackingStateMachine`; `FlightTimeLedger`; conventional park/shutdown/servicing terminal policy; offline JSONL trace analyzer. CI at `540029c`: **104/104 xUnit + 29/29 SimLab; Windows WinUI/probe green**. Analyzer fixtures are synthetic; live validation remains open.
 
@@ -39,4 +41,4 @@ First live validation fixture: **F-22 at KRME** (test only; not a career startin
 
 **Do not:** merge PR/main without explicit approval; expand finance/dealers before playable flight core; let AI/cloud become gameplay authority.
 
-Deep docs only if needed: `docs/development-master-checklist.md`, `docs/project-state.md`, `docs/simulator-connection.md`, `docs/flight-session-design.md`, `docs/efb-integration.md`, `docs/cargo-market-requirements.md`, `docs/ui-screen-spec.md`, `docs/development-workflow.md`.
+Deep docs only if needed: `docs/ui-design-language.md`, `docs/development-master-checklist.md`, `docs/project-state.md`, `docs/simulator-connection.md`, `docs/flight-session-design.md`, `docs/efb-integration.md`, `docs/cargo-market-requirements.md`, `docs/ui-screen-spec.md`, `docs/development-workflow.md`.
