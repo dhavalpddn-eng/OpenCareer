@@ -1,4 +1,5 @@
 using OpenCareer.Application.Economy;
+using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Infrastructure.Economy;
@@ -106,6 +107,34 @@ public sealed class ActivePlayRecurringCostTests : IDisposable
 
         Assert.InRange(threeHours / 3m, oneHour - 0.02m, oneHour + 0.02m);
         Assert.InRange(fifteenHours / 15m, oneHour - 0.02m, oneHour + 0.02m);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(6)]
+    [InlineData(15)]
+    public void FixedOwnershipBurdenDoesNotRequireMarathonFlights(int sessionHours)
+    {
+        var policy = ActivePlayRecurringCostPolicy.Default;
+        decimal recurring =
+            policy.Assess(
+                TimeSpan.Zero,
+                TimeSpan.FromHours(sessionHours),
+                RepresentativeFinancedCosts).Total;
+
+        const decimal routineFiftyHourMaintenance = 575m;
+        decimal maintenanceReserve =
+            routineFiftyHourMaintenance * sessionHours / 50m;
+        decimal targetSavings =
+            CareerProgressionPolicy.Default.TargetNetSavingsPerFlightHour
+            * sessionHours;
+
+        decimal ownershipBurden = recurring + maintenanceReserve;
+
+        Assert.True(
+            ownershipBurden <= targetSavings * 0.06m,
+            $"{sessionHours}h ownership burden {ownershipBurden:C} exceeded 6% of target savings {targetSavings:C}.");
     }
 
     [Fact]
