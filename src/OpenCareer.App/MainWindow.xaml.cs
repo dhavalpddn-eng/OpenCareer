@@ -1,10 +1,12 @@
 using System.ComponentModel;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using OpenCareer.App.ViewModels;
 using OpenCareer.App.Views;
 using OpenCareer.Application.Dashboard;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Tutorials;
 
 namespace OpenCareer.App;
@@ -12,18 +14,29 @@ namespace OpenCareer.App;
 public sealed partial class MainWindow : Window
 {
     private readonly DispatcherQueueTimer _statusTimer;
+    private readonly FlightSessionRuntime _flightRuntime;
+    private readonly ILogger<MainWindow> _logger;
+    private readonly CancellationTokenSource _lifetimeCts = new();
     private bool _tutorialInitialized;
 
     public MainWindow(
         ShellViewModel viewModel,
         DashboardViewModel dashboard,
         TutorialViewModel tutorial,
-        SettingsViewModel settings)
+        SettingsViewModel settings,
+        FlightSessionRuntime flightRuntime,
+        ILogger<MainWindow> logger)
     {
         ViewModel = viewModel;
         Dashboard = dashboard;
         Tutorial = tutorial;
         Settings = settings;
+        _flightRuntime =
+            flightRuntime
+            ?? throw new ArgumentNullException(nameof(flightRuntime));
+        _logger =
+            logger
+            ?? throw new ArgumentNullException(nameof(logger));
 
         InitializeComponent();
 
@@ -51,6 +64,7 @@ public sealed partial class MainWindow : Window
     public void StopStatusUpdates()
     {
         _statusTimer.Stop();
+        _lifetimeCts.Cancel();
         _statusTimer.Tick -= OnStatusTimerTick;
         Dashboard.NavigationRequested -= OnDashboardNavigationRequested;
         Tutorial.PropertyChanged -= OnTutorialPropertyChanged;
@@ -71,10 +85,36 @@ public sealed partial class MainWindow : Window
         UpdateTutorialLayer();
     }
 
-    private void OnStatusTimerTick(DispatcherQueueTimer sender, object args)
+    private async void OnStatusTimerTick(
+        DispatcherQueueTimer sender,
+        object args)
     {
         ViewModel.RefreshConnectionStatus();
         Tutorial.RefreshLiveEvidence();
+
+        try
+        {
+            bool changed =
+                await _flightRuntime
+                    .RefreshAsync(
+                        _lifetimeCts.Token);
+
+            if (changed)
+            {
+                ViewModel.RefreshConnectionStatus();
+                Tutorial.RefreshLiveEvidence();
+            }
+        }
+        catch (OperationCanceledException)
+            when (_lifetimeCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "FlightSession runtime refresh failed.");
+        }
     }
 
     private void NavView_SelectionChanged(
