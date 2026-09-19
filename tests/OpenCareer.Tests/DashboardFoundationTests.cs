@@ -106,6 +106,117 @@ public sealed class DashboardFoundationTests
         Assert.Equal(DashboardActionTarget.Dispatch, selected.Target);
     }
 
+
+    [Fact]
+    public void SnapshotGuidanceUsesBlockedActiveOperationAsCritical()
+    {
+        var engine = new DashboardGuidanceEngine();
+        DashboardSnapshot snapshot = EmptySnapshot() with
+        {
+            ActiveOperation = new(
+                "job-1",
+                "Regional cargo",
+                "KAAA",
+                "KBBB",
+                ActiveOperationStage.PreparationRequired,
+                DashboardActionTarget.Dispatch,
+                "Resolve dispatch blocker",
+                "Complete preparation.",
+                ChecklistRequired: true,
+                IsBlocked: true,
+                BlockingReason: "Payload exceeds aircraft limit.")
+        };
+
+        IReadOnlyList<DashboardGuidanceCandidate> candidates =
+            engine.ComposeSnapshotCandidates(snapshot, hasEligibleOpportunities: true);
+        DashboardGuidanceCandidate? selected = engine.SelectPrimary(candidates);
+
+        Assert.NotNull(selected);
+        Assert.Equal("active-operation", selected.Id);
+        Assert.Equal(DashboardGuidancePriority.Critical, selected.Priority);
+        Assert.Equal(DashboardActionTarget.Dispatch, selected.Target);
+    }
+
+    [Fact]
+    public void AircraftMaintenanceOutranksUnblockedActiveOperation()
+    {
+        var engine = new DashboardGuidanceEngine();
+        DashboardSnapshot snapshot = EmptySnapshot() with
+        {
+            Aircraft = new(
+                "Cessna 172",
+                "Owned",
+                ReadyForWork: false,
+                AircraftLocation: "KAAA",
+                PlayerLocation: "KAAA",
+                DistanceToPlayerNauticalMiles: 0,
+                BlockingReason: "Inspection overdue."),
+            ActiveOperation = new(
+                "job-1",
+                "Regional cargo",
+                "KAAA",
+                "KBBB",
+                ActiveOperationStage.Accepted,
+                DashboardActionTarget.Dispatch,
+                "Prepare operation",
+                "Review dispatch.",
+                ChecklistRequired: true)
+        };
+
+        DashboardGuidanceCandidate? selected = engine.SelectPrimary(
+            engine.ComposeSnapshotCandidates(snapshot, hasEligibleOpportunities: true));
+
+        Assert.NotNull(selected);
+        Assert.Equal("aircraft-not-ready", selected.Id);
+        Assert.Equal(DashboardActionTarget.Maintenance, selected.Target);
+    }
+
+    [Fact]
+    public void TerminatedEmploymentRoutesToCompanyRecovery()
+    {
+        var engine = new DashboardGuidanceEngine();
+        DashboardSnapshot snapshot = EmptySnapshot() with
+        {
+            Employment = new(
+                EmploymentStatus.Terminated,
+                "Example Air",
+                "First Officer",
+                0,
+                "Employment ended after repeated no-shows.")
+        };
+
+        DashboardGuidanceCandidate? selected = engine.SelectPrimary(
+            engine.ComposeSnapshotCandidates(snapshot, hasEligibleOpportunities: false));
+
+        Assert.NotNull(selected);
+        Assert.Equal("company-terminated", selected.Id);
+        Assert.Equal(DashboardActionTarget.Company, selected.Target);
+    }
+
+    [Fact]
+    public void AvailableJobsBecomeRecommendationWhenNoHigherPriorityStateExists()
+    {
+        var engine = new DashboardGuidanceEngine();
+
+        DashboardGuidanceCandidate? selected = engine.SelectPrimary(
+            engine.ComposeSnapshotCandidates(
+                EmptySnapshot(),
+                hasEligibleOpportunities: true));
+
+        Assert.NotNull(selected);
+        Assert.Equal("top-jobs", selected.Id);
+        Assert.Equal(DashboardActionTarget.Jobs, selected.Target);
+    }
+
+    private static DashboardSnapshot EmptySnapshot() =>
+        DashboardSnapshot.Empty with
+        {
+            Opportunities = Array.Empty<DashboardOpportunity>(),
+            RecentActivity = Array.Empty<DashboardRecentActivity>(),
+            SocialFeed = Array.Empty<DashboardSocialPost>(),
+            Guidance = Array.Empty<DashboardGuidanceCandidate>()
+        };
+
     private static DashboardOpportunity Opportunity(
         string id,
         OpportunityTier tier,
