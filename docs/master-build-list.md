@@ -4,38 +4,181 @@ Status: **CANONICAL high-level list of unfinished major product systems**.
 
 This file is the active "what is left to build" list.
 
-Rules:
+## Ordering rule
+
+Items are sorted from **lowest to highest estimated remaining direct engineering effort** for a production-quality implementation.
+
+The estimates are rough solo-development effort, not calendar promises. They exclude time waiting on prerequisite systems, user testing, external SDK fixes, store/signing approval, and unknown simulator/API behavior. A short item may therefore be blocked by a larger prerequisite even though its own implementation effort is small.
+
+The `MBL-xx` identifier is stable and does not change when this file is reordered.
+
+## Maintenance rules
 
 - Keep only unfinished major systems here.
 - Remove an item only after it is implemented, integrated, tested and accepted.
 - Partial foundations do not count as complete.
 - Git history and `docs/development-master-checklist.md` preserve completed implementation history.
 - New major scope goes here when accepted.
-- Technical dependency order in `ASTRA.md` can override list order.
+- Technical dependency order in `ASTRA.md` can override this effort-based order.
 
-## Remaining
+## Remaining — lowest to highest effort
 
-1. **Production Home / Dashboard** — full career home using real application data and the canonical OpenCareer visual language.
-2. **Reusable WinUI design system** — production tokens/components for the retro-modern shell, vivid paper panels, controls, lists, status states, typography and accessibility.
-3. **Full tutorial engine — IN PROGRESS** — core engine is implemented and CI-green: versioned first-run app tour, persistent resume/skip/completion, shell overlay/navigation, Settings replay, first-job walkthrough, and banner/carrier previews. Keep this item until local interactive/visual acceptance plus automatic first-job/mission-family trigger integration are verified.
-4. **Live per-flight checklist** — phase-aware preflight through shutdown checklist with trustworthy live auto-verification.
-5. **Controller + keyboard binding system** — per-step verified bindings, UNBOUND states and aircraft/device-sensitive mapping.
-6. **FlightEvidenceProcessor** — normalized telemetry to stable taxi/takeoff/airborne/approach/landing/go-around/parking evidence.
-7. **Persistent FlightSession / recovery** — SQLite checkpoints, multi-leg sessions, route/event persistence, interruption recovery and duplicate-effect prevention.
-8. **Installed-aircraft registry** — installed aircraft identity, capability/confidence, location/experience and installed/employer/rented/assigned/owned access.
-9. **Dispatch system** — payload, fuel/range, runway, weather/environment, qualification and mission feasibility with explicit blocking reasons.
-10. **Playable Jobs system** — market/location/career-driven work with employee viability and accept-to-active-operation flow.
-11. **Specialized mission framework** — banner tow, carrier operations, glider tow, skydiving, firefighting, SAR, survey, medevac, special government work and other unique mission families.
-12. **Debrief + Logbook** — trustworthy flight/mission history, evidence, incidents, metrics and one-time settlement record.
-13. **Career progression** — licenses, ratings, experience, recency, reputation, relationships, qualifications and milestones.
-14. **Economy + Markets** — authoritative persistent economy, named cargo, market pressure/events, long absence and bankruptcy/recovery.
-15. **Aircraft purchasing + financing** — persistent dealers/lenders, used/new inventory, loans, insurance and atomic ownership transfer.
-16. **Hangars + Bases** — physical fleet geography, storage, local services, relationships, expansion and reposition logistics.
-17. **Maintenance** — wear, service, repairs, parts/MRO, downtime, history and supported incident consequences.
-18. **Company system** — optional business ownership, contracts, routes, utilization, staff, margins and expansion while preserving employee-only play.
-19. **Military / Government career system** — separate qualifications, assigned aircraft, patrol/surveillance/logistics/intercept/escort and later fictionalized conflict operations.
-20. **World Map** — airports, bases, fleet/company geography, routes, opportunities, events, markets and authorized government/military overlays.
-21. **MSFS EFB companion** — thin in-sim projection for Current Flight, checklist, objectives, route and next action while Windows remains authoritative.
-22. **AI dispatcher / copilot / passengers** — optional narrative/dialogue layer that never owns authoritative game state.
-23. **Settings / diagnostics system** — full simulator health, inputs, tutorials, units, accessibility, backup/recovery, logs and optional-service controls.
-24. **Installer / update / release pipeline** — packaging, migrations, backups, production logging, performance validation, signing and update strategy.
+### MBL-03 — Full tutorial engine — IN PROGRESS
+**Estimated remaining direct effort: ~0.5–1.5 developer days**
+
+Core engine is implemented and CI-green: versioned first-run app tour, persistent resume/skip/completion, shell overlay/navigation, Settings replay, first-job walkthrough, and banner/carrier previews.
+
+Remaining before removal:
+
+- local interactive/visual acceptance,
+- automatic first-job trigger when Jobs exists,
+- automatic specialized mission-family trigger when those mission families exist,
+- mission/checklist evidence integration.
+
+### MBL-02 — Reusable WinUI design system
+**Estimated effort: ~1–3 developer days**
+
+Production tokens/components for the retro-modern shell, vivid paper panels, controls, lists, status states, typography and accessibility.
+
+### MBL-23 — Settings / diagnostics system
+**Estimated effort: ~2–4 developer days**
+
+Full simulator health, inputs, tutorials, units, accessibility, backup/recovery, logs and optional-service controls.
+
+### MBL-01 — Production Home / Dashboard
+**Estimated effort: ~2–4 developer days**
+
+Full career home using real application data and the canonical OpenCareer visual language.
+
+Direct UI effort is modest, but final completion depends on real Jobs, Career, Aircraft and economy data being available.
+
+### MBL-22 — AI dispatcher / copilot / passengers
+**Estimated effort: ~2–5 developer days for the first production version**
+
+Optional narrative/dialogue layer that never owns authoritative game state.
+
+This estimate covers the first safe production integration, not an unlimited library of personalities/content.
+
+### MBL-12 — Debrief + Logbook
+**Estimated effort: ~3–6 developer days**
+
+Trustworthy flight/mission history, evidence, incidents, metrics and one-time settlement record.
+
+Depends heavily on authoritative FlightSession data.
+
+### MBL-04 — Live per-flight checklist
+**Estimated effort: ~3–6 developer days**
+
+Phase-aware preflight through shutdown checklist with trustworthy live auto-verification.
+
+### MBL-06 — FlightEvidenceProcessor
+**Estimated effort: ~4–7 developer days**
+
+Normalized telemetry to stable taxi/takeoff/airborne/approach/landing/go-around/parking evidence.
+
+Includes configuration, hysteresis, edge cases and regression coverage. Live calibration may extend elapsed calendar time.
+
+### MBL-24 — Installer / update / release pipeline
+**Estimated effort: ~4–8 developer days**
+
+Packaging, migrations, backups, production logging, performance validation, signing and update strategy.
+
+Final release acceptance naturally waits until the app is much closer to feature-complete.
+
+### MBL-05 — Controller + keyboard binding system
+**Estimated effort: ~4–8 developer days**
+
+Per-step verified bindings, UNBOUND states and aircraft/device-sensitive mapping.
+
+This is more uncertain than its size suggests because MSFS binding/profile accessibility must be proven rather than guessed.
+
+### MBL-15 — Aircraft purchasing + financing
+**Estimated effort: ~5–8 developer days**
+
+Persistent dealers/lenders, used/new inventory, loans, insurance and atomic ownership transfer.
+
+Credit/dealer domain foundations already exist, reducing remaining effort.
+
+### MBL-07 — Persistent FlightSession / recovery
+**Estimated effort: ~5–9 developer days**
+
+SQLite checkpoints, multi-leg sessions, route/event persistence, interruption recovery and duplicate-effect prevention.
+
+### MBL-16 — Hangars + Bases
+**Estimated effort: ~5–10 developer days**
+
+Physical fleet geography, storage, local services, relationships, expansion and reposition logistics.
+
+### MBL-13 — Career progression
+**Estimated effort: ~6–10 developer days**
+
+Licenses, ratings, experience, recency, reputation, relationships, qualifications and milestones.
+
+### MBL-20 — World Map
+**Estimated effort: ~6–12 developer days**
+
+Airports, bases, fleet/company geography, routes, opportunities, events, markets and authorized government/military overlays.
+
+### MBL-08 — Installed-aircraft registry
+**Estimated effort: ~7–12 developer days**
+
+Installed aircraft identity, capability/confidence, location/experience and installed/employer/rented/assigned/owned access.
+
+Aircraft discovery and reliable capability inference are the main uncertainty.
+
+### MBL-09 — Dispatch system
+**Estimated effort: ~7–14 developer days**
+
+Payload, fuel/range, runway, weather/environment, qualification and mission feasibility with explicit blocking reasons.
+
+### MBL-17 — Maintenance
+**Estimated effort: ~8–14 developer days**
+
+Wear, service, repairs, parts/MRO, downtime, history and supported incident consequences.
+
+### MBL-14 — Economy + Markets
+**Estimated effort: ~8–15 developer days**
+
+Authoritative persistent economy, named cargo, market pressure/events, long absence and bankruptcy/recovery.
+
+A substantial deterministic foundation already exists, which keeps this below a from-scratch economy implementation.
+
+### MBL-10 — Playable Jobs system
+**Estimated effort: ~10–18 developer days**
+
+Market/location/career-driven work with employee viability and accept-to-active-operation flow.
+
+This is where many earlier foundations become one playable product loop.
+
+### MBL-21 — MSFS EFB companion
+**Estimated effort: ~10–20 developer days**
+
+Thin in-sim projection for Current Flight, checklist, objectives, route and next action while Windows remains authoritative.
+
+MSFS SDK/version-sensitive behavior is the largest uncertainty.
+
+### MBL-18 — Company system
+**Estimated effort: ~12–25 developer days**
+
+Optional business ownership, contracts, routes, utilization, staff, margins and expansion while preserving employee-only play.
+
+### MBL-19 — Military / Government career system
+**Estimated effort: ~15–30 developer days**
+
+Separate qualifications, assigned aircraft, patrol/surveillance/logistics/intercept/escort and later fictionalized conflict operations.
+
+### MBL-11 — Specialized mission framework
+**Estimated effort: ~20–40+ developer days for the full planned family set**
+
+Banner tow, carrier operations, glider tow, skydiving, firefighting, SAR, survey, medevac, special government work and other unique mission families.
+
+This is the largest single feature family because each mission type needs:
+
+- deterministic objectives,
+- simulator evidence,
+- failure/recovery handling,
+- aircraft/capability constraints,
+- UI/checklist behavior,
+- tutorial integration,
+- tests,
+- and mission-specific balancing.
