@@ -333,6 +333,97 @@ public sealed class LogbookDebriefTests
         Assert.False(debrief.Assistance.RouteEvidenceCompromised);
     }
 
+
+    [Fact]
+    public void QueryMatcherSearchesRouteAircraftPayloadAndEvents()
+    {
+        FlightDebrief debrief = FlightDebriefFactory.Create(
+            Draft(
+                contractId: null,
+                entryKind: LogbookEntryKind.FreeFlight,
+                missionOutcome: MissionOutcome.NotApplicable,
+                events:
+                [
+                    new(
+                        Guid.NewGuid(),
+                        Start.AddMinutes(20),
+                        "Weather",
+                        DebriefEventSeverity.Advisory,
+                        "Diverted around thunderstorms",
+                        EvidenceQuality.Observed)
+                ],
+                settlement: FlightSettlementRecord.NotApplicable));
+
+        LogbookEntry entry = LogbookEntry.Commit(
+            Guid.NewGuid(),
+            debrief,
+            Start.AddMinutes(95),
+            LogbookCommitKind.ManualPilotLog);
+
+        Assert.True(LogbookQueryMatcher.Matches(
+            entry,
+            new LogbookQuery(SearchText: "Cessna")));
+
+        Assert.True(LogbookQueryMatcher.Matches(
+            entry,
+            new LogbookQuery(SearchText: "KBBB")));
+
+        Assert.True(LogbookQueryMatcher.Matches(
+            entry,
+            new LogbookQuery(SearchText: "General cargo")));
+
+        Assert.True(LogbookQueryMatcher.Matches(
+            entry,
+            new LogbookQuery(SearchText: "thunderstorms")));
+
+        Assert.False(LogbookQueryMatcher.Matches(
+            entry,
+            new LogbookQuery(SearchText: "Boeing")));
+    }
+
+    [Fact]
+    public void QueryMatcherAppliesTypeOutcomeAndDateFilters()
+    {
+        FlightDebrief debrief = FlightDebriefFactory.Create(
+            Draft(
+                contractId: null,
+                entryKind: LogbookEntryKind.FreeFlight,
+                missionOutcome: MissionOutcome.NotApplicable,
+                settlement: FlightSettlementRecord.NotApplicable));
+
+        LogbookEntry entry = LogbookEntry.Commit(
+            Guid.NewGuid(),
+            debrief,
+            Start.AddMinutes(95),
+            LogbookCommitKind.ManualPilotLog);
+
+        Assert.True(LogbookQueryMatcher.Matches(
+            entry,
+            new LogbookQuery(
+                From: Start,
+                To: Start.AddHours(2),
+                EntryKind: LogbookEntryKind.FreeFlight,
+                SafetyOutcome: FlightSafetyOutcome.CompletedNormally)));
+
+        Assert.False(LogbookQueryMatcher.Matches(
+            entry,
+            new LogbookQuery(EntryKind: LogbookEntryKind.CareerJob)));
+
+        Assert.False(LogbookQueryMatcher.Matches(
+            entry,
+            new LogbookQuery(To: Start.AddMinutes(30))));
+    }
+
+    [Fact]
+    public void QueryRejectsInvalidDateRange()
+    {
+        LogbookQuery query = new(
+            From: Start.AddHours(2),
+            To: Start);
+
+        Assert.Throws<ArgumentException>(query.Validate);
+    }
+
     private static FlightDebriefDraft Draft(
         Guid? contractId = null,
         LogbookEntryKind entryKind = LogbookEntryKind.CareerJob,

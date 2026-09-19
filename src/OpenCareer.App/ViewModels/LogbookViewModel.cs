@@ -14,6 +14,9 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
         Array.Empty<LogbookEntryItemViewModel>();
     private LogbookEntryItemViewModel? _selectedEntry;
     private LogbookStatistics _statistics = LogbookStatistics.Empty;
+    private string _searchText = string.Empty;
+    private LogbookEntryKind? _entryKindFilter;
+    private FlightSafetyOutcome? _safetyOutcomeFilter;
 
     public LogbookViewModel(ILogbookSource source)
     {
@@ -48,6 +51,25 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
         $"{_statistics.FullStopLandingCount} full-stop • " +
         $"{_statistics.TouchAndGoCount} touch-and-go • " +
         $"{_statistics.StopAndGoCount} stop-and-go";
+
+    public string FilterSummaryText
+    {
+        get
+        {
+            var filters = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(_searchText))
+                filters.Add($"Search: {_searchText.Trim()}");
+            if (_entryKindFilter is { } kind)
+                filters.Add($"Type: {Friendly(kind)}");
+            if (_safetyOutcomeFilter is { } safety)
+                filters.Add($"Outcome: {Friendly(safety)}");
+
+            return filters.Count == 0
+                ? "Showing all committed flights."
+                : string.Join(" • ", filters);
+        }
+    }
 
     public string StatusText =>
         _entries.Count == 0
@@ -94,14 +116,17 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        if (!await _refreshGate.WaitAsync(0, cancellationToken).ConfigureAwait(true))
-            return;
+        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(true);
 
         try
         {
             IReadOnlyList<LogbookEntry> entries =
                 await _source.QueryAsync(
-                    new LogbookQuery(Limit: 200),
+                    new LogbookQuery(
+                        SearchText: _searchText,
+                        EntryKind: _entryKindFilter,
+                        SafetyOutcome: _safetyOutcomeFilter,
+                        Limit: 200),
                     cancellationToken).ConfigureAwait(true);
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -129,6 +154,17 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
         }
     }
 
+    public void SetFilters(
+        string? searchText,
+        LogbookEntryKind? entryKind,
+        FlightSafetyOutcome? safetyOutcome)
+    {
+        _searchText = searchText ?? string.Empty;
+        _entryKindFilter = entryKind;
+        _safetyOutcomeFilter = safetyOutcome;
+        OnPropertyChanged(nameof(FilterSummaryText));
+    }
+
     public void SelectEntry(LogbookEntryItemViewModel? entry)
     {
         if (ReferenceEquals(_selectedEntry, entry))
@@ -142,6 +178,7 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(Entries));
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(FilterSummaryText));
         OnPropertyChanged(nameof(TotalFlightTimeText));
         OnPropertyChanged(nameof(CareerCreditText));
         OnPropertyChanged(nameof(ExperienceDimensionsText));

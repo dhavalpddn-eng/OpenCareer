@@ -87,6 +87,46 @@
                     <StackPanel Spacing="12">
                         <TextBlock Text="COMMITTED FLIGHTS"
                                    Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+
+                        <TextBox x:Name="SearchBox"
+                                 PlaceholderText="Search airport, aircraft, cargo or event"
+                                 Style="{StaticResource OpenCareerTextBoxStyle}"
+                                 TextChanged="FilterControl_Changed" />
+
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <ComboBox x:Name="KindFilter"
+                                      SelectedIndex="0"
+                                      SelectionChanged="FilterControl_Changed">
+                                <ComboBoxItem Content="All flight types" Tag="" />
+                                <ComboBoxItem Content="Career jobs" Tag="CareerJob" />
+                                <ComboBoxItem Content="Free flight" Tag="FreeFlight" />
+                                <ComboBoxItem Content="Training" Tag="Training" />
+                                <ComboBoxItem Content="Reposition" Tag="Reposition" />
+                                <ComboBoxItem Content="Other" Tag="Other" />
+                            </ComboBox>
+
+                            <ComboBox x:Name="SafetyFilter"
+                                      Grid.Column="1"
+                                      SelectedIndex="0"
+                                      SelectionChanged="FilterControl_Changed">
+                                <ComboBoxItem Content="All outcomes" Tag="" />
+                                <ComboBoxItem Content="Completed normally" Tag="CompletedNormally" />
+                                <ComboBoxItem Content="Completed with incident" Tag="CompletedWithIncident" />
+                                <ComboBoxItem Content="Diverted safely" Tag="DivertedSafely" />
+                                <ComboBoxItem Content="Interrupted" Tag="Interrupted" />
+                                <ComboBoxItem Content="Crashed" Tag="Crashed" />
+                            </ComboBox>
+                        </Grid>
+
+                        <TextBlock Text="{Binding FilterSummaryText}"
+                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                   TextWrapping="Wrap" />
+
                         <ListView x:Name="EntryList"
                                   ItemsSource="{Binding Entries}"
                                   Style="{StaticResource OpenCareerListViewStyle}"
