@@ -1,5 +1,7 @@
 # OpenCareer UI design system
 
+> **Visual authority:** `docs/ui-design-language.md` is canonical for palette, material treatment and overall aesthetic. This file defines implementation-oriented layout/tokens/behavior. If older wording here conflicts visually with the canonical design language, follow `ui-design-language.md`.
+
 Status: approved visual direction and implementation reference. This document defines the shared shell, visual tokens, layout rules, adaptive behavior and interaction rules for the production WinUI 3 application.
 
 The current executable remains intentionally smaller than this target. Do not display fabricated balances, jobs, aircraft ownership, war state or mission progress merely to match the mockups. Populate a surface only when the corresponding application/domain data exists.
