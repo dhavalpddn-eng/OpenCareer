@@ -29,10 +29,10 @@ These are gameplay stress values, not real-world aircraft maintenance claims.
 
 | Aircraft class | Qualifications used by review | Routine maintenance / h | Repair reserve / h | Base major repair | Operating reserve |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Basic piston | 1 | $11.50 | $8 | $3,000 | $4,000 |
-| Advanced piston/twin | 2 | $30 | $25 | $10,000 | $14,000 |
-| Turboprop | 3 | $70 | $55 | $18,000 | $25,000 |
-| Light jet | 4 | $140 | $110 | $40,000 | $60,000 |
+| Basic piston | 1 | $11.50 | **$12** | $3,000 | $4,000 |
+| Advanced piston/twin | 2 | $30 | **$32** | $10,000 | $14,000 |
+| Turboprop | 3 | $70 | **$70** | $18,000 | $25,000 |
+| Light jet | 4 | $140 | **$140** | $40,000 | $60,000 |
 | Midsize/regional | 5 | $260 | $210 | $90,000 | $140,000 |
 | Heavy transport | 6 | $500 | $420 | $220,000 | $350,000 |
 
@@ -89,7 +89,7 @@ Production should solve this through the finance/income-history design, qualific
 
 At 65% condition the provisional repair model produces:
 
-- routine + repair reserve: about **$31.81/h**;
+- routine + repair reserve: about **$39.81/h**;
 - representative major repair exposure: **$5,400**;
 - starter operating reserve: **$4,000**.
 
@@ -120,3 +120,6 @@ This prevents the economy from requiring ownership of every aircraft class just 
 ## Explicit airline tiers
 
 The review now distinguishes **regional jet**, **narrowbody airliner** and **widebody airliner** instead of lumping all airline flying into a generic heavy-aircraft tier. See `docs/airline-career-path.md` for the employer-aircraft progression and company-system boundary.
+
+
+The bold repair-reserve values above supersede the original first-pass values after the 100-career long-term stress audit. See `docs/long-term-career-balance-audit.md`.
