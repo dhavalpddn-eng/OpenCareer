@@ -109,11 +109,11 @@ Chapter status: **ACTIVE**
 
 ## Remaining
 
-- [ ] Implement tutorial catalog + feature-readiness boundary.
-- [ ] Implement WinUI first-run tutorial overlay with Back / Next / Skip / Finish.
-- [ ] Persist tutorial version/progress independently from authoritative career state.
-- [ ] Add Settings action to restart the intro tutorial.
-- [ ] Bind real focus targets only for implemented screens; label unfinished destinations Coming later.
+- [x] Implement tutorial catalog + feature-readiness boundary.
+- [x] Implement WinUI first-run tutorial overlay with Back / Next / Skip / Finish.
+- [x] Persist tutorial version/progress independently from authoritative career state.
+- [x] Add Settings action to restart the intro tutorial.
+- [ ] Add per-control spotlight/focus targets; page navigation and **Coming Later** readiness labels are implemented.
 - [ ] Launch and inspect the production app locally on the user's Windows machine with MSFS closed.
 - [ ] Verify NavigationView interaction locally.
 - [ ] Verify resize/adaptive behavior on practical desktop window widths.
@@ -521,9 +521,9 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Define per-flight contextual checklist UX with inline controller/keyboard binding state.
 - [x] Define layered onboarding: app tutorial, first-job tutorial and first-time mission-family tutorials.
 - [x] Define mission-family tutorial behavior for unique procedures in `docs/mission-tutorial-system.md`.
-- [ ] Implement versioned mission tutorial catalog + progress store.
+- [x] Implement shared versioned tutorial catalog + progress store with app intro, first-job, banner-tow and carrier-operation definitions.
 - [ ] Require a tutorial definition before a specialized mission family is considered production-ready.
-- [ ] Implement first-use guided tutorials for banner tow and carrier takeoff/landing when those mission families are built.
+- [ ] Bind banner-tow and carrier takeoff/landing tutorials automatically to first mission use and live mission/checklist evidence when those mission families are built.
 - [ ] Implement per-flight checklist phases and **Show checklist every flight** setting.
 - [ ] Implement controller/keyboard binding resolution/profile source without guessed bindings.
 - [ ] Render missing controller/keyboard mappings as visible amber/orange **UNBOUND** and required/critical missing mappings as red **UNBOUND — REQUIRED**.
