@@ -38,9 +38,9 @@ Remaining before removal:
 ### MBL-02 — Reusable WinUI design system — IN PROGRESS
 **Estimated remaining effort: ~0.5–2 developer days**
 
-The application now has centralized Jet Age design tokens and reusable WinUI typography, paper/metal panel, button and status-badge styles. Dashboard, Current Flight, Settings, placeholders, shell surfaces and the tutorial overlay have begun migrating to the shared resources.
+The reusable code layer is implemented: centralized Jet Age tokens plus shared typography, paper/metal panels, buttons, form controls, toggles, tabs, lists, ledger/table rows and semantic status styles. Dashboard, Current Flight, Settings, placeholders, shell surfaces and the tutorial overlay use the shared resources. Automated design-contract tests lock the vivid-ivory palette, contrast and required component keys.
 
-Remaining before removal: successful Windows XAML build verification, local visual/accessibility acceptance, any missing reusable list/input/tab states, and removal of remaining page-level visual drift.
+Remaining before removal: successful Windows XAML build verification and local interactive/visual/accessibility acceptance. Current GitHub Actions attempts are failing before runner steps begin, so they are not reporting a code failure.
 
 ### MBL-23 — Settings / diagnostics system
 **Estimated effort: ~2–4 developer days**
