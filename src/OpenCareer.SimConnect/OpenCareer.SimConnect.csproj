@@ -3,6 +3,7 @@
     <ProjectReference Include="../OpenCareer.Application/OpenCareer.Application.csproj" />
     <ProjectReference Include="../OpenCareer.Domain/OpenCareer.Domain.csproj" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Polly.Core" Version="8.8.0" />
     <InternalsVisibleTo Include="OpenCareer.Tests" />
   </ItemGroup>
 </Project>
