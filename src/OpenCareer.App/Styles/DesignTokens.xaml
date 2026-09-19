@@ -33,6 +33,7 @@
     <Color x:Key="OpenCareerWarningColor">#C58327</Color>
     <Color x:Key="OpenCareerDangerColor">#B8453E</Color>
     <Color x:Key="OpenCareerDisabledColor">#7B878E</Color>
+    <Color x:Key="OpenCareerTutorialScrimColor">#B30A1118</Color>
 
     <SolidColorBrush x:Key="OpenCareerShellBackgroundBrush" Color="{StaticResource OpenCareerShellBackgroundColor}" />
     <SolidColorBrush x:Key="OpenCareerShellRaisedBrush" Color="{StaticResource OpenCareerShellRaisedColor}" />
@@ -59,6 +60,7 @@
     <SolidColorBrush x:Key="OpenCareerWarningBrush" Color="{StaticResource OpenCareerWarningColor}" />
     <SolidColorBrush x:Key="OpenCareerDangerBrush" Color="{StaticResource OpenCareerDangerColor}" />
     <SolidColorBrush x:Key="OpenCareerDisabledBrush" Color="{StaticResource OpenCareerDisabledColor}" />
+    <SolidColorBrush x:Key="OpenCareerTutorialScrimBrush" Color="{StaticResource OpenCareerTutorialScrimColor}" />
 
     <!-- Compatibility aliases for existing pages while the app is migrated onto canonical names. -->
     <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource OpenCareerShellBackgroundColor}" />

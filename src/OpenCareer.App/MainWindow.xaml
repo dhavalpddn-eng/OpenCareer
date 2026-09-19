@@ -74,7 +74,7 @@
 
         <Grid x:Name="TutorialLayer"
               Visibility="Collapsed"
-              Background="#B30A1118">
+              Background="{StaticResource OpenCareerTutorialScrimBrush}">
             <Border Width="620"
                     MaxHeight="760"
                     HorizontalAlignment="Center"

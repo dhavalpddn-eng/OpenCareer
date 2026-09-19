@@ -60,11 +60,32 @@
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="22">
-                <StackPanel Spacing="8">
+                <StackPanel Spacing="12">
                     <TextBlock Text="SIMULATOR"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="Diagnostics &amp; preferences"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
                     <TextBlock Text="Detailed connection diagnostics and input/checklist preferences will be added as their production systems are implemented."
                                Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <Border Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="SHOW CHECKLIST EVERY FLIGHT"
+                                           Style="{StaticResource OpenCareerInputLabelStyle}" />
+                                <TextBlock Text="Visual design-system preview only. Persistence arrives with the live checklist feature."
+                                           Style="{StaticResource OpenCareerInputHelpStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsEnabled="False"
+                                          OffContent="Coming later"
+                                          Style="{StaticResource OpenCareerToggleSwitchStyle}" />
+                        </Grid>
+                    </Border>
                 </StackPanel>
             </Border>
         </StackPanel>
