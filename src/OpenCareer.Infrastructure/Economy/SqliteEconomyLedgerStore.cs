@@ -11,7 +11,7 @@ namespace OpenCareer.Infrastructure.Economy;
 public sealed class SqliteEconomyLedgerStore :
     IAircraftAcquisitionStore,
     ICashGuardedEconomyLedgerStore,
-    IJobContractStore
+    IPersistedContractSettlementStore
 {
     private static readonly JsonSerializerOptions ContractJsonOptions =
         new(JsonSerializerDefaults.Web);
@@ -187,6 +187,131 @@ public sealed class SqliteEconomyLedgerStore :
 
             sqliteTransaction.Commit();
             return JobContractSaveResult.Updated;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    public async Task<LedgerPostResult> CompleteAndPostContractSettlementAsync(
+        JobContract completedContract,
+        long expectedContractVersion,
+        ContractSettlementSummary settlement,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(completedContract);
+        ArgumentNullException.ThrowIfNull(settlement);
+        completedContract.Validate();
+        settlement.Validate();
+
+        if (completedContract.Status != ContractStatus.Completed)
+        {
+            throw new InvalidOperationException(
+                "Only a completed contract can be atomically settled.");
+        }
+
+        if (expectedContractVersion < 0)
+            throw new ArgumentOutOfRangeException(nameof(expectedContractVersion));
+
+        if (settlement.ContractId != completedContract.ContractId
+            || settlement.Transaction.TransactionId != completedContract.ContractId)
+        {
+            throw new ArgumentException(
+                "Settlement does not belong to the completed contract.",
+                nameof(settlement));
+        }
+
+        await _writeGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await EnableForeignKeysAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            using var sqliteTransaction = connection.BeginTransaction();
+
+            PersistedJobContract persisted =
+                await ReadJobContractAsync(
+                    connection,
+                    sqliteTransaction,
+                    completedContract.ContractId,
+                    cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException(
+                    "Persisted job contract was not found.");
+
+            string? existingId =
+                await FindExistingTransactionIdAsync(
+                    connection,
+                    sqliteTransaction,
+                    settlement.Transaction.TransactionId,
+                    settlement.Transaction.IdempotencyKey,
+                    cancellationToken).ConfigureAwait(false);
+
+            if (existingId is not null)
+            {
+                EconomyLedgerTransaction existingTransaction =
+                    await ReadTransactionAsync(
+                        connection,
+                        sqliteTransaction,
+                        Guid.Parse(existingId),
+                        cancellationToken).ConfigureAwait(false);
+
+                if (!Equivalent(
+                        existingTransaction,
+                        settlement.Transaction)
+                    || persisted.Contract != completedContract)
+                {
+                    throw new InvalidOperationException(
+                        "Existing contract settlement conflicts with the persisted completed contract.");
+                }
+
+                return LedgerPostResult.AlreadyPosted;
+            }
+
+            if (persisted.Version != expectedContractVersion)
+            {
+                throw new InvalidOperationException(
+                    "Job contract changed before completion settlement. Re-read and retry.");
+            }
+
+            if (!EquivalentImmutableContract(
+                    persisted.Contract,
+                    completedContract))
+            {
+                throw new InvalidOperationException(
+                    "Completed contract economic or dispatch terms differ from the persisted contract.");
+            }
+
+            if (!AllowedContractTransition(
+                    persisted.Contract.Status,
+                    completedContract.Status))
+            {
+                throw new InvalidOperationException(
+                    $"Persisted job contract cannot transition from {persisted.Contract.Status} to {completedContract.Status}.");
+            }
+
+            await InsertTransactionAsync(
+                connection,
+                sqliteTransaction,
+                settlement.Transaction,
+                cancellationToken).ConfigureAwait(false);
+
+            await UpdateJobContractRowAsync(
+                connection,
+                sqliteTransaction,
+                completedContract,
+                checked(persisted.Version + 1),
+                persisted.Version,
+                cancellationToken).ConfigureAwait(false);
+
+            sqliteTransaction.Commit();
+            return LedgerPostResult.Posted;
         }
         finally
         {
