@@ -55,6 +55,7 @@ inflation, WinUI 3 and SimConnect integration remain unfinished.
 - [Instruction alignment review and foundation acceptance](docs/instruction-alignment.md)
 - [Current simulation rules and verification](docs/simulation-model.md)
 - [Offline OurAirports, OpenAIP and FAA NASR reference data](docs/aviation-reference-data.md)
+- [NeoFly and OnAir design references](docs/career-platform-references.md)
 - [Remaining work, next milestone and gameplay decisions](docs/development-backlog.md)
 
 Run the same regression suite as CI:
