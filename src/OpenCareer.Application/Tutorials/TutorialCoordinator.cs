@@ -47,7 +47,7 @@ public sealed class TutorialCoordinator(
 
     public async Task NextAsync(CancellationToken cancellationToken = default)
     {
-        if (!TryGetActive(out TutorialDefinition? definition, out TutorialProgress? progress))
+        if (!TryGetActive(out TutorialDefinition definition, out TutorialProgress progress))
             return;
 
         if (Current.IsLastStep)
@@ -69,7 +69,7 @@ public sealed class TutorialCoordinator(
 
     public async Task BackAsync(CancellationToken cancellationToken = default)
     {
-        if (!TryGetActive(out TutorialDefinition? definition, out TutorialProgress? progress) ||
+        if (!TryGetActive(out TutorialDefinition definition, out TutorialProgress progress) ||
             Current.CurrentIndex <= 0)
         {
             return;
@@ -84,7 +84,7 @@ public sealed class TutorialCoordinator(
 
     public async Task SkipAsync(CancellationToken cancellationToken = default)
     {
-        if (!TryGetActive(out TutorialDefinition? definition, out TutorialProgress? progress))
+        if (!TryGetActive(out TutorialDefinition definition, out TutorialProgress progress))
             return;
 
         TutorialProgress skipped = progress with
@@ -178,12 +178,21 @@ public sealed class TutorialCoordinator(
     }
 
     private bool TryGetActive(
-        out TutorialDefinition? definition,
-        out TutorialProgress? progress)
+        out TutorialDefinition definition,
+        out TutorialProgress progress)
     {
-        definition = _activeDefinition;
-        progress = _activeProgress;
-        return Current.IsActive && definition is not null && progress is not null;
+        if (Current.IsActive &&
+            _activeDefinition is TutorialDefinition activeDefinition &&
+            _activeProgress is TutorialProgress activeProgress)
+        {
+            definition = activeDefinition;
+            progress = activeProgress;
+            return true;
+        }
+
+        definition = null!;
+        progress = null!;
+        return false;
     }
 
     private static int FindResumeIndex(TutorialDefinition definition, string? stepId)
