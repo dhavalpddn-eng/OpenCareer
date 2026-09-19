@@ -23,7 +23,15 @@ public static class RouteTrackProjection
             .ToArray();
 
         if (allPoints.Length == 0)
-            return Array.Empty<ProjectedRouteLeg>();
+        {
+            return legs
+                .OrderBy(static leg => leg.Sequence)
+                .Select(static leg =>
+                    new ProjectedRouteLeg(
+                        leg.Sequence,
+                        Array.Empty<ProjectedRoutePoint>()))
+                .ToArray();
+        }
 
         double minLatitude = allPoints.Min(static point => point.LatitudeDegrees);
         double maxLatitude = allPoints.Max(static point => point.LatitudeDegrees);
