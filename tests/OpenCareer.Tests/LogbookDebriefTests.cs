@@ -180,6 +180,103 @@ public sealed class LogbookDebriefTests
                 Draft(events: [invalid])));
     }
 
+
+    [Fact]
+    public void StatisticsAggregateOnlyCommittedEntryFacts()
+    {
+        FlightDebrief firstDebrief = FlightDebriefFactory.Create(
+            Draft(
+                contractId: null,
+                entryKind: LogbookEntryKind.FreeFlight,
+                missionOutcome: MissionOutcome.NotApplicable,
+                settlement: FlightSettlementRecord.NotApplicable));
+
+        LogbookEntry first = LogbookEntry.Commit(
+            Guid.NewGuid(),
+            firstDebrief,
+            Start.AddMinutes(95),
+            LogbookCommitKind.ManualPilotLog);
+
+        FlightDebrief secondDebrief = FlightDebriefFactory.Create(
+            Draft(
+                contractId: null,
+                entryKind: LogbookEntryKind.FreeFlight,
+                missionOutcome: MissionOutcome.NotApplicable,
+                landings:
+                [
+                    new(
+                        1,
+                        Start.AddMinutes(70),
+                        LandingOperationType.TouchAndGo,
+                        0,
+                        -180,
+                        1.08,
+                        58,
+                        3,
+                        0,
+                        false,
+                        EvidenceQuality.DerivedHighConfidence)
+                ],
+                settlement: FlightSettlementRecord.NotApplicable));
+
+        LogbookEntry second = LogbookEntry.Commit(
+            Guid.NewGuid(),
+            secondDebrief,
+            Start.AddMinutes(95),
+            LogbookCommitKind.ManualPilotLog);
+
+        LogbookStatistics stats =
+            LogbookStatisticsCalculator.Calculate([first, second]);
+
+        Assert.Equal(2, stats.FlightCount);
+        Assert.Equal(TimeSpan.FromMinutes(140), stats.MovementFlightTime);
+        Assert.Equal(TimeSpan.FromMinutes(120), stats.CareerCreditTime);
+        Assert.Equal(2, stats.TakeoffCount);
+        Assert.Equal(2, stats.LandingEpisodeCount);
+        Assert.Equal(1, stats.FullStopLandingCount);
+        Assert.Equal(1, stats.TouchAndGoCount);
+    }
+
+    [Fact]
+    public void StatisticsDoNotInventLandingTypeWhenEvidenceIsUnknown()
+    {
+        FlightDebrief debrief = FlightDebriefFactory.Create(
+            Draft(
+                contractId: null,
+                entryKind: LogbookEntryKind.FreeFlight,
+                missionOutcome: MissionOutcome.NotApplicable,
+                landings:
+                [
+                    new(
+                        1,
+                        Start.AddMinutes(70),
+                        LandingOperationType.Unknown,
+                        0,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        EvidenceQuality.Unavailable)
+                ],
+                settlement: FlightSettlementRecord.NotApplicable));
+
+        LogbookEntry entry = LogbookEntry.Commit(
+            Guid.NewGuid(),
+            debrief,
+            Start.AddMinutes(95),
+            LogbookCommitKind.ManualPilotLog);
+
+        LogbookStatistics stats =
+            LogbookStatisticsCalculator.Calculate([entry]);
+
+        Assert.Equal(1, stats.LandingEpisodeCount);
+        Assert.Equal(0, stats.FullStopLandingCount);
+        Assert.Equal(0, stats.TouchAndGoCount);
+        Assert.Equal(0, stats.StopAndGoCount);
+    }
+
     private static FlightDebriefDraft Draft(
         Guid? contractId = null,
         LogbookEntryKind entryKind = LogbookEntryKind.CareerJob,

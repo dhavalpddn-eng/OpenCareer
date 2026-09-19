@@ -13,6 +13,7 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
     private IReadOnlyList<LogbookEntryItemViewModel> _entries =
         Array.Empty<LogbookEntryItemViewModel>();
     private LogbookEntryItemViewModel? _selectedEntry;
+    private LogbookStatistics _statistics = LogbookStatistics.Empty;
 
     public LogbookViewModel(ILogbookSource source)
     {
@@ -23,6 +24,28 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
 
     public IReadOnlyList<LogbookEntryItemViewModel> Entries => _entries;
     public LogbookEntryItemViewModel? SelectedEntry => _selectedEntry;
+    public IReadOnlyList<LogbookLandingItemViewModel> SelectedLandings =>
+        _selectedEntry?.Landings ?? Array.Empty<LogbookLandingItemViewModel>();
+    public IReadOnlyList<LogbookEventItemViewModel> SelectedEvents =>
+        _selectedEntry?.Events ?? Array.Empty<LogbookEventItemViewModel>();
+
+    public string TotalFlightTimeText =>
+        FormatDuration(_statistics.MovementFlightTime);
+
+    public string CareerCreditText =>
+        FormatDuration(_statistics.CareerCreditTime);
+
+    public string ExperienceDimensionsText =>
+        $"Night {FormatDuration(_statistics.NightCareerCreditTime)} • " +
+        $"Actual instrument {FormatDuration(_statistics.ActualInstrumentCareerCreditTime)}";
+
+    public string OperationsCountText =>
+        $"{_statistics.TakeoffCount} takeoffs • {_statistics.LandingEpisodeCount} landings";
+
+    public string LandingTypeCountText =>
+        $"{_statistics.FullStopLandingCount} full-stop • " +
+        $"{_statistics.TouchAndGoCount} touch-and-go • " +
+        $"{_statistics.StopAndGoCount} stop-and-go";
 
     public string StatusText =>
         _entries.Count == 0
@@ -69,6 +92,8 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
 
             cancellationToken.ThrowIfCancellationRequested();
 
+            _statistics = LogbookStatisticsCalculator.Calculate(entries);
+
             _entries = entries
                 .OrderByDescending(static entry => entry.Debrief.EndedAt)
                 .ThenBy(static entry => entry.EntryId)
@@ -103,6 +128,11 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(Entries));
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(TotalFlightTimeText));
+        OnPropertyChanged(nameof(CareerCreditText));
+        OnPropertyChanged(nameof(ExperienceDimensionsText));
+        OnPropertyChanged(nameof(OperationsCountText));
+        OnPropertyChanged(nameof(LandingTypeCountText));
         RaiseSelection();
     }
 
@@ -117,7 +147,14 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SelectedSettlementSummary));
         OnPropertyChanged(nameof(SelectedEventSummary));
         OnPropertyChanged(nameof(SelectedLandingSummary));
+        OnPropertyChanged(nameof(SelectedLandings));
+        OnPropertyChanged(nameof(SelectedEvents));
     }
+
+    private static string FormatDuration(TimeSpan value) =>
+        value.TotalHours >= 1
+            ? $"{(int)value.TotalHours}:{value.Minutes:00}"
+            : $"{value.Minutes}:{value.Seconds:00}";
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
@@ -130,7 +167,18 @@ public sealed class LogbookEntryItemViewModel
     public LogbookEntryItemViewModel(LogbookEntry entry)
     {
         _entry = entry ?? throw new ArgumentNullException(nameof(entry));
+
+        Landings = entry.Debrief.Landings
+            .Select(static landing => new LogbookLandingItemViewModel(landing))
+            .ToArray();
+
+        Events = entry.Debrief.Events
+            .Select(static item => new LogbookEventItemViewModel(item))
+            .ToArray();
     }
+
+    public IReadOnlyList<LogbookLandingItemViewModel> Landings { get; }
+    public IReadOnlyList<LogbookEventItemViewModel> Events { get; }
 
     public Guid EntryId => _entry.EntryId;
 
@@ -215,4 +263,80 @@ public sealed class LogbookEntryItemViewModel
                 index > 0 && char.IsUpper(character)
                     ? $" {character}"
                     : character.ToString()));
+}
+
+
+public sealed class LogbookLandingItemViewModel
+{
+    public LogbookLandingItemViewModel(LandingDebrief landing)
+    {
+        ArgumentNullException.ThrowIfNull(landing);
+
+        Title = $"Landing {landing.EpisodeNumber} • {Friendly(landing.OperationType)}";
+        When = landing.Timestamp.ToLocalTime().ToString("g");
+        Evidence = Friendly(landing.EvidenceQuality);
+        Bounces = $"{landing.BounceCount} bounce{(landing.BounceCount == 1 ? string.Empty : "s")}";
+
+        var metrics = new List<string>();
+        if (landing.VerticalSpeedFeetPerMinute is { } verticalSpeed)
+            metrics.Add($"{verticalSpeed:0} fpm");
+        if (landing.TouchdownG is { } touchdownG)
+            metrics.Add($"{touchdownG:0.00} G");
+        if (landing.IndicatedAirspeedKnots is { } airspeed)
+            metrics.Add($"{airspeed:0} kt IAS");
+        if (landing.PitchDegrees is { } pitch)
+            metrics.Add($"{pitch:0.0}° pitch");
+        if (landing.BankDegrees is { } bank)
+            metrics.Add($"{bank:0.0}° bank");
+
+        Metrics = metrics.Count == 0
+            ? "Touchdown metrics unavailable"
+            : string.Join(" • ", metrics);
+
+        HardLanding = landing.HardLanding switch
+        {
+            true => "Hard landing",
+            false => "No hard-landing classification",
+            null => "Hard-landing classification unavailable"
+        };
+    }
+
+    public string Title { get; }
+    public string When { get; }
+    public string Metrics { get; }
+    public string Bounces { get; }
+    public string HardLanding { get; }
+    public string Evidence { get; }
+
+    private static string Friendly<T>(T value)
+        where T : struct, Enum =>
+        string.Concat(
+            value.ToString().Select((character, index) =>
+                index > 0 && char.IsUpper(character)
+                    ? $" {character}"
+                    : character.ToString()));
+}
+
+public sealed class LogbookEventItemViewModel
+{
+    public LogbookEventItemViewModel(FlightDebriefEvent item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        When = item.Timestamp.ToLocalTime().ToString("g");
+        Category = item.Category.ToUpperInvariant();
+        Severity = item.Severity.ToString().ToUpperInvariant();
+        Text = item.Text;
+        Evidence = string.Concat(
+            item.EvidenceQuality.ToString().Select((character, index) =>
+                index > 0 && char.IsUpper(character)
+                    ? $" {character}"
+                    : character.ToString()));
+    }
+
+    public string When { get; }
+    public string Category { get; }
+    public string Severity { get; }
+    public string Text { get; }
+    public string Evidence { get; }
 }

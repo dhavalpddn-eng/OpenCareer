@@ -14,11 +14,66 @@
             </StackPanel>
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="20">
-                <StackPanel Spacing="4">
-                    <TextBlock Text="HISTORY STATUS"
-                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
-                    <TextBlock Text="{Binding StatusText}"
-                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="HISTORY STATUS"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="{Binding StatusText}"
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                    </StackPanel>
+
+                    <Grid ColumnSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Style="{StaticResource OpenCareerPaperInsetStyle}">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="FLIGHT TIME"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                <TextBlock Text="{Binding TotalFlightTimeText}"
+                                           Style="{StaticResource OpenCareerPaperValueStyle}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="1"
+                                Style="{StaticResource OpenCareerPaperInsetStyle}">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="CAREER CREDIT"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                <TextBlock Text="{Binding CareerCreditText}"
+                                           Style="{StaticResource OpenCareerPaperValueStyle}" />
+                                <TextBlock Text="{Binding ExperienceDimensionsText}"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="2"
+                                Style="{StaticResource OpenCareerPaperInsetStyle}">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="OPERATIONS"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                <TextBlock Text="{Binding OperationsCountText}"
+                                           Style="{StaticResource OpenCareerPaperValueStyle}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="3"
+                                Style="{StaticResource OpenCareerPaperInsetStyle}">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="LANDING TYPES"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                <TextBlock Text="{Binding LandingTypeCountText}"
+                                           Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </StackPanel>
             </Border>
 
@@ -149,6 +204,72 @@
                                 </StackPanel>
                             </Border>
                         </Grid>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="LANDING EPISODES"
+                                       Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                            <ItemsControl ItemsSource="{Binding SelectedLandings}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource OpenCareerPaperRuleBrush}"
+                                                BorderThickness="0,0,0,1"
+                                                Padding="0,8">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{Binding Title}"
+                                                           Style="{StaticResource OpenCareerTableCellTextStyle}"
+                                                           FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Metrics}"
+                                                           Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                                <TextBlock Text="{Binding Bounces}"
+                                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                                <TextBlock Text="{Binding HardLanding}"
+                                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                                <TextBlock Text="{Binding Evidence}"
+                                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="EVENTS / INCIDENTS"
+                                       Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                            <ItemsControl ItemsSource="{Binding SelectedEvents}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource OpenCareerPaperRuleBrush}"
+                                                BorderThickness="0,0,0,1"
+                                                Padding="0,8">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="130" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="170" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Category}"
+                                                               Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                                    <TextBlock Text="{Binding Severity}"
+                                                               Style="{StaticResource OpenCareerTableCellTextStyle}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Text}"
+                                                           Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                                           TextWrapping="Wrap" />
+                                                <StackPanel Grid.Column="2">
+                                                    <TextBlock Text="{Binding When}"
+                                                               Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                                    <TextBlock Text="{Binding Evidence}"
+                                                               Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
 
                         <TextBlock Text="Historical entries are frozen snapshots. Later tuning changes do not rewrite completed flight outcomes, evidence, or settlement references."
                                    Style="{StaticResource OpenCareerPaperBodyStyle}"
