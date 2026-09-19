@@ -171,6 +171,138 @@ public sealed class BeginnerLearningStressTests
             string.Join(Environment.NewLine, issues));
     }
 
+    [Fact]
+    public void RoughLandingDoesNotBlockOrdinaryCompletion()
+    {
+        BeginnerFlightAssessment assessment =
+            BeginnerFlightSupportPolicy.Default.Assess(
+                new BeginnerFlightAttempt(
+                    PriorCompletedFlights: 2,
+                    PriorCareerCreditHours: 3,
+                    IsTrainingOrPractice: false,
+                    ReachedPlannedDestination: true,
+                    RecoveredToPlannedDestination: false,
+                    RouteDeviationObserved: false,
+                    MissedPlannedWaypoint: false,
+                    UsedNavigationAssist: true,
+                    UsedAutopilot: false,
+                    GoAroundCount: 0,
+                    BounceCount: 2,
+                    TouchdownVerticalSpeedFeetPerMinute: -700,
+                    TouchdownG: 1.95,
+                    AircraftDamageObserved: false,
+                    RunwayExcursionObserved: false,
+                    CrashObserved: false));
+
+        Assert.True(assessment.MissionCompletionAllowed);
+        Assert.False(assessment.CareerFailure);
+        Assert.False(assessment.SmoothLandingRequired);
+        Assert.True(assessment.LandingCoachRecommended);
+        Assert.Equal(
+            BeginnerFlightOutcome.CompletedWithCoaching,
+            assessment.Outcome);
+    }
+
+    [Fact]
+    public void RouteDeviationCanBeRecoveredWithoutCareerFailure()
+    {
+        BeginnerFlightAssessment assessment =
+            BeginnerFlightSupportPolicy.Default.Assess(
+                new BeginnerFlightAttempt(
+                    PriorCompletedFlights: 1,
+                    PriorCareerCreditHours: 2,
+                    IsTrainingOrPractice: false,
+                    ReachedPlannedDestination: false,
+                    RecoveredToPlannedDestination: true,
+                    RouteDeviationObserved: true,
+                    MissedPlannedWaypoint: true,
+                    UsedNavigationAssist: true,
+                    UsedAutopilot: false,
+                    GoAroundCount: 0,
+                    BounceCount: 0,
+                    TouchdownVerticalSpeedFeetPerMinute: -250,
+                    TouchdownG: 1.20,
+                    AircraftDamageObserved: false,
+                    RunwayExcursionObserved: false,
+                    CrashObserved: false));
+
+        Assert.True(assessment.MissionCompletionAllowed);
+        Assert.False(assessment.CareerFailure);
+        Assert.False(assessment.RoutePerfectionRequired);
+        Assert.True(assessment.NavigationAssistRecommended);
+    }
+
+    [Fact]
+    public void SafeGoAroundIsCoachedAsGoodJudgment()
+    {
+        BeginnerFlightAssessment assessment =
+            BeginnerFlightSupportPolicy.Default.Assess(
+                new BeginnerFlightAttempt(
+                    PriorCompletedFlights: 0,
+                    PriorCareerCreditHours: 0,
+                    IsTrainingOrPractice: true,
+                    ReachedPlannedDestination: true,
+                    RecoveredToPlannedDestination: false,
+                    RouteDeviationObserved: false,
+                    MissedPlannedWaypoint: false,
+                    UsedNavigationAssist: true,
+                    UsedAutopilot: false,
+                    GoAroundCount: 2,
+                    BounceCount: 0,
+                    TouchdownVerticalSpeedFeetPerMinute: -180,
+                    TouchdownG: 1.10,
+                    AircraftDamageObserved: false,
+                    RunwayExcursionObserved: false,
+                    CrashObserved: false));
+
+        Assert.True(assessment.GoAroundWasSafeChoice);
+        Assert.False(assessment.CareerFailure);
+        Assert.True(assessment.MissionCompletionAllowed);
+    }
+
+    [Fact]
+    public void TrainingCrashDoesNotDamageCareerButPhysicalDamageStillCounts()
+    {
+        BeginnerFlightAssessment assessment =
+            BeginnerFlightSupportPolicy.Default.Assess(
+                new BeginnerFlightAttempt(
+                    PriorCompletedFlights: 30,
+                    PriorCareerCreditHours: 80,
+                    IsTrainingOrPractice: true,
+                    ReachedPlannedDestination: false,
+                    RecoveredToPlannedDestination: false,
+                    RouteDeviationObserved: false,
+                    MissedPlannedWaypoint: false,
+                    UsedNavigationAssist: true,
+                    UsedAutopilot: false,
+                    GoAroundCount: 0,
+                    BounceCount: 0,
+                    TouchdownVerticalSpeedFeetPerMinute: null,
+                    TouchdownG: null,
+                    AircraftDamageObserved: true,
+                    RunwayExcursionObserved: true,
+                    CrashObserved: true));
+
+        Assert.False(assessment.CareerFailure);
+        Assert.False(assessment.ReputationPenaltyAllowed);
+        Assert.False(assessment.EconomicPenaltyAllowed);
+        Assert.True(assessment.PhysicalAircraftConsequencesApply);
+        Assert.False(assessment.MissionCompletionAllowed);
+    }
+
+    [Fact]
+    public void GuidanceDoesNotFadeForAStillStrugglingExperiencedBeginner()
+    {
+        BeginnerGuidanceIntensity guidance =
+            BeginnerFlightSupportPolicy.Default.GuidanceFor(
+                completedFlights: 30,
+                careerCreditHours: 80,
+                recentDifficultyCount: 4,
+                recentWindowCount: 6);
+
+        Assert.Equal(BeginnerGuidanceIntensity.Full, guidance);
+    }
+
     private static BeginnerResult Simulate(
         BeginnerFlightSupportPolicy policy,
         BeginnerProfile profile,
@@ -228,12 +360,15 @@ public sealed class BeginnerLearningStressTests
                     _ => .95
                 };
 
+            // This is a stress-model assumption for a player who follows the
+            // landing coach/go-around prompts. It does not mean the app flies
+            // the aircraft for them.
             double unsafeLandingMultiplier =
                 guidance switch
                 {
-                    BeginnerGuidanceIntensity.Full => .45,
-                    BeginnerGuidanceIntensity.Standard => .65,
-                    _ => .85
+                    BeginnerGuidanceIntensity.Full => .30,
+                    BeginnerGuidanceIntensity.Standard => .50,
+                    _ => .75
                 };
 
             double routeErrorChance =
