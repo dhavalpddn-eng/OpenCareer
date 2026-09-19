@@ -116,11 +116,13 @@ public class JobMarketTests
     {
         var policy = JobMarketPolicy.Default;
         var inside = policy.DurationSuitability(ContractKind.Cargo, 3, 1);
+        var oneHour = policy.DurationSuitability(ContractKind.Cargo, 1, 1);
         var shortFlight = policy.DurationSuitability(ContractKind.Cargo, 0.5, 1);
         var longFlight = policy.DurationSuitability(ContractKind.Cargo, 7, 1);
         var experiencedLongFlight = policy.DurationSuitability(ContractKind.Cargo, 7, 20);
         var marathonFlight = policy.DurationSuitability(ContractKind.Cargo, 15, 50);
 
+        Assert.Equal(1.35, oneHour);
         Assert.True(inside > shortFlight);
         Assert.Equal(0, longFlight);
         Assert.Equal(0, experiencedLongFlight);
