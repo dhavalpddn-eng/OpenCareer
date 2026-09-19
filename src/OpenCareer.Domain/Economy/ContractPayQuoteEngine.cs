@@ -178,9 +178,26 @@ public static class ContractPayQuoteEngine
         request.Validate();
         effectivePolicy.Validate();
 
+        double extendedDutyProgress =
+            Math.Clamp(
+                (request.EstimatedFlightHours
+                    - effectivePolicy.ExtendedDutyStartHours)
+                / (effectivePolicy.ExtendedDutyFullPremiumHours
+                    - effectivePolicy.ExtendedDutyStartHours),
+                0.0,
+                1.0);
+
+        double extendedDutyMultiplier =
+            1.0
+            + effectivePolicy.MaximumExtendedDutyPremium
+                * extendedDutyProgress;
+
+        // Extended-duty premium is labor/time compensation. Do not multiply
+        // distance or payload value merely because the duty period is long.
         decimal timeComponent =
             effectivePolicy.TimeRatePerFlightHour
-            * (decimal)request.EstimatedFlightHours;
+            * (decimal)request.EstimatedFlightHours
+            * (decimal)extendedDutyMultiplier;
 
         decimal distanceComponent =
             effectivePolicy.DistanceRatePerNauticalMile
@@ -219,28 +236,13 @@ public static class ContractPayQuoteEngine
             + effectivePolicy.RelationshipPremium
                 * request.RelationshipStrength;
 
-        double extendedDutyProgress =
-            Math.Clamp(
-                (request.EstimatedFlightHours
-                    - effectivePolicy.ExtendedDutyStartHours)
-                / (effectivePolicy.ExtendedDutyFullPremiumHours
-                    - effectivePolicy.ExtendedDutyStartHours),
-                0.0,
-                1.0);
-
-        double extendedDutyMultiplier =
-            1.0
-            + effectivePolicy.MaximumExtendedDutyPremium
-                * extendedDutyProgress;
-
         decimal adjustedServiceValue =
             Money.Normalize(
                 coreServiceValue
                 * (decimal)demandMultiplier
                 * (decimal)urgencyMultiplier
                 * (decimal)difficultyMultiplier
-                * (decimal)relationshipMultiplier
-                * (decimal)extendedDutyMultiplier);
+                * (decimal)relationshipMultiplier);
 
         bool playerOwnsOperatingCosts =
             request.ServiceTrack is
