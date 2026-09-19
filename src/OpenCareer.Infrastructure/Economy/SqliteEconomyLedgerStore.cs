@@ -4,7 +4,7 @@ using OpenCareer.Domain.Economy;
 
 namespace OpenCareer.Infrastructure.Economy;
 
-public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore
+public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore, IAircraftPurchaseLedgerStore
 {
     private readonly string _connectionString;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
@@ -88,6 +88,134 @@ public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore
         {
             _writeGate.Release();
         }
+    }
+
+    public async Task<LedgerPostResult> PostAircraftPurchaseAsync(
+        AircraftPurchaseSettlement settlement,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settlement);
+        settlement.Validate();
+
+        await _writeGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await EnableForeignKeysAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            using var sqliteTransaction = connection.BeginTransaction();
+
+            AircraftPurchaseSettlement? existingPurchase =
+                await ReadAircraftPurchaseAsync(
+                    connection,
+                    sqliteTransaction,
+                    settlement.PurchaseId,
+                    cancellationToken).ConfigureAwait(false);
+
+            if (existingPurchase is not null)
+            {
+                if (!EquivalentAircraftPurchase(existingPurchase, settlement))
+                {
+                    throw new InvalidOperationException(
+                        "Aircraft purchase ID already exists with different financial data.");
+                }
+
+                return LedgerPostResult.AlreadyPosted;
+            }
+
+            string? consumedBy =
+                await FindConsumedListingOrOwnershipAsync(
+                    connection,
+                    sqliteTransaction,
+                    settlement.ListingId,
+                    settlement.OwnershipId,
+                    cancellationToken).ConfigureAwait(false);
+
+            if (consumedBy is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Aircraft listing or ownership is already consumed by purchase {consumedBy}.");
+            }
+
+            string? existingLedgerTransaction =
+                await FindExistingTransactionIdAsync(
+                    connection,
+                    sqliteTransaction,
+                    settlement.Transaction.TransactionId,
+                    settlement.Transaction.IdempotencyKey,
+                    cancellationToken).ConfigureAwait(false);
+
+            if (existingLedgerTransaction is not null)
+            {
+                throw new InvalidOperationException(
+                    "Aircraft purchase ledger identity is already in use without the matching purchase record.");
+            }
+
+            await InsertTransactionAsync(
+                connection,
+                sqliteTransaction,
+                settlement.Transaction,
+                cancellationToken).ConfigureAwait(false);
+
+            await InsertAircraftPurchaseAsync(
+                connection,
+                sqliteTransaction,
+                settlement,
+                cancellationToken).ConfigureAwait(false);
+
+            sqliteTransaction.Commit();
+            return LedgerPostResult.Posted;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    public async Task<AircraftPurchaseSettlement?> ReadAircraftPurchaseAsync(
+        string ownershipId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownershipId);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        Guid? purchaseId = null;
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText =
+                """
+                SELECT PurchaseId
+                FROM AircraftPurchases
+                WHERE OwnershipId = $ownershipId
+                LIMIT 1;
+                """;
+            command.Parameters.AddWithValue("$ownershipId", ownershipId);
+
+            object? result =
+                await command
+                    .ExecuteScalarAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (result is not null and not DBNull)
+                purchaseId = Guid.Parse(Convert.ToString(result, System.Globalization.CultureInfo.InvariantCulture)!);
+        }
+
+        return purchaseId is { } id
+            ? await ReadAircraftPurchaseAsync(
+                connection,
+                sqliteTransaction: null,
+                id,
+                cancellationToken).ConfigureAwait(false)
+            : null;
     }
 
     public async Task<ActivePlayBillingState> ReadActivePlayBillingStateAsync(
@@ -371,6 +499,25 @@ public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore
                     CycleProgressTicks INTEGER NOT NULL CHECK (CycleProgressTicks >= 0),
                     Version INTEGER NOT NULL CHECK (Version >= 0),
                     UpdatedAtUtcTicks INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS AircraftPurchases (
+                    PurchaseId TEXT NOT NULL PRIMARY KEY,
+                    OwnershipId TEXT NOT NULL UNIQUE,
+                    ListingId TEXT NOT NULL UNIQUE,
+                    AircraftId TEXT NOT NULL,
+                    SalePriceCents INTEGER NOT NULL CHECK (SalePriceCents > 0),
+                    CashPaidCents INTEGER NOT NULL CHECK (CashPaidCents >= 0),
+                    FinancedPrincipalCents INTEGER NOT NULL CHECK (FinancedPrincipalCents >= 0),
+                    PurchasedAtUtcTicks INTEGER NOT NULL,
+                    LoanId TEXT NULL UNIQUE,
+                    LenderId TEXT NULL,
+                    AnnualRate TEXT NULL,
+                    TermCycles INTEGER NULL,
+                    ScheduledPaymentCents INTEGER NULL,
+                    FOREIGN KEY (PurchaseId)
+                        REFERENCES EconomyLedgerTransactions(TransactionId)
+                        ON DELETE CASCADE
                 );
 
                 CREATE INDEX IF NOT EXISTS IX_EconomyLedgerTransactions_Occurred
