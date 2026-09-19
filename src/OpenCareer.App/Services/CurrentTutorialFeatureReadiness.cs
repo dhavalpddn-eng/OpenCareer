@@ -25,7 +25,10 @@ public sealed class CurrentTutorialFeatureReadiness : ITutorialFeatureReadiness
             ["military"] = TutorialFeatureState.ComingLater,
             ["logbook"] = TutorialFeatureState.ComingLater,
             ["career"] = TutorialFeatureState.ComingLater,
-            ["first-job"] = TutorialFeatureState.ComingLater
+            ["first-job"] = TutorialFeatureState.ComingLater,
+            ["mission-banner-tow"] = TutorialFeatureState.ComingLater,
+            ["mission-carrier-takeoff"] = TutorialFeatureState.ComingLater,
+            ["mission-carrier-landing"] = TutorialFeatureState.ComingLater
         };
 
     public TutorialFeatureState GetState(string featureKey) =>
