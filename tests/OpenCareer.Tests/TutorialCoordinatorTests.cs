@@ -112,6 +112,19 @@ public sealed class TutorialCoordinatorTests
         Assert.Equal(TutorialFeatureState.ComingLater, coordinator.Current.FeatureState);
     }
 
+    [Fact]
+    public void BuiltInCatalogContainsSpecializedTutorialPreviews()
+    {
+        var catalog = new AppTutorialCatalog();
+
+        Assert.NotNull(catalog.Get(AppTutorialCatalog.BannerTowId));
+        Assert.NotNull(catalog.Get(AppTutorialCatalog.CarrierTakeoffId));
+        Assert.NotNull(catalog.Get(AppTutorialCatalog.CarrierLandingId));
+        Assert.Equal(8, catalog.Get(AppTutorialCatalog.BannerTowId)?.Steps.Count);
+        Assert.Equal(5, catalog.Get(AppTutorialCatalog.CarrierTakeoffId)?.Steps.Count);
+        Assert.Equal(6, catalog.Get(AppTutorialCatalog.CarrierLandingId)?.Steps.Count);
+    }
+
     private static TutorialCoordinator CreateCoordinator(
         MemoryProgressStore store,
         int version) =>
