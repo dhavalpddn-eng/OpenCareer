@@ -25,4 +25,13 @@
     <ProjectReference Include="../../tools/OpenCareer.TraceAnalysis/OpenCareer.TraceAnalysis.csproj" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/ShellViewModel.cs" Link="ViewModels/ShellViewModel.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../src/OpenCareer.App/Styles/DesignTokens.xaml"
+          Link="UiDesign/DesignTokens.xaml"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/Styles/ComponentStyles.xaml"
+          Link="UiDesign/ComponentStyles.xaml"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
