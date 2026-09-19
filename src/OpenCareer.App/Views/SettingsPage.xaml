@@ -27,9 +27,16 @@
                     <TextBlock Text="Replay the full OpenCareer application walkthrough. Restarting the tutorial does not change career progress, money, flights, aircraft or qualifications."
                                TextWrapping="Wrap"
                                Foreground="{StaticResource AppMutedTextBrush}" />
-                    <Button Content="Restart intro tutorial"
-                            HorizontalAlignment="Left"
-                            Click="RestartIntro_Click" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Restart intro tutorial"
+                                Click="RestartIntro_Click" />
+                        <Button Content="Preview first-job walkthrough"
+                                Click="StartFirstJob_Click" />
+                    </StackPanel>
+                    <TextBlock Text="The first-job walkthrough is available for preview now. Job and Dispatch steps remain labeled Coming Later until those systems are implemented."
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource AppMutedTextBrush}" />
                 </StackPanel>
             </Border>
 
