@@ -4,12 +4,18 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
 {
     public const string AppIntroId = "app-intro";
     public const string FirstJobId = "first-job";
+    public const string BannerTowId = "mission-banner-tow";
+    public const string CarrierTakeoffId = "mission-carrier-takeoff";
+    public const string CarrierLandingId = "mission-carrier-landing";
 
     private readonly IReadOnlyDictionary<string, TutorialDefinition> _definitions =
         new Dictionary<string, TutorialDefinition>(StringComparer.Ordinal)
         {
             [AppIntroId] = CreateAppIntro(),
-            [FirstJobId] = CreateFirstJob()
+            [FirstJobId] = CreateFirstJob(),
+            [BannerTowId] = CreateBannerTow(),
+            [CarrierTakeoffId] = CreateCarrierTakeoff(),
+            [CarrierLandingId] = CreateCarrierLanding()
         };
 
     public TutorialDefinition? Get(string tutorialId) =>
@@ -115,6 +121,90 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
         ];
 
         return new TutorialDefinition(FirstJobId, 1, steps);
+    }
+
+    private static TutorialDefinition CreateBannerTow()
+    {
+        TutorialStep[] steps =
+        [
+            Step("banner-brief", "Banner tow briefing",
+                "This mission uses a pickup procedure that is different from a normal departure. Review the pickup area, direction and any mission-specific equipment before moving.",
+                "current-flight", "mission-banner-tow"),
+            Step("banner-setup", "Configure for pickup",
+                "Set the aircraft and mission equipment for the pickup run. OpenCareer will only auto-verify states that MSFS or the mission system can prove reliably.",
+                "current-flight", "mission-banner-tow"),
+            Step("banner-approach", "Fly the pickup approach",
+                "Approach the pickup line on the required path and speed. If the pickup is missed, climb away safely and reset for another attempt rather than forcing the maneuver.",
+                "current-flight", "mission-banner-tow"),
+            Step("banner-acquire", "Acquire the banner",
+                "Perform the pickup action. The live mission system will confirm attachment when supported; otherwise the step remains an explicit mission/manual confirmation.",
+                "current-flight", "mission-banner-tow"),
+            Step("banner-climb", "Climb with the banner",
+                "After a successful pickup, establish the mission-defined climb and tow profile before proceeding to the display route.",
+                "current-flight", "mission-banner-tow"),
+            Step("banner-tow", "Fly the tow route",
+                "Maintain the required route, altitude and speed envelope while towing. The mission evaluator will use real aircraft telemetry for geometry and flight evidence.",
+                "current-flight", "mission-banner-tow"),
+            Step("banner-release", "Release the banner",
+                "Enter the designated release area and perform the mission-defined release procedure. A release is not assumed from a generic simulator event.",
+                "current-flight", "mission-banner-tow"),
+            Step("banner-return", "Return and land",
+                "Return normally, land, taxi and complete the mission-defined terminal state. Banner release alone does not complete the job.",
+                "current-flight", "mission-banner-tow")
+        ];
+
+        return new TutorialDefinition(BannerTowId, 1, steps);
+    }
+
+    private static TutorialDefinition CreateCarrierTakeoff()
+    {
+        TutorialStep[] steps =
+        [
+            Step("carrier-to-brief", "Carrier takeoff briefing",
+                "Carrier departures use a different launch environment from a normal runway. Confirm the aircraft, deck position and launch method supported by the aircraft and scenery.",
+                "current-flight", "mission-carrier-takeoff"),
+            Step("carrier-to-config", "Configure for launch",
+                "Set the required flight controls, trim, flaps and other aircraft-specific launch configuration. Unsupported aircraft-specific switches remain cockpit/manual steps.",
+                "current-flight", "mission-carrier-takeoff"),
+            Step("carrier-to-ready", "Confirm launch readiness",
+                "Verify the launch area is correct and the aircraft is ready. OpenCareer will not invent catapult or deck-state telemetry that the simulator does not expose reliably.",
+                "current-flight", "mission-carrier-takeoff"),
+            Step("carrier-to-launch", "Launch",
+                "Apply the mission-defined launch procedure and maintain directional control. The tutorial will advance from trustworthy aircraft movement and airborne evidence where available.",
+                "current-flight", "mission-carrier-takeoff"),
+            Step("carrier-to-climb", "Climb away",
+                "Establish a safe climb-away profile and clear the carrier environment before transitioning to the mission route.",
+                "current-flight", "mission-carrier-takeoff")
+        ];
+
+        return new TutorialDefinition(CarrierTakeoffId, 1, steps);
+    }
+
+    private static TutorialDefinition CreateCarrierLanding()
+    {
+        TutorialStep[] steps =
+        [
+            Step("carrier-land-brief", "Carrier landing briefing",
+                "Carrier recovery is taught separately from carrier takeoff. Review the recovery method supported by the aircraft and carrier environment before beginning the approach.",
+                "current-flight", "mission-carrier-landing"),
+            Step("carrier-land-config", "Configure for recovery",
+                "Set the required gear, flaps, speed and aircraft-specific recovery configuration. Only verified simulator states auto-complete.",
+                "current-flight", "mission-carrier-landing"),
+            Step("carrier-land-lineup", "Establish the approach",
+                "Align with the carrier and stabilize the approach using the mission-defined geometry and tolerances.",
+                "current-flight", "mission-carrier-landing"),
+            Step("carrier-land-touchdown", "Touch down in the recovery zone",
+                "Fly the required touchdown. OpenCareer uses defensible position and flight evidence and will not claim native arresting-wire telemetry unless that integration is actually available.",
+                "current-flight", "mission-carrier-landing"),
+            Step("carrier-land-bolter", "Bolter / go-around",
+                "If the aircraft does not recover successfully, fly the safe go-around procedure and re-enter rather than treating the attempt as an automatic mission failure.",
+                "current-flight", "mission-carrier-landing"),
+            Step("carrier-land-secure", "Secure on deck",
+                "After a successful recovery, reach the mission-defined deck-safe or parked state before the operation can complete.",
+                "current-flight", "mission-carrier-landing")
+        ];
+
+        return new TutorialDefinition(CarrierLandingId, 1, steps);
     }
 
     private static TutorialStep Step(
