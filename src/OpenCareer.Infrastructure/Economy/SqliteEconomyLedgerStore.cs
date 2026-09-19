@@ -1,10 +1,11 @@
 using Microsoft.Data.Sqlite;
 using OpenCareer.Application.Economy;
 using OpenCareer.Domain.Economy;
+using OpenCareer.Domain.Finance;
 
 namespace OpenCareer.Infrastructure.Economy;
 
-public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore
+public sealed class SqliteEconomyLedgerStore : IAircraftAcquisitionStore
 {
     private readonly string _connectionString;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
@@ -191,6 +192,180 @@ public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore
         }
     }
 
+    public async Task<LedgerPostResult> AcquireAircraftAsync(
+        AircraftAcquisitionSettlement settlement,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settlement);
+        settlement.Validate();
+
+        await _writeGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await EnableForeignKeysAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            using var sqliteTransaction = connection.BeginTransaction();
+
+            string? existingId = await FindExistingTransactionIdAsync(
+                connection,
+                sqliteTransaction,
+                settlement.Transaction.TransactionId,
+                settlement.Transaction.IdempotencyKey,
+                cancellationToken).ConfigureAwait(false);
+
+            if (existingId is not null)
+            {
+                EconomyLedgerTransaction existing =
+                    await ReadTransactionAsync(
+                        connection,
+                        sqliteTransaction,
+                        Guid.Parse(existingId),
+                        cancellationToken).ConfigureAwait(false);
+
+                AircraftOwnershipRecord? persistedOwnership =
+                    await ReadAircraftOwnershipAsync(
+                        connection,
+                        sqliteTransaction,
+                        settlement.Ownership.OwnershipId,
+                        cancellationToken).ConfigureAwait(false);
+
+                AircraftLoanAgreement? persistedLoan =
+                    settlement.Loan is null
+                        ? null
+                        : await ReadAircraftLoanAsync(
+                            connection,
+                            sqliteTransaction,
+                            settlement.Loan.LoanId,
+                            cancellationToken).ConfigureAwait(false);
+
+                if (!Equivalent(existing, settlement.Transaction)
+                    || persistedOwnership != settlement.Ownership
+                    || persistedLoan != settlement.Loan)
+                {
+                    throw new InvalidOperationException(
+                        "Aircraft purchase identity already exists with different financial or ownership data.");
+                }
+
+                return LedgerPostResult.AlreadyPosted;
+            }
+
+            if (await ListingAlreadyConsumedAsync(
+                    connection,
+                    sqliteTransaction,
+                    settlement.Ownership.DealerId,
+                    settlement.Ownership.ListingId,
+                    cancellationToken).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException(
+                    "Dealer listing has already been purchased.");
+            }
+
+            if (await ReadAircraftOwnershipAsync(
+                    connection,
+                    sqliteTransaction,
+                    settlement.Ownership.OwnershipId,
+                    cancellationToken).ConfigureAwait(false)
+                is not null)
+            {
+                throw new InvalidOperationException(
+                    "Aircraft ownership ID already exists.");
+            }
+
+            decimal currentCash =
+                await ReadCashBalanceAsync(
+                    connection,
+                    sqliteTransaction,
+                    cancellationToken).ConfigureAwait(false);
+
+            decimal cashAfter =
+                currentCash + settlement.Transaction.CashChange;
+
+            if (cashAfter < settlement.RequiredOperatingReserve)
+            {
+                throw new InvalidOperationException(
+                    "Aircraft purchase would violate the required operating reserve using the authoritative ledger balance.");
+            }
+
+            await InsertTransactionAsync(
+                connection,
+                sqliteTransaction,
+                settlement.Transaction,
+                cancellationToken).ConfigureAwait(false);
+
+            await InsertAircraftOwnershipAsync(
+                connection,
+                sqliteTransaction,
+                settlement.Ownership,
+                cancellationToken).ConfigureAwait(false);
+
+            if (settlement.Loan is not null)
+            {
+                await InsertAircraftLoanAsync(
+                    connection,
+                    sqliteTransaction,
+                    settlement.Loan,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            await UpsertBillingStateAsync(
+                connection,
+                sqliteTransaction,
+                ActivePlayBillingState.Start(
+                    settlement.Ownership.OwnershipId),
+                cancellationToken).ConfigureAwait(false);
+
+            sqliteTransaction.Commit();
+            return LedgerPostResult.Posted;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    public async Task<AircraftOwnershipRecord?> ReadAircraftOwnershipAsync(
+        string ownershipId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownershipId);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        return await ReadAircraftOwnershipAsync(
+            connection,
+            sqliteTransaction: null,
+            ownershipId,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AircraftLoanAgreement?> ReadAircraftLoanAsync(
+        Guid loanId,
+        CancellationToken cancellationToken = default)
+    {
+        if (loanId == Guid.Empty)
+            throw new ArgumentException("Loan ID is required.", nameof(loanId));
+
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        return await ReadAircraftLoanAsync(
+            connection,
+            sqliteTransaction: null,
+            loanId,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<decimal> ReadCashBalanceAsync(
         CancellationToken cancellationToken = default)
     {
@@ -328,6 +503,34 @@ public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore
                     UpdatedAtUtcTicks INTEGER NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS OwnedAircraft (
+                    OwnershipId TEXT NOT NULL PRIMARY KEY,
+                    DealerId TEXT NOT NULL,
+                    ListingId TEXT NOT NULL,
+                    AircraftId TEXT NOT NULL,
+                    AcquisitionMethod INTEGER NOT NULL,
+                    AcquisitionPriceCents INTEGER NOT NULL CHECK (AcquisitionPriceCents > 0),
+                    AcquiredAtUtcTicks INTEGER NOT NULL,
+                    StorageIcao TEXT NOT NULL,
+                    LoanId TEXT NULL,
+                    UNIQUE (DealerId, ListingId),
+                    UNIQUE (LoanId)
+                );
+
+                CREATE TABLE IF NOT EXISTS AircraftLoans (
+                    LoanId TEXT NOT NULL PRIMARY KEY,
+                    OwnershipId TEXT NOT NULL UNIQUE,
+                    LenderId TEXT NOT NULL,
+                    OriginalPrincipalCents INTEGER NOT NULL CHECK (OriginalPrincipalCents > 0),
+                    AnnualRateText TEXT NOT NULL,
+                    TermMonths INTEGER NOT NULL CHECK (TermMonths > 0),
+                    ScheduledPaymentCents INTEGER NOT NULL CHECK (ScheduledPaymentCents > 0),
+                    OriginatedAtUtcTicks INTEGER NOT NULL,
+                    FOREIGN KEY (OwnershipId)
+                        REFERENCES OwnedAircraft(OwnershipId)
+                        ON DELETE CASCADE
+                );
+
                 CREATE INDEX IF NOT EXISTS IX_EconomyLedgerTransactions_Occurred
                     ON EconomyLedgerTransactions (OccurredAtUtcTicks DESC);
 
@@ -430,6 +633,263 @@ public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore
         && left.CycleProgress == right.CycleProgress
         && left.Version == right.Version
         && left.UpdatedAt.UtcTicks == right.UpdatedAt.UtcTicks;
+
+    private static async Task<decimal> ReadCashBalanceAsync(
+        SqliteConnection connection,
+        SqliteTransaction sqliteTransaction,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            SELECT COALESCE(SUM(DebitCents - CreditCents), 0)
+            FROM EconomyLedgerPostings
+            WHERE AccountCode = $cashAccount;
+            """;
+        command.Parameters.AddWithValue(
+            "$cashAccount",
+            (int)LedgerAccountCode.Cash);
+
+        object? result =
+            await command
+                .ExecuteScalarAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        long cents = result is null or DBNull
+            ? 0
+            : Convert.ToInt64(
+                result,
+                System.Globalization.CultureInfo.InvariantCulture);
+
+        return FromCents(cents);
+    }
+
+    private static async Task<bool> ListingAlreadyConsumedAsync(
+        SqliteConnection connection,
+        SqliteTransaction sqliteTransaction,
+        string dealerId,
+        string listingId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            SELECT 1
+            FROM OwnedAircraft
+            WHERE DealerId = $dealerId
+              AND ListingId = $listingId
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$dealerId", dealerId);
+        command.Parameters.AddWithValue("$listingId", listingId);
+
+        object? result =
+            await command
+                .ExecuteScalarAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        return result is not null and not DBNull;
+    }
+
+    private static async Task InsertAircraftOwnershipAsync(
+        SqliteConnection connection,
+        SqliteTransaction sqliteTransaction,
+        AircraftOwnershipRecord ownership,
+        CancellationToken cancellationToken)
+    {
+        ownership.Validate();
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            INSERT INTO OwnedAircraft (
+                OwnershipId,
+                DealerId,
+                ListingId,
+                AircraftId,
+                AcquisitionMethod,
+                AcquisitionPriceCents,
+                AcquiredAtUtcTicks,
+                StorageIcao,
+                LoanId)
+            VALUES (
+                $ownershipId,
+                $dealerId,
+                $listingId,
+                $aircraftId,
+                $method,
+                $price,
+                $acquiredAt,
+                $storageIcao,
+                $loanId);
+            """;
+        command.Parameters.AddWithValue("$ownershipId", ownership.OwnershipId);
+        command.Parameters.AddWithValue("$dealerId", ownership.DealerId);
+        command.Parameters.AddWithValue("$listingId", ownership.ListingId);
+        command.Parameters.AddWithValue("$aircraftId", ownership.AircraftId);
+        command.Parameters.AddWithValue("$method", (int)ownership.AcquisitionMethod);
+        command.Parameters.AddWithValue("$price", ToCents(ownership.AcquisitionPrice));
+        command.Parameters.AddWithValue("$acquiredAt", ownership.AcquiredAt.UtcTicks);
+        command.Parameters.AddWithValue("$storageIcao", ownership.StorageIcao);
+        command.Parameters.AddWithValue(
+            "$loanId",
+            ownership.LoanId is { } loanId
+                ? loanId.ToString("D")
+                : DBNull.Value);
+
+        await command
+            .ExecuteNonQueryAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task InsertAircraftLoanAsync(
+        SqliteConnection connection,
+        SqliteTransaction sqliteTransaction,
+        AircraftLoanAgreement loan,
+        CancellationToken cancellationToken)
+    {
+        loan.Validate();
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            INSERT INTO AircraftLoans (
+                LoanId,
+                OwnershipId,
+                LenderId,
+                OriginalPrincipalCents,
+                AnnualRateText,
+                TermMonths,
+                ScheduledPaymentCents,
+                OriginatedAtUtcTicks)
+            VALUES (
+                $loanId,
+                $ownershipId,
+                $lenderId,
+                $principal,
+                $annualRate,
+                $termMonths,
+                $payment,
+                $originatedAt);
+            """;
+        command.Parameters.AddWithValue("$loanId", loan.LoanId.ToString("D"));
+        command.Parameters.AddWithValue("$ownershipId", loan.OwnershipId);
+        command.Parameters.AddWithValue("$lenderId", loan.LenderId);
+        command.Parameters.AddWithValue("$principal", ToCents(loan.OriginalPrincipal));
+        command.Parameters.AddWithValue(
+            "$annualRate",
+            loan.AnnualRate.ToString(
+                System.Globalization.CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$termMonths", loan.TermMonths);
+        command.Parameters.AddWithValue("$payment", ToCents(loan.ScheduledMonthlyPayment));
+        command.Parameters.AddWithValue("$originatedAt", loan.OriginatedAt.UtcTicks);
+
+        await command
+            .ExecuteNonQueryAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task<AircraftOwnershipRecord?> ReadAircraftOwnershipAsync(
+        SqliteConnection connection,
+        SqliteTransaction? sqliteTransaction,
+        string ownershipId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            SELECT
+                DealerId,
+                ListingId,
+                AircraftId,
+                AcquisitionMethod,
+                AcquisitionPriceCents,
+                AcquiredAtUtcTicks,
+                StorageIcao,
+                LoanId
+            FROM OwnedAircraft
+            WHERE OwnershipId = $ownershipId;
+            """;
+        command.Parameters.AddWithValue("$ownershipId", ownershipId);
+
+        await using var reader =
+            await command
+                .ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        var ownership = new AircraftOwnershipRecord(
+            ownershipId,
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            (AircraftAcquisitionMethod)reader.GetInt32(3),
+            FromCents(reader.GetInt64(4)),
+            new DateTimeOffset(reader.GetInt64(5), TimeSpan.Zero),
+            reader.GetString(6),
+            reader.IsDBNull(7)
+                ? null
+                : Guid.Parse(reader.GetString(7)));
+
+        ownership.Validate();
+        return ownership;
+    }
+
+    private static async Task<AircraftLoanAgreement?> ReadAircraftLoanAsync(
+        SqliteConnection connection,
+        SqliteTransaction? sqliteTransaction,
+        Guid loanId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            SELECT
+                OwnershipId,
+                LenderId,
+                OriginalPrincipalCents,
+                AnnualRateText,
+                TermMonths,
+                ScheduledPaymentCents,
+                OriginatedAtUtcTicks
+            FROM AircraftLoans
+            WHERE LoanId = $loanId;
+            """;
+        command.Parameters.AddWithValue("$loanId", loanId.ToString("D"));
+
+        await using var reader =
+            await command
+                .ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        decimal annualRate = decimal.Parse(
+            reader.GetString(3),
+            System.Globalization.CultureInfo.InvariantCulture);
+
+        var loan = new AircraftLoanAgreement(
+            loanId,
+            reader.GetString(0),
+            reader.GetString(1),
+            FromCents(reader.GetInt64(2)),
+            annualRate,
+            reader.GetInt32(4),
+            FromCents(reader.GetInt64(5)),
+            new DateTimeOffset(reader.GetInt64(6), TimeSpan.Zero));
+
+        loan.Validate();
+        return loan;
+    }
 
     private static async Task EnableForeignKeysAsync(
         SqliteConnection connection,
