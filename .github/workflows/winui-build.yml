@@ -13,6 +13,8 @@ on:
       - "tests/OpenCareer.Tests/**"
       - "tools/OpenCareer.LiveProbe/**"
       - "tools/OpenCareer.TraceAnalysis/**"
+      - "tools/OpenCareer.BalanceLab/**"
+      - "tools/OpenCareer.BalanceLab/**"
       - "tools/run-live-probe.ps1"
       - "Directory.Build.props"
       - ".github/workflows/winui-build.yml"
@@ -55,3 +57,6 @@ jobs:
 
       - name: Test domain and simulator connection lifecycle
         run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release
+
+      - name: Run economy balance and progression calibration
+        run: dotnet run --project tools/OpenCareer.BalanceLab/OpenCareer.BalanceLab.csproj --configuration Release
