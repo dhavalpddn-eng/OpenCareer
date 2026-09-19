@@ -194,7 +194,7 @@ Current review tuning:
 Under equal moderate context, the reviewed fixture becomes:
 
 - 1-hour mission: **$977.29 total / $977.29 per hour**;
-- 15-hour mission: **$18,049.52 total / $1,203.30 per hour**.
+- 15-hour mission: **$18,049.53 total / $1,203.30 per hour**.
 
 That is about **18.5x the total payout** and about **23.1% higher hourly pay** than the 1-hour reference. The regression test now requires at least a 20% hourly premium for the 15-hour fixture.
 
@@ -233,3 +233,56 @@ Do not compare high-end aircraft against the starter $1,000/hour income center a
 4. Keep ordinary one- to three-hour work economically viable; do not use long flights as the path to better loan terms.
 5. Add high-aircraft-class revenue bands before tuning Commercial Fleet Finance against expensive aircraft.
 6. Cherry-pick the review tests after the current loan branch stabilizes, rather than editing the same finance files concurrently.
+
+
+## Independent 70-hour test-career run
+
+A deterministic review-only career scenario now runs against the actual C# domain code in CI. It does not modify the sidework production branch.
+
+Career shape:
+- 20 × 2-hour employee cargo jobs at 260 NM;
+- 5 × 3-hour employee cargo jobs at 400 NM;
+- 1 × optional 15-hour ferry marathon at 1,500 NM;
+- **70 career-credit hours**, **26 completed jobs**.
+
+Moderate common quote context:
+- demand 1.00;
+- urgency 0.15;
+- difficulty 0.15;
+- relationship 0.20;
+- employee track, so fuel/maintenance/airport costs are employer-covered for this phase.
+
+Exact C# quote results:
+- 2h job: **$1,969.23**;
+- 3h job: **$2,961.17**;
+- 15h marathon: **$18,049.53**;
+- marathon extended-duty multiplier: **1.25**.
+
+Career outcome:
+- total wages after 70 active hours: **$72,239.98**;
+- average: **$1,032.00 per active hour**;
+- first point at which the $60,000 cash aircraft + $4,000 reserve target is satisfied: **70 hours**;
+- all-short control of 35 × 2h jobs reaches the same cash target at **66 hours**;
+- both remain inside the declared **50–80 hour** first-ownership window;
+- a full year of protected real-world absence produces **$0** catch-up fixed liability.
+
+Representative financing check at 70 hours:
+- one failure, safety 93, trust 85, no prior payment history;
+- active-cycle-equivalent income: **$30,959.99 per 30 active hours**;
+- credit score: **722**;
+- $100,000 aircraft / $20,000 deposit / $80,000 Community principal;
+- loan approved;
+- scheduled installment: **$945.30**;
+- first-cycle loan + insurance + storage: **$1,615.30**;
+- adding the current $575/50h maintenance reserve gives about **$65.34 ownership burden per active hour**;
+- that is about **6.33%** of this test career's $1,032/hour employee earning rate.
+
+Independent amortization cross-check for that same loan:
+- annual rate: **7.3963636%**;
+- first interest: **$493.09**;
+- first principal: **$452.21**;
+- final opening principal: **$938.23**;
+- final interest: **$5.78**;
+- final adjusted payment: **$944.01**.
+
+Linux CI at review head `40f3737` passed **266/266 xUnit** plus SimLab after this scenario was added. The scenario's exact cent values therefore match the production C# rounding behavior, including the 15-hour wage of **$18,049.53**.
