@@ -119,6 +119,31 @@ Before Fleet/Finances UI is built, choose one vocabulary and keep it consistent:
 
 Do not display a literal calendar due date or "10 years remaining" unless the repayment engine is changed to a real-calendar model. Real-calendar repayment would conflict with the current no-punishment-for-being-away rule.
 
+## Payoff-horizon balance warning
+
+The 30-active-hour billing clock makes the current real-world-style term counts extremely long in gameplay time.
+
+At the current mapping:
+
+- 24 installments = **720 active flight hours**;
+- 36 installments = **1,080 active flight hours**;
+- 60 installments = **1,800 active flight hours**;
+- 120 installments = **3,600 active flight hours**;
+- 180 installments = **5,400 active flight hours**.
+
+For the representative $80,000 Community loan at 6.7090909%, Wolfram gives:
+
+| Term | Scheduled installment | Approx. ownership burden / active hour | Active hours to scheduled payoff |
+| --- | ---: | ---: | ---: |
+| 24 cycles | $3,571.27 | $152.88/h | 720 h |
+| 36 cycles | $2,459.55 | $115.82/h | 1,080 h |
+| 60 cycles | $1,573.14 | $86.27/h | 1,800 h |
+| 120 cycles | $916.92 | $64.40/h | 3,600 h |
+
+The current 120-cycle starter fixture is easy to carry but may effectively never be paid off in a normal career. This is not a math defect; it is a game-time-scale decision.
+
+Before locking lender terms, treat **term length** and **active-hours-per-billing-cycle** as gameplay tuning variables rather than copying real-world 120/180-month labels directly. Preserve proportional accrual so casual players remain fair regardless of session length.
+
 ## Progression bypass risk
 
 The current progression policy explicitly targets first ownership in the **50–80 career-credit-hour** range for both:
