@@ -1,3 +1,4 @@
+using OpenCareer.Application.Logbook;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Logbook;
 
