@@ -106,10 +106,10 @@ public sealed class PersistedContractSettlementTests : IDisposable
 
         Assert.Equal(2, recent.Count);
         Assert.Single(
-            recent.Where(
-                transaction =>
-                    transaction.ReferenceType
-                        == nameof(JobContract)));
+            recent,
+            transaction =>
+                transaction.ReferenceType
+                    == nameof(JobContract));
     }
 
     [Fact]

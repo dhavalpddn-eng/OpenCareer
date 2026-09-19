@@ -12,7 +12,10 @@ public sealed record ContractPayPolicy(
     double RelationshipPremium,
     decimal EmployeePilotShare,
     decimal MilitaryDutyShare,
-    decimal OwnerOperatorCostRecoveryMarkup)
+    decimal OwnerOperatorCostRecoveryMarkup,
+    double ExtendedDutyStartHours = 6,
+    double ExtendedDutyFullPremiumHours = 12,
+    double MaximumExtendedDutyPremium = 0.25)
 {
     // Gameplay calibration, not a claim about real-world compensation.
     // The baseline is intentionally tuned around the current 50-80 flight-hour
@@ -27,7 +30,10 @@ public sealed record ContractPayPolicy(
         RelationshipPremium: 0.08,
         EmployeePilotShare: 0.95m,
         MilitaryDutyShare: 0.80m,
-        OwnerOperatorCostRecoveryMarkup: 0.10m);
+        OwnerOperatorCostRecoveryMarkup: 0.10m,
+        ExtendedDutyStartHours: 6,
+        ExtendedDutyFullPremiumHours: 12,
+        MaximumExtendedDutyPremium: 0.25);
 
     public void Validate()
     {
@@ -37,6 +43,12 @@ public sealed record ContractPayPolicy(
             || EmployeePilotShare is < 0m or > 1m
             || MilitaryDutyShare is < 0m or > 1m
             || OwnerOperatorCostRecoveryMarkup is < 0m or > 2m
+            || !double.IsFinite(ExtendedDutyStartHours)
+            || ExtendedDutyStartHours < 0
+            || !double.IsFinite(ExtendedDutyFullPremiumHours)
+            || ExtendedDutyFullPremiumHours <= ExtendedDutyStartHours
+            || !double.IsFinite(MaximumExtendedDutyPremium)
+            || MaximumExtendedDutyPremium is < 0 or > 1
             || !double.IsFinite(DemandSensitivity)
             || DemandSensitivity is < 0 or > 2
             || !double.IsFinite(UrgencyPremium)
@@ -119,6 +131,7 @@ public sealed record ContractPayQuote(
     double UrgencyMultiplier,
     double DifficultyMultiplier,
     double RelationshipMultiplier,
+    double ExtendedDutyMultiplier,
     decimal OperatingCostRecovery,
     ContractCompensation Compensation)
 {
@@ -137,6 +150,7 @@ public sealed record ContractPayQuote(
         ValidatePositiveMultiplier(UrgencyMultiplier, nameof(UrgencyMultiplier));
         ValidatePositiveMultiplier(DifficultyMultiplier, nameof(DifficultyMultiplier));
         ValidatePositiveMultiplier(RelationshipMultiplier, nameof(RelationshipMultiplier));
+        ValidatePositiveMultiplier(ExtendedDutyMultiplier, nameof(ExtendedDutyMultiplier));
 
         ArgumentNullException.ThrowIfNull(Compensation);
     }
@@ -164,9 +178,26 @@ public static class ContractPayQuoteEngine
         request.Validate();
         effectivePolicy.Validate();
 
+        double extendedDutyProgress =
+            Math.Clamp(
+                (request.EstimatedFlightHours
+                    - effectivePolicy.ExtendedDutyStartHours)
+                / (effectivePolicy.ExtendedDutyFullPremiumHours
+                    - effectivePolicy.ExtendedDutyStartHours),
+                0.0,
+                1.0);
+
+        double extendedDutyMultiplier =
+            1.0
+            + effectivePolicy.MaximumExtendedDutyPremium
+                * extendedDutyProgress;
+
+        // Extended-duty premium is labor/time compensation. Do not multiply
+        // distance or payload value merely because the duty period is long.
         decimal timeComponent =
             effectivePolicy.TimeRatePerFlightHour
-            * (decimal)request.EstimatedFlightHours;
+            * (decimal)request.EstimatedFlightHours
+            * (decimal)extendedDutyMultiplier;
 
         decimal distanceComponent =
             effectivePolicy.DistanceRatePerNauticalMile
@@ -240,6 +271,7 @@ public static class ContractPayQuoteEngine
             urgencyMultiplier,
             difficultyMultiplier,
             relationshipMultiplier,
+            extendedDutyMultiplier,
             operatingCostRecovery,
             compensation);
 
