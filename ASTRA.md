@@ -14,7 +14,7 @@
 **Canonical UI language:** `docs/ui-design-language.md`. All screens must preserve the dark blue-gray riveted shell, vivid ivory paper panels, restrained navy/brass accents and retro-modern 1950s/60s aviation-operations character. Do not drift back to generic SaaS, olive/yellow wash, or sepia-heavy styling.
 
 ## Active product build
-**WinUI design system:** MBL-02 is in progress. Centralized Jet Age palette/resources plus reusable paper/metal panel, typography, button and status styles are implemented, and current shell/pages are being migrated. Windows Actions failed before runner steps were created on the first validation attempt, so do not call MBL-02 build-verified yet.
+**WinUI design system:** MBL-02 code layer is implemented: centralized Jet Age tokens plus reusable typography, paper/metal panels, buttons, form controls, toggles, tabs, lists/tables and semantic status styles; current shell/pages are migrated and design-contract tests protect vivid-ivory/contrast/style keys. MBL-02 remains open only for Windows XAML build verification and local interactive/visual/accessibility acceptance. Current GitHub Actions attempts fail before runner steps begin, so do not treat them as a code failure or as build verification.
 **Tutorial engine:** MBL-03 is in progress. The versioned coordinator, persistent progress/resume/skip, first-run WinUI overlay/navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews are implemented and CI-green. Current automated baseline is **118/118 xUnit + 29/29 SimLab**, with Windows WinUI/probe build green. MBL-03 remains until local interactive/visual acceptance and automatic future job/mission trigger integration are verified.
 
 ## Built
