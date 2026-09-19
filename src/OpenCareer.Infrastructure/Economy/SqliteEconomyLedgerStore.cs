@@ -171,11 +171,51 @@ public sealed class SqliteEconomyLedgerStore : IAircraftAcquisitionStore
                     "Active-play billing state changed before recurring costs could be posted. Re-read the state and retry the activity settlement.");
             }
 
+            AircraftLoanRepaymentState? loanStateAfter = null;
+            if (settlement.Accrual.LoanPrincipal > 0m)
+            {
+                AircraftLoanAgreement? loan =
+                    await ReadAircraftLoanByOwnershipAsync(
+                        connection,
+                        sqliteTransaction,
+                        settlement.OwnershipId,
+                        cancellationToken).ConfigureAwait(false);
+
+                if (loan is null)
+                {
+                    throw new InvalidOperationException(
+                        "Recurring ownership costs contain loan principal but no loan exists for this aircraft.");
+                }
+
+                AircraftLoanRepaymentState stateBefore =
+                    await ReadAircraftLoanStateAsync(
+                        connection,
+                        sqliteTransaction,
+                        loan.LoanId,
+                        cancellationToken).ConfigureAwait(false)
+                    ?? throw new InvalidOperationException(
+                        "Aircraft loan repayment state is missing.");
+
+                loanStateAfter =
+                    stateBefore.ApplyPrincipal(
+                        settlement.Accrual.LoanPrincipal,
+                        settlement.Transaction.OccurredAt);
+            }
+
             await InsertTransactionAsync(
                 connection,
                 sqliteTransaction,
                 settlement.Transaction,
                 cancellationToken).ConfigureAwait(false);
+
+            if (loanStateAfter is not null)
+            {
+                await UpsertAircraftLoanStateAsync(
+                    connection,
+                    sqliteTransaction,
+                    loanStateAfter,
+                    cancellationToken).ConfigureAwait(false);
+            }
 
             await UpsertBillingStateAsync(
                 connection,
@@ -312,6 +352,13 @@ public sealed class SqliteEconomyLedgerStore : IAircraftAcquisitionStore
                     sqliteTransaction,
                     settlement.Loan,
                     cancellationToken).ConfigureAwait(false);
+
+                await UpsertAircraftLoanStateAsync(
+                    connection,
+                    sqliteTransaction,
+                    AircraftLoanRepaymentState.Start(
+                        settlement.Loan),
+                    cancellationToken).ConfigureAwait(false);
             }
 
             await UpsertBillingStateAsync(
@@ -360,6 +407,25 @@ public sealed class SqliteEconomyLedgerStore : IAircraftAcquisitionStore
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
         return await ReadAircraftLoanAsync(
+            connection,
+            sqliteTransaction: null,
+            loanId,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AircraftLoanRepaymentState?> ReadAircraftLoanStateAsync(
+        Guid loanId,
+        CancellationToken cancellationToken = default)
+    {
+        if (loanId == Guid.Empty)
+            throw new ArgumentException("Loan ID is required.", nameof(loanId));
+
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        return await ReadAircraftLoanStateAsync(
             connection,
             sqliteTransaction: null,
             loanId,
@@ -526,6 +592,20 @@ public sealed class SqliteEconomyLedgerStore : IAircraftAcquisitionStore
                     TermMonths INTEGER NOT NULL CHECK (TermMonths > 0),
                     ScheduledPaymentCents INTEGER NOT NULL CHECK (ScheduledPaymentCents > 0),
                     OriginatedAtUtcTicks INTEGER NOT NULL,
+                    FOREIGN KEY (OwnershipId)
+                        REFERENCES OwnedAircraft(OwnershipId)
+                        ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS AircraftLoanState (
+                    LoanId TEXT NOT NULL PRIMARY KEY,
+                    OwnershipId TEXT NOT NULL UNIQUE,
+                    RemainingPrincipalCents INTEGER NOT NULL CHECK (RemainingPrincipalCents >= 0),
+                    Version INTEGER NOT NULL CHECK (Version >= 0),
+                    UpdatedAtUtcTicks INTEGER NOT NULL,
+                    FOREIGN KEY (LoanId)
+                        REFERENCES AircraftLoans(LoanId)
+                        ON DELETE CASCADE,
                     FOREIGN KEY (OwnershipId)
                         REFERENCES OwnedAircraft(OwnershipId)
                         ON DELETE CASCADE
@@ -889,6 +969,121 @@ public sealed class SqliteEconomyLedgerStore : IAircraftAcquisitionStore
 
         loan.Validate();
         return loan;
+    }
+
+    private static async Task<AircraftLoanAgreement?> ReadAircraftLoanByOwnershipAsync(
+        SqliteConnection connection,
+        SqliteTransaction? sqliteTransaction,
+        string ownershipId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            SELECT LoanId
+            FROM AircraftLoans
+            WHERE OwnershipId = $ownershipId;
+            """;
+        command.Parameters.AddWithValue("$ownershipId", ownershipId);
+
+        object? result =
+            await command
+                .ExecuteScalarAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (result is null or DBNull)
+            return null;
+
+        return await ReadAircraftLoanAsync(
+            connection,
+            sqliteTransaction,
+            Guid.Parse(Convert.ToString(
+                result,
+                System.Globalization.CultureInfo.InvariantCulture)!),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<AircraftLoanRepaymentState?> ReadAircraftLoanStateAsync(
+        SqliteConnection connection,
+        SqliteTransaction? sqliteTransaction,
+        Guid loanId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            SELECT
+                OwnershipId,
+                RemainingPrincipalCents,
+                Version,
+                UpdatedAtUtcTicks
+            FROM AircraftLoanState
+            WHERE LoanId = $loanId;
+            """;
+        command.Parameters.AddWithValue("$loanId", loanId.ToString("D"));
+
+        await using var reader =
+            await command
+                .ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        var state = new AircraftLoanRepaymentState(
+            loanId,
+            reader.GetString(0),
+            FromCents(reader.GetInt64(1)),
+            reader.GetInt64(2),
+            new DateTimeOffset(reader.GetInt64(3), TimeSpan.Zero));
+
+        state.Validate();
+        return state;
+    }
+
+    private static async Task UpsertAircraftLoanStateAsync(
+        SqliteConnection connection,
+        SqliteTransaction sqliteTransaction,
+        AircraftLoanRepaymentState state,
+        CancellationToken cancellationToken)
+    {
+        state.Validate();
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            INSERT INTO AircraftLoanState (
+                LoanId,
+                OwnershipId,
+                RemainingPrincipalCents,
+                Version,
+                UpdatedAtUtcTicks)
+            VALUES (
+                $loanId,
+                $ownershipId,
+                $remainingPrincipal,
+                $version,
+                $updatedAt)
+            ON CONFLICT(LoanId) DO UPDATE SET
+                OwnershipId = excluded.OwnershipId,
+                RemainingPrincipalCents = excluded.RemainingPrincipalCents,
+                Version = excluded.Version,
+                UpdatedAtUtcTicks = excluded.UpdatedAtUtcTicks;
+            """;
+        command.Parameters.AddWithValue("$loanId", state.LoanId.ToString("D"));
+        command.Parameters.AddWithValue("$ownershipId", state.OwnershipId);
+        command.Parameters.AddWithValue(
+            "$remainingPrincipal",
+            ToCents(state.RemainingPrincipal));
+        command.Parameters.AddWithValue("$version", state.Version);
+        command.Parameters.AddWithValue("$updatedAt", state.UpdatedAt.UtcTicks);
+
+        await command
+            .ExecuteNonQueryAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static async Task EnableForeignKeysAsync(
