@@ -1,5 +1,6 @@
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Events;
+using OpenCareer.Domain.Economy;
 
 namespace OpenCareer.Domain.Careers;
 
@@ -94,11 +95,16 @@ public sealed record JobContract(
     bool GovernmentAuthorizationRequired = false,
     DateTimeOffset? AcceptedAt = null,
     DateTimeOffset? StartedAt = null,
-    DateTimeOffset? CompletedAt = null)
+    DateTimeOffset? CompletedAt = null,
+    JobContractEconomicSnapshot? EconomicSnapshot = null,
+    DateTimeOffset? MustAcceptBy = null)
 {
     public JobContract Accept(ContractDispatchContext context)
     {
         if (Status != ContractStatus.Offered) throw InvalidTransition("accept");
+        Validate();
+        if (MustAcceptBy is { } acceptDeadline && context.Time > acceptDeadline)
+            throw new InvalidOperationException("Contract offer acceptance deadline has passed.");
         ValidateDispatch(context);
         return this with { Status = ContractStatus.Accepted, AcceptedAt = context.Time };
     }
@@ -133,7 +139,9 @@ public sealed record JobContract(
     {
         Validate();
         if (Status != ContractStatus.Offered) throw InvalidTransition("expire");
-        if (!(MustStartBy is { } start && time > start) && !(MustCompleteBy is { } end && time > end))
+        if (!(MustAcceptBy is { } accept && time > accept)
+            && !(MustStartBy is { } start && time > start)
+            && !(MustCompleteBy is { } end && time > end))
             throw new InvalidOperationException("The offer has not expired.");
         return this with { Status = ContractStatus.Expired };
     }
@@ -143,6 +151,7 @@ public sealed record JobContract(
         ArgumentNullException.ThrowIfNull(Compensation);
         ArgumentNullException.ThrowIfNull(AircraftRequirements);
         AircraftRequirements.Validate();
+        EconomicSnapshot?.Validate();
         if ((AcceptedAt is { } accepted && accepted < OfferedAt)
             || (StartedAt is { } started && (AcceptedAt is not { } a || started < a))
             || (CompletedAt is { } completed && (StartedAt is not { } s || completed < s))
@@ -155,8 +164,10 @@ public sealed record JobContract(
             || !Enum.IsDefined(Compensation.Model) || Compensation.GrossCustomerRevenue < 0 || Compensation.PilotCompensation < 0
             || !double.IsFinite(ReputationReward) || ReputationReward < 0
             || !double.IsFinite(ReputationPenalty) || ReputationPenalty < 0
+            || (MustAcceptBy is { } acceptBy && acceptBy < OfferedAt)
             || (MustStartBy is { } start && start < OfferedAt)
-            || (MustCompleteBy is { } end && (end < OfferedAt || (MustStartBy is { } begin && end < begin))))
+            || (MustCompleteBy is { } end && (end < OfferedAt || (MustStartBy is { } begin && end < begin)))
+            || (EconomicSnapshot is { } snapshot && snapshot.Quote.Compensation != Compensation))
             throw new ArgumentException("Invalid contract.");
     }
 

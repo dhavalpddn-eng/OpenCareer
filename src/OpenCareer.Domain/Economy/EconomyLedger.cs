@@ -5,6 +5,7 @@ namespace OpenCareer.Domain.Economy;
 public enum LedgerAccountCode
 {
     Cash,
+    OpeningEquity,
     ContractRevenue,
     WageIncome,
     ReimbursementIncome,
