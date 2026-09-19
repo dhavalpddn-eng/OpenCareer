@@ -1,5 +1,7 @@
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Dealers;
+using OpenCareer.Domain.Finance;
+using OpenCareer.Domain.Maintenance;
 using OpenCareer.Domain.Ownership;
 using OpenCareer.Domain.Simulation;
 
@@ -41,6 +43,7 @@ internal static class Program
             var shortHop = RunShortHopSpam(policy, CareerHours);
             var monteCarlo = RunMonteCarlo(policy, cashThreshold);
             var progression = RunProgressionCalibration(policy, cashThreshold);
+            var carryingCosts = RunOwnershipCarryingCostPreview();
 
             Require(
                 adversarial.HourlyAverage <=
@@ -95,6 +98,22 @@ internal static class Program
                 progression.Struggling.HourlyAverage >= policy.TargetNetPerCareerCreditHour * 0.75m
                 && progression.Struggling.HourlyAverage <= policy.TargetNetPerCareerCreditHour * 0.95m,
                 "Struggling progression left the calibrated hourly band.");
+            Require(
+                carryingCosts.FinancingApproved,
+                "Representative light-aircraft financing was unexpectedly declined.");
+            Require(
+                carryingCosts.CashMonthlyFixedCost <= carryingCosts.RequiredOperatingReserve * 0.25m,
+                "Cash-ownership fixed monthly carrying cost consumed more than 25% of the operating reserve.");
+            Require(
+                carryingCosts.FinancedMonthlyFixedCost <= carryingCosts.RequiredOperatingReserve * 0.35m,
+                "Financed fixed monthly carrying cost consumed more than 35% of the operating reserve.");
+            Require(
+                carryingCosts.FiftyHourMaintenanceCost <= carryingCosts.RequiredOperatingReserve * 0.20m,
+                "Routine 50-hour maintenance consumed more than 20% of the operating reserve.");
+            Require(
+                carryingCosts.FinancedMonthlyFixedCost + carryingCosts.FiftyHourMaintenanceCost
+                <= carryingCosts.RequiredOperatingReserve * 0.50m,
+                "One financed billing cycle plus routine 50-hour maintenance consumed more than half the operating reserve.");
 
             Console.WriteLine("OpenCareer Economy BalanceLab");
             Console.WriteLine(
@@ -119,6 +138,12 @@ internal static class Program
                 $"({Money(progression.Ordinary.HourlyAverage)}/h, ownership h={progression.Ordinary.AcquisitionHour}); " +
                 $"struggling={Money(progression.Struggling.NetAt64)} / 64 h " +
                 $"({Money(progression.Struggling.HourlyAverage)}/h, ownership h={progression.Struggling.AcquisitionHour}).");
+            Console.WriteLine(
+                $"Ownership carrying-cost preview: cash fixed={Money(carryingCosts.CashMonthlyFixedCost)}/month; " +
+                $"financed fixed={Money(carryingCosts.FinancedMonthlyFixedCost)}/month " +
+                $"(loan {Money(carryingCosts.MonthlyLoanPayment)}); " +
+                $"routine 50h maintenance={Money(carryingCosts.FiftyHourMaintenanceCost)}; " +
+                $"reserve={Money(carryingCosts.RequiredOperatingReserve)}.");
             Console.WriteLine(
                 $"PASS all balance gates. Cash threshold={Money(cashThreshold)}; " +
                 $"financed threshold={Money(financedThreshold)}.");
@@ -412,6 +437,70 @@ internal static class Program
         return new(totalAt64, totalAt64 / CareerHours, acquisitionHour ?? int.MaxValue);
     }
 
+    private static OwnershipCarryingCostPreview RunOwnershipCarryingCostPreview()
+    {
+        var reserve = CareerProgressionPolicy.Default.MinimumOperatingReserve;
+        var storage = 250m;
+        var insurance = InitialAircraftInsurance.StandardHull.MonthlyPremium;
+        var cashMonthlyFixed = storage + insurance;
+
+        var history = new CareerCreditHistory(
+            RealFlightHours: 70,
+            CompletedJobs: 45,
+            FailedJobs: 1,
+            OnTimePayments: 18,
+            MissedPayments: 0,
+            SafetyScore: 96,
+            EmployerTrust: 92,
+            VerifiedMonthlyNetIncome: 12_000m,
+            ExistingMonthlyDebtPayments: 250m,
+            AvailableCash: 120_000m,
+            RequiredOperatingReserve: reserve,
+            UnresolvedDefault: false);
+
+        var loan = CareerCredit.Evaluate(
+            history,
+            InitialLenders.Community,
+            new AircraftLoanRequest(
+                Price: 60_000m,
+                AppraisedValue: 58_000m,
+                Deposit: 20_000m,
+                TermMonths: 120,
+                CivilianOwnershipEligible: true));
+
+        var program = InitialMaintenancePrograms.LightAircraftFallback;
+        var maintenance = AircraftMaintenanceEngine.CreateInitial(
+            "balance-preview-light",
+            acquiredConditionPercent: 82m,
+            program,
+            new DateTimeOffset(2026, 9, 18, 12, 0, 0, TimeSpan.Zero));
+        maintenance = AircraftMaintenanceEngine.ApplyUsage(
+            maintenance,
+            program,
+            new MaintenanceUsage(
+                AirframeHours: 50,
+                EngineHours: 50,
+                LandingCycles: 50,
+                OverspeedMinutes: 0,
+                EngineStressMinutes: 0,
+                HardLandingSeverity: 0,
+                MaximumPositiveG: 1.5,
+                ExcessGSeconds: 0),
+            new DateTimeOffset(2026, 9, 20, 14, 0, 0, TimeSpan.Zero));
+        var service = AircraftMaintenanceEngine.QuoteService(
+            maintenance,
+            program,
+            new DateTimeOffset(2026, 9, 20, 14, 0, 0, TimeSpan.Zero));
+
+        return new(
+            loan.Approved,
+            reserve,
+            cashMonthlyFixed,
+            cashMonthlyFixed + loan.MonthlyPayment,
+            loan.MonthlyPayment,
+            service.Cost);
+    }
+
     private static JobEconomyQuote Quote(
         JobEconomyBalancePolicy policy,
         Candidate candidate,
@@ -542,6 +631,14 @@ internal static class Program
         ContractKind Kind,
         decimal TotalNet,
         decimal HourlyAverage);
+
+    private readonly record struct OwnershipCarryingCostPreview(
+        bool FinancingApproved,
+        decimal RequiredOperatingReserve,
+        decimal CashMonthlyFixedCost,
+        decimal FinancedMonthlyFixedCost,
+        decimal MonthlyLoanPayment,
+        decimal FiftyHourMaintenanceCost);
 
     private sealed record ProgressionProfile(
         IReadOnlyList<ContractKind> Kinds,
