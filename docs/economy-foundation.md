@@ -114,6 +114,34 @@ A representative early employee job used in tests:
 
 Wolfram independently evaluates the current policy at approximately **$2,883.66 pilot cash pay**, or **$961.22 per flight hour**. At that unchanged illustrative rate, 65 hours would produce about **$62,479** before discretionary spending, close to the existing $64,000 cash/reserve first-aircraft tuning target. Real playtesting must still tune the distribution rather than one example.
 
+## Casual-play recurring ownership costs
+
+Recurring ownership liabilities now have an authoritative **active-play** settlement foundation rather than a real-calendar punishment loop.
+
+Rules:
+
+- one gameplay billing cycle is **30 career-credit flight hours**;
+- the default protected-absence policy still accrues **$0 while the player is away**, including long real-world absences;
+- pause, slew and invalid/non-credit simulator time do not advance the billing clock;
+- simulation acceleration cannot multiply the billing clock because settlement uses `FlightTimeLedger.CareerCreditTime`;
+- there is **no minimum charge per session**: one 15-hour block and fifteen 1-hour blocks telescope to the same cent-rounded liability;
+- billing-cycle progress is stored in SQLite and advanced in the same transaction as the recurring-cost ledger posting, so restarting the app cannot reset accrued active-play progress;
+- duplicate activity settlement uses a stable ownership/activity idempotency key; stale concurrent billing state is rejected instead of overwriting progress;
+- loan principal reduces `LoanPayable`; interest, insurance and storage use distinct ledger expense accounts;
+- a flight that crosses a 30-hour cycle boundary can consume the next supplied cost cycle without requiring a marathon session.
+
+Current representative financed-light-aircraft stress fixture:
+
+- loan payment component: **$455.79 per active billing cycle**,
+- insurance + storage: **$670.00 per cycle**,
+- total fixed cash carrying cost: **$1,125.79 per 30 active hours**,
+- ordinary 50-hour fallback maintenance fixture: **$575**,
+- combined fixed + routine-maintenance burden: about **$49.03 per active hour**, or about **4.9%** of the current $1,000/hour progression center before fuel/airport costs and their contract cost-recovery treatment.
+
+Wolfram independently evaluates that combined representative burden at about **$49.026/hour**. This is gameplay calibration, not a real-world ownership-cost claim.
+
+Session length is not a progression multiplier. Employee quote regression coverage now compares plausible **1h / 3h / 6h** jobs and keeps their hourly pay within roughly 0.25% of each other under equal context. Normal generated jobs above the six-hour session ceiling receive zero duration suitability; extended ferry/reposition/military transport remains optional special work. Early-career generation now prefers **1–3 hour** jobs.
+
 ## Persistence behavior
 
 `SqliteEconomyLedgerStore`:
@@ -156,8 +184,8 @@ Not yet implemented end-to-end:
 - verified `FlightSession` fuel/fees/maintenance actuals -> settlement,
 - career opening cash transaction,
 - aircraft ownership transfer/purchase,
-- persisted loan origination/payment schedule,
-- insurance/storage/maintenance recurring settlement,
+- persisted loan origination/payment schedule -> ownership recurring-cost schedule binding,
+- final ownership adapter that feeds loan/insurance/storage schedules into the implemented active-play recurring settlement,
 - deadhead travel settlement,
 - company payroll,
 - named commodity lots and shipment market value,
@@ -172,8 +200,8 @@ The market simulation can influence future quotes, but existing jobs must preser
 3. Feed verified FlightSession actual fuel/airport/maintenance costs into `ContractSettlementCosts`.
 4. Create/open the career with an explicit opening-balance ledger transaction.
 5. Implement atomic aircraft purchase: consume listing once, debit cash/deposit, create loan if needed, post aircraft asset, transfer ownership and assign storage/delivery.
-6. Add loan amortization/repayment and protected-absence behavior.
-7. Add insurance, storage, maintenance and paid-deadhead transactions.
+6. Bind persistent ownership loan/insurance/storage schedules into the implemented active-play billing engine and advance loan state when each 30-hour cycle completes.
+7. Feed verified fuel/service/maintenance actuals into settlement and add paid-deadhead transactions.
 8. After the flight/session/dispatch loop is playable, implement the named commodity catalog from `docs/cargo-market-requirements.md`.
 9. Run balance simulations/playtests against the 50–80-hour ownership target and tune distributions, not isolated examples.
 
