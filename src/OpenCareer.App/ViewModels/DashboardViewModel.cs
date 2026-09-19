@@ -276,57 +276,9 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
     private void RefreshGuidance()
     {
-        var candidates = new List<DashboardGuidanceCandidate>(_snapshot.Guidance);
-
-        if (_snapshot.ActiveOperation is { } operation &&
-            operation.NextActionTarget != DashboardActionTarget.None)
-        {
-            candidates.Add(new(
-                "active-operation",
-                operation.IsBlocked
-                    ? DashboardGuidancePriority.Critical
-                    : DashboardGuidancePriority.Important,
-                5,
-                operation.NextActionTarget,
-                operation.NextActionTitle,
-                operation.BlockingReason ?? operation.Detail));
-        }
-
-        if (_snapshot.Aircraft?.ReadyForWork == false)
-        {
-            candidates.Add(new(
-                "aircraft-not-ready",
-                DashboardGuidancePriority.Critical,
-                0,
-                DashboardActionTarget.Maintenance,
-                "Aircraft needs attention",
-                _snapshot.Aircraft.BlockingReason ??
-                "The selected aircraft is not ready for work."));
-        }
-
-        if (_snapshot.Employment?.Status is EmploymentStatus.Probation or
-            EmploymentStatus.Suspended)
-        {
-            candidates.Add(new(
-                "company-standing",
-                DashboardGuidancePriority.Important,
-                0,
-                DashboardActionTarget.Company,
-                "Company standing needs attention",
-                _snapshot.Employment.StatusMessage ??
-                "Review your company standing before taking more company work."));
-        }
-
-        if (_topOpportunities.Count > 0)
-        {
-            candidates.Add(new(
-                "top-jobs",
-                DashboardGuidancePriority.Recommended,
-                20,
-                DashboardActionTarget.Jobs,
-                "Review your best available jobs",
-                "The Jobs board has ranked your four strongest eligible opportunities."));
-        }
+        var candidates = _guidanceEngine
+            .ComposeSnapshotCandidates(_snapshot, _topOpportunities.Count > 0)
+            .ToList();
 
         if (_shell.IsSimulatorConnected && _shell.HasTelemetry)
         {
