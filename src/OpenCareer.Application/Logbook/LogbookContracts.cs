@@ -98,3 +98,22 @@ public static class LogbookQueryMatcher
         !string.IsNullOrWhiteSpace(value) &&
         value.Contains(search, StringComparison.OrdinalIgnoreCase);
 }
+
+
+public enum LogbookAppendDisposition
+{
+    Appended,
+    AlreadyExists
+}
+
+public sealed record LogbookAppendResult(
+    LogbookAppendDisposition Disposition,
+    LogbookEntry Entry);
+
+public interface ILogbookWriter
+{
+    Task<LogbookAppendResult> TryAppendAsync(
+        LogbookEntry entry,
+        string idempotencyKey,
+        CancellationToken cancellationToken = default);
+}
