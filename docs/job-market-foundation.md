@@ -15,7 +15,7 @@ Conflict simulation work now continues on child branch `feature/conflict-simulat
 - **Starter board:** level 1 exposes only **1–2 jobs**.
 - **Airport cap:** career level expands visibility up to an airport-specific mature capacity. Current scale presets are Local 10, Small 16, Regional 20, Large 35, MajorHub 45, MegaHub 60. These are game-design capacities, not claims about real daily flights.
 - **Meaningful levels:** level is a meta-progression summary derived from verified flying/contracts/routes/trust/qualifications. It may reveal more work/convenience/prestige but never bypasses licenses, ratings, aircraft capability, military authorization, employer trust, affordability or dispatch feasibility.
-- **Early duration:** early-career boards favor jobs estimated around **2–4 flight hours**, with mission-type exceptions such as ferry/reposition work.
+- **Early duration:** early-career boards now favor jobs estimated around **1–3 flight hours**. Normal generated jobs above **6 hours** are excluded by duration suitability; ferry/reposition/military transport may exceed that only as optional special work.
 - **Employer trust:** repeated successful, safe, on-time work builds persistent trust. Real company names may be used only when their real airport presence/service is sourced. Large employers can later provide duty deadhead when the relationship permits it.
 - **Airport specialization:** airport/company/job mix should reflect real airport roles: airline hubs, cargo hubs, military/government activity, UAS/research, skydiving, GA, medical, tourism, etc. Specialties are strong tendencies rather than a generic board.
 - **Military/security events:** regional security phases can shift work toward military/government missions, including transport, surveillance/recon, patrol, medevac, evacuation and logistics. Severe active conflict can suppress ordinary civilian work. Ceasefire/recovery immediately refreshes toward humanitarian, cargo, medical, survey and infrastructure-recovery work.
@@ -43,7 +43,7 @@ Conflict simulation work now continues on child branch `feature/conflict-simulat
 - `JobMarketPolicy`, `JobMarketAccess`, `JobMarketDestination`, `JobMarketGenerator`.
 - deterministic generation by career seed + airport + generation bucket;
 - randomized per-offer expiry rather than a single board expiry;
-- early 2–4-hour preference;
+- early **1–3-hour** preference with a normal-job **6-hour ceiling**; long ferry/reposition/military-transport work remains an explicit exception;
 - 1–2 locked dream previews as the board grows;
 - route/relationship weighting;
 - stronger UAS/research weighting for survey/photography/surveillance;
