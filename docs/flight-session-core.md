@@ -58,16 +58,16 @@ Preflight servicing/loading phases remain mission/workflow-driven rather than gu
 
 ## CI note
 
-At the time this branch was created, both GitHub Actions workflows were failing before runner steps began, including a run triggered from the unchanged base commit. The connector returned jobs with no steps/logs, so this is not currently attributable to the new flight-session code.
+The repository's current workflows automatically validate pull requests targeting `main`; this nested draft PR targets `feature/m1-simulation-core`, so it does not automatically receive the normal Linux/Windows validation runs.
 
-Do not claim green CI for this branch until Actions actually executes the build/tests.
+PR #11 is currently reported mergeable against the active m1 branch. Do not claim this branch is CI-green until it is exercised by a manual/workflow validation path or folded into the parent m1 PR validation.
 
 ## Next bounded work
 
-1. Add the telemetry-to-`FlightStateEvidence` processor with conservative hysteresis and synthetic tests.
-2. Add SQLite active-session checkpoint/recovery.
-3. Expose the coordinator snapshot to Current Flight and MBL-03 checklist steps.
-4. Calibrate takeoff/landing thresholds against real MSFS traces when the user's PC is available.
+1. Wire the persistence service into app DI/Current Flight without moving business logic into the UI.
+2. Add restart/recovery presentation for active, suspended and interrupted sessions.
+3. Add route/leg summary persistence and duplicate-effect guards needed by jobs/logbook.
+4. Keep takeoff/landing thresholds configurable and defer real-aircraft calibration until Windows/MSFS access is available.
 
 No merge is requested yet.
 ## Telemetry evidence processor added
