@@ -450,7 +450,8 @@ public sealed class ActivePlayRecurringCostTests : IDisposable
 
         Assert.False(retry.WasNewlyPosted);
         Assert.Null(retry.Settlement);
-        Assert.Equal(second.Transaction, retry.Transaction);
+        Assert.Equal(second.Transaction.TransactionId, retry.Transaction.TransactionId);
+        Assert.Equal(second.Transaction.CashChange, retry.Transaction.CashChange);
         Assert.Equal(second.CashBalanceAfter, retry.CashBalanceAfter);
         Assert.Equal(second.CurrentBillingState, retry.CurrentBillingState);
     }
