@@ -8,7 +8,7 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Latest implementation: `c4a52c955b080aceb73e0b1d762d90c8dbc54506` (MBL-23 settings/diagnostics; UI-thread-safe preference notifications). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
+- Latest implementation: `44cddd0804d1d09fc005794731c307a9c29f472f` (MBL-01 dynamic production Dashboard surface and routing foundation). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 - WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. A versioned tutorial engine is also implemented with persistent progress, first-run overlay navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews. **Live simulator/runtime validation remains open.**
 - [Windows CI run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135): WinUI x64 and live-probe Release builds passed with 0 warnings/errors; **104/104 xUnit tests passed**, including the compiled trace analyzer.
 - [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
@@ -82,6 +82,20 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - **Do not treat input-hint preference as binding discovery.** MBL-05 owns actual controller/keyboard profile resolution.
 - MBL-23 is code-complete but remains unremoved until Windows build and local interactive persistence/backup/export verification are available. GitHub Actions currently fails before runner steps are created, so those failures are not compiler/test evidence.
 
+## Production Dashboard implementation
+
+- `OpenCareer.Application/Dashboard` defines stable Dashboard snapshot contracts, opportunity tiers, company-employment status, guidance targets, a deterministic primary-guidance selector and Top Opportunities ranking.
+- `DashboardOpportunitySelector` returns at most four **available** jobs, ordering by tier -> fit -> estimated net -> reposition distance -> stable ID.
+- Tiers are fixed as Green **Standard**, Blue **Specialist**, Purple **Elite**, Orange/Gold **Legendary**. The UI renders the tier name as well as color.
+- `DashboardViewModel` owns presentation/routing logic and consumes `IDashboardSnapshotSource`; no Jobs/Career/Company/Economy values are fabricated while those systems are unavailable.
+- The production Home layout contains split flight/career hero, daily P/L header, dynamic recommendation, Top Opportunities, career Level/XP/licenses/hours/owned count/next/recent, company rank/standing/employment state, aircraft readiness/location/distance, finance summary, recent activity, condensed world activity and searchable OpenCareer Network feed.
+- KRME was removed as a hard-coded production Home base. KRME/F-22 remains a developer validation fixture only.
+- Career Level + XP are now accepted as meta-progression but cannot bypass licenses/ratings, employer standing, military authorization, capability, affordability or dispatch/safety requirements.
+- Company employment is required to support deterministic rank/standing plus probation, demotion, suspension and firing/termination. Normal safety choices and one routine rough landing are not arbitrary termination triggers; other-employer/independent recovery paths remain available.
+- OpenCareer Network is an in-world simulated feed generated from structured career/world events. It is searchable by area/airport/company/text. Optional AI may phrase posts but cannot authoritatively create money, mission outcomes or reputation changes.
+- The temporary `UnavailableDashboardSnapshotSource` intentionally returns an empty snapshot. Later authoritative systems replace/wrap it without changing the Home page contract.
+- MBL-01 remains active until Jobs/Career/Company/Aircraft/Economy/World integrations and Windows visual/runtime acceptance are complete.
+
 ## Chapter 2 shell and simulator boundary
 
 `src/OpenCareer.App` contains:
@@ -90,7 +104,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - application resources and DI/logging startup,
 - `NavigationView` shell,
 - observable simulator connection and telemetry ViewModel,
-- disconnected Dashboard with KRME home-base placeholder,
+- dynamic production Dashboard shell with honest empty states and no hard-coded production home base,
 - Current Flight view that displays telemetry while explicitly remaining **No active flight**,
 - placeholders for later sections,
 - Windows GitHub Actions build workflow.

@@ -10,25 +10,152 @@ Conflict reference: see [Conflict Operations reference](assets/opencareer-confli
 
 ## 1. Dashboard
 
-Purpose: answer “what matters right now?”
+Purpose: act as the player's **dynamic career operations desk** and answer “what matters right now, what is ready, and where should I go next?”
+
+Detailed accepted behavior: see `home-dashboard.md`.
 
 ### Layout
 
-- Hero/status strip: MSFS connection, aircraft identity, operation state.
-- Current assignment / next action.
-- Home base card.
-- Career standing summary.
-- Cash / obligations summary.
-- Aircraft access/owned summary.
-- Active world event or important alert.
-- Recent flights / upcoming maintenance compact list.
+The production Dashboard uses a split hero rather than a single static welcome card:
+
+- left hero: current/relevant aircraft, simulator state, player location, aircraft location, distance to aircraft and readiness for work,
+- right hero: career status plus current employer/company status when applicable.
+
+Persistent/major modules:
+
+- header financial strip:
+  - current cash,
+  - today's net P/L with explicit positive/negative sign,
+- dynamic **OpenCareer Recommends** action:
+  - chooses the highest-priority actionable next step,
+  - links directly to the relevant top-level destination,
+- **Top Opportunities**:
+  - exactly four highest-ranked **available** jobs,
+  - Green **Standard**,
+  - Blue **Specialist**,
+  - Purple **Elite**,
+  - Orange/Gold **Legendary**,
+  - tier text/icon must accompany color,
+  - eligibility first, then tier, personalized fit, economics/reposition tie-breaks,
+- career card:
+  - Career Level,
+  - XP toward next level,
+  - licenses/ratings,
+  - total/relevant flight hours,
+  - owned-aircraft count,
+  - next meaningful milestone,
+  - most recent meaningful achievement/activity,
+- company card when employed:
+  - employer,
+  - company rank,
+  - company standing,
+  - employment state,
+  - warnings/probation/suspension/termination information,
+- financial-health card:
+  - cash,
+  - today's net,
+  - upcoming obligations,
+- aircraft-readiness card:
+  - ready/not ready/unknown,
+  - blocker/maintenance summary,
+  - current aircraft location,
+  - player location,
+  - distance between player and aircraft,
+- recent activity stream,
+- condensed World / Map module:
+  - player/home/fleet geography,
+  - jobs/routes,
+  - markets/events,
+  - government/military signals when authorized,
+- searchable **OpenCareer Network** in-world social feed.
+
+### Dynamic guidance
+
+The Dashboard is not a static summary. It can direct the player to the correct screen.
+
+Examples:
+
+- active operation -> Current Flight,
+- accepted job requiring preparation -> Dispatch,
+- aircraft blocked by maintenance -> Maintenance,
+- no accepted work + strong opportunities -> Jobs,
+- company probation/suspension/review -> Company,
+- financial issue requiring action -> Finances,
+- qualification/career gate -> Career.
+
+Critical operational blockers outrank routine recommendations. The guidance engine is deterministic and testable.
+
+### Opportunity tier rules
+
+The four Dashboard jobs are not merely the highest raw payout.
+
+Only jobs the player is currently eligible to accept enter the Dashboard Top Opportunities list. Ranking is:
+
+1. availability/eligibility,
+2. opportunity tier,
+3. personalized fit,
+4. estimated net value and reposition cost/distance as tie-breakers.
+
+Tier communicates scarcity/prestige/opportunity quality and can reflect requirements, urgency, employer value, world events and career relevance. It does not bypass dispatch feasibility.
+
+Locked jobs can still appear in the full Jobs screen with explanations; they do not displace an actually available Top Opportunity on Home.
+
+### Career Level + XP
+
+Career Level and XP are now accepted as visible meta-progression.
+
+They may summarize broad career growth, unlock presentation/prestige/convenience or help pace content, but **never bypass**:
+
+- licenses/ratings,
+- aircraft capability,
+- company/employer standing,
+- government/military authorization,
+- affordability,
+- dispatch/safety requirements.
+
+The career must not become XP-grind dependent.
+
+### Company employment and firing
+
+Employment is a real relationship, not permanent access after hiring.
+
+Company employment can include:
+
+- active,
+- probation,
+- suspended,
+- terminated/fired.
+
+Rank and standing can rise or fall. Company-specific deterministic policy may react to repeated failures, no-shows, preventable damage, serious safety/reliability problems and other actual employment-performance signals.
+
+Do not fire or heavily punish the player for one ordinary rough landing, a legitimate go-around/diversion, a simulator disconnect, or another defensible safety decision. Termination must not permanently brick the career; other employers/employee work remain recovery paths.
+
+### OpenCareer Network
+
+The social feed is primarily a **live in-world simulated network**, not scraped real social media.
+
+It can contain posts/reactions from:
+
+- passengers,
+- employers/companies,
+- airports/bases,
+- local organizations,
+- customers,
+- simulated aviation/world entities.
+
+It is searchable by airport, city/region, company and text/topic. Structured world/player events remain authoritative; optional AI may render flavor text but cannot invent or modify money, mission outcomes, reputation changes or other critical state.
+
+If optional real-world public content is added later, it must be opt-in where appropriate and visually/source-labeled separately from OpenCareer simulated posts.
 
 ### Rules
 
 - Telemetry alone must never create an active FlightSession.
-- Home base is prominent because geography and relationships matter.
-- Employer/rented/assigned aircraft must be visually distinct from owned aircraft.
-- If disconnected, retain useful career/economy information and show connection as a separate status.
+- No hard-coded developer fixture may be presented as the player's production home base.
+- Home remains useful with MSFS closed.
+- Employer/rented/assigned/owned aircraft remain distinct.
+- Do not fabricate career, company, aircraft, job or economy values while their authoritative systems are unavailable.
+- Future layout customization is allowed as an extension point, but the initial production Dashboard uses one curated fixed layout.
+- The full Jobs, Map / World, Finances, Company, Aircraft and Career screens remain the detailed workspaces; Home summarizes and routes into them.
 
 ## 2. Dispatch
 
@@ -240,6 +367,9 @@ Purpose: manage the business without turning the app into a spreadsheet simulato
 ### Rules
 
 - Employment remains viable even if the player never builds a large company.
+- A player can be demoted, placed on probation, suspended or fired according to deterministic company policy and performance history.
+- Legitimate safety decisions, one ordinary rough landing or simulator disconnect must not be treated as arbitrary firing triggers.
+- Termination reduces/removes access to that employer but must leave recovery paths through other employers or independent work.
 - Management defaults to automation.
 - Manual actions provide bounded advantages only where designed.
 
@@ -383,11 +513,11 @@ Purpose: show meaningful progression without MMO-style XP dependence.
 - government/military qualifications.
 - safety/reliability record.
 - meaningful milestones/achievements.
-- optional future meta-level if later adopted.
+- Career Level + XP meta-progression summary.
 
 ### Rules
 
-A level, if added, never bypasses:
+Career Level + XP are accepted meta-progression, but they never bypass:
 
 - license/rating,
 - military authorization,

@@ -526,6 +526,15 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Define adaptive-layout/accessibility rules.
 - [x] Implement production shell.
 - [x] Implement initial Dashboard.
+- [x] Implement production Dashboard layout and data contract without fabricated career/job/economy values.
+- [x] Implement deterministic dynamic Dashboard guidance/routing foundation.
+- [x] Implement Top Opportunities selection: four highest available jobs by tier -> fit -> economics/reposition tie-breakers.
+- [x] Lock opportunity tiers: Green Standard / Blue Specialist / Purple Elite / Orange-Gold Legendary with text labels.
+- [x] Add career/company/finance/aircraft/world/recent-activity/social-feed Dashboard modules.
+- [x] Add searchable OpenCareer Network in-world social-feed surface.
+- [x] Remove KRME as a hard-coded production Home base; keep it developer-fixture only.
+- [ ] Wire Dashboard to authoritative Jobs/Career/Company/Aircraft/Economy/World snapshot sources as those systems are implemented.
+- [ ] Verify production Dashboard adaptive layout, keyboard navigation and visual hierarchy on Windows.
 - [x] Implement initial Current Flight telemetry page.
 - [x] Define per-flight contextual checklist UX with inline controller/keyboard binding state.
 - [x] Define layered onboarding: app tutorial, first-job tutorial and first-time mission-family tutorials.
@@ -543,6 +552,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.
+- [ ] Implement employer rank/standing lifecycle with deterministic probation, demotion, suspension and firing/termination plus recovery/rehire rules.
 - [ ] Implement Finances screen.
 - [ ] Implement Markets screen.
 - [ ] Implement Military / Government screen.

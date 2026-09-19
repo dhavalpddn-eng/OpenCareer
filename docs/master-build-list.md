@@ -66,12 +66,12 @@ Remaining before removal:
 - automatic specialized mission-family trigger when those mission families exist,
 - mission/checklist evidence integration.
 
-### MBL-01 — Production Home / Dashboard
-**Estimated effort: ~2–4 developer days**
+### MBL-01 — Production Home / Dashboard — IN PROGRESS
+**Estimated remaining direct effort: ~0.5–1.5 developer days plus downstream integrations**
 
-Full career home using real application data and the canonical OpenCareer visual language.
+The production dynamic Home surface and contracts are implemented: split flight/career hero, daily P/L header, deterministic next-action routing, four-tier Top Opportunities foundation, career/company/finance/aircraft/readiness modules, world summary, recent activity, and searchable OpenCareer Network feed.
 
-Direct UI effort is modest, but final completion depends on real Jobs, Career, Aircraft and economy data being available.
+The UI intentionally shows honest empty/unavailable states until authoritative systems provide data. Final completion depends on Jobs, Career/XP, Company employment, Aircraft Registry/location, Economy/Finances and Map / World sources wiring into `IDashboardSnapshotSource`, plus local visual/runtime acceptance.
 
 ### MBL-22 — AI dispatcher / copilot / passengers
 **Estimated effort: ~2–5 developer days for the first production version**
@@ -181,7 +181,7 @@ MSFS SDK/version-sensitive behavior is the largest uncertainty.
 ### MBL-18 — Company system
 **Estimated effort: ~12–25 developer days**
 
-Optional business ownership, contracts, routes, utilization, staff, margins and expansion while preserving employee-only play.
+Optional business ownership, contracts, routes, utilization, staff, margins and expansion while preserving employee-only play. Employer careers must include rank/standing plus deterministic probation, suspension, demotion and firing/termination behavior with fair recovery paths.
 
 ### MBL-19 — Military / Government career system
 **Estimated effort: ~15–30 developer days**
