@@ -176,6 +176,36 @@
                                        Style="{StaticResource OpenCareerPaperBodyStyle}" />
                         </StackPanel>
 
+                        <Border Style="{StaticResource OpenCareerMetalInsetStyle}"
+                                Padding="0"
+                                MinHeight="240">
+                            <Grid MinHeight="240">
+                                <Canvas x:Name="RouteCanvas"
+                                        MinHeight="240"
+                                        SizeChanged="RouteCanvas_SizeChanged" />
+                                <StackPanel x:Name="RouteTrackEmptyState"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Spacing="4">
+                                    <TextBlock Text="ROUTE TRACK"
+                                               Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
+                                               FontWeight="SemiBold"
+                                               CharacterSpacing="80"
+                                               HorizontalAlignment="Center" />
+                                    <TextBlock Text="No stored route track for this flight."
+                                               Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
+                                               HorizontalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Text="ACTUAL TRACK • DECIMATED LOGBOOK POINTS"
+                                           Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
+                                           FontSize="10"
+                                           CharacterSpacing="60"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Bottom"
+                                           Margin="12" />
+                            </Grid>
+                        </Border>
+
                         <Border Style="{StaticResource OpenCareerPaperInsetStyle}">
                             <StackPanel Spacing="5">
                                 <TextBlock Text="TIME"

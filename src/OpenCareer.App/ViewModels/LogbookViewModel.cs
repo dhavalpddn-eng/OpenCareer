@@ -235,11 +235,14 @@ public sealed class LogbookEntryItemViewModel
         Legs = entry.Debrief.Legs
             .Select(static leg => new LogbookLegItemViewModel(leg))
             .ToArray();
+
+        RouteTracks = RouteTrackProjection.Project(entry.Debrief.Legs);
     }
 
     public IReadOnlyList<LogbookLandingItemViewModel> Landings { get; }
     public IReadOnlyList<LogbookEventItemViewModel> Events { get; }
     public IReadOnlyList<LogbookLegItemViewModel> Legs { get; }
+    public IReadOnlyList<ProjectedRouteLeg> RouteTracks { get; }
 
     public Guid EntryId => _entry.EntryId;
 
