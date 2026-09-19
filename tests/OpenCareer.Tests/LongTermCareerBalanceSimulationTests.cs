@@ -169,7 +169,6 @@ public sealed class LongTermCareerBalanceSimulationTests
         int routeMilestones = 0;
         int trustMilestones = 0;
         int onTimePayments = 0;
-        int missedPayments = 0;
         int majorRepairs = 0;
         int uncoveredRepairs = 0;
 
