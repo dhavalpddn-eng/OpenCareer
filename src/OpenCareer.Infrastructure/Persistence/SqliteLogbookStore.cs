@@ -386,13 +386,13 @@ public sealed class SqliteLogbookStore : ILogbookSource, ILogbookWriter
         command.Parameters.AddWithValue("$aircraft_name", debrief.Aircraft.DisplayName);
         command.Parameters.AddWithValue(
             "$departure",
-            (object?)debrief.Route.ActualDeparture ??
-            debrief.Route.PlannedOrigin ??
+            (object?)(debrief.Route.ActualDeparture ??
+                      debrief.Route.PlannedOrigin) ??
             DBNull.Value);
         command.Parameters.AddWithValue(
             "$arrival",
-            (object?)debrief.Route.ActualArrival ??
-            debrief.Route.PlannedDestination ??
+            (object?)(debrief.Route.ActualArrival ??
+                      debrief.Route.PlannedDestination) ??
             DBNull.Value);
         command.Parameters.AddWithValue(
             "$contract_id",
