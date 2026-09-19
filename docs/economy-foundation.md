@@ -8,9 +8,9 @@ Read `AGENTS.md` and `docs/project-state.md` first. This is the compact handoff 
 
 - Branch: `feature/economy-ledger-settlement`
 - Base: `feature/military-operations-foundation` at `4ca6f8815581dd71a1e54a17da8c5da0cf41a0dd`
-- Latest verified implementation: `d8b25f6b0820d831bd9a45c04894605294203dd3`
-- Linux CI run 35331620111: **204/204 xUnit tests + 29/29 SimLab scenarios**, 0 warnings/errors.
-- Windows CI run 35331620076: WinUI x64 Release build + live-probe build + **204/204 xUnit tests**, 0 warnings/errors.
+- Latest verified implementation: `bcbe7bdf111f2cfe06da84f5074e8078e034938c`
+- Existing Linux branch baseline run 35331620111: **204/204 xUnit tests + 29/29 SimLab scenarios**, 0 warnings/errors.
+- Windows PR integration run 35417940644 at the latest implementation head: WinUI x64 Release build + live-probe build + **221/221 xUnit tests**, 0 test failures.
 
 ## Existing economy retained
 
@@ -50,6 +50,7 @@ Current accounts include:
 - InterestExpense
 - AircraftAsset
 - LoanPayable
+- StorageExpense
 
 Money values are whole cents. Each non-zero posting has exactly one debit or one credit. Each transaction must balance.
 
@@ -212,5 +213,4 @@ The market simulation can influence future quotes, but existing jobs must preser
 - Whether player-owned companies can intentionally accept loss-leading contracts for reputation.
 - Loan late-payment grace, repossession/default severity and recovery path.
 - Insurance deductibles/coverage tiers.
-- How aggressively recurring hangar/storage/maintenance costs should continue while the player is away.
 - Whether taxes are omitted entirely, simplified, or modeled only for owned companies.
