@@ -4,6 +4,11 @@ on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
     paths:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"
@@ -22,6 +27,9 @@ concurrency:
 
 jobs:
   build:
+    # Windows hosted minutes are intentionally reserved for milestone/ready-review
+    # validation. Draft PR development is covered by the cheaper Linux workflow.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: windows-latest
     timeout-minutes: 15
 
@@ -32,7 +40,7 @@ jobs:
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: 10.0.x
 
       - name: Restore WinUI app
         run: dotnet restore src/OpenCareer.App/OpenCareer.App.csproj -p:Platform=x64
