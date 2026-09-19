@@ -100,7 +100,9 @@ public sealed class SqliteFlightSessionCheckpointStore :
                     SchemaVersion = excluded.SchemaVersion,
                     Status = excluded.Status,
                     UpdatedAtUtcTicks = excluded.UpdatedAtUtcTicks,
-                    PayloadJson = excluded.PayloadJson;
+                    PayloadJson = excluded.PayloadJson
+                WHERE excluded.UpdatedAtUtcTicks
+                    >= FlightSessionCheckpoint.UpdatedAtUtcTicks;
                 """;
 
             command.Parameters.AddWithValue(
