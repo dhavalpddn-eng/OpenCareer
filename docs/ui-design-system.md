@@ -10,17 +10,23 @@ OpenCareer should look like a professional aviation operations terminal: dense e
 
 The approved baseline is:
 
-- dark navy/slate shell,
+- crisp graphite/navy shell rather than smoky or cinematic backgrounds,
 - restrained aviation blue for normal emphasis,
+- teal only for selected economy/market information where a second cool accent helps,
 - green for healthy/confirmed state,
-- amber for caution,
+- amber for caution/dependency state,
 - red only for dangerous/conflict/failure state,
+- bright neutral text on clearly separated surfaces,
 - thin borders,
 - compact information cards,
 - readable typography rather than decorative type,
 - persistent simulator connection state,
 - left NavigationView shell,
 - map/route panels only where they carry operational value.
+
+### Clarity rule
+
+Do not use smoke, fog, diffuse cloud overlays, heavy bloom, neon glow, frosted-glass blur, soft vignettes or low-contrast blue-on-blue backgrounds as part of the production UI. Concept images may contain scenery, but production application surfaces should remain visually flat and sharp. Decorative backgrounds must never reduce text/card contrast.
 
 ## Canonical production stack
 
@@ -34,28 +40,42 @@ The approved baseline is:
 
 Microsoft's current Windows app guidance supports `NavigationView` as the application shell and adaptive layouts/visual states for width changes. The existing OpenCareer shell already follows this pattern.
 
-## Existing color tokens
+## Production color direction
 
-These are already defined in `src/OpenCareer.App/App.xaml` and remain authoritative unless a later design pass deliberately changes them.
+The original blue/slate palette is usable, but the production target should move toward a cleaner graphite + aviation-blue system with stronger separation between background, cards and text.
 
-| Token | Value | Usage |
+Recommended target tokens:
+
+| Token | Target value | Usage |
 | --- | --- | --- |
-| AppBackgroundBrush | `#0B1520` | page/window background |
-| AppSurfaceBrush | `#111E2B` | primary cards |
-| AppSurfaceAltBrush | `#172737` | selected/secondary surfaces |
-| AppBorderBrush | `#294156` | card/divider borders |
-| AppAccentBrush | `#4EA8DE` | normal active/accent state |
-| AppSuccessBrush | `#52D273` | connected/healthy/completed |
-| AppMutedTextBrush | `#9FB1C2` | labels/secondary text |
+| AppBackgroundBrush | `#080D12` | deepest window/page background |
+| AppSurfaceBrush | `#101820` | primary cards/panes |
+| AppSurfaceAltBrush | `#16222D` | selected/raised surfaces |
+| AppSurfaceHoverBrush | `#1C2B37` | hover/secondary interaction |
+| AppBorderBrush | `#2A3B49` | card/divider borders |
+| AppTextBrush | `#F2F6F9` | primary text |
+| AppMutedTextBrush | `#9AAEBD` | labels/secondary text |
+| AppAccentBrush | `#2F9FE8` | primary aviation blue |
+| AppAccentBrightBrush | `#71C7FF` | focus/selected highlight |
+| AppSecondaryAccentBrush | `#22B8A7` | optional market/economy accent |
+| AppSuccessBrush | `#39D17D` | verified/connected/completed |
+| AppWarningBrush | `#F2B84B` | caution/dependency |
+| AppDangerBrush | `#F05C65` | active threat/error/conflict |
+| AppDisabledBrush | `#667886` | unavailable/disabled state |
 
-Additional semantic tokens should be added centrally rather than hard-coded per page:
+This palette should replace the older hazier blue-on-blue appearance when production UI styling is revised. Until code changes are deliberately made, existing App.xaml tokens remain the implemented values.
 
-- Warning: `#F4B942`
-- Danger / active conflict: `#FF4D4D`
-- Critical surface tint: very dark red derived from the base surface, never full-red page backgrounds.
-- Friendly operational map: use blue family.
-- Hostile operational map: use red family.
-- Neutral/unknown: slate/gray.
+### Color usage
+
+- Aviation blue: navigation selection, normal active controls, route lines, primary actions.
+- Teal: optional economy/market comparison emphasis, never a second global accent competing with blue.
+- Green: completed/healthy/verified only.
+- Amber: dependency, caution, waiting on prerequisite, degraded confidence.
+- Red: failure, active conflict, urgent threat, destructive action.
+- White/off-white: main text.
+- Slate: secondary text and inactive structure.
+
+Do not fill whole pages with semantic colors. Apply them to badges, small bars, icons, outlines, route/threat marks and focused status areas.
 
 Color must never be the only carrier of meaning. Pair it with iconography and text.
 
@@ -92,9 +112,12 @@ These are reference proportions, not fixed pixel contracts.
 
 Primary cards:
 
-- 12-14 px corner radius.
+- 10-12 px corner radius.
 - 1 px `AppBorderBrush`.
 - 16-24 px internal padding.
+- Solid surface fills; no frosted/translucent blur.
+- No outer glow.
+- Shadows, if used at all, stay extremely subtle and structural.
 - Keep one dominant question per card.
 - Use inline mini-metrics only when they belong to the same decision.
 - Prefer vertical scrolling over squeezing text to unreadable sizes.
@@ -253,3 +276,30 @@ normalized player telemetry
     -> ViewModel
     -> UI
 ```
+
+
+## Visual effects policy
+
+Production OpenCareer should favor clarity over cinematic atmosphere.
+
+Allowed:
+
+- crisp 1 px separators,
+- subtle selected-row tint,
+- restrained focus ring,
+- small status-color accents,
+- very light elevation differences between surfaces,
+- sharp map overlays and route lines.
+
+Avoid:
+
+- smoke/fog textures,
+- translucent haze across the content area,
+- blurred mountain/cloud imagery behind text,
+- glowing blue borders on every card,
+- heavy gradients,
+- bloom around icons,
+- excessive transparency,
+- large decorative background images while flying.
+
+For the development progress/checklist screen specifically, use the same flat production palette. It should look like an internal project-control panel, with solid cards and sharp text, not like a promotional splash screen.
