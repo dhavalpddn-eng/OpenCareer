@@ -69,7 +69,9 @@ Remaining before removal:
 ### MBL-01 — Production Home / Dashboard — IN PROGRESS
 **Estimated remaining direct effort: ~0.5–1.5 developer days plus downstream integrations**
 
-The production dynamic Home surface and contracts are implemented: split flight/career hero, daily P/L header, deterministic next-action routing, four-tier Top Opportunities foundation, career/company/finance/aircraft/readiness modules, world summary, recent activity, and searchable OpenCareer Network feed.
+The production dynamic Home surface and contracts are implemented: split flight/career hero, daily P/L header, deterministic next-action routing, four-tier Top Opportunities foundation, career/company/finance/aircraft/readiness modules, world summary, recent activity, searchable OpenCareer Network feed, and an Active Operation panel for accepted work/checklist/blocker/next-action state.
+
+Dashboard snapshot guidance is centralized and domain-tested for active operations, maintenance blockers, probation/suspension/termination and job recommendations. Home refreshes its non-telemetry snapshot every 10 seconds while visible with overlap protection and cancellation on navigation. Windows WinUI, live-probe, Linux, SimLab and unit-test CI all passed after the first converter namespace defect was fixed.
 
 The UI intentionally shows honest empty/unavailable states until authoritative systems provide data. Final completion depends on Jobs, Career/XP, Company employment, Aircraft Registry/location, Economy/Finances and Map / World sources wiring into `IDashboardSnapshotSource`, plus local visual/runtime acceptance.
 
