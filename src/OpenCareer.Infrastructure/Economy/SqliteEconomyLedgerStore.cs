@@ -191,6 +191,51 @@ public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore
         }
     }
 
+    public async Task<EconomyLedgerTransaction?> FindByIdempotencyKeyAsync(
+        string idempotencyKey,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        Guid? transactionId = null;
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText =
+                """
+                SELECT TransactionId
+                FROM EconomyLedgerTransactions
+                WHERE IdempotencyKey = $idempotencyKey
+                LIMIT 1;
+                """;
+            command.Parameters.AddWithValue("$idempotencyKey", idempotencyKey);
+
+            object? result =
+                await command
+                    .ExecuteScalarAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (result is not null and not DBNull)
+            {
+                transactionId = Guid.Parse(
+                    Convert.ToString(
+                        result,
+                        System.Globalization.CultureInfo.InvariantCulture)!);
+            }
+        }
+
+        return transactionId is { } id
+            ? await ReadTransactionAsync(
+                connection,
+                sqliteTransaction: null,
+                id,
+                cancellationToken).ConfigureAwait(false)
+            : null;
+    }
+
     public async Task<decimal> ReadCashBalanceAsync(
         CancellationToken cancellationToken = default)
     {
