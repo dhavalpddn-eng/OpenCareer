@@ -77,8 +77,20 @@ public sealed record AirSupportMission(
         if (missionId == Guid.Empty)
             throw new ArgumentException("Mission ID is required.", nameof(missionId));
 
-        if (request.IsExpired(acceptedAt))
-            throw new InvalidOperationException("Support request has expired.");
+        if (request.Status != SupportRequestStatus.Reserved
+            || request.ReservedMissionId != missionId)
+        {
+            throw new InvalidOperationException(
+                "Support request must be reserved by this mission before acceptance.");
+        }
+
+        if (request.Type is not (
+            SupportRequestType.CloseAirSupport
+            or SupportRequestType.Suppression))
+        {
+            throw new InvalidOperationException(
+                "Support request does not use the combat-support mission lifecycle.");
+        }
 
         if (request.TargetUnitId is not Guid targetUnitId)
             throw new InvalidOperationException("Support request does not identify a target.");

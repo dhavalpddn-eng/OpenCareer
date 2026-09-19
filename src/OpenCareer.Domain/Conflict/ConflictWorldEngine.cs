@@ -42,7 +42,9 @@ public static class ConflictWorldEngine
             Sectors = sectors,
             Threats = threats,
             SupportRequests = state.SupportRequests
-                .Where(request => !request.IsExpired(through))
+                .Select(request => request.IsPastOpenDeadline(through)
+                    ? request.Expire(through)
+                    : request)
                 .ToArray()
         };
 
@@ -175,6 +177,8 @@ public static class ConflictWorldEngine
 public static class SupportRequestGenerator
 {
     private const double NearbyHostileRadiusNm = 20;
+    private const double LowReadinessThreshold = 0.35;
+    private const double LowIntelligenceThreshold = 0.30;
 
     public static ConflictWorldState Refresh(
         ConflictWorldState state,
@@ -182,14 +186,39 @@ public static class SupportRequestGenerator
     {
         ConflictValidation.Validate(state);
 
-        var active = state.SupportRequests
-            .Where(request => !request.IsExpired(now))
+        var tracked = state.SupportRequests
+            .Select(request => request.IsPastOpenDeadline(now)
+                ? request.Expire(now)
+                : request)
             .ToList();
 
-        var activeKeys = active
+        var activeKeys = tracked
+            .Where(request => request.IsActive)
             .Select(request => (request.RequestingUnitId, request.Type))
             .ToHashSet();
 
+        AddBattlefieldRequests(state, now, tracked, activeKeys);
+        AddLogisticsRequests(state, now, tracked, activeKeys);
+        AddReconnaissanceRequests(state, now, tracked, activeKeys);
+        AddPatrolRequests(state, now, tracked, activeKeys);
+
+        return state with
+        {
+            SupportRequests = tracked
+                .OrderBy(request => request.IsTerminal)
+                .ThenByDescending(request => request.Urgency)
+                .ThenBy(request => request.CreatedAt)
+                .ThenBy(request => request.RequestId, StringComparer.Ordinal)
+                .ToArray()
+        };
+    }
+
+    private static void AddBattlefieldRequests(
+        ConflictWorldState state,
+        DateTimeOffset now,
+        ICollection<AirSupportRequest> tracked,
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+    {
         foreach (var friendly in state.Units
             .Where(unit => unit.Side == ConflictSide.Friendly
                 && unit.IsOperational
@@ -219,14 +248,16 @@ public static class SupportRequestGenerator
             if (maneuverTarget is not null)
             {
                 AddRequestIfNeeded(
-                    active,
+                    tracked,
                     activeKeys,
                     state,
                     now,
                     friendly,
-                    maneuverTarget,
+                    maneuverTarget.UnitId,
+                    maneuverTarget.Position,
                     SupportRequestType.CloseAirSupport,
-                    urgency);
+                    urgency,
+                    requiredEffect: Math.Clamp(0.18 + friendly.Pressure * 0.32, 0, 0.55));
             }
 
             var airDefenseTarget = hostiles
@@ -238,38 +269,129 @@ public static class SupportRequestGenerator
             if (airDefenseTarget is not null)
             {
                 AddRequestIfNeeded(
-                    active,
+                    tracked,
                     activeKeys,
                     state,
                     now,
                     friendly,
-                    airDefenseTarget,
+                    airDefenseTarget.UnitId,
+                    airDefenseTarget.Position,
                     SupportRequestType.Suppression,
-                    urgency);
+                    urgency,
+                    requiredEffect: Math.Clamp(0.15 + friendly.Pressure * 0.25, 0, 0.45));
             }
         }
-
-        return state with
-        {
-            SupportRequests = active
-                .OrderByDescending(request => request.Urgency)
-                .ThenBy(request => request.CreatedAt)
-                .ThenBy(request => request.RequestId, StringComparer.Ordinal)
-                .ToArray()
-        };
     }
 
+    private static void AddLogisticsRequests(
+        ConflictWorldState state,
+        DateTimeOffset now,
+        ICollection<AirSupportRequest> tracked,
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+    {
+        foreach (var friendly in state.Units
+            .Where(unit => unit.Side == ConflictSide.Friendly
+                && unit.IsOperational
+                && unit.Readiness <= LowReadinessThreshold
+                && unit.Pressure < 0.55)
+            .OrderBy(unit => unit.Readiness)
+            .ThenBy(unit => unit.UnitId))
+        {
+            AddRequestIfNeeded(
+                tracked,
+                activeKeys,
+                state,
+                now,
+                friendly,
+                friendly.UnitId,
+                friendly.Position,
+                SupportRequestType.Logistics,
+                friendly.Readiness < 0.20 ? SupportUrgency.Priority : SupportUrgency.Routine,
+                requiredEffect: Math.Clamp(0.60 - friendly.Readiness, 0.10, 0.40));
+        }
+    }
+
+    private static void AddReconnaissanceRequests(
+        ConflictWorldState state,
+        DateTimeOffset now,
+        ICollection<AirSupportRequest> tracked,
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+    {
+        foreach (var sector in state.Sectors
+            .Where(sector => sector.IntelligenceConfidence < LowIntelligenceThreshold)
+            .OrderBy(sector => sector.IntelligenceConfidence)
+            .ThenBy(sector => sector.SectorId, StringComparer.Ordinal))
+        {
+            var requester = NearestFriendly(state, sector.Center);
+            if (requester is null)
+                continue;
+
+            AddRequestIfNeeded(
+                tracked,
+                activeKeys,
+                state,
+                now,
+                requester,
+                targetUnitId: null,
+                sector.Center,
+                SupportRequestType.Reconnaissance,
+                sector.IntelligenceConfidence < 0.15 ? SupportUrgency.Priority : SupportUrgency.Routine,
+                requiredEffect: Math.Clamp(0.55 - sector.IntelligenceConfidence, 0.15, 0.40));
+        }
+    }
+
+    private static void AddPatrolRequests(
+        ConflictWorldState state,
+        DateTimeOffset now,
+        ICollection<AirSupportRequest> tracked,
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+    {
+        foreach (var sector in state.Sectors
+            .Where(sector => sector.FriendlyControl is >= 0.40 and <= 0.60
+                && sector.IntelligenceConfidence >= 0.50)
+            .OrderBy(sector => Math.Abs(sector.FriendlyControl - 0.50))
+            .ThenBy(sector => sector.SectorId, StringComparer.Ordinal))
+        {
+            var requester = NearestFriendly(state, sector.Center);
+            if (requester is null)
+                continue;
+
+            AddRequestIfNeeded(
+                tracked,
+                activeKeys,
+                state,
+                now,
+                requester,
+                targetUnitId: null,
+                sector.Center,
+                SupportRequestType.Patrol,
+                SupportUrgency.Routine,
+                requiredEffect: 0.10);
+        }
+    }
+
+    private static GroundUnitState? NearestFriendly(
+        ConflictWorldState state,
+        GeoPoint position) =>
+        state.Units
+            .Where(unit => unit.Side == ConflictSide.Friendly && unit.IsOperational)
+            .OrderBy(unit => ConflictGeometry.DistanceNauticalMiles(position, unit.Position))
+            .ThenBy(unit => unit.UnitId)
+            .FirstOrDefault();
+
     private static void AddRequestIfNeeded(
-        ICollection<AirSupportRequest> active,
+        ICollection<AirSupportRequest> tracked,
         ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys,
         ConflictWorldState state,
         DateTimeOffset now,
-        GroundUnitState friendly,
-        GroundUnitState target,
+        GroundUnitState requester,
+        Guid? targetUnitId,
+        GeoPoint targetPosition,
         SupportRequestType type,
-        SupportUrgency urgency)
+        SupportUrgency urgency,
+        double requiredEffect)
     {
-        if (!activeKeys.Add((friendly.UnitId, type)))
+        if (!activeKeys.Add((requester.UnitId, type)))
             return;
 
         var lifetime = urgency switch
@@ -280,16 +402,16 @@ public static class SupportRequestGenerator
         };
 
         var requestId =
-            $"{state.TheaterId}:{friendly.UnitId:N}:{type}:{state.Tick}";
+            $"{state.TheaterId}:{requester.UnitId:N}:{type}:{state.Tick}";
 
-        active.Add(new AirSupportRequest(
+        tracked.Add(new AirSupportRequest(
             requestId,
             type,
             urgency,
-            friendly.UnitId,
-            target.UnitId,
-            target.Position,
-            RequiredEffect: Math.Clamp(0.18 + friendly.Pressure * 0.32, 0, 0.55),
+            requester.UnitId,
+            targetUnitId,
+            targetPosition,
+            requiredEffect,
             CreatedAt: now,
             ExpiresAt: now + lifetime));
     }

@@ -28,6 +28,7 @@ public enum SupportRequestType
     CloseAirSupport,
     Reconnaissance,
     Logistics,
+    Patrol,
     Escort,
     Suppression
 }
@@ -37,6 +38,16 @@ public enum SupportUrgency
     Routine,
     Priority,
     Immediate
+}
+
+public enum SupportRequestStatus
+{
+    Open,
+    Reserved,
+    Completed,
+    Failed,
+    Cancelled,
+    Expired
 }
 
 public enum AirSupportMissionStage
@@ -185,9 +196,88 @@ public sealed record AirSupportRequest(
     GeoPoint TargetPosition,
     double RequiredEffect,
     DateTimeOffset CreatedAt,
-    DateTimeOffset ExpiresAt)
+    DateTimeOffset ExpiresAt,
+    SupportRequestStatus Status = SupportRequestStatus.Open,
+    Guid? ReservedMissionId = null,
+    DateTimeOffset? ClosedAt = null)
 {
-    public bool IsExpired(DateTimeOffset now) => now >= ExpiresAt;
+    public bool IsPastOpenDeadline(DateTimeOffset now) =>
+        Status == SupportRequestStatus.Open && now >= ExpiresAt;
+
+    public bool IsActive =>
+        Status is SupportRequestStatus.Open or SupportRequestStatus.Reserved;
+
+    public bool IsTerminal =>
+        Status is SupportRequestStatus.Completed
+            or SupportRequestStatus.Failed
+            or SupportRequestStatus.Cancelled
+            or SupportRequestStatus.Expired;
+
+    public AirSupportRequest Reserve(Guid missionId, DateTimeOffset acceptedAt)
+    {
+        if (missionId == Guid.Empty)
+            throw new ArgumentException("Mission ID is required.", nameof(missionId));
+
+        if (Status != SupportRequestStatus.Open)
+            throw new InvalidOperationException("Only an open support request can be reserved.");
+
+        if (acceptedAt < CreatedAt)
+            throw new ArgumentOutOfRangeException(nameof(acceptedAt));
+
+        if (acceptedAt >= ExpiresAt)
+            throw new InvalidOperationException("Support request has expired.");
+
+        return this with
+        {
+            Status = SupportRequestStatus.Reserved,
+            ReservedMissionId = missionId
+        };
+    }
+
+    public AirSupportRequest Expire(DateTimeOffset now)
+    {
+        if (Status != SupportRequestStatus.Open)
+            return this;
+
+        if (now < ExpiresAt)
+            return this;
+
+        return this with
+        {
+            Status = SupportRequestStatus.Expired,
+            ClosedAt = now
+        };
+    }
+
+    public AirSupportRequest Close(
+        Guid missionId,
+        SupportRequestStatus terminalStatus,
+        DateTimeOffset closedAt)
+    {
+        if (terminalStatus is not (
+            SupportRequestStatus.Completed
+            or SupportRequestStatus.Failed
+            or SupportRequestStatus.Cancelled))
+        {
+            throw new ArgumentOutOfRangeException(nameof(terminalStatus));
+        }
+
+        if (Status != SupportRequestStatus.Reserved
+            || ReservedMissionId != missionId)
+        {
+            throw new InvalidOperationException(
+                "Support request is not reserved by this mission.");
+        }
+
+        if (closedAt < CreatedAt)
+            throw new ArgumentOutOfRangeException(nameof(closedAt));
+
+        return this with
+        {
+            Status = terminalStatus,
+            ClosedAt = closedAt
+        };
+    }
 
     public void Validate()
     {
@@ -204,6 +294,40 @@ public sealed record AirSupportRequest(
 
         if (ExpiresAt <= CreatedAt)
             throw new ArgumentException("Support request must expire after it is created.");
+
+        switch (Status)
+        {
+            case SupportRequestStatus.Open:
+                if (ReservedMissionId is not null || ClosedAt is not null)
+                    throw new ArgumentException("Open support request cannot have reservation/closure data.");
+                break;
+
+            case SupportRequestStatus.Reserved:
+                if (ReservedMissionId is null || ReservedMissionId == Guid.Empty)
+                    throw new ArgumentException("Reserved support request requires a mission ID.");
+                if (ClosedAt is not null)
+                    throw new ArgumentException("Reserved support request cannot already be closed.");
+                break;
+
+            case SupportRequestStatus.Completed:
+            case SupportRequestStatus.Failed:
+            case SupportRequestStatus.Cancelled:
+                if (ReservedMissionId is null || ReservedMissionId == Guid.Empty)
+                    throw new ArgumentException("Mission-closed support request requires a mission ID.");
+                if (ClosedAt is null || ClosedAt < CreatedAt)
+                    throw new ArgumentException("Closed support request requires a valid close time.");
+                break;
+
+            case SupportRequestStatus.Expired:
+                if (ReservedMissionId is not null)
+                    throw new ArgumentException("Expired unaccepted request cannot have a mission reservation.");
+                if (ClosedAt is null || ClosedAt < ExpiresAt)
+                    throw new ArgumentException("Expired request requires a close time at/after expiry.");
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(Status));
+        }
     }
 }
 
@@ -379,6 +503,14 @@ public static class ConflictValidation
         if (state.SupportRequests.Select(request => request.RequestId).Distinct(StringComparer.Ordinal).Count() != state.SupportRequests.Length)
             throw new ArgumentException("Duplicate support-request IDs.");
 
+        var reservedMissionIds = state.SupportRequests
+            .Where(request => request.ReservedMissionId.HasValue && request.IsActive)
+            .Select(request => request.ReservedMissionId!.Value)
+            .ToArray();
+
+        if (reservedMissionIds.Distinct().Count() != reservedMissionIds.Length)
+            throw new ArgumentException("One mission cannot reserve multiple active support requests.");
+
         if (state.ProcessedEventIds.Distinct(StringComparer.Ordinal).Count() != state.ProcessedEventIds.Length)
             throw new ArgumentException("Duplicate processed conflict-event IDs.");
     }
@@ -409,4 +541,64 @@ public static class ConflictGeometry
     }
 
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180d;
+}
+
+public static class SupportRequestLifecycle
+{
+    public static ConflictWorldState Reserve(
+        ConflictWorldState state,
+        string requestId,
+        Guid missionId,
+        DateTimeOffset acceptedAt)
+    {
+        ConflictValidation.Validate(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+
+        var index = Array.FindIndex(
+            state.SupportRequests,
+            request => string.Equals(request.RequestId, requestId, StringComparison.Ordinal));
+
+        if (index < 0)
+            throw new InvalidOperationException("Support request was not found.");
+
+        if (state.SupportRequests.Any(
+            request => request.IsActive
+                && request.ReservedMissionId == missionId
+                && !string.Equals(request.RequestId, requestId, StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException("Mission already reserves another support request.");
+        }
+
+        var requests = state.SupportRequests.ToArray();
+        requests[index] = requests[index].Reserve(missionId, acceptedAt);
+
+        var updated = state with { SupportRequests = requests };
+        ConflictValidation.Validate(updated);
+        return updated;
+    }
+
+    public static ConflictWorldState Close(
+        ConflictWorldState state,
+        string requestId,
+        Guid missionId,
+        SupportRequestStatus terminalStatus,
+        DateTimeOffset closedAt)
+    {
+        ConflictValidation.Validate(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+
+        var index = Array.FindIndex(
+            state.SupportRequests,
+            request => string.Equals(request.RequestId, requestId, StringComparison.Ordinal));
+
+        if (index < 0)
+            throw new InvalidOperationException("Support request was not found.");
+
+        var requests = state.SupportRequests.ToArray();
+        requests[index] = requests[index].Close(missionId, terminalStatus, closedAt);
+
+        var updated = state with { SupportRequests = requests };
+        ConflictValidation.Validate(updated);
+        return updated;
+    }
 }

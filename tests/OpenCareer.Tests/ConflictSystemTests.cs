@@ -12,64 +12,124 @@ public sealed class ConflictSystemTests
     [Fact]
     public void GroundPressureGeneratesCasAndSuppressionRequestsDeterministically()
     {
-        var state = CreateWorld();
+        var state = ConflictWorldEngine.Advance(
+            CreateWorld(),
+            Epoch.AddMinutes(30));
 
-        state = ConflictWorldEngine.Advance(state, Epoch.AddMinutes(30));
+        var active = state.SupportRequests
+            .Where(request => request.IsActive)
+            .ToArray();
 
-        Assert.Equal(2, state.SupportRequests.Length);
+        Assert.Equal(2, active.Length);
 
-        var cas = state.SupportRequests.Single(
+        var cas = active.Single(
             request => request.Type == SupportRequestType.CloseAirSupport);
 
         Assert.Equal(FriendlyInfantryId, cas.RequestingUnitId);
         Assert.Equal(HostileArmorId, cas.TargetUnitId);
         Assert.Equal(SupportUrgency.Immediate, cas.Urgency);
+        Assert.Equal(SupportRequestStatus.Open, cas.Status);
 
-        var suppression = state.SupportRequests.Single(
+        var suppression = active.Single(
             request => request.Type == SupportRequestType.Suppression);
 
         Assert.Equal(HostileAirDefenseId, suppression.TargetUnitId);
 
-        var replay = ConflictWorldEngine.Advance(CreateWorld(), Epoch.AddMinutes(30));
+        var replay = ConflictWorldEngine.Advance(
+            CreateWorld(),
+            Epoch.AddMinutes(30));
+
         Assert.Equal(state.SupportRequests, replay.SupportRequests);
     }
 
     [Fact]
     public void SameSupportNeedDoesNotDuplicateOpenRequests()
     {
-        var state = ConflictWorldEngine.Advance(CreateWorld(), Epoch.AddMinutes(30));
+        var state = ConflictWorldEngine.Advance(
+            CreateWorld(),
+            Epoch.AddMinutes(30));
 
-        state = ConflictWorldEngine.Advance(state, Epoch.AddMinutes(40));
+        state = ConflictWorldEngine.Advance(
+            state,
+            Epoch.AddMinutes(40));
 
-        Assert.Equal(2, state.SupportRequests.Length);
+        var active = state.SupportRequests
+            .Where(request => request.IsActive)
+            .ToArray();
+
+        Assert.Equal(2, active.Length);
         Assert.Equal(
             2,
-            state.SupportRequests.Select(request => request.RequestId).Distinct().Count());
+            active.Select(request => request.RequestId).Distinct().Count());
+    }
+
+    [Fact]
+    public void AcceptingSupportRequestReservesItAndBlocksSecondMission()
+    {
+        var state = ConflictWorldEngine.Advance(
+            CreateWorld(),
+            Epoch.AddMinutes(30));
+
+        var service = new ConflictOperationsService();
+        var request = state.SupportRequests.Single(
+            item => item.Type == SupportRequestType.CloseAirSupport);
+
+        var firstMissionId =
+            Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
+        var accepted = service.AcceptCombatSupportRequest(
+            state,
+            request.RequestId,
+            firstMissionId,
+            Epoch.AddMinutes(31));
+
+        var reserved = accepted.World.SupportRequests.Single(
+            item => item.RequestId == request.RequestId);
+
+        Assert.Equal(SupportRequestStatus.Reserved, reserved.Status);
+        Assert.Equal(firstMissionId, reserved.ReservedMissionId);
+
+        Assert.Throws<InvalidOperationException>(
+            () => service.AcceptCombatSupportRequest(
+                accepted.World,
+                request.RequestId,
+                Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaab"),
+                Epoch.AddMinutes(32)));
     }
 
     [Fact]
     public void AuthorizedPlayerActionChangesBattleStateExactlyOnce()
     {
-        var state = ConflictWorldEngine.Advance(CreateWorld(), Epoch.AddMinutes(30));
+        var state = ConflictWorldEngine.Advance(
+            CreateWorld(),
+            Epoch.AddMinutes(30));
+
         var service = new ConflictOperationsService();
         var request = state.SupportRequests.Single(
             item => item.Type == SupportRequestType.CloseAirSupport);
-        var missionId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-        var mission = service.AcceptSupportRequest(state, request.RequestId, missionId, Epoch.AddMinutes(31));
+
+        var accepted = service.AcceptCombatSupportRequest(
+            state,
+            request.RequestId,
+            Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            Epoch.AddMinutes(31));
 
         var telemetryResult = service.UpdateMission(
-            mission,
+            accepted.Mission,
             AirSupportMissionProfile.FixedWingDefault,
             TelemetryAt(request.TargetPosition, altitudeAgl: 5_000, speed: 260),
             Epoch.AddMinutes(32));
 
-        Assert.Equal(AirSupportMissionStage.ActionAuthorized, telemetryResult.Mission.Stage);
+        Assert.Equal(
+            AirSupportMissionStage.ActionAuthorized,
+            telemetryResult.Mission.Stage);
         Assert.True(telemetryResult.ActionWindowSatisfied);
 
-        var before = state.Units.Single(unit => unit.UnitId == HostileArmorId);
+        var before = accepted.World.Units.Single(
+            unit => unit.UnitId == HostileArmorId);
 
         var first = service.ExecuteAuthorizedAction(
-            state,
+            accepted.World,
             telemetryResult.Mission,
             PlayerActionKind.PrecisionAttack,
             "action-001",
@@ -77,7 +137,8 @@ public sealed class ConflictSystemTests
             targetConfidence: 0.95,
             Epoch.AddMinutes(32).AddSeconds(5));
 
-        var after = first.World.Units.Single(unit => unit.UnitId == HostileArmorId);
+        var after = first.World.Units.Single(
+            unit => unit.UnitId == HostileArmorId);
 
         Assert.Equal(PlayerActionOutcome.Applied, first.Action.Outcome);
         Assert.True(after.Strength < before.Strength);
@@ -87,14 +148,84 @@ public sealed class ConflictSystemTests
             first.World,
             new PlayerActionRequest(
                 "action-001",
-                missionId,
+                first.Mission.MissionId,
                 HostileArmorId,
                 PlayerActionKind.PrecisionAttack,
                 0.90,
                 0.95));
 
-        Assert.Equal(PlayerActionOutcome.DuplicateIgnored, duplicate.Result.Outcome);
-        Assert.Equal(after, duplicate.State.Units.Single(unit => unit.UnitId == HostileArmorId));
+        Assert.Equal(
+            PlayerActionOutcome.DuplicateIgnored,
+            duplicate.Result.Outcome);
+        Assert.Equal(
+            after,
+            duplicate.State.Units.Single(
+                unit => unit.UnitId == HostileArmorId));
+    }
+
+    [Fact]
+    public void CombatMissionClosesRequestOnlyAfterActionAndEgress()
+    {
+        var state = ConflictWorldEngine.Advance(
+            CreateWorld(),
+            Epoch.AddMinutes(30));
+
+        var service = new ConflictOperationsService();
+        var request = state.SupportRequests.Single(
+            item => item.Type == SupportRequestType.CloseAirSupport);
+
+        var accepted = service.AcceptCombatSupportRequest(
+            state,
+            request.RequestId,
+            Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+            Epoch.AddMinutes(31));
+
+        var onStation = service.UpdateMission(
+            accepted.Mission,
+            AirSupportMissionProfile.FixedWingDefault,
+            TelemetryAt(request.TargetPosition, 5_000, 250),
+            Epoch.AddMinutes(32));
+
+        var action = service.ExecuteAuthorizedAction(
+            accepted.World,
+            onStation.Mission,
+            PlayerActionKind.PrecisionAttack,
+            "action-egress-001",
+            0.90,
+            0.90,
+            Epoch.AddMinutes(32).AddSeconds(5));
+
+        var stillInside = service.UpdateMission(
+            action.Mission,
+            AirSupportMissionProfile.FixedWingDefault,
+            TelemetryAt(request.TargetPosition, 5_000, 250),
+            Epoch.AddMinutes(33));
+
+        Assert.Equal(AirSupportMissionStage.Egress, stillInside.Mission.Stage);
+        Assert.Equal(
+            SupportRequestStatus.Reserved,
+            action.World.SupportRequests.Single(
+                item => item.RequestId == request.RequestId).Status);
+
+        var outside = service.UpdateMission(
+            stillInside.Mission,
+            AirSupportMissionProfile.FixedWingDefault,
+            TelemetryAt(new GeoPoint(35.5, -96.0), 6_000, 280),
+            Epoch.AddMinutes(40));
+
+        Assert.Equal(
+            AirSupportMissionStage.ObjectiveComplete,
+            outside.Mission.Stage);
+
+        var completedWorld = service.CompleteCombatSupportMission(
+            action.World,
+            outside.Mission,
+            Epoch.AddMinutes(40));
+
+        Assert.Equal(
+            SupportRequestStatus.Completed,
+            completedWorld.SupportRequests.Single(
+                item => item.RequestId == request.RequestId).Status);
     }
 
     [Fact]
@@ -120,32 +251,192 @@ public sealed class ConflictSystemTests
     }
 
     [Fact]
-    public void ReconnaissanceRaisesIntelligenceWithoutDamagingTarget()
+    public void ReconActionRaisesIntelligenceWithoutDamagingTarget()
     {
         var state = CreateWorld();
-        var targetBefore = state.Units.Single(unit => unit.UnitId == HostileArmorId);
+        var targetBefore = state.Units.Single(
+            unit => unit.UnitId == HostileArmorId);
         var sectorBefore = state.Sectors.Single();
 
         var result = ConflictActionResolver.Apply(
             state,
             new PlayerActionRequest(
-                "recon-001",
+                "recon-action-001",
                 Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
                 HostileArmorId,
                 PlayerActionKind.Reconnaissance,
                 GeometryQuality: 0.8,
                 TargetConfidence: 0.9));
 
-        var targetAfter = result.State.Units.Single(unit => unit.UnitId == HostileArmorId);
+        var targetAfter = result.State.Units.Single(
+            unit => unit.UnitId == HostileArmorId);
         var sectorAfter = result.State.Sectors.Single();
 
         Assert.Equal(targetBefore.Strength, targetAfter.Strength);
         Assert.Equal(targetBefore.Readiness, targetAfter.Readiness);
-        Assert.True(sectorAfter.IntelligenceConfidence > sectorBefore.IntelligenceConfidence);
+        Assert.True(
+            sectorAfter.IntelligenceConfidence
+            > sectorBefore.IntelligenceConfidence);
     }
 
     [Fact]
-    public void ThreatExposureUsesRealPlayerTelemetryButNotMsfsCombatEvents()
+    public void LowIntelligenceGeneratesReconRequestAndMissionImprovesSectorIntel()
+    {
+        var world = CreateWorld();
+        world = world with
+        {
+            Sectors = new[]
+            {
+                world.Sectors[0] with { IntelligenceConfidence = 0.10 }
+            }
+        };
+
+        world = ConflictWorldEngine.Advance(
+            world,
+            Epoch.AddMinutes(30));
+
+        var request = world.SupportRequests.Single(
+            item => item.Type == SupportRequestType.Reconnaissance);
+
+        var service = new ConflictOperationsService();
+        var accepted = service.AcceptAreaSupportRequest(
+            world,
+            request.RequestId,
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            Epoch.AddMinutes(31));
+
+        var profile = AreaSupportMissionProfile.For(
+            SupportRequestType.Reconnaissance) with
+        {
+            RequiredVerifiedPresence = TimeSpan.FromSeconds(20)
+        };
+
+        var sample = TelemetryAt(
+            request.TargetPosition,
+            altitudeAgl: 6_000,
+            speed: 220);
+
+        var first = service.UpdateAreaMission(
+            accepted.Mission,
+            profile,
+            sample,
+            Epoch.AddMinutes(31).AddSeconds(1));
+
+        var second = service.UpdateAreaMission(
+            first.Mission,
+            profile,
+            sample,
+            Epoch.AddMinutes(31).AddSeconds(11));
+
+        var third = service.UpdateAreaMission(
+            second.Mission,
+            profile,
+            sample,
+            Epoch.AddMinutes(31).AddSeconds(21));
+
+        Assert.Equal(
+            AreaSupportMissionStage.ObjectiveComplete,
+            third.Mission.Stage);
+
+        var before = accepted.World.Sectors.Single().IntelligenceConfidence;
+
+        var completed = service.CompleteAreaSupportMission(
+            accepted.World,
+            third.Mission,
+            Epoch.AddMinutes(31).AddSeconds(21));
+
+        var after = completed.World.Sectors.Single().IntelligenceConfidence;
+
+        Assert.True(after > before);
+        Assert.True(completed.Outcome.Applied);
+        Assert.Equal(
+            SupportRequestStatus.Completed,
+            completed.World.SupportRequests.Single(
+                item => item.RequestId == request.RequestId).Status);
+    }
+
+    [Fact]
+    public void LogisticsMissionRequiresLandedStoppedParkingStateAndRestoresReadiness()
+    {
+        var world = CreateWorld();
+        var request = new AirSupportRequest(
+            "logistics-authored-001",
+            SupportRequestType.Logistics,
+            SupportUrgency.Priority,
+            FriendlyInfantryId,
+            FriendlyInfantryId,
+            world.Units.Single(unit => unit.UnitId == FriendlyInfantryId).Position,
+            RequiredEffect: 0.20,
+            CreatedAt: Epoch,
+            ExpiresAt: Epoch.AddHours(1));
+
+        world = world with
+        {
+            Units = world.Units
+                .Select(unit => unit.UnitId == FriendlyInfantryId
+                    ? unit with { Readiness = 0.30, Pressure = 0 }
+                    : unit)
+                .ToArray(),
+            SupportRequests = new[] { request }
+        };
+
+        ConflictValidation.Validate(world);
+
+        var service = new ConflictOperationsService();
+        var accepted = service.AcceptAreaSupportRequest(
+            world,
+            request.RequestId,
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            Epoch.AddMinutes(5));
+
+        var invalid = service.UpdateAreaMission(
+            accepted.Mission,
+            AreaSupportMissionProfile.For(SupportRequestType.Logistics),
+            TelemetryAt(request.TargetPosition, 50, 20),
+            Epoch.AddMinutes(6));
+
+        Assert.NotEqual(
+            AreaSupportMissionStage.ObjectiveComplete,
+            invalid.Mission.Stage);
+
+        var parked = TelemetryAt(
+            request.TargetPosition,
+            altitudeAgl: 0,
+            speed: 0) with
+        {
+            OnGround = true,
+            ParkingBrakeSet = true
+        };
+
+        var completedMission = service.UpdateAreaMission(
+            invalid.Mission,
+            AreaSupportMissionProfile.For(SupportRequestType.Logistics),
+            parked,
+            Epoch.AddMinutes(7));
+
+        Assert.Equal(
+            AreaSupportMissionStage.ObjectiveComplete,
+            completedMission.Mission.Stage);
+
+        var readinessBefore = accepted.World.Units.Single(
+            unit => unit.UnitId == FriendlyInfantryId).Readiness;
+
+        var completed = service.CompleteAreaSupportMission(
+            accepted.World,
+            completedMission.Mission,
+            Epoch.AddMinutes(7));
+
+        var readinessAfter = completed.World.Units.Single(
+            unit => unit.UnitId == FriendlyInfantryId).Readiness;
+
+        Assert.True(readinessAfter > readinessBefore);
+        Assert.Equal(
+            SupportRequestStatus.Completed,
+            completed.World.SupportRequests.Single().Status);
+    }
+
+    [Fact]
+    public void ThreatExposureUsesPlayerTelemetryButNotMsfsCombatEvents()
     {
         var state = CreateWorld();
         var threat = state.Threats.Single();
@@ -167,69 +458,47 @@ public sealed class ConflictSystemTests
     [Fact]
     public void PausedOrSlewTelemetryCannotAuthorizeConflictAction()
     {
-        var state = ConflictWorldEngine.Advance(CreateWorld(), Epoch.AddMinutes(30));
+        var state = ConflictWorldEngine.Advance(
+            CreateWorld(),
+            Epoch.AddMinutes(30));
+
+        var service = new ConflictOperationsService();
         var request = state.SupportRequests.Single(
             item => item.Type == SupportRequestType.CloseAirSupport);
-        var mission = AirSupportMission.Accept(
-            request,
+
+        var accepted = service.AcceptCombatSupportRequest(
+            state,
+            request.RequestId,
             Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd"),
             Epoch.AddMinutes(31));
 
-        var paused = AirSupportMissionEngine.Update(
-            mission,
+        var paused = service.UpdateMission(
+            accepted.Mission,
             AirSupportMissionProfile.FixedWingDefault,
-            TelemetryAt(request.TargetPosition, 5_000, 250) with { Paused = true },
+            TelemetryAt(request.TargetPosition, 5_000, 250) with
+            {
+                Paused = true
+            },
             Epoch.AddMinutes(32));
 
         Assert.False(paused.ActionWindowSatisfied);
-        Assert.NotEqual(AirSupportMissionStage.ActionAuthorized, paused.Mission.Stage);
+        Assert.NotEqual(
+            AirSupportMissionStage.ActionAuthorized,
+            paused.Mission.Stage);
 
-        var slew = AirSupportMissionEngine.Update(
-            mission,
+        var slew = service.UpdateMission(
+            accepted.Mission,
             AirSupportMissionProfile.FixedWingDefault,
-            TelemetryAt(request.TargetPosition, 5_000, 250) with { SlewActive = true },
+            TelemetryAt(request.TargetPosition, 5_000, 250) with
+            {
+                SlewActive = true
+            },
             Epoch.AddMinutes(32));
 
         Assert.False(slew.ActionWindowSatisfied);
-        Assert.NotEqual(AirSupportMissionStage.ActionAuthorized, slew.Mission.Stage);
-    }
-
-    [Fact]
-    public void ObjectiveCompletesOnlyAfterAppliedActionAndExit()
-    {
-        var state = ConflictWorldEngine.Advance(CreateWorld(), Epoch.AddMinutes(30));
-        var request = state.SupportRequests.Single(
-            item => item.Type == SupportRequestType.CloseAirSupport);
-        var mission = AirSupportMission.Accept(
-            request,
-            Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
-            Epoch.AddMinutes(31));
-
-        var onStation = AirSupportMissionEngine.Update(
-            mission,
-            AirSupportMissionProfile.FixedWingDefault,
-            TelemetryAt(request.TargetPosition, 5_000, 250),
-            Epoch.AddMinutes(32));
-
-        var egress = AirSupportMissionEngine.MarkActionApplied(
-            onStation.Mission,
-            Epoch.AddMinutes(32).AddSeconds(5));
-
-        var stillInside = AirSupportMissionEngine.Update(
-            egress,
-            AirSupportMissionProfile.FixedWingDefault,
-            TelemetryAt(request.TargetPosition, 5_000, 250),
-            Epoch.AddMinutes(33));
-
-        Assert.Equal(AirSupportMissionStage.Egress, stillInside.Mission.Stage);
-
-        var outside = AirSupportMissionEngine.Update(
-            stillInside.Mission,
-            AirSupportMissionProfile.FixedWingDefault,
-            TelemetryAt(new GeoPoint(35.5, -96.0), 6_000, 280),
-            Epoch.AddMinutes(40));
-
-        Assert.Equal(AirSupportMissionStage.ObjectiveComplete, outside.Mission.Stage);
+        Assert.NotEqual(
+            AirSupportMissionStage.ActionAuthorized,
+            slew.Mission.Stage);
     }
 
     [Fact]
@@ -262,8 +531,12 @@ public sealed class ConflictSystemTests
             request,
             first.Result.PlayerState);
 
-        Assert.Equal(ThreatEngagementOutcome.DuplicateIgnored, duplicate.Result.Outcome);
-        Assert.Equal(first.Result.PlayerState, duplicate.Result.PlayerState);
+        Assert.Equal(
+            ThreatEngagementOutcome.DuplicateIgnored,
+            duplicate.Result.Outcome);
+        Assert.Equal(
+            first.Result.PlayerState,
+            duplicate.Result.PlayerState);
     }
 
     [Fact]
@@ -272,7 +545,10 @@ public sealed class ConflictSystemTests
         var state = CreateWorld();
         var before = state.Sectors.Single().FriendlyControl;
 
-        var advanced = ConflictWorldEngine.Advance(state, Epoch.AddHours(2));
+        var advanced = ConflictWorldEngine.Advance(
+            state,
+            Epoch.AddHours(2));
+
         var after = advanced.Sectors.Single().FriendlyControl;
 
         Assert.True(after < before);
