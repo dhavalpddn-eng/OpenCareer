@@ -518,6 +518,11 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement initial Dashboard.
 - [x] Implement initial Current Flight telemetry page.
 - [x] Define per-flight contextual checklist UX with inline controller/keyboard binding state.
+- [x] Define layered onboarding: app tutorial, first-job tutorial and first-time mission-family tutorials.
+- [x] Define mission-family tutorial behavior for unique procedures in `docs/mission-tutorial-system.md`.
+- [ ] Implement versioned mission tutorial catalog + progress store.
+- [ ] Require a tutorial definition before a specialized mission family is considered production-ready.
+- [ ] Implement first-use guided tutorials for banner tow and carrier takeoff/landing when those mission families are built.
 - [ ] Implement per-flight checklist phases and **Show checklist every flight** setting.
 - [ ] Implement controller/keyboard binding resolution/profile source without guessed bindings.
 - [ ] Render missing controller/keyboard mappings as visible amber/orange **UNBOUND** and required/critical missing mappings as red **UNBOUND — REQUIRED**.
