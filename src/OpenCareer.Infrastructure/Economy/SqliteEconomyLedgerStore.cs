@@ -4,7 +4,7 @@ using OpenCareer.Domain.Economy;
 
 namespace OpenCareer.Infrastructure.Economy;
 
-public sealed class SqliteEconomyLedgerStore : IEconomyLedgerStore
+public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore
 {
     private readonly string _connectionString;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
@@ -79,6 +79,107 @@ public sealed class SqliteEconomyLedgerStore : IEconomyLedgerStore
                 connection,
                 sqliteTransaction,
                 transaction,
+                cancellationToken).ConfigureAwait(false);
+
+            sqliteTransaction.Commit();
+            return LedgerPostResult.Posted;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    public async Task<ActivePlayBillingState> ReadActivePlayBillingStateAsync(
+        string ownershipId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownershipId);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        ActivePlayBillingState? state =
+            await ReadBillingStateAsync(
+                connection,
+                sqliteTransaction: null,
+                ownershipId,
+                cancellationToken).ConfigureAwait(false);
+
+        return state ?? ActivePlayBillingState.Start(ownershipId);
+    }
+
+    public async Task<LedgerPostResult> PostActivePlayRecurringCostAsync(
+        PersistedActivePlayRecurringCostSettlementSummary settlement,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settlement);
+        settlement.Validate();
+
+        await _writeGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await EnableForeignKeysAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            using var sqliteTransaction = connection.BeginTransaction();
+
+            string? existingId = await FindExistingTransactionIdAsync(
+                connection,
+                sqliteTransaction,
+                settlement.Transaction.TransactionId,
+                settlement.Transaction.IdempotencyKey,
+                cancellationToken).ConfigureAwait(false);
+
+            if (existingId is not null)
+            {
+                EconomyLedgerTransaction existing =
+                    await ReadTransactionAsync(
+                        connection,
+                        sqliteTransaction,
+                        Guid.Parse(existingId),
+                        cancellationToken).ConfigureAwait(false);
+
+                if (!Equivalent(existing, settlement.Transaction))
+                {
+                    throw new InvalidOperationException(
+                        "The recurring-cost idempotency key or transaction ID already exists with different financial data.");
+                }
+
+                return LedgerPostResult.AlreadyPosted;
+            }
+
+            ActivePlayBillingState persistedBefore =
+                await ReadBillingStateAsync(
+                    connection,
+                    sqliteTransaction,
+                    settlement.OwnershipId,
+                    cancellationToken).ConfigureAwait(false)
+                ?? ActivePlayBillingState.Start(settlement.OwnershipId);
+
+            if (!EquivalentBillingState(persistedBefore, settlement.StateBefore))
+            {
+                throw new InvalidOperationException(
+                    "Active-play billing state changed before recurring costs could be posted. Re-read the state and retry the activity settlement.");
+            }
+
+            await InsertTransactionAsync(
+                connection,
+                sqliteTransaction,
+                settlement.Transaction,
+                cancellationToken).ConfigureAwait(false);
+
+            await UpsertBillingStateAsync(
+                connection,
+                sqliteTransaction,
+                settlement.StateAfter,
                 cancellationToken).ConfigureAwait(false);
 
             sqliteTransaction.Commit();
@@ -219,6 +320,14 @@ public sealed class SqliteEconomyLedgerStore : IEconomyLedgerStore
                     )
                 );
 
+                CREATE TABLE IF NOT EXISTS ActivePlayBillingState (
+                    OwnershipId TEXT NOT NULL PRIMARY KEY,
+                    CycleIndex INTEGER NOT NULL CHECK (CycleIndex >= 0),
+                    CycleProgressTicks INTEGER NOT NULL CHECK (CycleProgressTicks >= 0),
+                    Version INTEGER NOT NULL CHECK (Version >= 0),
+                    UpdatedAtUtcTicks INTEGER NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS IX_EconomyLedgerTransactions_Occurred
                     ON EconomyLedgerTransactions (OccurredAtUtcTicks DESC);
 
@@ -237,6 +346,90 @@ public sealed class SqliteEconomyLedgerStore : IEconomyLedgerStore
             _initializationGate.Release();
         }
     }
+
+    private static async Task<ActivePlayBillingState?> ReadBillingStateAsync(
+        SqliteConnection connection,
+        SqliteTransaction? sqliteTransaction,
+        string ownershipId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            SELECT CycleIndex, CycleProgressTicks, Version, UpdatedAtUtcTicks
+            FROM ActivePlayBillingState
+            WHERE OwnershipId = $ownershipId;
+            """;
+        command.Parameters.AddWithValue("$ownershipId", ownershipId);
+
+        await using var reader =
+            await command
+                .ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        var state = new ActivePlayBillingState(
+            ownershipId,
+            reader.GetInt32(0),
+            TimeSpan.FromTicks(reader.GetInt64(1)),
+            reader.GetInt64(2),
+            new DateTimeOffset(reader.GetInt64(3), TimeSpan.Zero));
+        state.Validate();
+        return state;
+    }
+
+    private static async Task UpsertBillingStateAsync(
+        SqliteConnection connection,
+        SqliteTransaction sqliteTransaction,
+        ActivePlayBillingState state,
+        CancellationToken cancellationToken)
+    {
+        state.Validate();
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = sqliteTransaction;
+        command.CommandText =
+            """
+            INSERT INTO ActivePlayBillingState (
+                OwnershipId,
+                CycleIndex,
+                CycleProgressTicks,
+                Version,
+                UpdatedAtUtcTicks)
+            VALUES (
+                $ownershipId,
+                $cycleIndex,
+                $cycleProgressTicks,
+                $version,
+                $updatedAt)
+            ON CONFLICT(OwnershipId) DO UPDATE SET
+                CycleIndex = excluded.CycleIndex,
+                CycleProgressTicks = excluded.CycleProgressTicks,
+                Version = excluded.Version,
+                UpdatedAtUtcTicks = excluded.UpdatedAtUtcTicks;
+            """;
+        command.Parameters.AddWithValue("$ownershipId", state.OwnershipId);
+        command.Parameters.AddWithValue("$cycleIndex", state.CycleIndex);
+        command.Parameters.AddWithValue("$cycleProgressTicks", state.CycleProgress.Ticks);
+        command.Parameters.AddWithValue("$version", state.Version);
+        command.Parameters.AddWithValue("$updatedAt", state.UpdatedAt.UtcTicks);
+
+        await command
+            .ExecuteNonQueryAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static bool EquivalentBillingState(
+        ActivePlayBillingState left,
+        ActivePlayBillingState right) =>
+        string.Equals(left.OwnershipId, right.OwnershipId, StringComparison.Ordinal)
+        && left.CycleIndex == right.CycleIndex
+        && left.CycleProgress == right.CycleProgress
+        && left.Version == right.Version
+        && left.UpdatedAt.UtcTicks == right.UpdatedAt.UtcTicks;
 
     private static async Task EnableForeignKeysAsync(
         SqliteConnection connection,
