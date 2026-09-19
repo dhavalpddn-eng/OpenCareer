@@ -62,6 +62,34 @@ public sealed class FlightSessionCoordinator
         Publish();
     }
 
+    public void CommitPersisted(
+        FlightSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        if (Current is null)
+        {
+            Current = session;
+            Publish();
+            return;
+        }
+
+        if (Current.SessionId != session.SessionId)
+        {
+            throw new InvalidOperationException(
+                "Cannot replace the current flight session with a different session identity.");
+        }
+
+        if (session.UpdatedAt < Current.UpdatedAt)
+        {
+            throw new InvalidOperationException(
+                "Cannot replace the current flight session with an older checkpoint.");
+        }
+
+        Current = session;
+        Publish();
+    }
+
     public void ClearTerminalSession()
     {
         if (Current is null)
