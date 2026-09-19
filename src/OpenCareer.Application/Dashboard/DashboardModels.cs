@@ -129,7 +129,8 @@ public sealed record DashboardSnapshot(
     DashboardWorldSummary? World,
     IReadOnlyList<DashboardOpportunity> Opportunities,
     IReadOnlyList<DashboardRecentActivity> RecentActivity,
-    IReadOnlyList<DashboardSocialPost> SocialFeed)
+    IReadOnlyList<DashboardSocialPost> SocialFeed,
+    IReadOnlyList<DashboardGuidanceCandidate> Guidance)
 {
     public static DashboardSnapshot Empty { get; } =
         new(
@@ -140,5 +141,6 @@ public sealed record DashboardSnapshot(
             null,
             Array.Empty<DashboardOpportunity>(),
             Array.Empty<DashboardRecentActivity>(),
-            Array.Empty<DashboardSocialPost>());
+            Array.Empty<DashboardSocialPost>(),
+            Array.Empty<DashboardGuidanceCandidate>());
 }
