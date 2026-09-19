@@ -37,11 +37,13 @@ Updated: 2026-09-18. **Read this after `AGENTS.md`; do not reread chat history u
 ## Economy / settlement foundation branch
 
 - Active economy branch: `feature/economy-ledger-settlement`, forked from the latest tested military/live-probe branch at `4ca6f8815581dd71a1e54a17da8c5da0cf41a0dd`.
-- Latest verified implementation: `d8b25f6b0820d831bd9a45c04894605294203dd3`.
-- Linux CI run 35331620111 passed **204/204 xUnit tests + 29/29 deterministic SimLab scenarios** with 0 warnings/errors.
-- Windows CI run 35331620076 passed the WinUI x64 Release build, live-probe build and **204/204 xUnit tests** with 0 warnings/errors.
-- New authoritative economy path: deterministic contract pay quote -> verified completed `JobContract` -> balanced ledger transaction -> SQLite atomic/idempotent post -> Finances UI.
-- Duplicate and even concurrent settlement attempts cannot credit the same contract twice in the current single-process application store.
+- Current economy code head before the latest handoff update: `dec4b8349b75ad37503e90f08d1a8cbdbfc3243e`.
+- Latest fully verified work-block checkpoint: `955ce454cec28844db67fbd61acda6d4dbfc3dbb`.
+- Linux run 35454813105 at `955ce454`: **227/227 xUnit + 29/29 SimLab**, 0 warnings/errors.
+- Windows run 35454813132 at `955ce454`: WinUI x64 Release + live-probe build + **227/227 xUnit**, 0 warnings/errors.
+- Later code adds atomic persisted aircraft purchase/listing consumption, finance account summaries and immutable accepted contract economics. A real test execution at `c2c3e56c` reached **233/234**; the sole retry failure was fixed at `dec4b834`. Initial `dec4b834` Actions attempts failed before any workflow steps/logs were created, so rerun CI before merge.
+- New authoritative economy path: deterministic contract pay quote -> immutable accepted economics -> verified completed `JobContract` -> balanced ledger transaction -> SQLite atomic/idempotent post -> Finances UI.
+- Opening cash, aircraft asset purchase, financed loan origination and active-play recurring ownership costs now use the same auditable ledger model. Duplicate and concurrent contract settlement cannot credit money twice.
 - Existing market simulation, route demand, economic cycles, bankruptcy/offline-liability policy, career credit and fictional aircraft-dealer quote systems are retained; this branch adds the missing authoritative money movement layer.
 - Detailed compact handoff: `docs/economy-foundation.md`.
 

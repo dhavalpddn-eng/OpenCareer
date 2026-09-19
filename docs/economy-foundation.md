@@ -1,16 +1,37 @@
 # Economy / settlement foundation
 
-Updated: 2026-09-18.
+Updated: 2026-09-19.
 
 Read `AGENTS.md` and `docs/project-state.md` first. This is the compact handoff for economy/finance work.
 
 ## Branch and verification
 
 - Branch: `feature/economy-ledger-settlement`
-- Base: `feature/military-operations-foundation` at `4ca6f8815581dd71a1e54a17da8c5da0cf41a0dd`
-- Latest verified implementation: `bcbe7bdf111f2cfe06da84f5074e8078e034938c`
-- Existing Linux branch baseline run 35331620111: **204/204 xUnit tests + 29/29 SimLab scenarios**, 0 warnings/errors.
-- Windows PR integration run 35417940644 at the latest implementation head: WinUI x64 Release build + live-probe build + **221/221 xUnit tests**, 0 test failures.
+- Base: `feature/military-operations-foundation` at `4ca6f8815581dd71a1e54a17da8c5da0cf41a0dd`.
+- Current code head before this handoff update: `dec4b8349b75ad37503e90f08d1a8cbdbfc3243e`.
+- Latest **fully verified** implementation in this work block: `955ce454cec28844db67fbd61acda6d4dbfc3dbb`.
+- Linux run 35454813105 at `955ce454`: **227/227 xUnit + 29/29 SimLab**, 0 build warnings/errors.
+- Windows run 35454813132 at `955ce454`: WinUI x64 Release + live-probe build + **227/227 xUnit**, 0 build warnings/errors.
+- A later real test execution at `c2c3e56c` reached **233/234 passing**; the only failing test was the same-purchase retry path re-running affordability after the initial cash debit. Commit `dec4b834` fixes that by recognizing the persisted purchase before rechecking affordability.
+- The first Actions jobs for `dec4b834` failed **before any workflow steps were created** (`steps=[]`, no job log blob), so the current head is not yet being called CI-verified. Re-run both Linux and Windows CI before merging.
+
+## 2026-09-19 pause checkpoint
+
+This work block materially expanded the economy from "pay and ledger" into the first acquisition/ownership accounting path:
+
+- explicit career opening-balance ledger transaction, with stable idempotency and append-only `OpeningEquity = 13` persisted account code;
+- cash and financed aircraft purchase accounting;
+- immutable aircraft-loan agreement generated only from an approved `LoanDecision`;
+- cent-rounded amortization by active-play billing cycle, including final-payment reconciliation;
+- recurring ownership schedule builder that feeds exact loan principal/interest plus insurance/storage/other fixed costs into the existing active-play billing engine;
+- atomic SQLite purchase persistence that writes the purchase ledger transaction and consumes a unique listing/ownership in one database transaction;
+- financed purchase persistence stores loan ID, lender, APR, term and scheduled payment as immutable origination terms;
+- purchase retry path is idempotent and does not charge cash twice;
+- ledger account-balance query;
+- Finances UI summary cards for settled income, operating costs, aircraft assets and outstanding loan balance;
+- immutable `ContractEconomicSnapshot` on `JobContract`, so accepted compensation and the quote inputs/multipliers are not rewritten when later market conditions change.
+
+Wolfram independently rechecked the existing 120-cycle example of **$80,000 at 6% with a $888.17 scheduled payment** using the same cent-rounding convention: first cycle interest/principal is **$400.00 / $488.17**, final payment is about **$887.23**, total principal is exactly **$80,000**, and the ending balance is $0. These are gameplay-finance calculations, not current real loan offers.
 
 ## Existing economy retained
 
@@ -51,6 +72,7 @@ Current accounts include:
 - AircraftAsset
 - LoanPayable
 - StorageExpense
+- OpeningEquity
 
 Money values are whole cents. Each non-zero posting has exactly one debit or one credit. Each transaction must balance.
 
@@ -171,6 +193,10 @@ The app composition root wires the ledger to:
 Current page shows:
 
 - authoritative available cash,
+- settled income,
+- operating costs,
+- aircraft asset book value posted by the ledger,
+- outstanding loan liability,
 - ledger status,
 - recent transactions,
 - explicit settlement rules.
@@ -181,30 +207,31 @@ It is intentionally read-only. It does not allow the UI to type a balance or fab
 
 Not yet implemented end-to-end:
 
-- generated job offer -> final pay quote -> persisted `JobContract`,
-- verified `FlightSession` fuel/fees/maintenance actuals -> settlement,
-- career opening cash transaction,
-- aircraft ownership transfer/purchase,
-- persisted loan origination/payment schedule -> ownership recurring-cost schedule binding,
-- final ownership adapter that feeds loan/insurance/storage schedules into the implemented active-play recurring settlement,
-- deadhead travel settlement,
-- company payroll,
-- named commodity lots and shipment market value,
+- generated job offer -> final pay quote -> persisted `JobContract` creation (the immutable accepted economic snapshot now exists);
+- verified `FlightSession` fuel/fees/maintenance actuals -> settlement;
+- app/career-creation wiring for the implemented opening-balance transaction (starting cash is still a product decision);
+- fleet-registry ownership transfer/storage-delivery wiring after the implemented atomic purchase accounting/persistence;
+- final ownership adapter that chooses the persisted loan/insurance/storage schedule automatically for each owned aircraft;
+- direct advancement/reporting of loan payoff state from completed active-play billing cycles;
+- deadhead travel settlement;
+- company payroll;
+- named commodity lots and shipment market value;
 - income-history observation window for credit underwriting.
 
 The market simulation can influence future quotes, but existing jobs must preserve accepted quoted compensation so market changes do not rewrite history.
 
 ## Next bounded economy work
 
-1. Bind `ContractPayQuoteEngine` when offer drafts become validated `JobContract` records.
-2. Define the immutable accepted economic snapshot stored with a contract.
+1. Re-run Linux + Windows CI for `dec4b834`; do not merge until the post-fix head executes real workflow steps and passes.
+2. Bind `ContractPayQuoteEngine` + `ContractEconomicSnapshot` when a `JobMarketOfferDraft` becomes a validated persisted `JobContract`.
 3. Feed verified FlightSession actual fuel/airport/maintenance costs into `ContractSettlementCosts`.
-4. Create/open the career with an explicit opening-balance ledger transaction.
-5. Implement atomic aircraft purchase: consume listing once, debit cash/deposit, create loan if needed, post aircraft asset, transfer ownership and assign storage/delivery.
-6. Bind persistent ownership loan/insurance/storage schedules into the implemented active-play billing engine and advance loan state when each 30-hour cycle completes.
-7. Feed verified fuel/service/maintenance actuals into settlement and add paid-deadhead transactions.
-8. After the flight/session/dispatch loop is playable, implement the named commodity catalog from `docs/cargo-market-requirements.md`.
-9. Run balance simulations/playtests against the 50–80-hour ownership target and tune distributions, not isolated examples.
+4. Decide starting cash, then wire `CareerEconomyInitializationService` into new-career creation exactly once.
+5. Connect the persisted aircraft purchase record to the fleet registry, storage location and delivery/geography rules; the financial/listing-consumption transaction already exists.
+6. Use the persisted loan agreement to build each ownership's recurring-cost schedule automatically, then surface remaining principal/payoff progress in Finance/Fleet.
+7. Add paid personal deadhead and employer-duty deadhead settlement.
+8. Add company payroll/operating-cost settlement only after the single-aircraft ownership loop is playable.
+9. After the flight/session/dispatch loop is playable, implement the named commodity catalog from `docs/cargo-market-requirements.md`.
+10. Run broad balance simulations/playtests against the 50–80-hour ownership target and tune distributions rather than isolated examples.
 
 ## Product decisions that should be confirmed before deeper tuning
 
