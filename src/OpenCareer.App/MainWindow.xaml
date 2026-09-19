@@ -7,7 +7,7 @@
     mc:Ignorable="d"
     Title="OpenCareer">
 
-    <Grid Background="{StaticResource AppBackgroundBrush}">
+    <Grid Background="{StaticResource OpenCareerShellBackgroundBrush}" RequestedTheme="Dark">
         <NavigationView
             x:Name="NavView"
             PaneDisplayMode="Left"
@@ -15,12 +15,13 @@
             IsSettingsVisible="False"
             IsPaneToggleButtonVisible="True"
             SelectionChanged="NavView_SelectionChanged"
-            Background="{StaticResource AppBackgroundBrush}">
+            Background="{StaticResource OpenCareerShellBackgroundBrush}"
+            Foreground="{StaticResource OpenCareerShellTextBrush}">
 
             <NavigationView.PaneHeader>
                 <StackPanel Margin="8,14,8,18" Spacing="2">
-                    <TextBlock Text="OpenCareer" FontSize="24" FontWeight="SemiBold" />
-                    <TextBlock Text="MSFS 2024 Companion" Foreground="{StaticResource AppMutedTextBrush}" FontSize="12" />
+                    <TextBlock Text="OPENCAREER" FontSize="24" FontWeight="SemiBold" CharacterSpacing="80" Foreground="{StaticResource OpenCareerShellTextBrush}" />
+                    <TextBlock Text="MSFS 2024 Companion" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="12" />
                 </StackPanel>
             </NavigationView.PaneHeader>
 
@@ -32,21 +33,18 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel>
-                        <TextBlock Text="Operations" FontSize="22" FontWeight="SemiBold" />
-                        <TextBlock Text="Career, dispatch and live flight management" Foreground="{StaticResource AppMutedTextBrush}" />
+                        <TextBlock Text="OPERATIONS" Style="{StaticResource OpenCareerShellSectionTitleStyle}" CharacterSpacing="70" />
+                        <TextBlock Text="Career, dispatch and live flight management" Style="{StaticResource OpenCareerShellBodyStyle}" />
                     </StackPanel>
 
                     <Border Grid.Column="1"
-                            Background="{StaticResource AppSurfaceBrush}"
-                            BorderBrush="{StaticResource AppBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="10"
+                            Style="{StaticResource OpenCareerMetalCardStyle}"
                             Padding="14,8">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Ellipse Width="9" Height="9" Fill="{StaticResource AppAccentBrush}" />
+                            <Ellipse Width="9" Height="9" Fill="{StaticResource OpenCareerSuccessBrush}" />
                             <StackPanel>
                                 <TextBlock Text="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}" FontWeight="SemiBold" />
-                                <TextBlock Text="{x:Bind ViewModel.AircraftStatus, Mode=OneWay}" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
+                                <TextBlock Text="{x:Bind ViewModel.AircraftStatus, Mode=OneWay}" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -81,10 +79,11 @@
                     MaxHeight="760"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Background="{StaticResource AppPaperBrush}"
-                    BorderBrush="{StaticResource AppBorderBrush}"
+                    Background="{StaticResource OpenCareerPaperBrush}"
+                    BorderBrush="{StaticResource OpenCareerSteelBorderBrush}"
                     BorderThickness="2"
-                    CornerRadius="8">
+                    CornerRadius="6"
+                    RequestedTheme="Light">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -92,7 +91,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Border Background="{StaticResource AppNavyBrush}"
+                    <Border Background="{StaticResource OpenCareerNavyBrush}"
                             Padding="24,18"
                             CornerRadius="6,6,0,0">
                         <Grid ColumnSpacing="16">
@@ -103,7 +102,7 @@
 
                             <StackPanel Spacing="4">
                                 <TextBlock Text="OPENCAREER FLIGHT SCHOOL"
-                                           Foreground="{StaticResource AppPaperBrush}"
+                                           Foreground="{StaticResource OpenCareerPaperBrush}"
                                            FontSize="11"
                                            FontWeight="SemiBold"
                                            CharacterSpacing="120" />
@@ -127,13 +126,13 @@
                                   VerticalScrollBarVisibility="Auto">
                         <StackPanel Padding="26,24" Spacing="18">
                             <TextBlock Text="{x:Bind Tutorial.CurrentBody, Mode=OneWay}"
-                                       Foreground="{StaticResource AppPaperTextBrush}"
+                                       Foreground="{StaticResource OpenCareerInkBrush}"
                                        FontSize="17"
                                        LineHeight="26"
                                        TextWrapping="Wrap" />
 
-                            <Border Background="{StaticResource AppPaperAltBrush}"
-                                    BorderBrush="#B6AE9F"
+                            <Border Background="{StaticResource OpenCareerPaperAltBrush}"
+                                    BorderBrush="{StaticResource OpenCareerPaperRuleBrush}"
                                     BorderThickness="1"
                                     Padding="12,9"
                                     CornerRadius="4"
@@ -151,15 +150,15 @@
                             </Border>
 
                             <TextBlock Text="The walkthrough can explain unfinished areas, but it will never pretend a placeholder is usable."
-                                       Foreground="#5C6266"
+                                       Foreground="{StaticResource OpenCareerInkMutedBrush}"
                                        FontSize="12"
                                        TextWrapping="Wrap" />
                         </StackPanel>
                     </ScrollViewer>
 
                     <Border Grid.Row="2"
-                            Background="{StaticResource AppPaperAltBrush}"
-                            BorderBrush="#C9C2B4"
+                            Background="{StaticResource OpenCareerPaperAltBrush}"
+                            BorderBrush="{StaticResource OpenCareerPaperRuleBrush}"
                             BorderThickness="0,1,0,0"
                             Padding="20,14">
                         <Grid ColumnSpacing="10">
@@ -171,10 +170,12 @@
                             </Grid.ColumnDefinitions>
 
                             <Button Content="Skip tutorial"
+                                    Style="{StaticResource OpenCareerSecondaryButtonStyle}"
                                     Click="SkipTutorial_Click" />
 
                             <Button Grid.Column="2"
                                     Content="Back"
+                                    Style="{StaticResource OpenCareerSecondaryButtonStyle}"
                                     IsEnabled="{x:Bind Tutorial.CanGoBack, Mode=OneWay}"
                                     Click="BackTutorial_Click" />
 

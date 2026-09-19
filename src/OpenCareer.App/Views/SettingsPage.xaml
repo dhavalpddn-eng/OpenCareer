@@ -6,79 +6,65 @@
     <ScrollViewer>
         <StackPanel Margin="32" Spacing="20" MaxWidth="920" HorizontalAlignment="Left">
             <StackPanel Spacing="4">
-                <TextBlock Text="Settings" FontSize="30" FontWeight="SemiBold" />
+                <TextBlock Text="Settings"
+                           Style="{StaticResource OpenCareerPageTitleStyle}" />
                 <TextBlock Text="Application preferences and recovery tools."
-                           Foreground="{StaticResource AppMutedTextBrush}" />
+                           Style="{StaticResource OpenCareerPageSubtitleStyle}" />
             </StackPanel>
 
-            <Border Background="{StaticResource AppSurfaceBrush}"
-                    BorderBrush="{StaticResource AppBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="12"
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="22">
                 <StackPanel Spacing="12">
                     <TextBlock Text="TRAINING &amp; TUTORIALS"
-                               FontSize="12"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource AppMutedTextBrush}" />
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                     <TextBlock Text="Intro tutorial"
-                               FontSize="20"
-                               FontWeight="SemiBold" />
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
                     <TextBlock Text="Replay the full OpenCareer application walkthrough. Restarting the tutorial does not change career progress, money, flights, aircraft or qualifications."
-                               TextWrapping="Wrap"
-                               Foreground="{StaticResource AppMutedTextBrush}" />
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Content="Restart intro tutorial"
+                                Style="{StaticResource OpenCareerPrimaryButtonStyle}"
                                 Click="RestartIntro_Click" />
                         <Button Content="Preview first-job walkthrough"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
                                 Click="StartFirstJob_Click" />
                     </StackPanel>
                     <TextBlock Text="The first-job walkthrough is available for preview now. Job and Dispatch steps remain labeled Coming Later until those systems are implemented."
                                FontSize="12"
-                               TextWrapping="Wrap"
-                               Foreground="{StaticResource AppMutedTextBrush}" />
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
                 </StackPanel>
             </Border>
 
-            <Border Background="{StaticResource AppSurfaceBrush}"
-                    BorderBrush="{StaticResource AppBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="12"
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="22">
                 <StackPanel Spacing="12">
                     <TextBlock Text="SPECIAL MISSION TUTORIAL PREVIEWS"
-                               FontSize="12"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource AppMutedTextBrush}" />
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                     <TextBlock Text="Preview unique procedures"
-                               FontSize="20"
-                               FontWeight="SemiBold" />
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
                     <TextBlock Text="These walkthroughs are usable as training previews now. Their real mission triggers, live objective validation and checklist evidence arrive with the corresponding mission systems."
-                               TextWrapping="Wrap"
-                               Foreground="{StaticResource AppMutedTextBrush}" />
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Content="Banner tow"
+                                Style="{StaticResource OpenCareerPrimaryButtonStyle}"
                                 Click="PreviewBannerTow_Click" />
                         <Button Content="Carrier takeoff"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
                                 Click="PreviewCarrierTakeoff_Click" />
                         <Button Content="Carrier landing"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
                                 Click="PreviewCarrierLanding_Click" />
                     </StackPanel>
                 </StackPanel>
             </Border>
 
-            <Border Background="{StaticResource AppSurfaceBrush}"
-                    BorderBrush="{StaticResource AppBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="12"
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="22">
                 <StackPanel Spacing="8">
                     <TextBlock Text="SIMULATOR"
-                               FontSize="12"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource AppMutedTextBrush}" />
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                     <TextBlock Text="Detailed connection diagnostics and input/checklist preferences will be added as their production systems are implemented."
-                               TextWrapping="Wrap" />
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
                 </StackPanel>
             </Border>
         </StackPanel>

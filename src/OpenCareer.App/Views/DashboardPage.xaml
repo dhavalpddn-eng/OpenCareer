@@ -6,15 +6,13 @@
     <ScrollViewer>
         <StackPanel Margin="32" Spacing="20">
             <StackPanel Spacing="4">
-                <TextBlock Text="Dashboard" FontSize="30" FontWeight="SemiBold" />
+                <TextBlock Text="Dashboard"
+                           Style="{StaticResource OpenCareerPageTitleStyle}" />
                 <TextBlock Text="Your career starts here. OpenCareer remains usable even when MSFS is not running."
-                           Foreground="{StaticResource AppMutedTextBrush}" />
+                           Style="{StaticResource OpenCareerPageSubtitleStyle}" />
             </StackPanel>
 
-            <Border Background="{StaticResource AppSurfaceBrush}"
-                    BorderBrush="{StaticResource AppBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="14"
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="28">
                 <Grid ColumnSpacing="24">
                     <Grid.ColumnDefinitions>
@@ -23,26 +21,30 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Spacing="10">
-                        <TextBlock Text="{Binding ConnectionStatus}" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock Text="SIMULATOR STATUS"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="{Binding ConnectionStatus}"
+                                   FontSize="24"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
                         <TextBlock Text="{Binding ConnectionDetail}"
-                                   Foreground="{StaticResource AppMutedTextBrush}"
-                                   TextWrapping="Wrap"
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
                                    MaxWidth="700" />
                         <TextBlock Text="Flight tracking will become available in a later build."
-                                   Foreground="{StaticResource AppMutedTextBrush}"
-                                   TextWrapping="Wrap"
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
                                    MaxWidth="700" />
                     </StackPanel>
 
                     <Border Grid.Column="1"
-                            Background="{StaticResource AppSurfaceAltBrush}"
-                            CornerRadius="12"
+                            Style="{StaticResource OpenCareerPaperInsetStyle}"
                             Padding="18,12"
                             VerticalAlignment="Center">
                         <StackPanel Spacing="4">
-                            <TextBlock Text="HOME BASE" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
-                            <TextBlock Text="KRME" FontSize="24" FontWeight="SemiBold" />
-                            <TextBlock Text="Griffiss International" Foreground="{StaticResource AppMutedTextBrush}" />
+                            <TextBlock Text="HOME BASE"
+                                       Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                            <TextBlock Text="KRME"
+                                       Style="{StaticResource OpenCareerPaperValueStyle}" />
+                            <TextBlock Text="Griffiss International"
+                                       Style="{StaticResource OpenCareerPaperBodyStyle}" />
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -55,27 +57,38 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Background="{StaticResource AppSurfaceBrush}" BorderBrush="{StaticResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="20">
+                <Border Style="{StaticResource OpenCareerPaperCardStyle}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="CAREER STANDING" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
-                        <TextBlock Text="New Pilot" FontSize="20" FontWeight="SemiBold" />
-                        <TextBlock Text="Qualifications, reputation and employer trust will drive access." Foreground="{StaticResource AppMutedTextBrush}" TextWrapping="Wrap" />
+                        <TextBlock Text="CAREER STANDING"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="New Pilot"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                        <TextBlock Text="Qualifications, reputation and employer trust will drive access."
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}" />
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="1" Background="{StaticResource AppSurfaceBrush}" BorderBrush="{StaticResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="20">
+                <Border Grid.Column="1"
+                        Style="{StaticResource OpenCareerPaperCardStyle}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="CURRENT AIRCRAFT" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
-                        <TextBlock Text="{Binding AircraftStatus}" FontSize="20" FontWeight="SemiBold" />
-                        <TextBlock Text="Employer, rented, assigned and owned aircraft stay distinct." Foreground="{StaticResource AppMutedTextBrush}" TextWrapping="Wrap" />
+                        <TextBlock Text="CURRENT AIRCRAFT"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="{Binding AircraftStatus}"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                        <TextBlock Text="Employer, rented, assigned and owned aircraft stay distinct."
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}" />
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="2" Background="{StaticResource AppSurfaceBrush}" BorderBrush="{StaticResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="20">
+                <Border Grid.Column="2"
+                        Style="{StaticResource OpenCareerPaperCardStyle}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="NEXT STEP" Foreground="{StaticResource AppMutedTextBrush}" FontSize="11" />
-                        <TextBlock Text="Connect to MSFS" FontSize="20" FontWeight="SemiBold" />
-                        <TextBlock Text="Live telemetry and flight-state detection come next." Foreground="{StaticResource AppMutedTextBrush}" TextWrapping="Wrap" />
+                        <TextBlock Text="NEXT STEP"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="Connect to MSFS"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                        <TextBlock Text="Live telemetry and flight-state detection come next."
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}" />
                     </StackPanel>
                 </Border>
             </Grid>

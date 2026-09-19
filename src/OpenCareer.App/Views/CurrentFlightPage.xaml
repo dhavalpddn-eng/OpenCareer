@@ -4,28 +4,28 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer>
-        <StackPanel MaxWidth="900"
+        <StackPanel MaxWidth="980"
                     Margin="32"
                     Spacing="18"
                     HorizontalAlignment="Center">
-            <TextBlock Text="No active flight" FontSize="28" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding ConnectionStatus}"
-                       Foreground="{StaticResource AppAccentBrush}"
-                       FontWeight="SemiBold" />
-            <TextBlock Text="Live simulator telemetry is shown below when available. OpenCareer does not create or claim a FlightSession from connection or telemetry alone."
-                       Foreground="{StaticResource AppMutedTextBrush}"
-                       TextWrapping="Wrap" />
+            <StackPanel Spacing="4">
+                <TextBlock Text="No active flight"
+                           Style="{StaticResource OpenCareerPageTitleStyle}" />
+                <TextBlock Text="{Binding ConnectionStatus}"
+                           Foreground="{StaticResource OpenCareerSelectionBrush}"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="Live simulator telemetry is shown below when available. OpenCareer does not create or claim a FlightSession from connection or telemetry alone."
+                           Style="{StaticResource OpenCareerPageSubtitleStyle}" />
+            </StackPanel>
 
-            <Border Background="{StaticResource AppSurfaceBrush}"
-                    BorderBrush="{StaticResource AppBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="14"
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="24">
                 <StackPanel Spacing="18">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="Aircraft telemetry" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="AIRCRAFT TELEMETRY"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                         <TextBlock Text="{Binding AircraftStatus}"
-                                   Foreground="{StaticResource AppMutedTextBrush}" />
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
                     </StackPanel>
 
                     <Grid ColumnSpacing="24" RowSpacing="16">
@@ -42,44 +42,44 @@
                         </Grid.RowDefinitions>
 
                         <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
-                            <TextBlock Text="Position" Foreground="{StaticResource AppMutedTextBrush}" />
-                            <TextBlock Text="{Binding PositionSummary}" FontWeight="SemiBold" />
+                            <TextBlock Text="POSITION" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding PositionSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
                         <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
-                            <TextBlock Text="Altitude" Foreground="{StaticResource AppMutedTextBrush}" />
-                            <TextBlock Text="{Binding AltitudeSummary}" FontWeight="SemiBold" />
+                            <TextBlock Text="ALTITUDE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding AltitudeSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
-                            <TextBlock Text="Speed" Foreground="{StaticResource AppMutedTextBrush}" />
-                            <TextBlock Text="{Binding SpeedSummary}" FontWeight="SemiBold" />
+                            <TextBlock Text="SPEED" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding SpeedSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
-                            <TextBlock Text="Vertical speed" Foreground="{StaticResource AppMutedTextBrush}" />
-                            <TextBlock Text="{Binding VerticalSpeedSummary}" FontWeight="SemiBold" />
+                            <TextBlock Text="VERTICAL SPEED" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding VerticalSpeedSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
-                            <TextBlock Text="Heading" Foreground="{StaticResource AppMutedTextBrush}" />
-                            <TextBlock Text="{Binding HeadingSummary}" FontWeight="SemiBold" />
+                            <TextBlock Text="HEADING" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding HeadingSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
                         <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
-                            <TextBlock Text="Aircraft state" Foreground="{StaticResource AppMutedTextBrush}" />
-                            <TextBlock Text="{Binding AircraftStateSummary}" FontWeight="SemiBold" />
+                            <TextBlock Text="AIRCRAFT STATE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding AircraftStateSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Spacing="3">
-                            <TextBlock Text="Attitude / load factor" Foreground="{StaticResource AppMutedTextBrush}" />
-                            <TextBlock Text="{Binding AttitudeSummary}" FontWeight="SemiBold" />
+                            <TextBlock Text="ATTITUDE / LOAD FACTOR" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding AttitudeSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="4" Grid.Column="0" Spacing="3">
-                            <TextBlock Text="Configuration" Foreground="{StaticResource AppMutedTextBrush}" />
-                            <TextBlock Text="{Binding ConfigurationSummary}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="CONFIGURATION" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding ConfigurationSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
                         <StackPanel Grid.Row="4" Grid.Column="1" Spacing="3">
-                            <TextBlock Text="Load" Foreground="{StaticResource AppMutedTextBrush}" />
-                            <TextBlock Text="{Binding LoadSummary}" FontWeight="SemiBold" />
+                            <TextBlock Text="LOAD" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding LoadSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
                     </Grid>
                 </StackPanel>
