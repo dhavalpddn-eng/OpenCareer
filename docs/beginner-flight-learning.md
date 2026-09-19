@@ -159,3 +159,26 @@ Acceptance gates:
 The beginner experience should feel like **flight school with a career attached**, not a pass/fail airline checkride on flight one.
 
 Players who already know flight simulation can reduce guidance immediately. Players who do not can leave the route/checklist/landing coach enabled for as long as they need without earning less money or less legitimate flight-time credit solely because they used the assistance.
+## Final stress results
+
+Initial 50-scenario run:
+- **8 learning-pressure violations**.
+- Main causes: assistance faded based only on accumulated hours/completions, and several still-learning controller/keyboard/rough-landing profiles accumulated too many career consequences.
+
+After adaptive-guidance and training-protection tuning, a fresh 59-scenario run found one remaining edge case:
+- `OvercontrolsController / ShortPractice` accumulated **5 punitive career consequences**.
+
+Final tuning kept rough landings common but strengthened the safety effect assumed when a beginner actually follows Full/Standard landing-coach and go-around prompts. This is a stress-model effectiveness target, **not an auto-land feature**.
+
+Final fresh 59-scenario rerun:
+- **0 balance/learning violations**.
+- Linux CI run `35446940256`: **304/304 xUnit passed** plus deterministic SimLab.
+- Both the tuned 50-scenario matrix and the fresh 59-scenario matrix are part of that passing suite.
+
+The final result specifically protects the desired beginner experience:
+- poor landing smoothness does not block ordinary job completion;
+- recoverable route mistakes do not create career failure;
+- safe go-arounds are accepted as good judgment;
+- guidance can increase again when a supposedly experienced player is still struggling;
+- training/practice protects career standing while preserving physical owned-aircraft consequences;
+- the app never needs to invent aircraft-specific approach speeds to provide useful landing coaching.
