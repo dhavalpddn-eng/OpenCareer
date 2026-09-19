@@ -15,16 +15,16 @@ Downstream: bind manifests to FlightSession/jobs, condition evidence, market-dri
 Career-derived credit compares fictional lenders and evaluates APR, LTV, debt-service capacity, reserve, deposit and civilian ownership eligibility. Military-only assets remain excluded from civilian purchase.
 
 ## Dealers & ownership flow — complete core backend
-SQLite persistence atomically coordinates career cash/reserve, dealer stock/offers, cash or financed purchase, stock consumption, ownership transfer, persistent loans/amortization schedules, insurance, storage occupancy/lease, initial maintenance state and idempotent purchase receipts. Failed transactions roll back together.
-Downstream: polished UI, recurring loan payment/default/restructure, delivery/reposition logistics and live-career balance calibration.
+SQLite persistence atomically coordinates career cash/reserve, dealer stock/offers, cash or financed purchase, stock consumption, ownership transfer, persistent loans/amortization schedules, insurance, storage occupancy/lease, initial maintenance state and idempotent purchase receipts. Failed transactions roll back together. A deterministic next-cycle recurring-cost quote now combines active normal loan, insurance and storage state for projection/UI use without mutating money; defaulted/restructured loans require separate terms instead of being treated as normal billing.
+Downstream: polished UI, authoritative recurring-cost accrual/ledger settlement, loan payment/default/restructure execution, delivery/reposition logistics and live-career balance calibration.
 
 ## Maintenance systems — complete core backend
 Implemented deterministic airframe/engine/gear wear, discrete damage, hard-landing/overspeed/engine-stress/excess-G inputs, inspection intervals, service cost/downtime, grounding thresholds, persistent maintenance state/history and idempotent service/usage operations. Conservative fallback profiles carry explicit confidence.
 Downstream: verified live telemetry binding, simulator-native component state where supported, MRO/parts depth and maintenance UI.
 
 ## Verification
-- **132/132 xUnit tests passed** on Linux and Windows.
-- **29/29 deterministic SimLab scenarios passed**.
+- Existing Linux branch audit baseline: **132/132 xUnit + 29/29 deterministic SimLab scenarios + BalanceLab PASS**.
+- Latest Windows PR integration at implementation head `325cf96`: **140/140 xUnit tests passed**.
 - Windows WinUI Release build and live-probe build passed.
 - `tools/OpenCareer.BalanceLab` runs adversarial and synthetic greedy career stress tests in CI and currently passes all ownership/payout gates.
 - Economy exploit coverage now includes repeat-job farming, reverse-route shuttle farming, short-flight bonus farming, quoted-duration abuse, stacked money bonuses, credit-job-count farming, high-value cargo farming, sim-rate earnings, dealer-discount pacing and used-aircraft maintenance reset.
