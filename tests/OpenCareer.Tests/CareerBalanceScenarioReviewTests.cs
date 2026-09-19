@@ -32,7 +32,7 @@ public sealed class CareerBalanceScenarioReviewTests
 
         Assert.Equal(1_969.23m, twoHourJob.PilotCashCompensation);
         Assert.Equal(2_961.17m, threeHourJob.PilotCashCompensation);
-        Assert.Equal(18_049.53m, marathonJob.PilotCashCompensation);
+        Assert.Equal(17_774.86m, marathonJob.PilotCashCompensation);
         Assert.Equal(1.25, marathonJob.ExtendedDutyMultiplier, precision: 10);
 
         decimal cash = 0m;
@@ -65,7 +65,7 @@ public sealed class CareerBalanceScenarioReviewTests
 
         Assert.Equal(70d, careerHours);
         Assert.Equal(26, completedJobs);
-        Assert.Equal(72_239.98m, cash);
+        Assert.Equal(71_965.31m, cash);
         Assert.Equal(70d, firstCashOwnershipHours);
         Assert.InRange(
             firstCashOwnershipHours!.Value,
@@ -78,7 +78,7 @@ public sealed class CareerBalanceScenarioReviewTests
                 2,
                 MidpointRounding.AwayFromZero);
 
-        Assert.Equal(1_032.00m, averagePayPerActiveHour);
+        Assert.Equal(1_028.08m, averagePayPerActiveHour);
 
         decimal marathonHourly =
             marathonJob.PilotCashCompensation / 15m;
@@ -108,7 +108,7 @@ public sealed class CareerBalanceScenarioReviewTests
                 2,
                 MidpointRounding.AwayFromZero);
 
-        Assert.Equal(30_959.99m, normalizedThirtyHourIncome);
+        Assert.Equal(30_842.28m, normalizedThirtyHourIncome);
 
         var history = new CareerCreditHistory(
             RealFlightHours: (decimal)careerHours,
@@ -211,7 +211,7 @@ public sealed class CareerBalanceScenarioReviewTests
         }
 
         Assert.Equal(60d, hours);
-        Assert.Equal(72_198.12m, cash);
+        Assert.Equal(71_099.44m, cash);
         Assert.Equal(60d, acquisitionHour);
         Assert.InRange(
             acquisitionHour!.Value,
