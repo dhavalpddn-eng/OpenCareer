@@ -100,13 +100,78 @@ public sealed class FlightSessionPersistenceServiceTests
         FlightSession? recovered =
             await service.RecoverAsync();
 
-        Assert.Equal(
-            checkpoint,
-            recovered);
+        Assert.NotNull(recovered);
 
         Assert.Equal(
-            checkpoint,
+            checkpoint.SessionId,
+            recovered!.SessionId);
+
+        Assert.Equal(
+            FlightSessionStatus.Suspended,
+            recovered.Status);
+
+        Assert.Equal(
+            FlightTrackingState.Suspended,
+            recovered.Tracking.State);
+
+        Assert.Equal(
+            checkpoint.SessionId,
+            service.LastRecoveredSessionId);
+
+        Assert.Equal(
+            recovered,
+            store.Checkpoint);
+
+        Assert.Equal(
+            recovered,
             coordinator.Current);
+    }
+
+    [Fact]
+    public async Task FlushWritesLatestInMemorySessionEvenBeforeCadenceExpires()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore();
+
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store,
+                new FlightSessionCheckpointPolicy(
+                    TimeSpan.FromMinutes(5)));
+
+        await service.StartAsync(Epoch);
+
+        await service.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(1),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true)));
+
+        await service.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(2),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true)));
+
+        Assert.Equal(
+            Epoch.AddSeconds(1),
+            store.Checkpoint?.UpdatedAt);
+
+        await service.FlushAsync();
+
+        Assert.Equal(
+            Epoch.AddSeconds(2),
+            store.Checkpoint?.UpdatedAt);
     }
 
     [Fact]
