@@ -6,10 +6,13 @@ public sealed class FlightSessionPersistenceService
 {
     private readonly FlightSessionCoordinator _coordinator;
     private readonly IFlightSessionCheckpointStore _store;
+    private readonly FlightSessionCheckpointPolicy _checkpointPolicy;
+    private FlightSession? _lastPersisted;
 
     public FlightSessionPersistenceService(
         FlightSessionCoordinator coordinator,
-        IFlightSessionCheckpointStore store)
+        IFlightSessionCheckpointStore store,
+        FlightSessionCheckpointPolicy? checkpointPolicy = null)
     {
         _coordinator =
             coordinator
@@ -18,6 +21,12 @@ public sealed class FlightSessionPersistenceService
         _store =
             store
             ?? throw new ArgumentNullException(nameof(store));
+
+        _checkpointPolicy =
+            checkpointPolicy
+            ?? FlightSessionCheckpointPolicy.Default;
+
+        _checkpointPolicy.Validate();
     }
 
     public async Task<FlightSession> StartAsync(
@@ -42,6 +51,7 @@ public sealed class FlightSessionPersistenceService
             .SaveAsync(session, cancellationToken)
             .ConfigureAwait(false);
 
+        _lastPersisted = session;
         _coordinator.CommitPersisted(session);
         return session;
     }
@@ -62,9 +72,16 @@ public sealed class FlightSessionPersistenceService
                 current,
                 update);
 
-        await _store
-            .SaveAsync(next, cancellationToken)
-            .ConfigureAwait(false);
+        if (_checkpointPolicy.ShouldCheckpoint(
+                _lastPersisted,
+                next))
+        {
+            await _store
+                .SaveAsync(next, cancellationToken)
+                .ConfigureAwait(false);
+
+            _lastPersisted = next;
+        }
 
         _coordinator.CommitPersisted(next);
         return next;
@@ -86,6 +103,8 @@ public sealed class FlightSessionPersistenceService
 
         if (checkpoint is null)
             return null;
+
+        _lastPersisted = checkpoint;
 
         if (_coordinator.Current is null)
         {
@@ -117,6 +136,7 @@ public sealed class FlightSessionPersistenceService
             .ClearAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        _lastPersisted = null;
         _coordinator.ClearTerminalSession();
     }
 }
