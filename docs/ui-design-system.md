@@ -40,32 +40,51 @@ Do not use smoke, fog, diffuse cloud overlays, heavy bloom, neon glow, frosted-g
 - `VisualStateManager`, adaptive grids and pane collapse for width changes.
 - Do not put SimConnect, persistence or game calculations in Views.
 
+### Implemented WinUI resource library
+
+Application-level resources are split by responsibility:
+
+- `Styles/DesignTokens.xaml` — canonical colors/brushes plus temporary compatibility aliases for older `App*` resource names.
+- `Styles/ComponentStyles.xaml` — reusable typography, paper/metal panels, buttons and status-badge styles.
+- `App.xaml` — merges the dictionaries once for application-wide use.
+
+Existing Dashboard, Current Flight, Settings, placeholder screens, shell status surfaces and tutorial overlay consume these shared resources. New pages should use the `OpenCareer*` resources rather than hard-coded colors, radii and text styling.
+
+The compatibility `App*` aliases exist only to make incremental migration safe. New code should not introduce additional uses of them.
+
 Microsoft's current Windows app guidance supports `NavigationView` as the application shell and adaptive layouts/visual states for width changes. The existing OpenCareer shell already follows this pattern.
 
 ## Production color direction
 
-The original blue/slate palette is usable, but the production target should move toward a cleaner graphite + aviation-blue system with stronger separation between background, cards and text.
+The production WinUI palette is implemented in `src/OpenCareer.App/Styles/DesignTokens.xaml`. Do not duplicate hex values in pages. New UI should consume named brushes/tokens so later tuning remains centralized.
 
-Recommended target tokens:
+Canonical implemented tokens:
 
-| Token | Target value | Usage |
+| Token | Value | Usage |
 | --- | --- | --- |
-| AppBackgroundBrush | `#080D12` | deepest window/page background |
-| AppSurfaceBrush | `#101820` | primary cards/panes |
-| AppSurfaceAltBrush | `#16222D` | selected/raised surfaces |
-| AppSurfaceHoverBrush | `#1C2B37` | hover/secondary interaction |
-| AppBorderBrush | `#2A3B49` | card/divider borders |
-| AppTextBrush | `#F2F6F9` | primary text |
-| AppMutedTextBrush | `#9AAEBD` | labels/secondary text |
-| AppAccentBrush | `#2F9FE8` | primary aviation blue |
-| AppAccentBrightBrush | `#71C7FF` | focus/selected highlight |
-| AppSecondaryAccentBrush | `#22B8A7` | optional market/economy accent |
-| AppSuccessBrush | `#39D17D` | verified/connected/completed |
-| AppWarningBrush | `#F2B84B` | caution/dependency |
-| AppDangerBrush | `#F05C65` | active threat/error/conflict |
-| AppDisabledBrush | `#667886` | unavailable/disabled state |
+| OpenCareerShellBackgroundColor | `#111C26` | outer application shell |
+| OpenCareerShellRaisedColor | `#192A37` | raised metal/panes |
+| OpenCareerShellInsetColor | `#223846` | inset structural surfaces |
+| OpenCareerSteelBorderColor | `#405867` | structural borders |
+| OpenCareerSteelHighlightColor | `#6E818D` | restrained edge/highlight |
+| OpenCareerShellTextColor | `#FFFDF8` | primary text on dark structure |
+| OpenCareerShellMutedTextColor | `#B7C3C9` | secondary shell text |
+| OpenCareerPaperColor | `#FFFDF8` | vivid primary briefing paper |
+| OpenCareerPaperAltColor | `#F5F2E9` | secondary paper surface |
+| OpenCareerPaperMutedColor | `#E9E5DA` | inset/status paper |
+| OpenCareerInkColor | `#18252D` | primary ink on paper |
+| OpenCareerInkMutedColor | `#5C6870` | secondary ink |
+| OpenCareerPaperRuleColor | `#C8C1B4` | document rules/dividers |
+| OpenCareerNavyColor | `#29475C` | primary controls/headers |
+| OpenCareerNavyRaisedColor | `#365E77` | raised/hover-capable navy |
+| OpenCareerSelectionColor | `#9FB7C7` | desaturated selection emphasis |
+| OpenCareerBrassColor | `#B58A48` | restrained prestige/finance accent |
+| OpenCareerSuccessColor | `#3E7E57` | healthy/verified/completed |
+| OpenCareerWarningColor | `#C58327` | caution/pending/unbound |
+| OpenCareerDangerColor | `#B8453E` | danger/failure/critical |
+| OpenCareerDisabledColor | `#7B878E` | unavailable/disabled |
 
-This palette should replace the older hazier blue-on-blue appearance when production UI styling is revised. Until code changes are deliberately made, existing App.xaml tokens remain the implemented values.
+The vivid paper surface is intentionally much brighter than the earlier beige/olive mockups. Do not reduce it back toward tan or sepia.
 
 ### Color usage
 
