@@ -40,6 +40,7 @@ internal static class Program
             var spam = RunBestSingleKindSpam(policy, CareerHours);
             var shortHop = RunShortHopSpam(policy, CareerHours);
             var monteCarlo = RunMonteCarlo(policy, cashThreshold);
+            var progression = RunProgressionCalibration(policy, cashThreshold);
 
             Require(
                 adversarial.HourlyAverage <=
@@ -69,6 +70,31 @@ internal static class Program
                 * CareerHours
                 * (decimal)policy.MaximumTotalPlayerNetFactor,
                 "Synthetic greedy career exceeded the hard 64-hour player-net ceiling.");
+            Require(
+                progression.Strong.AcquisitionHour is >= 50 and <= 60,
+                "Strong progression escaped the intended 50-60 hour acquisition band.");
+            Require(
+                progression.Ordinary.AcquisitionHour is >= 55 and <= 70,
+                "Ordinary progression escaped the intended 55-70 hour acquisition band.");
+            Require(
+                progression.Struggling.AcquisitionHour is >= 65 and <= 80,
+                "Struggling progression escaped the intended 65-80 hour acquisition band.");
+            Require(
+                progression.Strong.HourlyAverage > progression.Ordinary.HourlyAverage
+                && progression.Ordinary.HourlyAverage > progression.Struggling.HourlyAverage,
+                "Strong/ordinary/struggling progression ordering collapsed.");
+            Require(
+                progression.Strong.HourlyAverage >= policy.TargetNetPerCareerCreditHour * 1.05m
+                && progression.Strong.HourlyAverage <= policy.TargetNetPerCareerCreditHour * 1.15m,
+                "Strong progression left the calibrated hourly band.");
+            Require(
+                progression.Ordinary.HourlyAverage >= policy.TargetNetPerCareerCreditHour * 0.90m
+                && progression.Ordinary.HourlyAverage <= policy.TargetNetPerCareerCreditHour * 1.05m,
+                "Ordinary progression left the calibrated hourly band.");
+            Require(
+                progression.Struggling.HourlyAverage >= policy.TargetNetPerCareerCreditHour * 0.75m
+                && progression.Struggling.HourlyAverage <= policy.TargetNetPerCareerCreditHour * 0.95m,
+                "Struggling progression left the calibrated hourly band.");
 
             Console.WriteLine("OpenCareer Economy BalanceLab");
             Console.WriteLine(
@@ -86,6 +112,13 @@ internal static class Program
                 $"64h net p05={Money(monteCarlo.NetP05)}, median={Money(monteCarlo.NetP50)}, " +
                 $"p95={Money(monteCarlo.NetP95)}; ownership h p05={monteCarlo.AcquisitionP05:F0}, " +
                 $"median={monteCarlo.AcquisitionP50:F0}, p95={monteCarlo.AcquisitionP95:F0}.");
+            Console.WriteLine(
+                $"Progression calibration: strong={Money(progression.Strong.NetAt64)} / 64 h " +
+                $"({Money(progression.Strong.HourlyAverage)}/h, ownership h={progression.Strong.AcquisitionHour}); " +
+                $"ordinary={Money(progression.Ordinary.NetAt64)} / 64 h " +
+                $"({Money(progression.Ordinary.HourlyAverage)}/h, ownership h={progression.Ordinary.AcquisitionHour}); " +
+                $"struggling={Money(progression.Struggling.NetAt64)} / 64 h " +
+                $"({Money(progression.Struggling.HourlyAverage)}/h, ownership h={progression.Struggling.AcquisitionHour}).");
             Console.WriteLine(
                 $"PASS all balance gates. Cash threshold={Money(cashThreshold)}; " +
                 $"financed threshold={Money(financedThreshold)}.");
@@ -277,6 +310,108 @@ internal static class Program
             Percentile(acquisitionHours, 0.95));
     }
 
+    private static ProgressionCalibrationReport RunProgressionCalibration(
+        JobEconomyBalancePolicy policy,
+        decimal cashThreshold)
+    {
+        var strong = RunProgressionProfile(
+            policy,
+            cashThreshold,
+            new ProgressionProfile(
+                [
+                    ContractKind.Medical,
+                    ContractKind.Agricultural,
+                    ContractKind.GovernmentCourier,
+                    ContractKind.ExpressCargo,
+                    ContractKind.Charter,
+                    ContractKind.Cargo,
+                    ContractKind.Survey,
+                    ContractKind.BannerTow,
+                    ContractKind.Ferry
+                ],
+                DemandIndex: 1.35,
+                Urgency: 0.75,
+                Complexity: 0.70,
+                RouteCycle: 0,
+                MarketCycle: 0));
+
+        var ordinary = RunProgressionProfile(
+            policy,
+            cashThreshold,
+            new ProgressionProfile(
+                [
+                    ContractKind.Cargo,
+                    ContractKind.Passenger,
+                    ContractKind.Survey,
+                    ContractKind.BannerTow,
+                    ContractKind.Agricultural,
+                    ContractKind.GovernmentCourier
+                ],
+                DemandIndex: 1.00,
+                Urgency: 0.25,
+                Complexity: 0.35,
+                RouteCycle: 0,
+                MarketCycle: 6));
+
+        var struggling = RunProgressionProfile(
+            policy,
+            cashThreshold,
+            new ProgressionProfile(
+                [
+                    ContractKind.Ferry,
+                    ContractKind.Cargo,
+                    ContractKind.Passenger,
+                    ContractKind.Survey
+                ],
+                DemandIndex: 0.70,
+                Urgency: 0.10,
+                Complexity: 0.20,
+                RouteCycle: 4,
+                MarketCycle: 3));
+
+        return new(strong, ordinary, struggling);
+    }
+
+    private static ProgressionPath RunProgressionProfile(
+        JobEconomyBalancePolicy policy,
+        decimal cashThreshold,
+        ProgressionProfile profile)
+    {
+        if (profile.Kinds.Count == 0 || profile.RouteCycle < 0 || profile.MarketCycle < 0)
+            throw new ArgumentException("Invalid progression profile.", nameof(profile));
+
+        var history = new List<HistoryEntry>();
+        decimal total = 0m;
+        decimal totalAt64 = 0m;
+        int? acquisitionHour = null;
+
+        for (var hour = 0; hour < 80; hour++)
+        {
+            var kind = profile.Kinds[hour % profile.Kinds.Count];
+            var routeIndex = profile.RouteCycle == 0 ? hour : hour % profile.RouteCycle;
+            var marketIndex = profile.MarketCycle == 0 ? hour : hour % profile.MarketCycle;
+            var candidate = new Candidate(
+                kind,
+                Origin: $"P{routeIndex:D2}A",
+                Destination: $"P{routeIndex:D2}B",
+                MarketId: $"profile-{marketIndex:D2}",
+                profile.DemandIndex,
+                profile.Urgency,
+                profile.Complexity);
+
+            var quote = Quote(policy, candidate, history, 1);
+            total += quote.TargetPlayerNet;
+            history.Add(ToHistory(candidate));
+
+            if (hour == CareerHours - 1)
+                totalAt64 = total;
+
+            acquisitionHour ??= total >= cashThreshold ? hour + 1 : null;
+        }
+
+        return new(totalAt64, totalAt64 / CareerHours, acquisitionHour ?? int.MaxValue);
+    }
+
     private static JobEconomyQuote Quote(
         JobEconomyBalancePolicy policy,
         Candidate candidate,
@@ -407,6 +542,24 @@ internal static class Program
         ContractKind Kind,
         decimal TotalNet,
         decimal HourlyAverage);
+
+    private sealed record ProgressionProfile(
+        IReadOnlyList<ContractKind> Kinds,
+        double DemandIndex,
+        double Urgency,
+        double Complexity,
+        int RouteCycle,
+        int MarketCycle);
+
+    private readonly record struct ProgressionPath(
+        decimal NetAt64,
+        decimal HourlyAverage,
+        int AcquisitionHour);
+
+    private readonly record struct ProgressionCalibrationReport(
+        ProgressionPath Strong,
+        ProgressionPath Ordinary,
+        ProgressionPath Struggling);
 
     private readonly record struct MonteCarloReport(
         decimal NetP05,
