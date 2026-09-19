@@ -509,6 +509,11 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Create UI visual direction.
 - [x] Create canonical UI design system.
 - [x] Lock canonical retro-modern UI design language in `docs/ui-design-language.md`.
+- [x] Implement centralized Jet Age WinUI design tokens in `Styles/DesignTokens.xaml`.
+- [x] Implement reusable typography/panel/button/status styles in `Styles/ComponentStyles.xaml`.
+- [x] Migrate current Dashboard, Current Flight, Settings, placeholder, shell and tutorial surfaces onto shared design resources.
+- [ ] Verify shared resource dictionaries in Windows WinUI CI and local application launch.
+- [ ] Verify visual contrast, keyboard focus and text scaling with the production resource system.
 - [x] Define all 15 current navigation destinations.
 - [x] Create dashboard concept.
 - [x] Create all-tab screen atlas.
