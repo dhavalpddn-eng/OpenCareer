@@ -305,6 +305,15 @@ public sealed record PersistedActivePlayRecurringCostSettlementSummary(
 
 public static class ActivePlayRecurringCostSettlementEngine
 {
+    public static string BuildPersistedIdempotencyKey(
+        string ownershipId,
+        string activityReferenceId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownershipId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activityReferenceId);
+        return $"ownership:{ownershipId}:activity:{activityReferenceId}:active-cost-v2";
+    }
+
     public static ActivePlayRecurringCostSettlementSummary Create(
         Guid settlementId,
         string ownershipId,
@@ -497,7 +506,7 @@ public static class ActivePlayRecurringCostSettlementEngine
 
         var transaction = new EconomyLedgerTransaction(
             settlementId,
-            $"ownership:{ownershipId}:activity:{activityReferenceId}:active-cost-v2",
+            BuildPersistedIdempotencyKey(ownershipId, activityReferenceId),
             settledAt,
             $"Active-play ownership costs for {ownershipId}",
             "OwnershipActivePlayCosts",
