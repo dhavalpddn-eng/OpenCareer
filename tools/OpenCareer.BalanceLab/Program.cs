@@ -439,10 +439,31 @@ internal static class Program
 
     private static OwnershipCarryingCostPreview RunOwnershipCarryingCostPreview()
     {
+        const string ownershipId = "balance-preview-light";
+        var at = new DateTimeOffset(2026, 9, 18, 12, 0, 0, TimeSpan.Zero);
         var reserve = CareerProgressionPolicy.Default.MinimumOperatingReserve;
-        var storage = 250m;
-        var insurance = InitialAircraftInsurance.StandardHull.MonthlyPremium;
-        var cashMonthlyFixed = storage + insurance;
+        var insurancePolicy = new AircraftInsurancePolicy(
+            "balance-preview-policy",
+            ownershipId,
+            InitialAircraftInsurance.StandardHull,
+            at,
+            null,
+            true);
+        var storageLease = new AircraftStorageLease(
+            "balance-preview-lease",
+            ownershipId,
+            "balance-preview-slot",
+            "KRME",
+            AircraftStorageClass.Light,
+            250m,
+            at,
+            true);
+
+        var cashRecurring = OwnershipRecurringCostCalculator.QuoteNextCycle(
+            ownershipId,
+            null,
+            insurancePolicy,
+            storageLease);
 
         var history = new CareerCreditHistory(
             RealFlightHours: 70,
@@ -458,7 +479,7 @@ internal static class Program
             RequiredOperatingReserve: reserve,
             UnresolvedDefault: false);
 
-        var loan = CareerCredit.Evaluate(
+        var decision = CareerCredit.Evaluate(
             history,
             InitialLenders.Community,
             new AircraftLoanRequest(
@@ -468,12 +489,36 @@ internal static class Program
                 TermMonths: 120,
                 CivilianOwnershipEligible: true));
 
+        OwnershipRecurringCostQuote? financedRecurring = null;
+        if (decision.Approved)
+        {
+            var loanAccount = new AircraftLoanAccount(
+                "balance-preview-loan",
+                "balance-preview-career",
+                ownershipId,
+                InitialLenders.Community.Id,
+                decision.RequestedPrincipal,
+                decision.RequestedPrincipal,
+                decision.AnnualRate,
+                120,
+                decision.MonthlyPayment,
+                at,
+                at.AddMonths(1),
+                0,
+                AircraftLoanStatus.Active);
+            financedRecurring = OwnershipRecurringCostCalculator.QuoteNextCycle(
+                ownershipId,
+                loanAccount,
+                insurancePolicy,
+                storageLease);
+        }
+
         var program = InitialMaintenancePrograms.LightAircraftFallback;
         var maintenance = AircraftMaintenanceEngine.CreateInitial(
-            "balance-preview-light",
+            ownershipId,
             acquiredConditionPercent: 82m,
             program,
-            new DateTimeOffset(2026, 9, 18, 12, 0, 0, TimeSpan.Zero));
+            at);
         maintenance = AircraftMaintenanceEngine.ApplyUsage(
             maintenance,
             program,
@@ -486,18 +531,18 @@ internal static class Program
                 HardLandingSeverity: 0,
                 MaximumPositiveG: 1.5,
                 ExcessGSeconds: 0),
-            new DateTimeOffset(2026, 9, 20, 14, 0, 0, TimeSpan.Zero));
+            at.AddHours(50));
         var service = AircraftMaintenanceEngine.QuoteService(
             maintenance,
             program,
-            new DateTimeOffset(2026, 9, 20, 14, 0, 0, TimeSpan.Zero));
+            at.AddHours(50));
 
         return new(
-            loan.Approved,
+            decision.Approved,
             reserve,
-            cashMonthlyFixed,
-            cashMonthlyFixed + loan.MonthlyPayment,
-            loan.MonthlyPayment,
+            cashRecurring.Total,
+            financedRecurring?.Total ?? decimal.MaxValue,
+            financedRecurring?.LoanPayment ?? 0m,
             service.Cost);
     }
 
