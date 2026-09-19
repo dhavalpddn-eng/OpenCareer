@@ -104,6 +104,21 @@ Do not derive loan affordability from elapsed real-world calendar time under the
 
 A review test intentionally demonstrates this sensitivity so the integration boundary cannot be overlooked.
 
+## Loan-term clock semantics
+
+The production types still use names such as `TermMonths`, `ScheduledMonthlyPayment`, `VerifiedMonthlyNetIncome` and `ExistingMonthlyDebtPayments`, while actual repayment advances one installment over each **30 active career-credit hours**.
+
+That creates a semantic trap even if the math is correct.
+
+For example, a 120-"month" loan currently represents **120 active billing cycles = 3,600 career-credit flight hours**. It is therefore not a literal ten-year wall-clock loan under the protected-absence design.
+
+Before Fleet/Finances UI is built, choose one vocabulary and keep it consistent:
+
+- rename gameplay-facing concepts to **billing cycles / active-cycle payment / active-cycle income**, or
+- explicitly label them as a simulated month whose clock advances only through active career-credit flying.
+
+Do not display a literal calendar due date or "10 years remaining" unless the repayment engine is changed to a real-calendar model. Real-calendar repayment would conflict with the current no-punishment-for-being-away rule.
+
 ## Progression bypass risk
 
 The current progression policy explicitly targets first ownership in the **50–80 career-credit-hour** range for both:
