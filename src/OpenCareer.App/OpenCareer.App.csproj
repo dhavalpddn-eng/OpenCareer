@@ -24,6 +24,9 @@
   <ItemGroup>
     <ProjectReference Include="../OpenCareer.Application/OpenCareer.Application.csproj" />
     <ProjectReference Include="../OpenCareer.SimConnect/OpenCareer.SimConnect.csproj" />
+    <ProjectReference Include="../OpenCareer.Infrastructure/OpenCareer.Infrastructure.csproj" />
+    <Content Include="../../artifacts/aviation.sqlite" Condition="Exists('$(MSBuildProjectDirectory)/../../artifacts/aviation.sqlite')"
+             Link="Data/aviation.sqlite" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(SimConnectNativePath)" Condition="'$(SimConnectNativePath)' != '' and Exists('$(SimConnectNativePath)')"
              Link="SimConnect.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

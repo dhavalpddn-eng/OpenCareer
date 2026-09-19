@@ -8,6 +8,7 @@ using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
+using OpenCareer.Infrastructure.AviationData;
 using OpenCareer.SimConnect;
 
 namespace OpenCareer.App;
@@ -30,6 +31,10 @@ public partial class App : Microsoft.UI.Xaml.Application
         var fileLogger = new OpenCareerFileLoggerProvider(dataPaths);
 
         services.AddSingleton(dataPaths);
+        var aviationDatabasePath = Path.Combine(AppContext.BaseDirectory, "Data", "aviation.sqlite");
+        services.AddSingleton(new AviationReferenceDatabase(aviationDatabasePath));
+        services.AddSingleton(new FaaNasrReferenceDatabase(aviationDatabasePath));
+        services.AddSingleton(new OpenAipAirspaceDatabase(aviationDatabasePath));
         services.AddLogging(builder =>
         {
             builder.AddDebug();

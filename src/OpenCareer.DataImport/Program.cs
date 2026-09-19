@@ -2,10 +2,27 @@ using OpenCareer.Infrastructure.AviationData;
 using System.Text.Json;
 
 if (args.Length < 2 || args.Length > 3 ||
-    (args[0], args.Length) is not (("import", 3) or ("refresh", 2) or ("refresh-openaip", 3)))
+    (args[0], args.Length) is not (("import", 3) or ("refresh", 2) or ("refresh-openaip", 3) or ("import-faa", 3)))
 {
-    Console.Error.WriteLine("Usage: OpenCareer.DataImport import <database.sqlite> <csv-directory> | refresh <database.sqlite> | refresh-openaip <database.sqlite> <country-code>");
+    Console.Error.WriteLine("Usage: OpenCareer.DataImport import <database.sqlite> <csv-directory> | refresh <database.sqlite> | refresh-openaip <database.sqlite> <country-code> | import-faa <database.sqlite> <nasr-subscription.zip>");
     return 2;
+}
+
+if (args[0] == "import-faa")
+{
+    try
+    {
+        var result = new FaaNasrImportService().Import(args[2], args[1]);
+        Console.WriteLine($"FAA NASR cycle effective {result.EffectiveDate:yyyy-MM-dd}:");
+        foreach (var (name, count) in result.Counts) Console.WriteLine($"{name}: {count:N0}");
+        return 0;
+    }
+    catch (Exception error) when (error is IOException or InvalidDataException or FormatException or
+        Microsoft.Data.Sqlite.SqliteException or UnauthorizedAccessException or ArgumentException)
+    {
+        Console.Error.WriteLine($"FAA import failed; previous reference data was preserved: {error.Message}");
+        return 1;
+    }
 }
 
 if (args[0] == "refresh-openaip")
