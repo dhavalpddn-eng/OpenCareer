@@ -9,6 +9,10 @@ public sealed class FlightSessionPersistenceService
     private readonly FlightSessionCheckpointPolicy _checkpointPolicy;
     private FlightSession? _lastPersisted;
 
+    public bool RecoveryAttempted { get; private set; }
+
+    public Guid? LastRecoveredSessionId { get; private set; }
+
     public FlightSessionPersistenceService(
         FlightSessionCoordinator coordinator,
         IFlightSessionCheckpointStore store,
@@ -90,6 +94,8 @@ public sealed class FlightSessionPersistenceService
     public async Task<FlightSession?> RecoverAsync(
         CancellationToken cancellationToken = default)
     {
+        RecoveryAttempted = true;
+        LastRecoveredSessionId = null;
         if (_coordinator.Current is { IsTerminal: false })
         {
             throw new InvalidOperationException(
@@ -105,6 +111,7 @@ public sealed class FlightSessionPersistenceService
             return null;
 
         _lastPersisted = checkpoint;
+        LastRecoveredSessionId = checkpoint.SessionId;
 
         if (_coordinator.Current is null)
         {
@@ -116,6 +123,22 @@ public sealed class FlightSessionPersistenceService
         }
 
         return checkpoint;
+    }
+
+    public async Task FlushAsync(
+        CancellationToken cancellationToken = default)
+    {
+        FlightSession? current =
+            _coordinator.Current;
+
+        if (current is null)
+            return;
+
+        await _store
+            .SaveAsync(current, cancellationToken)
+            .ConfigureAwait(false);
+
+        _lastPersisted = current;
     }
 
     public async Task ClearTerminalAsync(
@@ -137,6 +160,7 @@ public sealed class FlightSessionPersistenceService
             .ConfigureAwait(false);
 
         _lastPersisted = null;
+        LastRecoveredSessionId = null;
         _coordinator.ClearTerminalSession();
     }
 }
