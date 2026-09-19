@@ -6,6 +6,16 @@ Purpose: teach a new player what OpenCareer does, how the career loop works, wha
 
 The tutorial is a product feature, not a developer walkthrough. It must remain useful with MSFS closed.
 
+## Tutorial layers
+
+OpenCareer onboarding is intentionally layered:
+
+1. **App tutorial** — explains the application, navigation, connection, career model and live checklist.
+2. **First-job tutorial** — walks through browsing work, dispatch, acceptance, flying, parking/shutdown, debrief and settlement.
+3. **Mission-family tutorials** — appear the first time the player performs a unique mission procedure such as banner pickup, carrier takeoff/landing, glider tow, skydiving, firefighting, survey, SAR or other specialized work.
+
+Mission-family tutorials are independent of the app intro and remain replayable later. See `docs/mission-tutorial-system.md`.
+
 ## Core behavior
 
 The production tutorial is a versioned first-run tour.
