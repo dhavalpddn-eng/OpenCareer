@@ -212,6 +212,14 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
             ? $"{(int)value.TotalHours}:{value.Minutes:00}"
             : $"{value.Minutes}:{value.Seconds:00}";
 
+    private static string Friendly<T>(T value)
+        where T : struct, Enum =>
+        string.Concat(
+            value.ToString().Select((character, index) =>
+                index > 0 && char.IsUpper(character)
+                    ? $" {character}"
+                    : character.ToString()));
+
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
