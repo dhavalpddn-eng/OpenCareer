@@ -373,6 +373,7 @@ Chapter status: **ACTIVE FOUNDATION**
 - [x] Implement insurance policy persistence and policy-dependent one-redo-per-real-day rule.
 - [x] Implement hangar/storage availability, first-period cost and slot occupancy.
 - [x] Persist ownership/loan/insurance/storage state across reload.
+- [x] Add deterministic next-cycle ownership cost quotes for active loan/insurance/storage state without performing settlement.
 
 ## Remaining / downstream integration
 
@@ -670,7 +671,7 @@ The high-level visual roadmap's **Economy & Ownership** panel is now **5/5 core 
 Verification for the final code head before this documentation update:
 
 - Linux branch audit baseline: **132/132 xUnit + 29/29 SimLab + BalanceLab PASS**.
-- Windows PR integration run **35411495605** at `bf81eee` against the current `feature/m1-simulation-core` base: WinUI Release build **passed**, live SimConnect probe build **passed**, **138/138 xUnit passed**, **BalanceLab PASS**.
+- Windows PR integration run **35411774172** at `325cf96` against the current `feature/m1-simulation-core` base: WinUI Release build **passed**, live SimConnect probe build **passed**, **140/140 xUnit passed**, **BalanceLab PASS**.
 - Progression calibration: strong **$1,119.94/h -> ownership hour 53**; ordinary **$996.48/h -> hour 59**; struggling **$847.10/h -> hour 70**.
 - Projected light-aircraft carrying-cost stress: cash fixed **$670/month**; financed fixed **$1,125.79/month** including a **$455.79** representative loan payment; routine 50-hour fallback maintenance **$575** versus the current **$4,000** operating reserve. This is a projection gate only, not recurring-cost settlement.
 - Core economy exploit/balance audit: **passed**; see `docs/economy-balance-audit.md`.
