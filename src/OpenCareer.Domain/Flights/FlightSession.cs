@@ -10,7 +10,8 @@ public sealed record FlightSession(
     FlightTrackingSnapshot Tracking,
     FlightTimeLedger TimeLedger,
     FlightSessionMilestones Milestones,
-    int SchemaVersion = 1)
+    int SchemaVersion = 1,
+    FlightContinuityAnchor? ContinuityAnchor = null)
 {
     public static FlightSession Start(
         DateTimeOffset timestamp,
