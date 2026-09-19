@@ -16,7 +16,8 @@ public enum LedgerAccountCode
     InterestExpense = 9,
     AircraftAsset = 10,
     LoanPayable = 11,
-    StorageExpense = 12
+    StorageExpense = 12,
+    OpeningEquity = 13
 }
 
 public sealed record LedgerPosting(
