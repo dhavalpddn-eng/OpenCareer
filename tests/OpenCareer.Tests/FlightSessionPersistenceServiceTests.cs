@@ -110,6 +110,144 @@ public sealed class FlightSessionPersistenceServiceTests
     }
 
     [Fact]
+    public async Task SteadyStateTelemetryDoesNotWriteEverySample()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore();
+
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store,
+                new FlightSessionCheckpointPolicy(
+                    TimeSpan.FromSeconds(30)));
+
+        await service.StartAsync(Epoch);
+
+        await service.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(1),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true)));
+
+        await service.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(5),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true)));
+
+        Assert.Equal(
+            2,
+            store.SaveCount);
+
+        Assert.Equal(
+            Epoch.AddSeconds(1),
+            store.Checkpoint?.UpdatedAt);
+
+        Assert.Equal(
+            Epoch.AddSeconds(5),
+            coordinator.Current?.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task SteadyStateCheckpointOccursAtMaximumInterval()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore();
+
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store,
+                new FlightSessionCheckpointPolicy(
+                    TimeSpan.FromSeconds(30)));
+
+        await service.StartAsync(Epoch);
+
+        await service.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(1),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true)));
+
+        await service.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(31),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true)));
+
+        Assert.Equal(
+            3,
+            store.SaveCount);
+
+        Assert.Equal(
+            Epoch.AddSeconds(31),
+            store.Checkpoint?.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task OperationalTransitionCheckpointsImmediately()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore();
+
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store,
+                new FlightSessionCheckpointPolicy(
+                    TimeSpan.FromMinutes(5)));
+
+        await service.StartAsync(Epoch);
+
+        await service.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(1),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true)));
+
+        await service.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(2),
+                    Connected: true,
+                    ContinuityPlausible: true,
+                    EngineStartObserved: true)));
+
+        Assert.Equal(
+            3,
+            store.SaveCount);
+
+        Assert.Equal(
+            FlightOperationState.EngineStart,
+            store.Checkpoint?.OperationState);
+    }
+
+    [Fact]
     public async Task ClearingTerminalSessionClearsPersistenceFirst()
     {
         var coordinator =
@@ -145,6 +283,8 @@ public sealed class FlightSessionPersistenceServiceTests
 
         public bool FailWrites { get; set; }
 
+        public int SaveCount { get; private set; }
+
         public Task SaveAsync(
             FlightSession session,
             CancellationToken cancellationToken = default)
@@ -155,6 +295,7 @@ public sealed class FlightSessionPersistenceServiceTests
                     "Synthetic persistence failure.");
             }
 
+            SaveCount++;
             Checkpoint = session;
             return Task.CompletedTask;
         }
