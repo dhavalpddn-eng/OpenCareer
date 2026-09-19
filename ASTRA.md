@@ -5,7 +5,7 @@
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/m1-simulation-core`  
 **PR:** #2 draft; keep `main` stable.  
-**Master build list:** `docs/master-build-list.md` — active unfinished major systems; remove items only when fully implemented, integrated, tested and accepted.  
+**Master build list:** `docs/master-build-list.md` — active unfinished major systems sorted low-to-high by estimated remaining engineering effort; stable `MBL-xx` IDs remain unchanged; remove items only when fully implemented, integrated, tested and accepted.  
 **Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
 **Last implementation commit:** `2accedb67d60c0864a0529e32ced56955556c9ec` (live gear-scale normalization).
 
