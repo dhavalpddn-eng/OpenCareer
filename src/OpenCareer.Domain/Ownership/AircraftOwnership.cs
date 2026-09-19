@@ -193,6 +193,93 @@ public sealed record AircraftLoanAccount(
     }
 }
 
+public sealed record OwnershipRecurringCostQuote(
+    string OwnershipId,
+    decimal LoanPayment,
+    decimal InsurancePremium,
+    decimal StorageCost,
+    int? LoanPaymentSequence,
+    DateTimeOffset? LoanDueAt)
+{
+    public decimal Total => LoanPayment + InsurancePremium + StorageCost;
+}
+
+public static class OwnershipRecurringCostCalculator
+{
+    // Projection only. Billing clocks, active-play accrual and ledger settlement remain separate concerns.
+    public static OwnershipRecurringCostQuote QuoteNextCycle(
+        string ownershipId,
+        AircraftLoanAccount? loan,
+        AircraftInsurancePolicy? insurance,
+        AircraftStorageLease? storage)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownershipId);
+
+        decimal loanPayment = 0m;
+        int? loanPaymentSequence = null;
+        DateTimeOffset? loanDueAt = null;
+
+        if (loan is not null)
+        {
+            loan.Validate();
+            EnsureOwnership(ownershipId, loan.OwnershipId, nameof(loan));
+
+            if (loan.Status is AircraftLoanStatus.Defaulted or AircraftLoanStatus.Restructured)
+                throw new InvalidOperationException("Normal recurring-cost quote is unavailable for defaulted or restructured loans.");
+
+            if (loan.Status == AircraftLoanStatus.Active)
+            {
+                var schedule = loan.BuildSchedule();
+                if (loan.PaymentsMade >= schedule.Length)
+                    throw new InvalidOperationException("Active loan has no remaining scheduled payment.");
+
+                var next = schedule[loan.PaymentsMade];
+                loanPayment = next.Payment;
+                loanPaymentSequence = next.Sequence;
+                loanDueAt = loan.NextPaymentDueAt;
+            }
+        }
+
+        decimal insurancePremium = 0m;
+        if (insurance is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(insurance.PolicyId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(insurance.OwnershipId);
+            ArgumentNullException.ThrowIfNull(insurance.Plan);
+            insurance.Plan.Validate();
+            EnsureOwnership(ownershipId, insurance.OwnershipId, nameof(insurance));
+            insurancePremium = insurance.Active ? insurance.Plan.MonthlyPremium : 0m;
+        }
+
+        decimal storageCost = 0m;
+        if (storage is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(storage.LeaseId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(storage.OwnershipId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(storage.SlotId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(storage.AirportIcao);
+            if (!Enum.IsDefined(storage.StorageClass) || storage.MonthlyCost < 0)
+                throw new ArgumentException("Invalid storage lease.", nameof(storage));
+            EnsureOwnership(ownershipId, storage.OwnershipId, nameof(storage));
+            storageCost = storage.Active ? storage.MonthlyCost : 0m;
+        }
+
+        return new OwnershipRecurringCostQuote(
+            ownershipId,
+            loanPayment,
+            insurancePremium,
+            storageCost,
+            loanPaymentSequence,
+            loanDueAt);
+    }
+
+    private static void EnsureOwnership(string expected, string actual, string parameterName)
+    {
+        if (!string.Equals(expected, actual, StringComparison.Ordinal))
+            throw new ArgumentException("Recurring-cost component belongs to a different aircraft ownership.", parameterName);
+    }
+}
+
 public sealed record AircraftPurchasePlan(
     string OperationId,
     string CareerId,
