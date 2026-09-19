@@ -100,6 +100,17 @@ public sealed class FlightContinuityPolicy
                 telemetry.AltitudeMslFeet
                 - anchor.AltitudeMslFeet);
 
+        if (anchor.OnGround)
+        {
+            if (!telemetry.OnGround)
+                return false;
+
+            return distance
+                    <= _options.GroundMaximumDistanceNauticalMiles
+                && altitudeDelta
+                    <= _options.GroundMaximumAltitudeDeltaFeet;
+        }
+
         if (WasAirborne(session))
         {
             double elapsedHours =
@@ -119,13 +130,7 @@ public sealed class FlightContinuityPolicy
                     <= _options.AirborneMaximumAltitudeDeltaFeet;
         }
 
-        if (!telemetry.OnGround)
-            return false;
-
-        return distance
-                <= _options.GroundMaximumDistanceNauticalMiles
-            && altitudeDelta
-                <= _options.GroundMaximumAltitudeDeltaFeet;
+        return false;
     }
 
     public static FlightContinuityAnchor CreateAnchor(
