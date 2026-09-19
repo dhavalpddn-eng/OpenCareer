@@ -30,6 +30,9 @@ public sealed partial class DashboardPage : Page
     private void PrimaryAction_Click(object sender, RoutedEventArgs e) =>
         _viewModel?.RequestPrimaryAction();
 
+    private void ActiveOperationAction_Click(object sender, RoutedEventArgs e) =>
+        _viewModel?.RequestActiveOperationAction();
+
     private void NavigateButton_Click(object sender, RoutedEventArgs e)
     {
         if (_viewModel is null || sender is not FrameworkElement element)
