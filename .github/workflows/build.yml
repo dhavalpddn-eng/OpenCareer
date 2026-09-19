@@ -4,10 +4,32 @@ on:
   push:
     branches:
       - main
-      - "feature/**"
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "tools/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "*.sln"
+      - "*.slnx"
+      - ".github/workflows/build.yml"
   pull_request:
     branches:
       - main
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "tools/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "*.sln"
+      - "*.slnx"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -15,21 +37,22 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
-      - name: Restore
+      - name: Restore simulation harness
         run: dotnet restore src/OpenCareer.SimLab/OpenCareer.SimLab.csproj
 
-      - name: Build
+      - name: Build simulation harness
         run: dotnet build src/OpenCareer.SimLab/OpenCareer.SimLab.csproj --configuration Release --no-restore
 
       - name: Run deterministic regression and stress scenarios
         run: dotnet run --project src/OpenCareer.SimLab/OpenCareer.SimLab.csproj --configuration Release --no-build
 
-      - name: Run career unit tests
+      - name: Run unit tests
         run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release
