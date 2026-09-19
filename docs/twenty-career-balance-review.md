@@ -63,7 +63,7 @@ For owner-operator scenarios, routine maintenance + repair reserve are passed th
 | 17 | Financed light-jet owner | 260 | 22 | 811 | Light jet at 85% | **Balanced** — payment about $9,376.83/cycle; owner net about $893/h; $40k repair shock fits $60k reserve |
 | 18 | Regional-jet airline employee | 420 | 28 | 818 | Regional jet | **Balanced** — employer-aircraft path opens airline flying without requiring ownership |
 | 19 | Narrowbody airline captain | 520 | 31 | 824 | 737/A320-class narrowbody | **Balanced** — endgame airline progression continues through employer qualifications/trust, not personal wealth |
-| 20 | Widebody endgame airline captain | 750 | 37 | 833 | Widebody airliner | **Balanced** — long-haul/widebody endgame is reachable as an airline employee without buying the airplane |
+| 20 | Widebody endgame airline captain | 750 | 37 | 829 | Widebody airliner | **Balanced** — long-haul/widebody endgame is reachable as an airline employee without buying the airplane |
 
 ## Balance findings
 
