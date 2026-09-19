@@ -11,6 +11,7 @@ public sealed class OpenCareerDataPaths
 
         Root = Path.GetFullPath(root);
         SettingsFile = Path.Combine(Root, "settings.json");
+        CareerDatabaseFile = Path.Combine(Root, "career.db");
         TutorialPreferencesFile = Path.Combine(Root, "ui-preferences.json");
         LogsFolder = Path.Combine(Root, "Logs");
         LogFile = Path.Combine(LogsFolder, "opencareer.log");
@@ -20,6 +21,7 @@ public sealed class OpenCareerDataPaths
 
     public string Root { get; }
     public string SettingsFile { get; }
+    public string CareerDatabaseFile { get; }
     public string TutorialPreferencesFile { get; }
     public string LogsFolder { get; }
     public string LogFile { get; }
