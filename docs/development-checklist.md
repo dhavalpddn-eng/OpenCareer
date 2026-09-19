@@ -58,8 +58,8 @@ This is the text source of truth for the visual roadmap. A green check means the
 
 ### Economy verification
 
-- Linux CI: **204/204 xUnit + 29/29 SimLab**
-- Windows CI: WinUI x64 Release + live probe compile + **204/204 xUnit**
+- Linux branch baseline: **204/204 xUnit + 29/29 SimLab**
+- Windows PR integration run **35417940644**: WinUI x64 Release + live probe compile + **221/221 xUnit**
 - Current pay figures are gameplay calibration, not claims about real-world pilot compensation or current aircraft prices.
 
 ## Verification
