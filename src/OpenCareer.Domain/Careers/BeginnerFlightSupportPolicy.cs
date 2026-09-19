@@ -71,6 +71,7 @@ public sealed record BeginnerFlightAssessment(
     bool NavigationAssistRecommended,
     bool LandingCoachRecommended,
     bool GoAroundWasSafeChoice,
+    bool PhysicalAircraftConsequencesApply,
     string CoachingCode);
 
 public sealed record BeginnerFlightSupportPolicy(
@@ -131,6 +132,43 @@ public sealed record BeginnerFlightSupportPolicy(
         return BeginnerGuidanceIntensity.Light;
     }
 
+    public BeginnerGuidanceIntensity GuidanceFor(
+        int completedFlights,
+        double careerCreditHours,
+        int recentDifficultyCount,
+        int recentWindowCount)
+    {
+        BeginnerGuidanceIntensity baseline =
+            GuidanceFor(completedFlights, careerCreditHours);
+
+        if (recentDifficultyCount < 0
+            || recentWindowCount < 0
+            || recentDifficultyCount > recentWindowCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(recentDifficultyCount));
+        }
+
+        if (recentWindowCount == 0)
+            return baseline;
+
+        double difficultyRate =
+            recentDifficultyCount / (double)recentWindowCount;
+
+        if (recentDifficultyCount >= 3
+            && difficultyRate >= 0.50)
+        {
+            return BeginnerGuidanceIntensity.Full;
+        }
+
+        if (difficultyRate >= 0.30
+            && baseline == BeginnerGuidanceIntensity.Light)
+        {
+            return BeginnerGuidanceIntensity.Standard;
+        }
+
+        return baseline;
+    }
+
     public BeginnerFlightAssessment Assess(
         BeginnerFlightAttempt attempt)
     {
@@ -144,9 +182,7 @@ public sealed record BeginnerFlightSupportPolicy(
                 attempt.PriorCareerCreditHours);
 
         bool protectedTraining =
-            attempt.IsTrainingOrPractice
-            && attempt.PriorCompletedFlights
-                < TrainingFailureProtectionFlights;
+            attempt.IsTrainingOrPractice;
 
         bool unsafeFailure =
             attempt.CrashObserved
@@ -166,6 +202,8 @@ public sealed record BeginnerFlightSupportPolicy(
                 NavigationAssistRecommended: true,
                 LandingCoachRecommended: true,
                 GoAroundWasSafeChoice: false,
+                PhysicalAircraftConsequencesApply:
+                    attempt.AircraftDamageObserved,
                 CoachingCode:
                     protectedTraining
                         ? "training-unsafe-retry-protected"
@@ -190,6 +228,8 @@ public sealed record BeginnerFlightSupportPolicy(
                 NavigationAssistRecommended: true,
                 LandingCoachRecommended: false,
                 GoAroundWasSafeChoice: attempt.GoAroundCount > 0,
+                PhysicalAircraftConsequencesApply:
+                    attempt.AircraftDamageObserved,
                 CoachingCode: "route-recovery-required");
         }
 
@@ -230,6 +270,8 @@ public sealed record BeginnerFlightSupportPolicy(
                 roughLanding
                 || guidance != BeginnerGuidanceIntensity.Light,
             GoAroundWasSafeChoice: attempt.GoAroundCount > 0,
+            PhysicalAircraftConsequencesApply:
+                attempt.AircraftDamageObserved,
             CoachingCode:
                 roughLanding
                     ? "safe-rough-landing-coaching"
