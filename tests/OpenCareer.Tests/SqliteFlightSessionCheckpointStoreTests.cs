@@ -170,11 +170,11 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
             session.SessionId,
             loaded.SessionId);
 
-        Assert.Contains(
-            loaded.UpdatedAt,
-            checkpoints.Select(
+        Assert.Equal(
+            checkpoints.Max(
                 checkpoint =>
-                    checkpoint.UpdatedAt));
+                    checkpoint.UpdatedAt),
+            loaded.UpdatedAt);
     }
 
     public void Dispose()
