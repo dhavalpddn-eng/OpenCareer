@@ -45,12 +45,16 @@ Do not use smoke, fog, diffuse cloud overlays, heavy bloom, neon glow, frosted-g
 Application-level resources are split by responsibility:
 
 - `Styles/DesignTokens.xaml` — canonical colors/brushes plus temporary compatibility aliases for older `App*` resource names.
-- `Styles/ComponentStyles.xaml` — reusable typography, paper/metal panels, buttons and status-badge styles.
+- `Styles/ComponentStyles.xaml` — reusable typography, paper/metal panels, primary/secondary/danger buttons, form controls, tabs, lists, ledger/table rows, semantic badges and semantic status text.
 - `App.xaml` — merges the dictionaries once for application-wide use.
 
 Existing Dashboard, Current Flight, Settings, placeholder screens, shell status surfaces and tutorial overlay consume these shared resources. New pages should use the `OpenCareer*` resources rather than hard-coded colors, radii and text styling.
 
 The compatibility `App*` aliases exist only to make incremental migration safe. New code should not introduce additional uses of them.
+
+The design system deliberately keeps standard WinUI control templates instead of replacing them. This preserves platform keyboard focus, high-contrast behavior, text scaling and accessibility semantics while OpenCareer controls the visual surface treatment.
+
+`tests/OpenCareer.Tests/UiDesignSystemContractTests.cs` protects the visual contract by checking the canonical vivid paper/cool shell colors, text contrast, required reusable style keys and duplicate resource keys.
 
 Microsoft's current Windows app guidance supports `NavigationView` as the application shell and adaptive layouts/visual states for width changes. The existing OpenCareer shell already follows this pattern.
 
