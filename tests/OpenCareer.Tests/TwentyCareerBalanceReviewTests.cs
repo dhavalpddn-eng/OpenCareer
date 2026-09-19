@@ -146,16 +146,52 @@ public sealed class TwentyCareerBalanceReviewTests
             0.20m,
             180),
         new(
-            "Heavy transport",
-            6,
+            "Regional jet",
+            5,
             8_000_000m,
-            15_000m,
-            500m,
-            420m,
-            220_000m,
-            350_000m,
+            12_000m,
+            380m,
+            320m,
+            160_000m,
+            275_000m,
             InitialLenders.Commercial,
             0.375m,
+            180),
+        new(
+            "Narrowbody airliner",
+            6,
+            18_000_000m,
+            24_000m,
+            650m,
+            560m,
+            350_000m,
+            600_000m,
+            InitialLenders.Commercial,
+            0.50m,
+            180),
+        new(
+            "Widebody airliner",
+            7,
+            45_000_000m,
+            50_000m,
+            1_200m,
+            1_000m,
+            900_000m,
+            1_500_000m,
+            InitialLenders.Commercial,
+            0.60m,
+            180),
+        new(
+            "Heavy transport",
+            7,
+            12_000_000m,
+            20_000m,
+            750m,
+            650m,
+            350_000m,
+            700_000m,
+            InitialLenders.Commercial,
+            0.50m,
             180)
     ];
 
@@ -178,9 +214,9 @@ public sealed class TwentyCareerBalanceReviewTests
         New("Charter pilot not yet jet-qualified", 200, 100, 3, 92, 90, 10, 0, 3, 8, 6, 6, 800, 2_000, 4, 88, 400_000, ReviewRole.Buyer, ReviewOutcome.BlockedAsIntended, 20),
         New("Light-jet-qualified employee", 240, 85, 1, 97, 95, 12, 0, 4, 10, 8, 10, 1_800, 3_000, 4, 85, 480_000, ReviewRole.Employee, ReviewOutcome.Balanced, 22),
         New("Financed light-jet owner", 260, 90, 1, 97, 95, 14, 0, 4, 10, 8, 10, 1_800, 3_000, 4, 85, 520_000, ReviewRole.Owner, ReviewOutcome.Balanced, 22),
-        New("Midsize access with repair stress", 420, 145, 2, 97, 96, 18, 0, 5, 15, 12, 12, 2_500, 12_000, 5, 72, 1_150_000, ReviewRole.Employee, ReviewOutcome.Balanced, 28),
-        New("Heavy-cargo veteran employee", 650, 200, 3, 98, 98, 24, 0, 6, 20, 16, 15, 4_500, 40_000, 6, 90, 2_000_000, ReviewRole.Employee, ReviewOutcome.Balanced, 34),
-        New("Military fighter-qualified veteran", 350, 100, 2, 96, 95, 12, 0, 5, 10, 10, 6, 800, 2_000, 0, 100, 500_000, ReviewRole.Military, ReviewOutcome.Balanced, 25)
+        New("Regional-jet airline employee", 420, 145, 2, 97, 96, 18, 0, 5, 15, 12, 4, 900, 3_000, 6, 88, 1_150_000, ReviewRole.Employee, ReviewOutcome.Balanced, 28),
+        New("Narrowbody airline captain", 520, 175, 2, 98, 98, 22, 0, 6, 18, 14, 8, 2_000, 8_000, 7, 90, 1_600_000, ReviewRole.Employee, ReviewOutcome.Balanced, 31),
+        New("Widebody endgame airline captain", 750, 240, 3, 98, 99, 28, 0, 7, 24, 18, 15, 5_500, 35_000, 8, 92, 2_500_000, ReviewRole.Employee, ReviewOutcome.Balanced, 36)
     };
 
     [Theory]
@@ -220,14 +256,14 @@ public sealed class TwentyCareerBalanceReviewTests
     }
 
     [Fact]
-    public void MidsizeConditionStressBarelyFitsProvisionalRepairReserve()
+    public void RegionalJetConditionStressFitsProvisionalRepairReserve()
     {
-        ReviewAircraftTier tier = AircraftTiers[5];
+        ReviewAircraftTier tier = AircraftTiers[6];
         (_, _, decimal shock) =
             RepairProjection(tier, conditionPercent: 72m);
 
-        Assert.Equal(136_800m, shock);
-        Assert.Equal(140_000m, tier.RequiredOperatingReserve);
+        Assert.Equal(243_200m, shock);
+        Assert.Equal(275_000m, tier.RequiredOperatingReserve);
         Assert.True(shock <= tier.RequiredOperatingReserve);
     }
 
