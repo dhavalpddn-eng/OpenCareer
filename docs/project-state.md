@@ -8,7 +8,7 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Latest implementation: `ace1ed3adf365a8f784d2acb8b1aefd60010a0a0` (MBL-23 settings/diagnostics and hardened backup/export). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
+- Latest implementation: `c4a52c955b080aceb73e0b1d762d90c8dbc54506` (MBL-23 settings/diagnostics; UI-thread-safe preference notifications). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 - WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. A versioned tutorial engine is also implemented with persistent progress, first-run overlay navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews. **Live simulator/runtime validation remains open.**
 - [Windows CI run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135): WinUI x64 and live-probe Release builds passed with 0 warnings/errors; **104/104 xUnit tests passed**, including the compiled trace analyzer.
 - [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
