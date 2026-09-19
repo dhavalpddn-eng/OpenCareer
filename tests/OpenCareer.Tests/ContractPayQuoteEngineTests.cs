@@ -173,6 +173,45 @@ public sealed class ContractPayQuoteEngineTests
     }
 
     [Fact]
+    public void OneThreeAndSixHourEmployeeJobsHaveComparableHourlyPay()
+    {
+        var scenarios = new[]
+        {
+            (Hours: 1d, Distance: 130d),
+            (Hours: 3d, Distance: 400d),
+            (Hours: 6d, Distance: 800d)
+        };
+
+        decimal[] hourlyPay = scenarios
+            .Select(scenario =>
+            {
+                ContractPayQuote quote =
+                    ContractPayQuoteEngine.Quote(
+                        new ContractPayQuoteRequest(
+                            ServiceTrack.CivilianEmployment,
+                            ContractKind.Cargo,
+                            EstimatedFlightHours: scenario.Hours,
+                            DistanceNauticalMiles: scenario.Distance,
+                            PayloadPounds: 500,
+                            DemandAttractiveness: 1,
+                            Urgency: 0.10,
+                            Difficulty: 0.10,
+                            RelationshipStrength: 0.20));
+
+                return quote.PilotCashCompensation / (decimal)scenario.Hours;
+            })
+            .ToArray();
+
+        Assert.All(
+            hourlyPay,
+            value => Assert.InRange(value, 850m, 950m));
+        Assert.True(
+            hourlyPay.Max() / hourlyPay.Min() <= 1.02m,
+            "Normal 1-6 hour employee jobs should not reward marathon sessions with materially better hourly pay.");
+        Assert.False(CareerSessionPolicy.FitsJobDuration(TimeSpan.FromHours(15)));
+    }
+
+    [Fact]
     public void MilitaryDutyUsesSalaryModelAndDoesNotCreateCustomerRevenue()
     {
         ContractPayQuote quote =
