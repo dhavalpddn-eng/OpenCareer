@@ -154,6 +154,13 @@ public sealed class CareerBalanceScenarioReviewTests
         AircraftLoanAmortizationSchedule schedule =
             AircraftLoanAmortization.Build(agreement);
 
+        Assert.Equal(493.09m, schedule.Installments[0].Interest);
+        Assert.Equal(452.21m, schedule.Installments[0].Principal);
+        Assert.Equal(33_434.71m, schedule.TotalInterest);
+        Assert.Equal(113_434.71m, schedule.TotalPayments);
+        Assert.Equal(944.01m, schedule.Installments[^1].Payment);
+        Assert.Equal(0m, schedule.Installments[^1].ClosingPrincipal);
+
         RecurringOwnershipCostCycle firstCycle =
             AircraftLoanAmortization.BuildActivePlayCostSchedule(
                 schedule,
