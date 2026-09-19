@@ -13,62 +13,79 @@ public sealed class AppDataBackupService(
     {
         paths.EnsureDirectories();
 
-        string fileName = $"opencareer-backup-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.zip";
+        string fileName =
+            $"opencareer-backup-{DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}.zip";
         string destination = Path.Combine(paths.BackupsFolder, fileName);
         string temporary = destination + ".tmp";
 
         try
         {
-            await using FileStream output = File.Create(temporary);
-            using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
-
             var includedFiles = new List<string>();
-            foreach (string file in EnumerateBackupFiles())
+
+            await using (FileStream output = File.Create(temporary))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                string relative = Path.GetRelativePath(paths.Root, file);
-                ZipArchiveEntry entry = archive.CreateEntry(relative, CompressionLevel.Optimal);
-
-                await using Stream destinationStream = entry.Open();
-                await using var sourceStream = new FileStream(
-                    file,
-                    FileMode.Open,
-                    FileAccess.Read,
-                    FileShare.ReadWrite | FileShare.Delete);
-
-                await sourceStream.CopyToAsync(destinationStream, cancellationToken)
-                    .ConfigureAwait(false);
-                includedFiles.Add(relative);
-            }
-
-            ZipArchiveEntry manifestEntry = archive.CreateEntry("backup-manifest.json");
-            await using (Stream manifestStream = manifestEntry.Open())
-            {
-                await JsonSerializer.SerializeAsync(
-                    manifestStream,
-                    new
+                using (var archive = new ZipArchive(
+                           output,
+                           ZipArchiveMode.Create,
+                           leaveOpen: true))
+                {
+                    foreach (string file in EnumerateBackupFiles())
                     {
-                        schemaVersion = 1,
-                        createdAt = DateTimeOffset.Now,
-                        appDataRoot = "OpenCareer",
-                        includedFiles,
-                        note = "This backup contains the currently implemented OpenCareer local application data. SQLite career-save-safe backup will be added with persistent FlightSession storage."
-                    },
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
+                        cancellationToken.ThrowIfCancellationRequested();
 
-            archive.Dispose();
-            await output.FlushAsync(cancellationToken).ConfigureAwait(false);
-            await output.DisposeAsync().ConfigureAwait(false);
+                        string relative = Path.GetRelativePath(paths.Root, file);
+                        ZipArchiveEntry entry = archive.CreateEntry(
+                            relative,
+                            CompressionLevel.Optimal);
+
+                        await using Stream destinationStream = entry.Open();
+                        await using var sourceStream = new FileStream(
+                            file,
+                            FileMode.Open,
+                            FileAccess.Read,
+                            FileShare.ReadWrite | FileShare.Delete);
+
+                        await sourceStream
+                            .CopyToAsync(destinationStream, cancellationToken)
+                            .ConfigureAwait(false);
+
+                        includedFiles.Add(relative);
+                    }
+
+                    ZipArchiveEntry manifestEntry =
+                        archive.CreateEntry("backup-manifest.json");
+
+                    await using Stream manifestStream = manifestEntry.Open();
+                    await JsonSerializer.SerializeAsync(
+                        manifestStream,
+                        new
+                        {
+                            schemaVersion = 1,
+                            createdAt = DateTimeOffset.Now,
+                            appDataRoot = "OpenCareer",
+                            includedFiles,
+                            note = "Current local application-data backup. SQLite career-save-consistent backup will be added with persistent FlightSession storage."
+                        },
+                        cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
+
+                await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             File.Move(temporary, destination, overwrite: false);
-            logger.LogInformation("Created OpenCareer local-data backup at {Path}.", destination);
+            logger.LogInformation(
+                "Created OpenCareer local-data backup at {Path}.",
+                destination);
 
             return new SettingsActionResult(
                 true,
                 $"Backup created: {fileName}",
                 destination);
+        }
+        catch (OperationCanceledException)
+        {
+            TryDelete(temporary);
+            throw;
         }
         catch (Exception ex) when (
             ex is IOException or UnauthorizedAccessException or InvalidDataException)
