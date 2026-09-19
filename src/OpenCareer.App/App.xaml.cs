@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
 using OpenCareer.SimConnect;
@@ -22,11 +23,23 @@ public partial class App : Microsoft.UI.Xaml.Application
         InitializeComponent();
 
         var services = new ServiceCollection();
+
+        var dataPaths = new OpenCareerDataPaths();
+        dataPaths.EnsureDirectories();
+        var fileLogger = new OpenCareerFileLoggerProvider(dataPaths);
+
+        services.AddSingleton(dataPaths);
         services.AddLogging(builder =>
         {
             builder.AddDebug();
+            builder.AddProvider(fileLogger);
             builder.SetMinimumLevel(LogLevel.Information);
         });
+
+        services.AddSingleton<IAppSettingsService, JsonAppSettingsService>();
+        services.AddSingleton<AppDataBackupService>();
+        services.AddSingleton<DiagnosticBundleService>();
+        services.AddSingleton<ShellOpenService>();
 
         services.AddSingleton<SimConnectConnection>();
         services.AddSingleton<ISimulatorConnection>(provider =>
@@ -41,18 +54,34 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<TutorialViewModel>();
+        services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MainWindow>();
 
         _services = services.BuildServiceProvider();
         UnhandledException += OnUnhandledException;
     }
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        var logger = _services.GetRequiredService<ILogger<App>>();
+
+        try
+        {
+            await _services
+                .GetRequiredService<IAppSettingsService>()
+                .InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "OpenCareer settings initialization failed; using defaults.");
+        }
+
         _window = _services.GetRequiredService<MainWindow>();
         _window.AppWindow.Closing += OnMainWindowClosing;
         _window.Activate();
+
         _services.GetRequiredService<ISimulatorConnection>().Start();
+        logger.LogInformation("OpenCareer application launched.");
     }
 
     private async void OnMainWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
@@ -69,6 +98,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         var logger = _services.GetRequiredService<ILogger<App>>();
         try
         {
+            logger.LogInformation("OpenCareer application shutting down.");
             await _services.DisposeAsync();
         }
         catch (Exception ex)
@@ -82,7 +112,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         }
     }
 
-    private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    private void OnUnhandledException(
+        object sender,
+        Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         var logger = _services.GetRequiredService<ILogger<App>>();
         logger.LogError(e.Exception, "Unhandled OpenCareer UI exception.");

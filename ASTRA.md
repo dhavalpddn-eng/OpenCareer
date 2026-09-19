@@ -7,13 +7,14 @@
 **PR:** #2 draft; keep `main` stable.  
 **Master build list:** `docs/master-build-list.md` — active unfinished major systems sorted low-to-high by estimated remaining engineering effort; stable `MBL-xx` IDs remain unchanged; remove items only when fully implemented, integrated, tested and accepted.  
 **Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
-**Last implementation commit:** `2accedb67d60c0864a0529e32ced56955556c9ec` (live gear-scale normalization).
+**Last implementation commit:** `c4a52c955b080aceb73e0b1d762d90c8dbc54506` (MBL-23 settings/diagnostics; UI-thread-safe preference notifications).
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
 
 **Canonical UI language:** `docs/ui-design-language.md`. All screens must preserve the dark blue-gray riveted shell, vivid ivory paper panels, restrained navy/brass accents and retro-modern 1950s/60s aviation-operations character. Do not drift back to generic SaaS, olive/yellow wash, or sepia-heavy styling.
 
 ## Active product build
+**Settings / diagnostics:** MBL-23 code layer is implemented: persistent preferences, Aviation/Metric live telemetry formatting, checklist/tutorial/input-hint/reduced-motion/online-service preferences, live SimConnect diagnostics, local file logging, diagnostic ZIP export, local-data backup and folder actions. MBL-05 still owns actual binding discovery; MBL-07 still owns authoritative SQLite FlightSession/save recovery. MBL-23 remains on the master list only until Windows build + local interactive verification.
 **WinUI design system:** MBL-02 code layer is implemented: centralized Jet Age tokens plus reusable typography, paper/metal panels, buttons, form controls, toggles, tabs, lists/tables and semantic status styles; current shell/pages are migrated and design-contract tests protect vivid-ivory/contrast/style keys. MBL-02 remains open only for Windows XAML build verification and local interactive/visual/accessibility acceptance. Current GitHub Actions attempts fail before runner steps begin, so do not treat them as a code failure or as build verification.
 **Tutorial engine:** MBL-03 is in progress. The versioned coordinator, persistent progress/resume/skip, first-run WinUI overlay/navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews are implemented and CI-green. Current automated baseline is **118/118 xUnit + 29/29 SimLab**, with Windows WinUI/probe build green. MBL-03 remains until local interactive/visual acceptance and automatic future job/mission trigger integration are verified.
 

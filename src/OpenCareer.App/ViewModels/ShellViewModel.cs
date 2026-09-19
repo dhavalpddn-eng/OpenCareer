@@ -1,14 +1,17 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.App.ViewModels;
 
-public sealed class ShellViewModel(
-    ISimulatorConnection connection,
-    ISimulatorTelemetrySource telemetrySource) : INotifyPropertyChanged
+public sealed class ShellViewModel : INotifyPropertyChanged
 {
+    private readonly ISimulatorConnection _connection;
+    private readonly ISimulatorTelemetrySource _telemetrySource;
+    private readonly IAppSettingsService _settings;
+
     private SimulatorConnectionSnapshot? _lastConnectionSnapshot;
     private AircraftTelemetrySnapshot? _lastTelemetry;
     private string _connectionStatus = "Waiting for MSFS 2024";
@@ -23,6 +26,17 @@ public sealed class ShellViewModel(
     private string _aircraftStateSummary = "—";
     private string _configurationSummary = "—";
     private string _loadSummary = "—";
+
+    public ShellViewModel(
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        IAppSettingsService settings)
+    {
+        _connection = connection;
+        _telemetrySource = telemetrySource;
+        _settings = settings;
+        _settings.Changed += OnSettingsChanged;
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -44,16 +58,18 @@ public sealed class ShellViewModel(
     // The shell calls this on its dispatcher. Native callbacks never touch observable UI state.
     public void RefreshConnectionStatus()
     {
-        var connectionSnapshot = connection.Current;
+        SimulatorConnectionSnapshot connectionSnapshot = _connection.Current;
         if (connectionSnapshot != _lastConnectionSnapshot)
         {
             _lastConnectionSnapshot = connectionSnapshot;
             RefreshConnection(connectionSnapshot);
         }
 
-        AircraftTelemetrySnapshot? telemetry = connectionSnapshot.State == SimulatorConnectionState.Connected
-            ? telemetrySource.Latest
-            : null;
+        AircraftTelemetrySnapshot? telemetry =
+            connectionSnapshot.State == SimulatorConnectionState.Connected
+                ? _telemetrySource.Latest
+                : null;
+
         if (telemetry != _lastTelemetry)
         {
             _lastTelemetry = telemetry;
@@ -80,6 +96,7 @@ public sealed class ShellViewModel(
             SimulatorConnectionState.Faulted => "Connection stopped",
             _ => "Disconnected"
         };
+
         string detail = snapshot.Issue switch
         {
             SimulatorConnectionIssue.RuntimeMissing => "The simulator connection component is missing from this OpenCareer build.",
@@ -120,7 +137,8 @@ public sealed class ShellViewModel(
 
         if (telemetry is null)
         {
-            SetField(ref _aircraftStatus,
+            SetField(
+                ref _aircraftStatus,
                 IsSimulatorConnected ? "Waiting for aircraft telemetry" : "No aircraft connected",
                 nameof(AircraftStatus));
             SetField(ref _positionSummary, "—", nameof(PositionSummary));
@@ -136,23 +154,67 @@ public sealed class ShellViewModel(
         }
 
         SetField(ref _aircraftStatus, "Live aircraft telemetry", nameof(AircraftStatus));
-        SetField(ref _positionSummary,
-            FormattableString.Invariant($"{telemetry.LatitudeDegrees:0.00000}°, {telemetry.LongitudeDegrees:0.00000}°"),
+        SetField(
+            ref _positionSummary,
+            FormattableString.Invariant(
+                $"{telemetry.LatitudeDegrees:0.00000}°, {telemetry.LongitudeDegrees:0.00000}°"),
             nameof(PositionSummary));
-        SetField(ref _altitudeSummary,
-            FormattableString.Invariant($"{telemetry.AltitudeMslFeet:0} ft MSL / {telemetry.AltitudeAglFeet:0} ft AGL"),
-            nameof(AltitudeSummary));
-        SetField(ref _speedSummary,
-            FormattableString.Invariant($"{telemetry.IndicatedAirspeedKnots:0} kt IAS / {telemetry.GroundSpeedKnots:0} kt GS"),
-            nameof(SpeedSummary));
-        SetField(ref _verticalSpeedSummary,
-            FormattableString.Invariant($"{telemetry.VerticalSpeedFeetPerMinute:+0;-0;0} ft/min"),
-            nameof(VerticalSpeedSummary));
-        SetField(ref _headingSummary,
+
+        if (_settings.Current.MeasurementSystem == MeasurementSystem.Metric)
+        {
+            SetField(
+                ref _altitudeSummary,
+                FormattableString.Invariant(
+                    $"{FeetToMeters(telemetry.AltitudeMslFeet):0} m MSL / {FeetToMeters(telemetry.AltitudeAglFeet):0} m AGL"),
+                nameof(AltitudeSummary));
+            SetField(
+                ref _speedSummary,
+                FormattableString.Invariant(
+                    $"{KnotsToKilometersPerHour(telemetry.IndicatedAirspeedKnots):0} km/h IAS / {KnotsToKilometersPerHour(telemetry.GroundSpeedKnots):0} km/h GS"),
+                nameof(SpeedSummary));
+            SetField(
+                ref _verticalSpeedSummary,
+                FormattableString.Invariant(
+                    $"{FeetPerMinuteToMetersPerSecond(telemetry.VerticalSpeedFeetPerMinute):+0.0;-0.0;0.0} m/s"),
+                nameof(VerticalSpeedSummary));
+            SetField(
+                ref _loadSummary,
+                FormattableString.Invariant(
+                    $"{PoundsToKilograms(telemetry.FuelTotalPounds):0} kg fuel / {PoundsToKilograms(telemetry.PayloadPounds):0} kg payload"),
+                nameof(LoadSummary));
+        }
+        else
+        {
+            SetField(
+                ref _altitudeSummary,
+                FormattableString.Invariant(
+                    $"{telemetry.AltitudeMslFeet:0} ft MSL / {telemetry.AltitudeAglFeet:0} ft AGL"),
+                nameof(AltitudeSummary));
+            SetField(
+                ref _speedSummary,
+                FormattableString.Invariant(
+                    $"{telemetry.IndicatedAirspeedKnots:0} kt IAS / {telemetry.GroundSpeedKnots:0} kt GS"),
+                nameof(SpeedSummary));
+            SetField(
+                ref _verticalSpeedSummary,
+                FormattableString.Invariant(
+                    $"{telemetry.VerticalSpeedFeetPerMinute:+0;-0;0} ft/min"),
+                nameof(VerticalSpeedSummary));
+            SetField(
+                ref _loadSummary,
+                FormattableString.Invariant(
+                    $"{telemetry.FuelTotalPounds:0} lb fuel / {telemetry.PayloadPounds:0} lb payload"),
+                nameof(LoadSummary));
+        }
+
+        SetField(
+            ref _headingSummary,
             FormattableString.Invariant($"{telemetry.HeadingDegrees:000}° true"),
             nameof(HeadingSummary));
-        SetField(ref _attitudeSummary,
-            FormattableString.Invariant($"{telemetry.PitchDegrees:+0.0;-0.0;0.0}° pitch / {telemetry.BankDegrees:+0.0;-0.0;0.0}° bank / {telemetry.NormalAccelerationG:0.00} G"),
+        SetField(
+            ref _attitudeSummary,
+            FormattableString.Invariant(
+                $"{telemetry.PitchDegrees:+0.0;-0.0;0.0}° pitch / {telemetry.BankDegrees:+0.0;-0.0;0.0}° bank / {telemetry.NormalAccelerationG:0.00} G"),
             nameof(AttitudeSummary));
 
         string motionState = telemetry.SlewActive
@@ -163,18 +225,30 @@ public sealed class ShellViewModel(
         SetField(ref _aircraftStateSummary, motionState, nameof(AircraftStateSummary));
 
         string gear = telemetry.GearDown ? "Gear down" : "Gear up";
-        SetField(ref _configurationSummary,
-            FormattableString.Invariant($"{gear} / Flaps {telemetry.FlapsPositionPercent:0}% / {telemetry.EnginesRunning} engine(s) running"),
+        SetField(
+            ref _configurationSummary,
+            FormattableString.Invariant(
+                $"{gear} / Flaps {telemetry.FlapsPositionPercent:0}% / {telemetry.EnginesRunning} engine(s) running"),
             nameof(ConfigurationSummary));
-        SetField(ref _loadSummary,
-            FormattableString.Invariant($"{telemetry.FuelTotalPounds:0} lb fuel / {telemetry.PayloadPounds:0} lb payload"),
-            nameof(LoadSummary));
     }
+
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        if (_lastTelemetry is not null)
+            RefreshTelemetry(_lastTelemetry);
+    }
+
+    private static double FeetToMeters(double feet) => feet * 0.3048;
+    private static double KnotsToKilometersPerHour(double knots) => knots * 1.852;
+    private static double FeetPerMinuteToMetersPerSecond(double feetPerMinute) =>
+        feetPerMinute * 0.00508;
+    private static double PoundsToKilograms(double pounds) => pounds * 0.45359237;
 
     private void SetField(ref string field, string value, string propertyName)
     {
         if (string.Equals(field, value, StringComparison.Ordinal))
             return;
+
         field = value;
         OnPropertyChanged(propertyName);
     }

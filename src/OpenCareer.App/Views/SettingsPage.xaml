@@ -4,49 +4,313 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer>
-        <StackPanel Margin="32" Spacing="20" MaxWidth="920" HorizontalAlignment="Left">
+        <StackPanel Margin="32"
+                    Spacing="20"
+                    MaxWidth="1040"
+                    HorizontalAlignment="Left">
+
             <StackPanel Spacing="4">
                 <TextBlock Text="Settings"
                            Style="{StaticResource OpenCareerPageTitleStyle}" />
-                <TextBlock Text="Application preferences and recovery tools."
+                <TextBlock Text="Preferences, simulator diagnostics, local recovery tools and support exports."
                            Style="{StaticResource OpenCareerPageSubtitleStyle}" />
             </StackPanel>
 
-            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
-                    Padding="22">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="TRAINING &amp; TUTORIALS"
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="GENERAL"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
-                    <TextBlock Text="Intro tutorial"
+                    <TextBlock Text="Display &amp; flight preferences"
                                Style="{StaticResource OpenCareerPaperTitleStyle}" />
-                    <TextBlock Text="Replay the full OpenCareer application walkthrough. Restarting the tutorial does not change career progress, money, flights, aircraft or qualifications."
-                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Button Content="Restart intro tutorial"
-                                Style="{StaticResource OpenCareerPrimaryButtonStyle}"
-                                Click="RestartIntro_Click" />
-                        <Button Content="Preview first-job walkthrough"
-                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
-                                Click="StartFirstJob_Click" />
-                    </StackPanel>
-                    <TextBlock Text="The first-job walkthrough is available for preview now. Job and Dispatch steps remain labeled Coming Later until those systems are implemented."
-                               FontSize="12"
-                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <Grid ColumnSpacing="20" RowSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="5">
+                            <TextBlock Text="MEASUREMENT UNITS"
+                                       Style="{StaticResource OpenCareerInputLabelStyle}" />
+                            <ComboBox x:Name="UnitsComboBox"
+                                      Style="{StaticResource OpenCareerComboBoxStyle}"
+                                      SelectionChanged="UnitsComboBox_SelectionChanged" />
+                            <TextBlock Text="Changes live telemetry display units immediately."
+                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="5">
+                            <TextBlock Text="INPUT HINT ORDER"
+                                       Style="{StaticResource OpenCareerInputLabelStyle}" />
+                            <ComboBox x:Name="InputHintsComboBox"
+                                      Style="{StaticResource OpenCareerComboBoxStyle}"
+                                      SelectionChanged="InputHintsComboBox_SelectionChanged" />
+                            <TextBlock Text="{Binding InputBindingStatus}"
+                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                        </StackPanel>
+
+                        <Border Grid.Row="1"
+                                Grid.Column="0"
+                                Style="{StaticResource OpenCareerPaperInsetStyle}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="SHOW CHECKLIST EVERY FLIGHT"
+                                               Style="{StaticResource OpenCareerInputLabelStyle}" />
+                                    <TextBlock Text="Saved now; the live checklist will consume this when MBL-04 is implemented."
+                                               Style="{StaticResource OpenCareerInputHelpStyle}" />
+                                </StackPanel>
+                                <ToggleSwitch x:Name="ChecklistToggle"
+                                              Grid.Column="1"
+                                              OnContent="On"
+                                              OffContent="Off"
+                                              Style="{StaticResource OpenCareerToggleSwitchStyle}"
+                                              Toggled="ChecklistToggle_Toggled" />
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="1"
+                                Grid.Column="1"
+                                Style="{StaticResource OpenCareerPaperInsetStyle}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="AUTOMATIC TUTORIAL OFFERS"
+                                               Style="{StaticResource OpenCareerInputLabelStyle}" />
+                                    <TextBlock Text="When off, tutorials remain available manually from this page."
+                                               Style="{StaticResource OpenCareerInputHelpStyle}" />
+                                </StackPanel>
+                                <ToggleSwitch x:Name="TutorialOfferToggle"
+                                              Grid.Column="1"
+                                              OnContent="On"
+                                              OffContent="Off"
+                                              Style="{StaticResource OpenCareerToggleSwitchStyle}"
+                                              Toggled="TutorialOfferToggle_Toggled" />
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
-                    Padding="22">
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="SPECIAL MISSION TUTORIAL PREVIEWS"
+                    <TextBlock Text="ACCESSIBILITY"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
-                    <TextBlock Text="Preview unique procedures"
+                    <TextBlock Text="Motion &amp; platform accessibility"
                                Style="{StaticResource OpenCareerPaperTitleStyle}" />
-                    <TextBlock Text="These walkthroughs are usable as training previews now. Their real mission triggers, live objective validation and checklist evidence arrive with the corresponding mission systems."
+                    <TextBlock Text="{Binding AccessibilityStatus}"
                                Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <Border Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="REDUCE MOTION"
+                                           Style="{StaticResource OpenCareerInputLabelStyle}" />
+                                <TextBlock Text="Disables or simplifies nonessential OpenCareer animations as they are added."
+                                           Style="{StaticResource OpenCareerInputHelpStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="ReduceMotionToggle"
+                                          Grid.Column="1"
+                                          OnContent="On"
+                                          OffContent="Off"
+                                          Style="{StaticResource OpenCareerToggleSwitchStyle}"
+                                          Toggled="ReduceMotionToggle_Toggled" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="SIMULATOR DIAGNOSTICS"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="MSFS 2024 connection health"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+
+                    <Grid ColumnSpacing="24" RowSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                            <TextBlock Text="CONNECTION STATE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding ConnectionState}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
+                            <TextBlock Text="CONNECTION ISSUE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding ConnectionIssue}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
+                            <TextBlock Text="SIMULATOR" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding SimulatorIdentity}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                            <TextBlock Text="SIMCONNECT VERSION" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding SimConnectVersion}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Grid.Column="0" Spacing="2">
+                            <TextBlock Text="TELEMETRY" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding TelemetryState}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2">
+                            <TextBlock Text="LAST SAMPLE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding LastTelemetry}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Grid.Column="0" Spacing="2">
+                            <TextBlock Text="AIRCRAFT RUNTIME STATE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding AircraftRuntimeState}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="2">
+                            <TextBlock Text="APP / RUNTIME" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding AppVersion}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                            <TextBlock Text="{Binding RuntimeSummary}" Style="{StaticResource OpenCareerInputHelpStyle}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Button Content="Refresh diagnostics"
+                            Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                            HorizontalAlignment="Left"
+                            Click="RefreshDiagnostics_Click" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="DATA, BACKUP &amp; RECOVERY"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="Local OpenCareer data"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="{Binding CareerRecoveryStatus}"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="DATA FOLDER" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                        <TextBlock Text="{Binding DataFolder}"
+                                   Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Create backup"
+                                Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                Click="CreateBackup_Click" />
+                        <Button Content="Open data folder"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                Click="OpenDataFolder_Click" />
+                        <Button Content="Open backups"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                Click="OpenBackupsFolder_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="LOGS &amp; SUPPORT"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="Troubleshooting bundle"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="OpenCareer writes an application log locally. A diagnostic export contains connection state, non-location telemetry diagnostics, preferences and logs; coordinates are intentionally excluded."
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="LOG FILE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                        <TextBlock Text="{Binding LogFile}"
+                                   Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Export diagnostics"
+                                Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                Click="ExportDiagnostics_Click" />
+                        <Button Content="Open logs"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                Click="OpenLogsFolder_Click" />
+                        <Button Content="Open exports"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                Click="OpenDiagnosticsFolder_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="OPTIONAL ONLINE SERVICES"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="Offline-first permission gate"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="{Binding OptionalServicesStatus}"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <Border Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="ALLOW OPTIONAL ONLINE SERVICES"
+                                           Style="{StaticResource OpenCareerInputLabelStyle}" />
+                                <TextBlock Text="This only grants permission. It does not activate a provider and never makes cloud/AI authoritative for career state."
+                                           Style="{StaticResource OpenCareerInputHelpStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="OnlineServicesToggle"
+                                          Grid.Column="1"
+                                          OnContent="Allowed"
+                                          OffContent="Offline"
+                                          Style="{StaticResource OpenCareerToggleSwitchStyle}"
+                                          Toggled="OnlineServicesToggle_Toggled" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="TRAINING &amp; TUTORIALS"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="Replay walkthroughs"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="Restarting or previewing a tutorial never changes career money, ownership, flight records or qualifications."
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Restart intro"
+                                Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                Click="RestartIntro_Click" />
+                        <Button Content="First-job preview"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                Click="StartFirstJob_Click" />
+                    </StackPanel>
+
+                    <TextBlock Text="SPECIAL MISSION PREVIEWS"
+                               Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Content="Banner tow"
-                                Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}"
                                 Click="PreviewBannerTow_Click" />
                         <Button Content="Carrier takeoff"
                                 Style="{StaticResource OpenCareerSecondaryButtonStyle}"
@@ -58,34 +322,30 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
-                    Padding="22">
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="SIMULATOR"
+                    <TextBlock Text="RESET"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
-                    <TextBlock Text="Diagnostics &amp; preferences"
+                    <TextBlock Text="Application preferences only"
                                Style="{StaticResource OpenCareerPaperTitleStyle}" />
-                    <TextBlock Text="Detailed connection diagnostics and input/checklist preferences will be added as their production systems are implemented."
+                    <TextBlock Text="Resetting these preferences does not delete tutorial progress, flights, money, aircraft, career state, backups or logs."
                                Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                    <Button Content="Reset preferences to defaults"
+                            Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                            HorizontalAlignment="Left"
+                            Click="ResetPreferences_Click" />
+                </StackPanel>
+            </Border>
 
-                    <Border Style="{StaticResource OpenCareerPaperInsetStyle}">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Spacing="3">
-                                <TextBlock Text="SHOW CHECKLIST EVERY FLIGHT"
-                                           Style="{StaticResource OpenCareerInputLabelStyle}" />
-                                <TextBlock Text="Visual design-system preview only. Persistence arrives with the live checklist feature."
-                                           Style="{StaticResource OpenCareerInputHelpStyle}" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1"
-                                          IsEnabled="False"
-                                          OffContent="Coming later"
-                                          Style="{StaticResource OpenCareerToggleSwitchStyle}" />
-                        </Grid>
-                    </Border>
+            <Border Style="{StaticResource OpenCareerMetalCardStyle}" Padding="16">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="LAST SETTINGS ACTION"
+                               Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
+                               FontSize="11"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding ActionStatus}"
+                               Foreground="{StaticResource OpenCareerShellTextBrush}"
+                               TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
         </StackPanel>

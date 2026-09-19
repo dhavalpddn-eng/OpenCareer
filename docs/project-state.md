@@ -8,7 +8,7 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Latest implementation: `540029c378a507f729dfe451db642eca4065ae65` (offline live-probe trace analysis). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
+- Latest implementation: `ace1ed3adf365a8f784d2acb8b1aefd60010a0a0` (MBL-23 settings/diagnostics and hardened backup/export). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 - WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. A versioned tutorial engine is also implemented with persistent progress, first-run overlay navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews. **Live simulator/runtime validation remains open.**
 - [Windows CI run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135): WinUI x64 and live-probe Release builds passed with 0 warnings/errors; **104/104 xUnit tests passed**, including the compiled trace analyzer.
 - [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
@@ -67,6 +67,20 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Standard WinUI control templates remain intact so native focus, keyboard and high-contrast behavior are preserved rather than replaced by custom templates.
 - `UiDesignSystemContractTests` verifies the vivid ivory/cool shell palette, WCAG-style text contrast, required component keys and duplicate-resource protection.
 - MBL-02 is not removed yet: Windows XAML build verification and local interactive visual/accessibility acceptance remain. Current GitHub Actions jobs are failing before any runner step starts and therefore do not provide a compiler/test result.
+
+## Settings and diagnostics implementation
+
+- `OpenCareer.Application/Settings` defines non-authoritative UI/application preferences and the persistence boundary.
+- `JsonAppSettingsService` stores a versioned `settings.json` under the OpenCareer local-app-data root using atomic temp-file replacement.
+- Measurement units are functional today: Aviation uses ft/kt/lb and Metric uses m/km/h/kg; changing the setting reformats the existing live telemetry snapshot immediately.
+- Persisted future-facing preferences include input-hint order, **Show checklist every flight**, automatic tutorial offers, reduced motion and the offline-first optional-online-services permission gate.
+- Settings exposes live simulator connection state/issue, simulator and SimConnect versions when reported, telemetry freshness, last sample time and pause/slew/on-ground/airborne state.
+- OpenCareer now writes an application log under `Logs/opencareer.log` with bounded rotation.
+- Diagnostic export creates a ZIP with environment, connection state, non-coordinate telemetry diagnostics, preferences and local logs/settings. Exact aircraft latitude/longitude are intentionally excluded.
+- Current local-data backup creates a ZIP plus manifest while excluding backup/export recursion. It is suitable for currently implemented settings/tutorial/log data.
+- **Do not treat the current backup as SQLite career-save consistency.** MBL-07 owns authoritative FlightSession/SQLite checkpoint/recovery and must integrate its own safe backup semantics.
+- **Do not treat input-hint preference as binding discovery.** MBL-05 owns actual controller/keyboard profile resolution.
+- MBL-23 is code-complete but remains unremoved until Windows build and local interactive persistence/backup/export verification are available. GitHub Actions currently fails before runner steps are created, so those failures are not compiler/test evidence.
 
 ## Chapter 2 shell and simulator boundary
 

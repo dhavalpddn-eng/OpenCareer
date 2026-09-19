@@ -13,10 +13,15 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer _statusTimer;
     private bool _tutorialInitialized;
 
-    public MainWindow(ShellViewModel viewModel, TutorialViewModel tutorial)
+    public MainWindow(
+        ShellViewModel viewModel,
+        TutorialViewModel tutorial,
+        SettingsViewModel settings)
     {
         ViewModel = viewModel;
         Tutorial = tutorial;
+        Settings = settings;
+
         InitializeComponent();
 
         NavView.SelectedItem = DashboardItem;
@@ -36,6 +41,7 @@ public sealed partial class MainWindow : Window
 
     public ShellViewModel ViewModel { get; }
     public TutorialViewModel Tutorial { get; }
+    public SettingsViewModel Settings { get; }
 
     public void StopStatusUpdates()
     {
@@ -52,7 +58,10 @@ public sealed partial class MainWindow : Window
             return;
 
         _tutorialInitialized = true;
-        await Tutorial.InitializeAsync();
+
+        if (Settings.AutomaticallyOfferTutorials)
+            await Tutorial.InitializeAsync();
+
         UpdateTutorialLayer();
     }
 
@@ -82,7 +91,9 @@ public sealed partial class MainWindow : Window
                 Navigate(typeof(CurrentFlightPage), ViewModel);
                 break;
             case "settings":
-                Navigate(typeof(SettingsPage), Tutorial);
+                Navigate(
+                    typeof(SettingsPage),
+                    new SettingsPageContext(Tutorial, Settings));
                 break;
             default:
                 Navigate(typeof(PlaceholderPage), displayName ?? tag);
