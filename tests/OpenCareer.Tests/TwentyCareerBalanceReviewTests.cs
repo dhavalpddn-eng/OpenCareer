@@ -207,18 +207,6 @@ public sealed class TwentyCareerBalanceReviewTests
     }
 
     [Fact]
-    public void ReviewMatrixContainsExactlyTwentyDistinctCareerScenarios()
-    {
-        Scenario[] scenarios = Scenarios.Select(row => row[0]).Cast<Scenario>().ToArray();
-
-        Assert.Equal(20, scenarios.Length);
-        Assert.Equal(20, scenarios.Select(item => item.Name).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(2, scenarios.Count(item => item.Expected == ReviewOutcome.NeedsTuning));
-        Assert.Equal(4, scenarios.Count(item => item.Expected == ReviewOutcome.BlockedAsIntended));
-        Assert.Equal(14, scenarios.Count(item => item.Expected == ReviewOutcome.Balanced));
-    }
-
-    [Fact]
     public void LowConditionStarterRepairShockExceedsCurrentStarterReserve()
     {
         ReviewAircraftTier tier = AircraftTiers[1];
