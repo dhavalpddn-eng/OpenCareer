@@ -58,8 +58,8 @@ public sealed record JobMarketPolicy(
     TimeSpan? MinimumOfferLifetime = null,
     TimeSpan? MaximumOfferLifetime = null,
     int EarlyCareerLevelCeiling = 10,
-    double EarlyCareerPreferredMinHours = 2,
-    double EarlyCareerPreferredMaxHours = 4,
+    double EarlyCareerPreferredMinHours = 1,
+    double EarlyCareerPreferredMaxHours = 3,
     double EarlyCareerOutOfBandWeight = 0.30)
 {
     public static JobMarketPolicy Default { get; } = new(
