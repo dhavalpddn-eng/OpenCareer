@@ -1,30 +1,24 @@
 name: winui-build
 
 on:
-  push:
-    branches:
-      - feature/**
-    paths:
-      - "src/OpenCareer.App/**"
-      - "src/OpenCareer.Application/**"
-      - "src/OpenCareer.SimConnect/**"
-      - "tests/OpenCareer.Tests/**"
-      - "tools/OpenCareer.LiveProbe/**"
-      - "tools/OpenCareer.TraceAnalysis/**"
-      - "tools/run-live-probe.ps1"
-      - "Directory.Build.props"
-      - ".github/workflows/winui-build.yml"
   pull_request:
+    branches:
+      - main
     paths:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"
+      - "src/OpenCareer.Domain/**"
       - "src/OpenCareer.SimConnect/**"
-      - "tests/OpenCareer.Tests/**"
       - "tools/OpenCareer.LiveProbe/**"
-      - "tools/OpenCareer.TraceAnalysis/**"
       - "tools/run-live-probe.ps1"
       - "Directory.Build.props"
+      - "Directory.Packages.props"
       - ".github/workflows/winui-build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: winui-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -38,7 +32,7 @@ jobs:
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: "10.0.x"
 
       - name: Restore WinUI app
         run: dotnet restore src/OpenCareer.App/OpenCareer.App.csproj -p:Platform=x64
