@@ -72,7 +72,10 @@ public static class FlightSessionEngine
             OperationState = operationState,
             Tracking = nextTracking,
             TimeLedger = ledger,
-            Milestones = milestones
+            Milestones = milestones,
+            ContinuityAnchor =
+                update.ContinuityAnchor
+                ?? current.ContinuityAnchor
         };
     }
 
