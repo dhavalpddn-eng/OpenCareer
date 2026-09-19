@@ -4,19 +4,19 @@ namespace OpenCareer.Domain.Economy;
 
 public enum LedgerAccountCode
 {
-    Cash,
-    ContractRevenue,
-    WageIncome,
-    ReimbursementIncome,
-    FuelExpense,
-    MaintenanceExpense,
-    AirportFeesExpense,
-    OtherOperatingExpense,
-    InsuranceExpense,
-    StorageExpense,
-    InterestExpense,
-    AircraftAsset,
-    LoanPayable
+    Cash = 0,
+    ContractRevenue = 1,
+    WageIncome = 2,
+    ReimbursementIncome = 3,
+    FuelExpense = 4,
+    MaintenanceExpense = 5,
+    AirportFeesExpense = 6,
+    OtherOperatingExpense = 7,
+    InsuranceExpense = 8,
+    InterestExpense = 9,
+    AircraftAsset = 10,
+    LoanPayable = 11,
+    StorageExpense = 12
 }
 
 public sealed record LedgerPosting(
