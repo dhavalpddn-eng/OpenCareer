@@ -437,6 +437,22 @@ public sealed class ActivePlayRecurringCostTests : IDisposable
         Assert.Equal(
             2_000m - expectedThreeHourCost,
             second.CashBalanceAfter);
+
+        PersistedActivePlayRecurringCostSettlementResult retry =
+            await service.SettlePersistedAsync(
+                Guid.NewGuid(),
+                "owned-persisted",
+                "two-hour-flight",
+                FlightTimeLedger.Empty.Add(
+                    OperationalInterval(TimeSpan.FromHours(2), 1)),
+                schedule,
+                Now.AddHours(2));
+
+        Assert.False(retry.WasNewlyPosted);
+        Assert.Null(retry.Settlement);
+        Assert.Equal(second.Transaction, retry.Transaction);
+        Assert.Equal(second.CashBalanceAfter, retry.CashBalanceAfter);
+        Assert.Equal(second.CurrentBillingState, retry.CurrentBillingState);
     }
 
     [Fact]
