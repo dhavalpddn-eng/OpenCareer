@@ -5,12 +5,16 @@
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/m1-simulation-core`  
 **PR:** #2 draft; keep `main` stable.  
-**Master tracker:** `docs/development-master-checklist.md` — update it whenever verified project status changes.  
+**Master build list:** `docs/master-build-list.md` — active unfinished major systems; remove items only when fully implemented, integrated, tested and accepted.  
+**Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
 **Last implementation commit:** `2accedb67d60c0864a0529e32ced56955556c9ec` (live gear-scale normalization).
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
 
 **Canonical UI language:** `docs/ui-design-language.md`. All screens must preserve the dark blue-gray riveted shell, vivid ivory paper panels, restrained navy/brass accents and retro-modern 1950s/60s aviation-operations character. Do not drift back to generic SaaS, olive/yellow wash, or sepia-heavy styling.
+
+## Active product build
+**Tutorial engine:** MBL-03 is in progress. Versioned app/first-job catalogs, persistent tutorial progress, first-run overlay/navigation and Settings replay are now implemented on the feature branch; mission-family hooks and final UI/runtime acceptance remain before MBL-03 can be removed.
 
 ## Built
 WinUI shell; resilient serialized SimConnect connect/reconnect; ~1 Hz normalized telemetry; Windows live probe; pure `FlightTrackingStateMachine`; `FlightTimeLedger`; conventional park/shutdown/servicing terminal policy; offline JSONL trace analyzer. CI at `540029c`: **104/104 xUnit + 29/29 SimLab; Windows WinUI/probe green**. Analyzer fixtures are synthetic; live validation remains open.
