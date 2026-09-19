@@ -2,8 +2,8 @@
 
 Updated: 2026-09-19.
 
-Branch: `feature/flight-session-core`
-Draft PR: #9 into `feature/m1-simulation-core`.
+Branch: `feature/flight-session-core-current`
+Draft PR: #11 into `feature/m1-simulation-core`.
 
 ## Purpose
 
@@ -97,3 +97,34 @@ Bounce, touch-and-go and go-around are intentionally still owned by the more det
 All thresholds are explicit options and remain provisional until broader real-aircraft MSFS calibration is available.
 
 `FlightTelemetryEvidenceProcessorTests` adds synthetic coverage for stable-sample arming, engine start/taxi, airborne hysteresis, touchdown hysteresis, rejected takeoff, pause/slew suppression, parking/completion, invalid telemetry, backward timestamps and disconnect streak reset.
+## SQLite checkpoint/recovery added
+
+The current branch now includes the first durable active-flight recovery path:
+
+- `IFlightSessionCheckpointStore` in Application;
+- `OpenCareer.Infrastructure` with `Microsoft.Data.Sqlite` 10.0.12, matching the existing economy workstream project/package choice;
+- `SqliteFlightSessionCheckpointStore` using one authoritative current-session slot;
+- schema-version and metadata/payload consistency validation;
+- atomic single-statement upsert for the latest checkpoint;
+- reopen/load recovery;
+- clear after terminal acknowledgement;
+- serialized concurrent writes;
+- `FlightSessionPersistenceService` that writes the next state before publishing it to the in-memory coordinator.
+
+The write-before-publish ordering is intentional: a failed SQLite checkpoint must not advance the app's authoritative in-memory FlightSession beyond what can survive an app crash.
+
+Added tests cover SQLite reopen, newer-checkpoint replacement, clear, unsupported schema rejection, concurrent saves, persistence-failure behavior, restore, and terminal cleanup.
+
+## Branch synchronization note
+
+The original draft PR #9 was based on an older m1 head and was closed without merge. This work was forward-ported onto the then-current `feature/m1-simulation-core` and continues in draft PR #11.
+
+The m1 branch remains active in other project chats, so PR CI/merge testing is the integration guard rather than assuming the base is static.
+
+## Remaining no-PC work for item #1
+
+1. Wire `FlightSessionPersistenceService` into app DI and Current Flight without creating UI business logic.
+2. Add automatic checkpoint cadence/debouncing so meaningful transitions persist immediately while steady telemetry does not write SQLite every sample.
+3. Add restart recovery UX/state for Active, Suspended and Interrupted sessions.
+4. Add route/leg summary fields needed by the later logbook without storing raw telemetry frames.
+5. Leave real-aircraft threshold calibration and live SimConnect validation for when the Windows/MSFS PC is available.
