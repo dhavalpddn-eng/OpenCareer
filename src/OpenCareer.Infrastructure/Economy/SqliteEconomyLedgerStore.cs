@@ -579,6 +579,243 @@ public sealed class SqliteEconomyLedgerStore : IActivePlayBillingLedgerStore, IA
         }
     }
 
+    private static async Task<string?> FindConsumedListingOrOwnershipAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string listingId,
+        string ownershipId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT PurchaseId
+            FROM AircraftPurchases
+            WHERE ListingId = $listingId
+               OR OwnershipId = $ownershipId
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$listingId", listingId);
+        command.Parameters.AddWithValue("$ownershipId", ownershipId);
+
+        object? result =
+            await command
+                .ExecuteScalarAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        return result is null or DBNull
+            ? null
+            : Convert.ToString(
+                result,
+                System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static async Task InsertAircraftPurchaseAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        AircraftPurchaseSettlement settlement,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            INSERT INTO AircraftPurchases (
+                PurchaseId,
+                OwnershipId,
+                ListingId,
+                AircraftId,
+                SalePriceCents,
+                CashPaidCents,
+                FinancedPrincipalCents,
+                PurchasedAtUtcTicks,
+                LoanId,
+                LenderId,
+                AnnualRate,
+                TermCycles,
+                ScheduledPaymentCents)
+            VALUES (
+                $purchaseId,
+                $ownershipId,
+                $listingId,
+                $aircraftId,
+                $salePrice,
+                $cashPaid,
+                $financedPrincipal,
+                $purchasedAt,
+                $loanId,
+                $lenderId,
+                $annualRate,
+                $termCycles,
+                $scheduledPayment);
+            """;
+
+        command.Parameters.AddWithValue("$purchaseId", settlement.PurchaseId.ToString("D"));
+        command.Parameters.AddWithValue("$ownershipId", settlement.OwnershipId);
+        command.Parameters.AddWithValue("$listingId", settlement.ListingId);
+        command.Parameters.AddWithValue("$aircraftId", settlement.AircraftId);
+        command.Parameters.AddWithValue("$salePrice", ToCents(settlement.SalePrice));
+        command.Parameters.AddWithValue("$cashPaid", ToCents(settlement.CashPaid));
+        command.Parameters.AddWithValue("$financedPrincipal", ToCents(settlement.FinancedPrincipal));
+        command.Parameters.AddWithValue("$purchasedAt", settlement.Transaction.OccurredAt.UtcTicks);
+        command.Parameters.AddWithValue(
+            "$loanId",
+            settlement.Loan is { } loan ? loan.LoanId.ToString("D") : DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$lenderId",
+            settlement.Loan is { } loan2 ? loan2.LenderId : DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$annualRate",
+            settlement.Loan is { } loan3
+                ? loan3.AnnualRate.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$termCycles",
+            settlement.Loan is { } loan4 ? loan4.TermCycles : DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$scheduledPayment",
+            settlement.Loan is { } loan5
+                ? ToCents(loan5.ScheduledPayment)
+                : DBNull.Value);
+
+        await command
+            .ExecuteNonQueryAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task<AircraftPurchaseSettlement?> ReadAircraftPurchaseAsync(
+        SqliteConnection connection,
+        SqliteTransaction? sqliteTransaction,
+        Guid purchaseId,
+        CancellationToken cancellationToken)
+    {
+        string? ownershipId = null;
+        string? listingId = null;
+        string? aircraftId = null;
+        long salePriceCents = 0;
+        long cashPaidCents = 0;
+        long financedPrincipalCents = 0;
+        long purchasedAtTicks = 0;
+        string? loanId = null;
+        string? lenderId = null;
+        string? annualRate = null;
+        int? termCycles = null;
+        long? scheduledPaymentCents = null;
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = sqliteTransaction;
+            command.CommandText =
+                """
+                SELECT
+                    OwnershipId,
+                    ListingId,
+                    AircraftId,
+                    SalePriceCents,
+                    CashPaidCents,
+                    FinancedPrincipalCents,
+                    PurchasedAtUtcTicks,
+                    LoanId,
+                    LenderId,
+                    AnnualRate,
+                    TermCycles,
+                    ScheduledPaymentCents
+                FROM AircraftPurchases
+                WHERE PurchaseId = $purchaseId;
+                """;
+            command.Parameters.AddWithValue("$purchaseId", purchaseId.ToString("D"));
+
+            await using var reader =
+                await command
+                    .ExecuteReaderAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return null;
+
+            ownershipId = reader.GetString(0);
+            listingId = reader.GetString(1);
+            aircraftId = reader.GetString(2);
+            salePriceCents = reader.GetInt64(3);
+            cashPaidCents = reader.GetInt64(4);
+            financedPrincipalCents = reader.GetInt64(5);
+            purchasedAtTicks = reader.GetInt64(6);
+            loanId = reader.IsDBNull(7) ? null : reader.GetString(7);
+            lenderId = reader.IsDBNull(8) ? null : reader.GetString(8);
+            annualRate = reader.IsDBNull(9) ? null : reader.GetString(9);
+            termCycles = reader.IsDBNull(10) ? null : reader.GetInt32(10);
+            scheduledPaymentCents = reader.IsDBNull(11) ? null : reader.GetInt64(11);
+        }
+
+        EconomyLedgerTransaction ledgerTransaction =
+            await ReadTransactionAsync(
+                connection,
+                sqliteTransaction,
+                purchaseId,
+                cancellationToken).ConfigureAwait(false);
+
+        OpenCareer.Domain.Finance.AircraftLoanAgreement? loan = null;
+        if (loanId is not null)
+        {
+            if (lenderId is null
+                || annualRate is null
+                || termCycles is null
+                || scheduledPaymentCents is null)
+            {
+                throw new InvalidDataException(
+                    "Persisted aircraft loan terms are incomplete.");
+            }
+
+            loan = new OpenCareer.Domain.Finance.AircraftLoanAgreement(
+                Guid.Parse(loanId),
+                ownershipId!,
+                lenderId,
+                FromCents(financedPrincipalCents),
+                decimal.Parse(
+                    annualRate,
+                    System.Globalization.CultureInfo.InvariantCulture),
+                termCycles.Value,
+                FromCents(scheduledPaymentCents.Value),
+                new DateTimeOffset(purchasedAtTicks, TimeSpan.Zero));
+            loan.Validate();
+        }
+
+        var settlement = new AircraftPurchaseSettlement(
+            purchaseId,
+            ownershipId!,
+            listingId!,
+            aircraftId!,
+            FromCents(salePriceCents),
+            FromCents(cashPaidCents),
+            FromCents(financedPrincipalCents),
+            loan,
+            ledgerTransaction);
+        settlement.Validate();
+        return settlement;
+    }
+
+    private static bool EquivalentAircraftPurchase(
+        AircraftPurchaseSettlement left,
+        AircraftPurchaseSettlement right)
+    {
+        bool loansEqual =
+            left.Loan is null && right.Loan is null
+            || left.Loan is not null
+                && right.Loan is not null
+                && left.Loan == right.Loan;
+
+        return left.PurchaseId == right.PurchaseId
+            && string.Equals(left.OwnershipId, right.OwnershipId, StringComparison.Ordinal)
+            && string.Equals(left.ListingId, right.ListingId, StringComparison.Ordinal)
+            && string.Equals(left.AircraftId, right.AircraftId, StringComparison.Ordinal)
+            && left.SalePrice == right.SalePrice
+            && left.CashPaid == right.CashPaid
+            && left.FinancedPrincipal == right.FinancedPrincipal
+            && loansEqual
+            && Equivalent(left.Transaction, right.Transaction);
+    }
+
     private static async Task<ActivePlayBillingState?> ReadBillingStateAsync(
         SqliteConnection connection,
         SqliteTransaction? sqliteTransaction,
