@@ -1,9 +1,34 @@
 using OpenCareer.Infrastructure.AviationData;
+using System.Text.Json;
 
-if (args.Length < 2 || args.Length > 3 || (args[0] != "import" && args[0] != "refresh") || (args[0] == "import" && args.Length != 3) || (args[0] == "refresh" && args.Length != 2))
+if (args.Length < 2 || args.Length > 3 ||
+    (args[0], args.Length) is not (("import", 3) or ("refresh", 2) or ("refresh-openaip", 3)))
 {
-    Console.Error.WriteLine("Usage: OpenCareer.DataImport import <database.sqlite> <csv-directory> | refresh <database.sqlite>");
+    Console.Error.WriteLine("Usage: OpenCareer.DataImport import <database.sqlite> <csv-directory> | refresh <database.sqlite> | refresh-openaip <database.sqlite> <country-code>");
     return 2;
+}
+
+if (args[0] == "refresh-openaip")
+{
+    var key = Environment.GetEnvironmentVariable("OPENAIP_API_KEY");
+    if (string.IsNullOrWhiteSpace(key))
+    {
+        Console.Error.WriteLine("OPENAIP_API_KEY is required for a manual OpenAIP refresh.");
+        return 2;
+    }
+    try
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        var count = await new OpenAipAirspaceRefreshService(client).RefreshCountryAsync(args[1], args[2], key);
+        Console.WriteLine($"OpenAIP airspaces for {args[2].ToUpperInvariant()}: {count:N0}. Local reference database updated.");
+        return 0;
+    }
+    catch (Exception error) when (error is IOException or HttpRequestException or TaskCanceledException or
+        Microsoft.Data.Sqlite.SqliteException or JsonException or KeyNotFoundException or InvalidOperationException or ArgumentException)
+    {
+        Console.Error.WriteLine($"OpenAIP refresh failed; previous data was preserved: {error.Message}");
+        return 1;
+    }
 }
 
 var sourceDirectory = args.Length == 3 ? args[2] : Path.Combine(Path.GetTempPath(), "opencareer-ourairports-" + Guid.NewGuid().ToString("N"));
