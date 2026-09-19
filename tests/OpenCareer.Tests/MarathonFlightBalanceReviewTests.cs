@@ -45,8 +45,13 @@ public sealed class MarathonFlightBalanceReviewTests
             "A 15-hour optional mission should pay dramatically more total cash than a 1-hour mission.");
 
         Assert.True(
-            marathonHourly >= shortHourly * 0.90m,
-            "Long optional missions should not suffer a major hourly-pay penalty simply because they are long.");
+            marathonHourly >= shortHourly * 1.20m,
+            "A 15-hour extended-duty mission should pay at least 20% more per hour than the short-duty reference.");
+
+        Assert.InRange(
+            marathonMission.ExtendedDutyMultiplier,
+            1.249,
+            1.251);
 
         Assert.True(
             JobMarketPolicy.Default.DurationSuitability(
