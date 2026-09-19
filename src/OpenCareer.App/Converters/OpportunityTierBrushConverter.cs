@@ -23,8 +23,8 @@ public sealed class OpportunityTierBrushConverter : IValueConverter
             }
             : "OpenCareerOpportunityStandardBrush";
 
-        return Application.Current.Resources[key] as Brush ??
-            Application.Current.Resources["OpenCareerNavyBrush"];
+        return Microsoft.UI.Xaml.Application.Current.Resources[key] as Brush ??
+            Microsoft.UI.Xaml.Application.Current.Resources["OpenCareerNavyBrush"];
     }
 
     public object ConvertBack(
