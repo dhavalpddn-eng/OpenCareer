@@ -5,7 +5,9 @@ using OpenCareer.Domain.Finance;
 
 namespace OpenCareer.Infrastructure.Economy;
 
-public sealed class SqliteEconomyLedgerStore : IAircraftAcquisitionStore
+public sealed class SqliteEconomyLedgerStore :
+    IAircraftAcquisitionStore,
+    ICashGuardedEconomyLedgerStore
 {
     private readonly string _connectionString;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
@@ -74,6 +76,93 @@ public sealed class SqliteEconomyLedgerStore : IAircraftAcquisitionStore
                 }
 
                 return LedgerPostResult.AlreadyPosted;
+            }
+
+            await InsertTransactionAsync(
+                connection,
+                sqliteTransaction,
+                transaction,
+                cancellationToken).ConfigureAwait(false);
+
+            sqliteTransaction.Commit();
+            return LedgerPostResult.Posted;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    public async Task<LedgerPostResult> PostWithMinimumCashAsync(
+        EconomyLedgerTransaction transaction,
+        decimal minimumCashAfter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+        transaction.Validate();
+
+        if (minimumCashAfter < 0m
+            || decimal.Round(
+                minimumCashAfter,
+                2,
+                MidpointRounding.AwayFromZero)
+                != minimumCashAfter)
+        {
+            throw new ArgumentOutOfRangeException(nameof(minimumCashAfter));
+        }
+
+        await _writeGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await EnableForeignKeysAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            using var sqliteTransaction = connection.BeginTransaction();
+
+            string? existingId = await FindExistingTransactionIdAsync(
+                connection,
+                sqliteTransaction,
+                transaction.TransactionId,
+                transaction.IdempotencyKey,
+                cancellationToken).ConfigureAwait(false);
+
+            if (existingId is not null)
+            {
+                EconomyLedgerTransaction existing =
+                    await ReadTransactionAsync(
+                        connection,
+                        sqliteTransaction,
+                        Guid.Parse(existingId),
+                        cancellationToken).ConfigureAwait(false);
+
+                if (!Equivalent(existing, transaction))
+                {
+                    throw new InvalidOperationException(
+                        "The cash-guarded ledger identity already exists with different financial data.");
+                }
+
+                return LedgerPostResult.AlreadyPosted;
+            }
+
+            decimal currentCash =
+                await ReadCashBalanceAsync(
+                    connection,
+                    sqliteTransaction,
+                    cancellationToken).ConfigureAwait(false);
+
+            decimal cashAfter =
+                currentCash + transaction.CashChange;
+
+            if (cashAfter < minimumCashAfter)
+            {
+                throw new InvalidOperationException(
+                    "The transaction would reduce cash below the required minimum balance.");
             }
 
             await InsertTransactionAsync(

@@ -2,6 +2,14 @@ using OpenCareer.Domain.Economy;
 
 namespace OpenCareer.Application.Economy;
 
+public interface ICashGuardedEconomyLedgerStore : IEconomyLedgerStore
+{
+    Task<LedgerPostResult> PostWithMinimumCashAsync(
+        EconomyLedgerTransaction transaction,
+        decimal minimumCashAfter,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed record DeadheadTravelSettlementResult(
     DeadheadTravelSettlement Settlement,
     LedgerPostResult PostResult,
@@ -12,9 +20,9 @@ public sealed record DeadheadTravelSettlementResult(
 }
 
 public sealed class DeadheadTravelSettlementService(
-    IEconomyLedgerStore ledgerStore)
+    ICashGuardedEconomyLedgerStore ledgerStore)
 {
-    private readonly IEconomyLedgerStore _ledgerStore =
+    private readonly ICashGuardedEconomyLedgerStore _ledgerStore =
         ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
 
     public async Task<DeadheadTravelSettlementResult> SettleAsync(
@@ -29,8 +37,9 @@ public sealed class DeadheadTravelSettlementService(
 
         LedgerPostResult postResult =
             await _ledgerStore
-                .PostAsync(
+                .PostWithMinimumCashAsync(
                     settlement.Transaction,
+                    minimumCashAfter: 0m,
                     cancellationToken)
                 .ConfigureAwait(false);
 

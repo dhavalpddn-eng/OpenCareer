@@ -101,6 +101,45 @@ public sealed class DeadheadTravelSettlementTests : IDisposable
     }
 
     [Fact]
+    public async Task PersonalDeadheadCannotOverdrawAuthoritativeCash()
+    {
+        string path =
+            Path.Combine(_directory, "insufficient.db");
+        var store =
+            new SqliteEconomyLedgerStore(path);
+
+        await new CareerEconomyBootstrapService(store)
+            .InitializeAsync(
+                Guid.NewGuid(),
+                openingCash: 100m,
+                createdAt: Now.AddHours(-1));
+
+        var quote =
+            new DeadheadTravelQuote(
+                Guid.NewGuid(),
+                "KRME",
+                "KJFK",
+                DeadheadPayer.Player,
+                Fare: 350m,
+                QuotedAt: Now,
+                ExpiresAt: Now.AddHours(2));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () =>
+                await new DeadheadTravelSettlementService(store)
+                    .SettleAsync(
+                        quote,
+                        Now.AddMinutes(5)));
+
+        Assert.Equal(
+            100m,
+            await store.ReadCashBalanceAsync());
+
+        Assert.Single(
+            await store.ReadRecentAsync(10));
+    }
+
+    [Fact]
     public void ExpiredDeadheadQuoteCannotSettle()
     {
         var quote =
