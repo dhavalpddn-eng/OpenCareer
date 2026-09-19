@@ -17,11 +17,13 @@ public sealed partial class MainWindow : Window
     public MainWindow(
         ShellViewModel viewModel,
         DashboardViewModel dashboard,
+        LogbookViewModel logbook,
         TutorialViewModel tutorial,
         SettingsViewModel settings)
     {
         ViewModel = viewModel;
         Dashboard = dashboard;
+        Logbook = logbook;
         Tutorial = tutorial;
         Settings = settings;
 
@@ -45,6 +47,7 @@ public sealed partial class MainWindow : Window
 
     public ShellViewModel ViewModel { get; }
     public DashboardViewModel Dashboard { get; }
+    public LogbookViewModel Logbook { get; }
     public TutorialViewModel Tutorial { get; }
     public SettingsViewModel Settings { get; }
 
@@ -95,6 +98,9 @@ public sealed partial class MainWindow : Window
                 break;
             case "current-flight":
                 Navigate(typeof(CurrentFlightPage), ViewModel);
+                break;
+            case "logbook":
+                Navigate(typeof(LogbookPage), Logbook);
                 break;
             case "settings":
                 Navigate(

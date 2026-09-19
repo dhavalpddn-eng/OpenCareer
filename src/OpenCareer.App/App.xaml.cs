@@ -5,6 +5,7 @@ using Microsoft.UI.Windowing;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Dashboard;
+using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
@@ -39,6 +40,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<IAppSettingsService, JsonAppSettingsService>();
         services.AddSingleton<IDashboardSnapshotSource, UnavailableDashboardSnapshotSource>();
+        services.AddSingleton<ILogbookSource, UnavailableLogbookSource>();
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
         services.AddSingleton<DiagnosticBundleService>();
@@ -57,6 +59,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<DashboardViewModel>();
+        services.AddSingleton<LogbookViewModel>();
         services.AddSingleton<TutorialViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MainWindow>();
