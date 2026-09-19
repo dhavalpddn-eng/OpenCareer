@@ -90,18 +90,24 @@ Treat Current Flight as the **In-Flight workspace**. It may use compact internal
 - **Mission** — current objectives, passenger/cargo status and mission-specific constraints.
 - **Events** — recent takeoff/landing/go-around/rejected-takeoff/abnormal/recovery events.
 
-Each checklist row includes the controller instruction for that exact action. Do not move controller bindings into a separate reference list.
+Each checklist row includes both the controller and keyboard instruction for that exact action. Do not move input bindings into a separate reference list.
 
-Controller-binding states:
+Input-binding states apply independently to **Controller** and **Keyboard**:
 
-- resolved binding: show the actual button/chord inline,
-- no controller action required: show **No input required**,
+- resolved binding: show the actual button/key/chord inline,
+- no direct input required: show **No input required**,
 - cockpit-only action: show **Cockpit only**,
 - mapping cannot be reliably resolved: show **Binding unavailable** in amber/orange,
 - no configured mapping: show **UNBOUND** in amber/orange,
 - required or safety-critical action with no mapping: show **UNBOUND — REQUIRED** in red.
 
-A missing controller mapping must never render as empty whitespace. Never invent a default binding when the player's actual mapping is unknown. Text/iconography must accompany color for accessibility.
+Example row:
+
+```text
+Parking brake — Controller: LB + X | Keyboard: Ctrl + Num Del
+```
+
+One input device can be bound while the other is unbound. A missing controller or keyboard mapping must never render as empty whitespace. Never invent a default binding when the player's actual mapping is unknown. Text/iconography must accompany color for accessibility.
 
 The header remains persistent across those views:
 
