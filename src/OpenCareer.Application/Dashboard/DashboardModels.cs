@@ -17,6 +17,16 @@ public enum EmploymentStatus
     Terminated
 }
 
+public enum ActiveOperationStage
+{
+    Accepted,
+    PreparationRequired,
+    ReadyToStart,
+    InProgress,
+    PostFlight,
+    AwaitingSettlement
+}
+
 public enum DashboardActionTarget
 {
     None,
@@ -96,6 +106,21 @@ public sealed record DashboardAircraftSummary(
     double? DistanceToPlayerNauticalMiles,
     string? BlockingReason);
 
+public sealed record DashboardActiveOperationSummary(
+    string JobId,
+    string Title,
+    string Origin,
+    string Destination,
+    ActiveOperationStage Stage,
+    DashboardActionTarget NextActionTarget,
+    string NextActionTitle,
+    string Detail,
+    bool ChecklistRequired,
+    bool IsBlocked = false,
+    string? BlockingReason = null,
+    decimal? GrossPay = null,
+    decimal? EstimatedNetPay = null);
+
 public sealed record DashboardRecentActivity(
     DateTimeOffset Timestamp,
     string Category,
@@ -126,6 +151,7 @@ public sealed record DashboardSnapshot(
     DashboardEmploymentSummary? Employment,
     DashboardFinanceSummary? Finances,
     DashboardAircraftSummary? Aircraft,
+    DashboardActiveOperationSummary? ActiveOperation,
     DashboardWorldSummary? World,
     IReadOnlyList<DashboardOpportunity> Opportunities,
     IReadOnlyList<DashboardRecentActivity> RecentActivity,
@@ -134,6 +160,7 @@ public sealed record DashboardSnapshot(
 {
     public static DashboardSnapshot Empty { get; } =
         new(
+            null,
             null,
             null,
             null,
