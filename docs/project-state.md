@@ -1,6 +1,6 @@
 # OpenCareer project state
 
-Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history unless a required decision is missing.**
+Updated: 2026-09-18. **Read this after `AGENTS.md`; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
@@ -33,6 +33,19 @@ Updated: 2026-09-17. **Read this after `AGENTS.md`; do not reread chat history u
 - The five Military / Government checklist foundation items are now green: conflict UI design, simulated combat architecture, air-support mission flow, threat simulation and military operations screen.
 - Green means implemented/tested foundation, not a complete military career loop. Persistence, job-to-operation orchestration, live telemetry evidence, settlement and runtime map binding remain.
 - Detailed compact handoff: `docs/military-operations-foundation.md`.
+
+## Economy / settlement foundation branch
+
+- Active economy branch: `feature/economy-ledger-settlement`, forked from the latest tested military/live-probe branch at `4ca6f8815581dd71a1e54a17da8c5da0cf41a0dd`.
+- Current economy code head before the latest handoff update: `dec4b8349b75ad37503e90f08d1a8cbdbfc3243e`.
+- Latest fully verified work-block checkpoint: `955ce454cec28844db67fbd61acda6d4dbfc3dbb`.
+- Linux run 35454813105 at `955ce454`: **227/227 xUnit + 29/29 SimLab**, 0 warnings/errors.
+- Windows run 35454813132 at `955ce454`: WinUI x64 Release + live-probe build + **227/227 xUnit**, 0 warnings/errors.
+- Later code adds atomic persisted aircraft purchase/listing consumption, finance account summaries and immutable accepted contract economics. A real test execution at `c2c3e56c` reached **233/234**; the sole retry failure was fixed at `dec4b834`. Initial `dec4b834` Actions attempts failed before any workflow steps/logs were created, so rerun CI before merge.
+- New authoritative economy path: deterministic contract pay quote -> immutable accepted economics -> verified completed `JobContract` -> balanced ledger transaction -> SQLite atomic/idempotent post -> Finances UI.
+- Opening cash, aircraft asset purchase, financed loan origination and active-play recurring ownership costs now use the same auditable ledger model. Duplicate and concurrent contract settlement cannot credit money twice.
+- Existing market simulation, route demand, economic cycles, bankruptcy/offline-liability policy, career credit and fictional aircraft-dealer quote systems are retained; this branch adds the missing authoritative money movement layer.
+- Detailed compact handoff: `docs/economy-foundation.md`.
 
 ## Fixed direction
 

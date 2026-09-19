@@ -112,18 +112,26 @@ public class JobMarketTests
     }
 
     [Fact]
-    public void EarlyCareerDurationPolicyPrefersTwoToFourHourFlights()
+    public void CareerBoardPrefersShortSessionsAndDoesNotRequireMarathonJobs()
     {
         var policy = JobMarketPolicy.Default;
         var inside = policy.DurationSuitability(ContractKind.Cargo, 3, 1);
+        var oneHour = policy.DurationSuitability(ContractKind.Cargo, 1, 1);
         var shortFlight = policy.DurationSuitability(ContractKind.Cargo, 0.5, 1);
         var longFlight = policy.DurationSuitability(ContractKind.Cargo, 7, 1);
         var experiencedLongFlight = policy.DurationSuitability(ContractKind.Cargo, 7, 20);
+        var marathonFlight = policy.DurationSuitability(ContractKind.Cargo, 15, 50);
 
+        Assert.Equal(1.35, oneHour);
         Assert.True(inside > shortFlight);
-        Assert.True(inside > longFlight);
-        Assert.Equal(1, experiencedLongFlight);
+        Assert.Equal(0, longFlight);
+        Assert.Equal(0, experiencedLongFlight);
+        Assert.Equal(0, marathonFlight);
+        Assert.False(CareerSessionPolicy.FitsJobDuration(TimeSpan.FromHours(15)));
+
+        // Long ferry/reposition work may still exist as optional special work.
         Assert.True(policy.DurationSuitability(ContractKind.Ferry, 7, 1) >= 0.60);
+        Assert.True(policy.DurationSuitability(ContractKind.Ferry, 15, 50) > 0);
     }
 
     [Fact]

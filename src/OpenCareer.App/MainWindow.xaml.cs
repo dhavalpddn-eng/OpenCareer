@@ -10,13 +10,16 @@ public sealed partial class MainWindow : Window
 {
     private readonly DispatcherQueueTimer _statusTimer;
     private readonly MilitaryOperationsViewModel _militaryOperationsViewModel;
+    private readonly FinancesViewModel _financesViewModel;
 
     public MainWindow(
         ShellViewModel viewModel,
-        MilitaryOperationsViewModel militaryOperationsViewModel)
+        MilitaryOperationsViewModel militaryOperationsViewModel,
+        FinancesViewModel financesViewModel)
     {
         ViewModel = viewModel;
         _militaryOperationsViewModel = militaryOperationsViewModel;
+        _financesViewModel = financesViewModel;
         InitializeComponent();
 
         NavView.SelectedItem = DashboardItem;
@@ -52,6 +55,9 @@ public sealed partial class MainWindow : Window
                 break;
             case "current-flight":
                 Navigate(typeof(CurrentFlightPage), ViewModel);
+                break;
+            case "finances":
+                Navigate(typeof(FinancesPage), _financesViewModel);
                 break;
             case "military":
                 Navigate(typeof(MilitaryGovernmentPage), _militaryOperationsViewModel);
