@@ -14,6 +14,17 @@ public sealed class SqliteEconomyLedgerStoreTests : IDisposable
             Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public void PersistedLedgerAccountCodesRemainStable()
+    {
+        Assert.Equal(0, (int)LedgerAccountCode.Cash);
+        Assert.Equal(8, (int)LedgerAccountCode.InsuranceExpense);
+        Assert.Equal(9, (int)LedgerAccountCode.InterestExpense);
+        Assert.Equal(10, (int)LedgerAccountCode.AircraftAsset);
+        Assert.Equal(11, (int)LedgerAccountCode.LoanPayable);
+        Assert.Equal(12, (int)LedgerAccountCode.StorageExpense);
+    }
+
+    [Fact]
     public async Task SettlementPostsExactlyOnceAndSurvivesReopen()
     {
         string databasePath =
