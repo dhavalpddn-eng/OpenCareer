@@ -64,6 +64,7 @@ public sealed class ComprehensiveCareerStressTests
         double? WidebodyHour,
         int MilitaryMissions,
         int HighThreatMissions,
+        double HighThreatHours,
         int MilitaryEligibilityDenials,
         int CivilianJobsOnMilitaryPath,
         int BeginnerPunitiveEvents,
@@ -298,6 +299,7 @@ public sealed class ComprehensiveCareerStressTests
 
         int militaryMissions = 0;
         int highThreatMissions = 0;
+        double highThreatHours = 0;
         int militaryEligibilityDenials = 0;
         int civilianJobsOnMilitaryPath = 0;
 
@@ -446,16 +448,23 @@ public sealed class ComprehensiveCareerStressTests
             while (recentBeginnerDifficulty.Count > 6)
                 recentBeginnerDifficulty.Dequeue();
 
+            bool learningPhase =
+                completedFlights < 25
+                || hours < 50;
+
             if (beginner.Outcome
                 == BeginnerFlightOutcome.RetryRecommended)
             {
-                beginnerRetries++;
+                if (learningPhase)
+                    beginnerRetries++;
+
                 failed = false;
             }
 
-            if (beginner.CareerFailure
-                || beginner.ReputationPenaltyAllowed
-                || beginner.EconomicPenaltyAllowed)
+            if (learningPhase
+                && (beginner.CareerFailure
+                    || beginner.ReputationPenaltyAllowed
+                    || beginner.EconomicPenaltyAllowed))
             {
                 beginnerPunitive++;
             }
@@ -476,8 +485,11 @@ public sealed class ComprehensiveCareerStressTests
                         serviceTrust);
 
                 militaryMissions++;
-                highThreatMissions +=
-                    military.HighThreat ? 1 : 0;
+                if (military.HighThreat)
+                {
+                    highThreatMissions++;
+                    highThreatHours += flightHours;
+                }
 
                 if (!military.Eligible)
                     militaryEligibilityDenials++;
@@ -492,14 +504,16 @@ public sealed class ComprehensiveCareerStressTests
                         serviceTrust =
                             Math.Min(
                                 1.0,
-                                serviceTrust + .004);
+                                serviceTrust
+                                + .0015 * flightHours);
                     }
                     else if (military.SafeAbort)
                     {
                         serviceTrust =
                             Math.Max(
                                 0,
-                                serviceTrust - .002);
+                                serviceTrust
+                                - .0005 * flightHours);
                     }
                     else
                     {
@@ -891,10 +905,10 @@ public sealed class ComprehensiveCareerStressTests
                 issues.Add($"military career earnings were only {hourly:C}/h.");
 
             if (path == CareerPath.MilitaryWarzoneChaser
-                && highThreatMissions < 35)
+                && highThreatHours < 250)
             {
                 issues.Add(
-                    $"warzone chaser only received {highThreatMissions} high-threat missions.");
+                    $"warzone chaser only accumulated {highThreatHours:0} high-threat flight hours.");
             }
         }
 
@@ -974,6 +988,7 @@ public sealed class ComprehensiveCareerStressTests
             widebodyHour,
             militaryMissions,
             highThreatMissions,
+            highThreatHours,
             militaryEligibilityDenials,
             civilianJobsOnMilitaryPath,
             beginnerPunitive,
@@ -1216,6 +1231,8 @@ public sealed class ComprehensiveCareerStressTests
                     plan,
                     authorization,
                     MobilityAircraft);
+
+            fighterMission = false;
         }
 
         double threat =
