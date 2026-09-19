@@ -129,11 +129,27 @@ public sealed class FlightSessionRuntime
                 return false;
 
             bool continuityPlausible =
-                current.Status
-                    != FlightSessionStatus.Suspended
-                || _continuityPolicy.IsPlausible(
+                _continuityPolicy.IsPlausible(
                     current,
                     telemetry);
+
+            if (current.Status
+                    != FlightSessionStatus.Suspended
+                && current.ContinuityAnchor is not null
+                && !continuityPlausible)
+            {
+                await _persistence
+                    .AdvanceAsync(
+                        new FlightSessionAdvance(
+                            new FlightStateEvidence(
+                                telemetry.Timestamp,
+                                Connected: false,
+                                ContinuityPlausible: false)),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                return true;
+            }
 
             FlightStateEvidence evidence =
                 _evidenceProcessor.Process(
