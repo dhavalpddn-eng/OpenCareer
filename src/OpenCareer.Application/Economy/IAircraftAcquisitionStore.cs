@@ -16,6 +16,10 @@ public interface IAircraftAcquisitionStore
     Task<AircraftLoanAgreement?> ReadAircraftLoanAsync(
         Guid loanId,
         CancellationToken cancellationToken = default);
+
+    Task<AircraftLoanRepaymentState?> ReadAircraftLoanStateAsync(
+        Guid loanId,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record AircraftAcquisitionResult(

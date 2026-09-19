@@ -52,6 +52,88 @@ public sealed record AircraftLoanAgreement(
     }
 }
 
+public sealed record AircraftLoanRepaymentState(
+    Guid LoanId,
+    string OwnershipId,
+    decimal RemainingPrincipal,
+    long Version,
+    DateTimeOffset UpdatedAt)
+{
+    public static AircraftLoanRepaymentState Start(
+        AircraftLoanAgreement agreement)
+    {
+        ArgumentNullException.ThrowIfNull(agreement);
+        agreement.Validate();
+
+        return new AircraftLoanRepaymentState(
+            agreement.LoanId,
+            agreement.OwnershipId,
+            agreement.OriginalPrincipal,
+            Version: 0,
+            agreement.OriginatedAt);
+    }
+
+    public AircraftLoanRepaymentState ApplyPrincipal(
+        decimal principalPaid,
+        DateTimeOffset updatedAt)
+    {
+        Validate();
+
+        if (principalPaid < 0m
+            || decimal.Round(
+                principalPaid,
+                2,
+                MidpointRounding.AwayFromZero)
+                != principalPaid)
+        {
+            throw new ArgumentOutOfRangeException(nameof(principalPaid));
+        }
+
+        if (principalPaid > RemainingPrincipal)
+        {
+            throw new InvalidOperationException(
+                "Loan principal payment exceeds the remaining balance.");
+        }
+
+        if (updatedAt < UpdatedAt)
+        {
+            throw new ArgumentException(
+                "Loan repayment state cannot move backward in time.",
+                nameof(updatedAt));
+        }
+
+        if (principalPaid == 0m)
+            return this;
+
+        return this with
+        {
+            RemainingPrincipal =
+                RemainingPrincipal - principalPaid,
+            Version = checked(Version + 1),
+            UpdatedAt = updatedAt
+        };
+    }
+
+    public void Validate()
+    {
+        if (LoanId == Guid.Empty)
+            throw new ArgumentException("Loan ID is required.", nameof(LoanId));
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(OwnershipId);
+
+        if (RemainingPrincipal < 0m
+            || decimal.Round(
+                RemainingPrincipal,
+                2,
+                MidpointRounding.AwayFromZero)
+                != RemainingPrincipal
+            || Version < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(AircraftLoanRepaymentState));
+        }
+    }
+}
+
 public sealed record AircraftOwnershipRecord(
     string OwnershipId,
     string DealerId,
