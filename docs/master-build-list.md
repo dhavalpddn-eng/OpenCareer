@@ -23,6 +23,37 @@ The `MBL-xx` identifier is stable and does not change when this file is reordere
 
 ## Remaining — lowest to highest effort
 
+### MBL-02 — Reusable WinUI design system — CODE COMPLETE / VERIFICATION PENDING
+**Estimated remaining effort: ~0.25–0.5 developer day**
+
+The reusable code layer is implemented: centralized Jet Age tokens plus shared typography, paper/metal panels, buttons, form controls, toggles, tabs, lists, ledger/table rows and semantic status styles. Dashboard, Current Flight, Settings, placeholders, shell surfaces and the tutorial overlay use the shared resources. Automated design-contract tests lock the vivid-ivory palette, contrast and required component keys.
+
+Remaining before removal: successful Windows XAML build verification and local interactive/visual/accessibility acceptance. Current GitHub Actions attempts are failing before runner steps begin, so they are not reporting a code failure.
+
+### MBL-23 — Settings / diagnostics system — CODE COMPLETE / VERIFICATION PENDING
+**Estimated remaining effort: ~0.25–0.5 developer day**
+
+Implemented:
+
+- persistent versioned application preferences,
+- Aviation/Metric unit selection with immediate live telemetry reformatting,
+- input-hint ordering preference without guessed bindings,
+- persisted **Show checklist every flight** preference,
+- persisted automatic tutorial-offer preference,
+- persisted reduced-motion preference,
+- live MSFS/SimConnect/telemetry diagnostics,
+- local rotating application log,
+- diagnostic ZIP export with exact coordinates intentionally excluded,
+- current local-data ZIP backup,
+- local data/log/backup/export folder actions,
+- offline-first optional-online-services permission gate,
+- tutorial replay/preview controls,
+- safe preference reset that does not touch career state.
+
+Dependency boundaries remain explicit: MBL-05 owns real controller/keyboard binding discovery, and MBL-07 owns authoritative SQLite FlightSession/save recovery. The Settings surface already reports those capabilities as unavailable rather than pretending they exist.
+
+Remaining before removal: Windows build verification and local interactive verification of persistence, folders, backup/export and accessibility behavior. Current GitHub Actions attempts are failing before runner steps begin, so they are not reporting a code failure.
+
 ### MBL-03 — Full tutorial engine — IN PROGRESS
 **Estimated remaining direct effort: ~0.5–1.5 developer days**
 
@@ -34,18 +65,6 @@ Remaining before removal:
 - automatic first-job trigger when Jobs exists,
 - automatic specialized mission-family trigger when those mission families exist,
 - mission/checklist evidence integration.
-
-### MBL-02 — Reusable WinUI design system — IN PROGRESS
-**Estimated remaining effort: ~0.5–2 developer days**
-
-The reusable code layer is implemented: centralized Jet Age tokens plus shared typography, paper/metal panels, buttons, form controls, toggles, tabs, lists, ledger/table rows and semantic status styles. Dashboard, Current Flight, Settings, placeholders, shell surfaces and the tutorial overlay use the shared resources. Automated design-contract tests lock the vivid-ivory palette, contrast and required component keys.
-
-Remaining before removal: successful Windows XAML build verification and local interactive/visual/accessibility acceptance. Current GitHub Actions attempts are failing before runner steps begin, so they are not reporting a code failure.
-
-### MBL-23 — Settings / diagnostics system
-**Estimated effort: ~2–4 developer days**
-
-Full simulator health, inputs, tutorials, units, accessibility, backup/recovery, logs and optional-service controls.
 
 ### MBL-01 — Production Home / Dashboard
 **Estimated effort: ~2–4 developer days**

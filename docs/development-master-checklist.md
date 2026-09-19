@@ -533,7 +533,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement shared versioned tutorial catalog + progress store with app intro, first-job, banner-tow and carrier-operation definitions.
 - [ ] Require a tutorial definition before a specialized mission family is considered production-ready.
 - [ ] Bind banner-tow and carrier takeoff/landing tutorials automatically to first mission use and live mission/checklist evidence when those mission families are built.
-- [ ] Implement per-flight checklist phases and **Show checklist every flight** setting.
+- [ ] Implement per-flight checklist phases; the persistent **Show checklist every flight** setting is implemented and ready for MBL-04 consumption.
 - [ ] Implement controller/keyboard binding resolution/profile source without guessed bindings.
 - [ ] Render missing controller/keyboard mappings as visible amber/orange **UNBOUND** and required/critical missing mappings as red **UNBOUND — REQUIRED**.
 - [ ] Implement Dispatch screen against real dispatch services.
@@ -548,7 +548,17 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement Military / Government screen.
 - [ ] Implement Logbook screen.
 - [ ] Implement Career screen.
-- [ ] Implement production Settings screen.
+- [x] Implement production Settings screen.
+- [x] Persist versioned app preferences independently from career state.
+- [x] Implement Aviation/Metric unit selection and reformat existing telemetry without waiting for a new sample.
+- [x] Implement live simulator/SimConnect/telemetry diagnostics.
+- [x] Implement local application file logging.
+- [x] Implement diagnostic ZIP export with coordinates excluded.
+- [x] Implement current local-data ZIP backup and folder access.
+- [x] Implement reduced-motion and offline optional-service permission preferences.
+- [x] Keep real binding discovery explicitly owned by MBL-05.
+- [x] Keep authoritative SQLite FlightSession/save recovery explicitly owned by MBL-07.
+- [ ] Verify Settings persistence, backup/export and diagnostics interactively on Windows.
 - [ ] Verify keyboard navigation/text scaling.
 - [ ] Verify adaptive layouts.
 - [ ] Verify live-flight UI refresh cost beside MSFS.
