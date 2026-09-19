@@ -315,6 +315,195 @@ public sealed class ActivePlayRecurringCostTests : IDisposable
     }
 
     [Fact]
+    public void PersistedEngineCrossesCycleBoundaryUsingNextCostCycle()
+    {
+        var schedule = new[]
+        {
+            RepresentativeFinancedCosts,
+            RepresentativeFinancedCosts with
+            {
+                LoanPrincipal = 250m,
+                LoanInterest = 205.79m
+            }
+        };
+        var state = new ActivePlayBillingState(
+            "owned-cross",
+            CycleIndex: 0,
+            CycleProgress: TimeSpan.FromHours(29),
+            Version: 7,
+            UpdatedAt: Now.AddHours(-1));
+        FlightTimeLedger threeHours =
+            FlightTimeLedger.Empty.Add(
+                OperationalInterval(
+                    TimeSpan.FromHours(3),
+                    simulationRate: 1));
+
+        PersistedActivePlayRecurringCostSettlementSummary settlement =
+            ActivePlayRecurringCostSettlementEngine.CreatePersisted(
+                Guid.NewGuid(),
+                "owned-cross",
+                "cross-boundary-flight",
+                state,
+                threeHours,
+                schedule,
+                Now);
+
+        Assert.Equal(1, settlement.Accrual.CompletedCycles);
+        Assert.Equal(1, settlement.StateAfter.CycleIndex);
+        Assert.Equal(TimeSpan.FromHours(2), settlement.StateAfter.CycleProgress);
+        Assert.Equal(8, settlement.StateAfter.Version);
+
+        decimal expected =
+            ActivePlayRecurringCostPolicy.Default.Assess(
+                TimeSpan.FromHours(29),
+                TimeSpan.FromHours(1),
+                schedule[0]).Total
+            + ActivePlayRecurringCostPolicy.Default.Assess(
+                TimeSpan.Zero,
+                TimeSpan.FromHours(2),
+                schedule[1]).Total;
+        Assert.Equal(expected, settlement.TotalCost);
+    }
+
+    [Fact]
+    public async Task BillingProgressAndLedgerSurviveRestartWithoutResettingShortFlights()
+    {
+        string databasePath =
+            Path.Combine(_directory, "persistent-career.db");
+        var schedule = Enumerable
+            .Repeat(RepresentativeFinancedCosts, 4)
+            .ToArray();
+
+        var firstStore = new SqliteEconomyLedgerStore(databasePath);
+        await firstStore.PostAsync(
+            new EconomyLedgerTransaction(
+                Guid.NewGuid(),
+                "opening-balance-persisted-active-play",
+                Now.AddMinutes(-1),
+                "Opening balance",
+                "Test",
+                "opening-persisted",
+                [
+                    LedgerPosting.DebitTo(LedgerAccountCode.Cash, 2_000m, "Opening cash"),
+                    LedgerPosting.CreditTo(LedgerAccountCode.ContractRevenue, 2_000m, "Opening fixture")
+                ]));
+
+        ActivePlayBillingState startingState =
+            await firstStore.ReadActivePlayBillingStateAsync("owned-persisted");
+        PersistedActivePlayRecurringCostSettlementSummary firstSettlement =
+            ActivePlayRecurringCostSettlementEngine.CreatePersisted(
+                Guid.NewGuid(),
+                "owned-persisted",
+                "one-hour-flight",
+                startingState,
+                FlightTimeLedger.Empty.Add(
+                    OperationalInterval(TimeSpan.FromHours(1), 1)),
+                schedule,
+                Now);
+
+        Assert.Equal(
+            LedgerPostResult.Posted,
+            await firstStore.PostActivePlayRecurringCostAsync(firstSettlement));
+        Assert.Equal(
+            LedgerPostResult.AlreadyPosted,
+            await firstStore.PostActivePlayRecurringCostAsync(firstSettlement));
+
+        var reopenedStore = new SqliteEconomyLedgerStore(databasePath);
+        ActivePlayBillingState reopenedState =
+            await reopenedStore.ReadActivePlayBillingStateAsync("owned-persisted");
+        Assert.Equal(TimeSpan.FromHours(1), reopenedState.CycleProgress);
+        Assert.Equal(1, reopenedState.Version);
+
+        var service = new ActivePlayRecurringCostService(reopenedStore);
+        PersistedActivePlayRecurringCostSettlementResult second =
+            await service.SettlePersistedAsync(
+                Guid.NewGuid(),
+                "owned-persisted",
+                "two-hour-flight",
+                FlightTimeLedger.Empty.Add(
+                    OperationalInterval(TimeSpan.FromHours(2), 1)),
+                schedule,
+                Now.AddHours(2));
+
+        Assert.True(second.WasNewlyPosted);
+        Assert.Equal(TimeSpan.FromHours(3), second.CurrentBillingState.CycleProgress);
+        Assert.Equal(2, second.CurrentBillingState.Version);
+
+        decimal expectedThreeHourCost =
+            ActivePlayRecurringCostPolicy.Default.Assess(
+                TimeSpan.Zero,
+                TimeSpan.FromHours(3),
+                RepresentativeFinancedCosts).Total;
+        Assert.Equal(
+            2_000m - expectedThreeHourCost,
+            second.CashBalanceAfter);
+
+        PersistedActivePlayRecurringCostSettlementResult retry =
+            await service.SettlePersistedAsync(
+                Guid.NewGuid(),
+                "owned-persisted",
+                "two-hour-flight",
+                FlightTimeLedger.Empty.Add(
+                    OperationalInterval(TimeSpan.FromHours(2), 1)),
+                schedule,
+                Now.AddHours(2));
+
+        Assert.False(retry.WasNewlyPosted);
+        Assert.Null(retry.Settlement);
+        Assert.Equal(second.Transaction.TransactionId, retry.Transaction.TransactionId);
+        Assert.Equal(second.Transaction.CashChange, retry.Transaction.CashChange);
+        Assert.Equal(second.CashBalanceAfter, retry.CashBalanceAfter);
+        Assert.Equal(second.CurrentBillingState, retry.CurrentBillingState);
+    }
+
+    [Fact]
+    public async Task StaleBillingStateCannotDoubleChargeOrOverwriteProgress()
+    {
+        string databasePath =
+            Path.Combine(_directory, "stale-state.db");
+        var store = new SqliteEconomyLedgerStore(databasePath);
+        var schedule = Enumerable
+            .Repeat(RepresentativeFinancedCosts, 2)
+            .ToArray();
+        ActivePlayBillingState initial =
+            await store.ReadActivePlayBillingStateAsync("owned-stale");
+        FlightTimeLedger oneHour =
+            FlightTimeLedger.Empty.Add(
+                OperationalInterval(TimeSpan.FromHours(1), 1));
+
+        PersistedActivePlayRecurringCostSettlementSummary first =
+            ActivePlayRecurringCostSettlementEngine.CreatePersisted(
+                Guid.NewGuid(),
+                "owned-stale",
+                "flight-a",
+                initial,
+                oneHour,
+                schedule,
+                Now);
+        PersistedActivePlayRecurringCostSettlementSummary staleSecond =
+            ActivePlayRecurringCostSettlementEngine.CreatePersisted(
+                Guid.NewGuid(),
+                "owned-stale",
+                "flight-b",
+                initial,
+                oneHour,
+                schedule,
+                Now.AddMinutes(5));
+
+        Assert.Equal(
+            LedgerPostResult.Posted,
+            await store.PostActivePlayRecurringCostAsync(first));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await store.PostActivePlayRecurringCostAsync(staleSecond));
+
+        ActivePlayBillingState currentState =
+            await store.ReadActivePlayBillingStateAsync("owned-stale");
+        Assert.Equal(TimeSpan.FromHours(1), currentState.CycleProgress);
+        Assert.Equal(1, currentState.Version);
+        Assert.Single(await store.ReadRecentAsync(10));
+    }
+
+    [Fact]
     public void PrincipalReducesLoanPayableAndFixedCostsUseExpenseAccounts()
     {
         FlightTimeLedger fifteenHours =

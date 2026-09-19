@@ -24,13 +24,17 @@ public sealed record ActivePlayRecurringCostSettlementResult(
 }
 
 public sealed record PersistedActivePlayRecurringCostSettlementResult(
-    PersistedActivePlayRecurringCostSettlementSummary Settlement,
+    PersistedActivePlayRecurringCostSettlementSummary? Settlement,
+    EconomyLedgerTransaction Transaction,
     LedgerPostResult PostResult,
     decimal CashBalanceAfter,
     ActivePlayBillingState CurrentBillingState)
 {
     public bool WasNewlyPosted =>
         PostResult == LedgerPostResult.Posted;
+
+    public decimal TotalCost =>
+        -Transaction.CashChange;
 }
 
 public sealed class ActivePlayRecurringCostService(
@@ -86,9 +90,41 @@ public sealed class ActivePlayRecurringCostService(
         FlightTimeLedger flightTime,
         IReadOnlyList<RecurringOwnershipCostCycle> costSchedule,
         DateTimeOffset settledAt,
-        ActivePlayRecurringCostPolicy? policy = null,
         CancellationToken cancellationToken = default)
     {
+        string idempotencyKey =
+            ActivePlayRecurringCostSettlementEngine.BuildPersistedIdempotencyKey(
+                ownershipId,
+                activityReferenceId);
+
+        EconomyLedgerTransaction? existing =
+            await _ledgerStore
+                .FindByIdempotencyKeyAsync(
+                    idempotencyKey,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (existing is not null)
+        {
+            decimal existingBalance =
+                await _ledgerStore
+                    .ReadCashBalanceAsync(cancellationToken)
+                    .ConfigureAwait(false);
+            ActivePlayBillingState existingState =
+                await _ledgerStore
+                    .ReadActivePlayBillingStateAsync(
+                        ownershipId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            return new PersistedActivePlayRecurringCostSettlementResult(
+                Settlement: null,
+                Transaction: existing,
+                PostResult: LedgerPostResult.AlreadyPosted,
+                CashBalanceAfter: existingBalance,
+                CurrentBillingState: existingState);
+        }
+
         ActivePlayBillingState stateBefore =
             await _ledgerStore
                 .ReadActivePlayBillingStateAsync(
@@ -104,8 +140,7 @@ public sealed class ActivePlayRecurringCostService(
                 stateBefore,
                 flightTime,
                 costSchedule,
-                settledAt,
-                policy);
+                settledAt);
 
         LedgerPostResult postResult =
             await _ledgerStore
@@ -127,9 +162,10 @@ public sealed class ActivePlayRecurringCostService(
                 .ConfigureAwait(false);
 
         return new PersistedActivePlayRecurringCostSettlementResult(
-            settlement,
-            postResult,
-            balance,
-            currentState);
+            Settlement: settlement,
+            Transaction: settlement.Transaction,
+            PostResult: postResult,
+            CashBalanceAfter: balance,
+            CurrentBillingState: currentState);
     }
 }
