@@ -18,6 +18,13 @@ public sealed class ActivePlayRecurringCostTests : IDisposable
             Insurance: 420m,
             Storage: 250m);
 
+    private static RecurringOwnershipCostCycle RepresentativeFixedCosts =>
+        RepresentativeFinancedCosts with
+        {
+            LoanPrincipal = 0m,
+            LoanInterest = 0m
+        };
+
     private readonly string _directory =
         Path.Combine(
             Path.GetTempPath(),
@@ -371,7 +378,7 @@ public sealed class ActivePlayRecurringCostTests : IDisposable
         string databasePath =
             Path.Combine(_directory, "persistent-career.db");
         var schedule = Enumerable
-            .Repeat(RepresentativeFinancedCosts, 4)
+            .Repeat(RepresentativeFixedCosts, 4)
             .ToArray();
 
         var firstStore = new SqliteEconomyLedgerStore(databasePath);
@@ -433,7 +440,7 @@ public sealed class ActivePlayRecurringCostTests : IDisposable
             ActivePlayRecurringCostPolicy.Default.Assess(
                 TimeSpan.Zero,
                 TimeSpan.FromHours(3),
-                RepresentativeFinancedCosts).Total;
+                RepresentativeFixedCosts).Total;
         Assert.Equal(
             2_000m - expectedThreeHourCost,
             second.CashBalanceAfter);
@@ -463,7 +470,7 @@ public sealed class ActivePlayRecurringCostTests : IDisposable
             Path.Combine(_directory, "stale-state.db");
         var store = new SqliteEconomyLedgerStore(databasePath);
         var schedule = Enumerable
-            .Repeat(RepresentativeFinancedCosts, 2)
+            .Repeat(RepresentativeFixedCosts, 2)
             .ToArray();
         ActivePlayBillingState initial =
             await store.ReadActivePlayBillingStateAsync("owned-stale");
