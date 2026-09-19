@@ -25,4 +25,10 @@ public sealed partial class SettingsPage : Page
         if (_tutorial is not null)
             await _tutorial.RestartIntroAsync();
     }
+
+    private async void StartFirstJob_Click(object sender, RoutedEventArgs e)
+    {
+        if (_tutorial is not null)
+            await _tutorial.StartFirstJobAsync();
+    }
 }
