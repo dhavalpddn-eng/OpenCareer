@@ -6,7 +6,7 @@ namespace OpenCareer.Tests;
 
 public sealed class TwentyCareerBalanceReviewTests
 {
-    private enum ReviewRole
+    public enum ReviewRole
     {
         Employee,
         Buyer,
@@ -14,7 +14,7 @@ public sealed class TwentyCareerBalanceReviewTests
         Military
     }
 
-    private enum ReviewOutcome
+    public enum ReviewOutcome
     {
         Balanced,
         BlockedAsIntended,
@@ -34,7 +34,7 @@ public sealed class TwentyCareerBalanceReviewTests
         decimal DepositRate,
         int TermCycles);
 
-    private sealed record Scenario(
+    public sealed record Scenario(
         string Name,
         double Hours,
         int Jobs,
