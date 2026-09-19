@@ -17,7 +17,7 @@ Rules:
 
 1. **Production Home / Dashboard** — full career home using real application data and the canonical OpenCareer visual language.
 2. **Reusable WinUI design system** — production tokens/components for the retro-modern shell, vivid paper panels, controls, lists, status states, typography and accessibility.
-3. **Full tutorial engine — IN PROGRESS** — first-run app tour, first-job walkthrough, persistence, replay, contextual/tutorial overlays and the shared engine used later by mission-family tutorials.
+3. **Full tutorial engine — IN PROGRESS** — core engine is implemented and CI-green: versioned first-run app tour, persistent resume/skip/completion, shell overlay/navigation, Settings replay, first-job walkthrough, and banner/carrier previews. Keep this item until local interactive/visual acceptance plus automatic first-job/mission-family trigger integration are verified.
 4. **Live per-flight checklist** — phase-aware preflight through shutdown checklist with trustworthy live auto-verification.
 5. **Controller + keyboard binding system** — per-step verified bindings, UNBOUND states and aircraft/device-sensitive mapping.
 6. **FlightEvidenceProcessor** — normalized telemetry to stable taxi/takeoff/airborne/approach/landing/go-around/parking evidence.
