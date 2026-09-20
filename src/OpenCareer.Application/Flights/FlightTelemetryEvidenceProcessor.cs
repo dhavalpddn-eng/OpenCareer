@@ -14,6 +14,7 @@ public sealed class FlightTelemetryEvidenceProcessor
     private int _groundSampleCount;
     private bool _airborneConfirmedPreviously;
     private bool _takeoffCandidateActive;
+    private bool _landingEpisodeActive;
 
     public FlightTelemetryEvidenceProcessor(
         FlightEvidenceProcessorOptions? options = null)
@@ -155,6 +156,21 @@ public sealed class FlightTelemetryEvidenceProcessor
             && _groundSampleCount
                 == _options.GroundConfirmationSamples;
 
+        if (touchdownConfirmed)
+            _landingEpisodeActive = true;
+
+        bool landingRolloutConfirmed =
+            operationalSample
+            && _landingEpisodeActive
+            && telemetry.OnGround
+            && _groundSampleCount
+                >= _options.GroundConfirmationSamples
+            && telemetry.GroundSpeedKnots
+                <= _options.LandingRolloutMaximumGroundSpeedKnots;
+
+        if (landingRolloutConfirmed)
+            _landingEpisodeActive = false;
+
         bool approachConfirmed =
             operationalSample
             && !telemetry.OnGround
@@ -204,6 +220,8 @@ public sealed class FlightTelemetryEvidenceProcessor
                     approachConfirmed,
                 TouchdownConfirmed:
                     touchdownConfirmed,
+                LandingRolloutConfirmed:
+                    landingRolloutConfirmed,
                 ParkingConfirmed:
                     parkingConfirmed,
                 OperationCompleteConfirmed:
@@ -238,6 +256,9 @@ public sealed class FlightTelemetryEvidenceProcessor
 
         _takeoffCandidateActive =
             state == FlightTrackingState.TakeoffRoll;
+
+        _landingEpisodeActive =
+            state == FlightTrackingState.LandingEpisode;
     }
 
     public void Reset()
@@ -248,6 +269,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         _groundSampleCount = 0;
         _airborneConfirmedPreviously = false;
         _takeoffCandidateActive = false;
+        _landingEpisodeActive = false;
     }
 
     private void ResetTransientEvidence()
