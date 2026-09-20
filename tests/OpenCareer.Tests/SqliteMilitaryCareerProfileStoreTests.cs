@@ -160,6 +160,39 @@ public sealed class SqliteMilitaryCareerProfileStoreTests
     }
 
     [Fact]
+    public async Task DefaultSavedAtIsRejectedWithoutCreatingProfile()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            var options =
+                new OpenCareerDatabaseOptions(
+                    Path.Combine(directory, "opencareer.db"));
+            var store = CreateStore(options);
+
+            var career = new MilitaryCareerState(
+                MilitaryAffiliation.Reserve,
+                MilitaryQualification.MilitaryFlight,
+                Trust: 0.25,
+                SuccessfulOperations: 0,
+                FailedOperations: 0);
+
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => store.SaveAsync(
+                    career,
+                    expectedRevision: null,
+                    savedAt: default));
+
+            Assert.Null(await store.LoadAsync());
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
     public async Task EmptyDatabaseReturnsNoProfile()
     {
         string directory = CreateTempDirectory();
