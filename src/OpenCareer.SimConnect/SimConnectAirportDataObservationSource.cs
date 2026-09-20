@@ -1,6 +1,7 @@
 using System.Globalization;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Airports;
+using OpenCareer.SimConnect.Native;
 
 namespace OpenCareer.SimConnect;
 
