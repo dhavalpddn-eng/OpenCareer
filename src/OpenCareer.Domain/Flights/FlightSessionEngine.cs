@@ -53,6 +53,24 @@ public static class FlightSessionEngine
                 update.Evidence.Timestamp,
                 update.ShutdownConfirmed);
 
+        FlightSessionStatistics statistics =
+            current.EffectiveStatistics;
+
+        if (update.Observation is not null)
+        {
+            statistics =
+                statistics.Observe(
+                    update.Observation,
+                    current.ContinuityAnchor);
+        }
+
+        IReadOnlyList<FlightSessionLandingEpisode> landingEpisodes =
+            UpdateLandingEpisodes(
+                current.EffectiveLandingEpisodes,
+                previousTracking,
+                nextTracking,
+                update.Evidence.Timestamp);
+
         if (update.ShutdownConfirmed
             && nextTracking.State == FlightTrackingState.Parked)
         {
@@ -75,7 +93,9 @@ public static class FlightSessionEngine
             Milestones = milestones,
             ContinuityAnchor =
                 update.ContinuityAnchor
-                ?? current.ContinuityAnchor
+                ?? current.ContinuityAnchor,
+            Statistics = statistics,
+            LandingEpisodes = landingEpisodes
         };
     }
 
@@ -325,6 +345,97 @@ public static class FlightSessionEngine
         }
 
         return milestones;
+    }
+
+    private static IReadOnlyList<FlightSessionLandingEpisode> UpdateLandingEpisodes(
+        IReadOnlyList<FlightSessionLandingEpisode> current,
+        FlightTrackingSnapshot previous,
+        FlightTrackingSnapshot next,
+        DateTimeOffset timestamp)
+    {
+        var episodes =
+            current.ToList();
+
+        if (next.LandingEpisodeCount
+            > previous.LandingEpisodeCount)
+        {
+            for (int episode =
+                     previous.LandingEpisodeCount + 1;
+                 episode <= next.LandingEpisodeCount;
+                 episode++)
+            {
+                episodes.Add(
+                    new FlightSessionLandingEpisode(
+                        episode,
+                        timestamp,
+                        FlightSessionLandingKind.Unknown,
+                        BounceCount: 0));
+            }
+        }
+
+        int bounceDelta =
+            next.BounceCount
+            - previous.BounceCount;
+
+        if (bounceDelta > 0
+            && episodes.Count > 0)
+        {
+            FlightSessionLandingEpisode last =
+                episodes[^1];
+
+            episodes[^1] =
+                last with
+                {
+                    BounceCount =
+                        last.BounceCount + bounceDelta
+                };
+        }
+
+        if (next.TouchAndGoCount
+            > previous.TouchAndGoCount
+            && episodes.Count > 0)
+        {
+            FlightSessionLandingEpisode last =
+                episodes[^1];
+
+            episodes[^1] =
+                last with
+                {
+                    Kind =
+                        FlightSessionLandingKind.TouchAndGo,
+                    CompletedAt =
+                        last.CompletedAt
+                        ?? timestamp
+                };
+        }
+
+        if (Entered(
+                previous,
+                next,
+                FlightTrackingState.TaxiIn)
+            && episodes.Count > 0)
+        {
+            FlightSessionLandingEpisode last =
+                episodes[^1];
+
+            episodes[^1] =
+                last with
+                {
+                    Kind =
+                        FlightSessionLandingKind.FullStop,
+                    CompletedAt =
+                        last.CompletedAt
+                        ?? timestamp
+                };
+        }
+
+        foreach (FlightSessionLandingEpisode episode
+                 in episodes)
+        {
+            episode.Validate();
+        }
+
+        return episodes;
     }
 
     private static bool Entered(
