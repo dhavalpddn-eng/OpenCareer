@@ -12,6 +12,7 @@ public sealed partial class MilitaryGovernmentPage : Page
 {
     private readonly DispatcherQueueTimer _refreshTimer;
     private MilitaryGovernmentViewModel? _viewModel;
+    private bool _synchronizingCompletedOperationSelection;
 
     public MilitaryGovernmentPage()
     {
@@ -54,6 +55,7 @@ public sealed partial class MilitaryGovernmentPage : Page
     private void RefreshPresentation()
     {
         _viewModel?.Refresh();
+        SynchronizeCompletedOperationSelection();
         UpdateCompletedOperationDetailVisibility();
         RenderOperationalMap();
     }
@@ -62,15 +64,49 @@ public sealed partial class MilitaryGovernmentPage : Page
         object sender,
         SelectionChangedEventArgs e)
     {
-        if (_viewModel is null
-            || CompletedOperationsList.SelectedItem
-                is not MilitaryCompletedOperationItemViewModel selected)
+        if (_synchronizingCompletedOperationSelection
+            || _viewModel is null)
         {
             return;
         }
 
-        _viewModel.SelectCompletedOperation(selected.CampaignId);
+        if (CompletedOperationsList.SelectedItem
+            is MilitaryCompletedOperationItemViewModel selected)
+        {
+            _viewModel.SelectCompletedOperation(selected.CampaignId);
+        }
+        else
+        {
+            _viewModel.ClearCompletedOperationSelection();
+        }
+
         UpdateCompletedOperationDetailVisibility();
+    }
+
+    private void SynchronizeCompletedOperationSelection()
+    {
+        if (_viewModel is null)
+            return;
+
+        MilitaryCompletedOperationItemViewModel? selected =
+            _viewModel.SelectedCompletedOperation;
+
+        if (ReferenceEquals(
+            CompletedOperationsList.SelectedItem,
+            selected))
+        {
+            return;
+        }
+
+        _synchronizingCompletedOperationSelection = true;
+        try
+        {
+            CompletedOperationsList.SelectedItem = selected;
+        }
+        finally
+        {
+            _synchronizingCompletedOperationSelection = false;
+        }
     }
 
     private void UpdateCompletedOperationDetailVisibility()
