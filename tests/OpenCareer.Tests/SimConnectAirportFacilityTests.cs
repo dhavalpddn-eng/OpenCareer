@@ -73,6 +73,35 @@ public sealed class SimConnectAirportFacilityTests
     }
 
     [Fact]
+    public void DecoderRejectsTruncatedFacilityPacket()
+    {
+        byte[] packet = SimConnectPackets.RunwayFacility(
+            requestId: 900,
+            uniqueRequestId: 42,
+            parentUniqueRequestId: 41,
+            itemIndex: 0,
+            listSize: 1,
+            lengthMeters: 1828.8f,
+            widthMeters: 45.72f,
+            surface: 4,
+            primaryNumber: 18,
+            primaryDesignator: 0,
+            secondaryNumber: 36,
+            secondaryDesignator: 0);
+
+        Array.Resize(ref packet, packet.Length - 1);
+        BitConverter.GetBytes((uint)packet.Length).CopyTo(packet, 0);
+
+        SimConnectPackets.WithPointer(
+            packet,
+            (data, size) =>
+            {
+                Assert.Throws<InvalidDataException>(
+                    () => SimConnectMessageDecoder.Decode(data, size));
+            });
+    }
+
+    [Fact]
     public async Task FacilityRequestUsesOwnedWorkerAndMapsAirportRunways()
     {
         var api = new SimConnectTestTransport();
@@ -209,6 +238,172 @@ public sealed class SimConnectAirportFacilityTests
     }
 
     [Fact]
+    public async Task MismatchedFacilityRequestIdsAreIgnored()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api);
+        var source = new SimConnectAirportDataObservationSource(connection);
+
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+
+        Task<AirportDataObservation?> lookup = source.FindAirportObservationAsync("KAAA");
+        await Until(() => api.FacilityRequests.Count == 1);
+        var request = Assert.Single(api.FacilityRequests);
+        uint wrongRequestId = request.RequestId + 1;
+
+        api.Enqueue(SimConnectPackets.AirportFacility(
+            wrongRequestId,
+            401,
+            "Wrong Airport",
+            "KZZZ"));
+        api.Enqueue(SimConnectPackets.FacilityDataEnd(wrongRequestId));
+
+        api.Enqueue(SimConnectPackets.AirportFacility(
+            request.RequestId,
+            402,
+            "Correct Airport",
+            "KAAA"));
+        api.Enqueue(SimConnectPackets.RunwayFacility(
+            request.RequestId,
+            403,
+            402,
+            0,
+            1,
+            lengthMeters: 1000,
+            widthMeters: 30,
+            surface: 0,
+            primaryNumber: 1,
+            primaryDesignator: 0,
+            secondaryNumber: 19,
+            secondaryDesignator: 0));
+        api.Enqueue(SimConnectPackets.FacilityDataEnd(request.RequestId));
+
+        AirportDataObservation observation = Assert.IsType<AirportDataObservation>(await lookup);
+        Assert.Equal("KAAA", observation.Airport.Icao);
+        Assert.Equal("Correct Airport", observation.Airport.Name);
+        Assert.Single(observation.Airport.Runways);
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+    }
+
+    [Fact]
+    public async Task UnsupportedSurfaceRemainsUnknown()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api);
+        var source = new SimConnectAirportDataObservationSource(connection);
+
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+
+        Task<AirportDataObservation?> lookup = source.FindAirportObservationAsync("KAAA");
+        await Until(() => api.FacilityRequests.Count == 1);
+        var request = Assert.Single(api.FacilityRequests);
+
+        api.Enqueue(SimConnectPackets.AirportFacility(
+            request.RequestId,
+            501,
+            "Unsupported Surface Airport",
+            "KAAA"));
+        api.Enqueue(SimConnectPackets.RunwayFacility(
+            request.RequestId,
+            502,
+            501,
+            0,
+            1,
+            lengthMeters: 1000,
+            widthMeters: 30,
+            surface: 999,
+            primaryNumber: 5,
+            primaryDesignator: 0,
+            secondaryNumber: 23,
+            secondaryDesignator: 0));
+        api.Enqueue(SimConnectPackets.FacilityDataEnd(request.RequestId));
+
+        AirportDataObservation observation = Assert.IsType<AirportDataObservation>(await lookup);
+        Assert.Equal(RunwaySurface.Unknown, Assert.Single(observation.Airport.Runways).Surface);
+    }
+
+    [Fact]
+    public async Task FacilityLookupCancellationDoesNotBreakConnectionOrNextRequest()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api);
+        var source = new SimConnectAirportDataObservationSource(connection);
+
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+
+        using var cancellation = new CancellationTokenSource();
+        Task<AirportDataObservation?> canceledLookup =
+            source.FindAirportObservationAsync("KAAA", cancellation.Token);
+        await Until(() => api.FacilityRequests.Count == 1);
+
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            async () => await canceledLookup);
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+
+        Task<AirportDataObservation?> retry = source.FindAirportObservationAsync("KBBB");
+        await Until(() => api.FacilityRequests.Count == 2);
+        var retryRequest = api.FacilityRequests.Last();
+
+        api.Enqueue(SimConnectPackets.AirportFacility(
+            retryRequest.RequestId,
+            601,
+            "Retry Airport",
+            "KBBB"));
+        api.Enqueue(SimConnectPackets.RunwayFacility(
+            retryRequest.RequestId,
+            602,
+            601,
+            0,
+            1,
+            lengthMeters: 1200,
+            widthMeters: 30,
+            surface: 4,
+            primaryNumber: 9,
+            primaryDesignator: 0,
+            secondaryNumber: 27,
+            secondaryDesignator: 0));
+        api.Enqueue(SimConnectPackets.FacilityDataEnd(retryRequest.RequestId));
+
+        AirportDataObservation observation = Assert.IsType<AirportDataObservation>(await retry);
+        Assert.Equal("KBBB", observation.Airport.Icao);
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+    }
+
+    [Fact]
+    public async Task FacilityLookupTimeoutReturnsUnavailableWithoutDroppingConnection()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+        var clock = new ManualTimeProvider(
+            new DateTimeOffset(2026, 9, 20, 12, 0, 0, TimeSpan.Zero));
+
+        await using var connection = Create(api, clock);
+        var source = new SimConnectAirportDataObservationSource(connection, clock);
+
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+
+        Task<AirportDataObservation?> lookup = source.FindAirportObservationAsync("KAAA");
+        await Until(() => api.FacilityRequests.Count == 1);
+
+        clock.Advance(SimConnectAirportFacilityDefinition.ResponseTimeout + TimeSpan.FromSeconds(1));
+
+        Assert.Null(await lookup.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+    }
+
+    [Fact]
     public async Task ImmediateFacilityFailureReturnsNullWithoutDroppingTelemetryConnection()
     {
         var api = new SimConnectTestTransport
@@ -340,7 +535,9 @@ public sealed class SimConnectAirportFacilityTests
         await Until(() => connection.Current.State != SimulatorConnectionState.Connected);
     }
 
-    private static SimConnectConnection Create(SimConnectTestTransport api) =>
+    private static SimConnectConnection Create(
+        SimConnectTestTransport api,
+        TimeProvider? clock = null) =>
         new(
             api,
             NullLogger<SimConnectConnection>.Instance,
@@ -350,7 +547,23 @@ public sealed class SimConnectAirportFacilityTests
                 MaximumRetryDelay = TimeSpan.FromMilliseconds(10),
                 DispatchInterval = TimeSpan.FromMilliseconds(5)
             },
-            TimeProvider.System);
+            clock ?? TimeProvider.System);
+
+    private sealed class ManualTimeProvider(DateTimeOffset origin) : TimeProvider
+    {
+        private long _timestamp;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override DateTimeOffset GetUtcNow() =>
+            origin.AddTicks(Volatile.Read(ref _timestamp));
+
+        public override long GetTimestamp() =>
+            Volatile.Read(ref _timestamp);
+
+        public void Advance(TimeSpan elapsed) =>
+            Interlocked.Add(ref _timestamp, elapsed.Ticks);
+    }
 
     private static async Task Until(Func<bool> condition)
     {
