@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `0dee5cb1` is green: Linux passed 245/245 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 245/245 xUnit.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `030f7865` is green: Linux passed 253/253 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 253/253 xUnit.
 
 ## Boundary
 
@@ -51,10 +51,14 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - persistent `ConflictCampaignState` with campaign phase, friendly momentum and deterministic strategic objectives for control, intelligence, readiness and threat reduction,
 - deterministic fictional campaign identity with a persistent operation name plus distinct friendly/hostile faction names and short codes; legacy checkpoints without identity are accepted and backfilled deterministically on advance,
 - bounded long-term campaign cycles that recover nearby ground units through same-side logistics support, recover simulated air-unit readiness from theater logistics, consolidate sector control from persistent campaign momentum, and resynchronize linked threat severity after recovery,
+- finite friendly/hostile replacement reserves that require operational logistics, reinforce the weakest eligible surviving ground units first, and are consumed rather than providing unlimited regeneration,
+- persisted campaign terminal outcomes: Ongoing, Victory, Defeat, Stalemate and Ceasefire; victory/defeat require sustained secured evaluations, ceasefire can result from mutual exhaustion, and prolonged balanced low-momentum campaigns can end in stalemate,
+- telemetry-only mission progress synchronization updates campaign timestamps/state without falsely incrementing strategic evaluation counters,
+- terminal campaigns refuse new military mission acceptance,
 - `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
 - `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
 - `MilitaryCampaignMissionService` that persists acceptance, mission-stage progress, failure/completion lifecycle and simulated threat outcomes without allowing duplicate replay after recovery,
-- `ConflictOperationsSnapshotBuilder` that projects operation/faction identity plus campaign/front/unit/threat/support/strategic-objective/trust/damage/active-operation state for the future Military/Government UI,
+- `ConflictOperationsSnapshotBuilder` that projects operation/faction identity, campaign outcome, replacement reserves, campaign/front/unit/threat/support/strategic-objective/trust/damage/active-operation state for the future Military/Government UI,
 - deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation, SQLite campaign recovery, strategic evolution, dispatch authorization and the operations snapshot.
 
 ## Deliberately abstract
@@ -66,7 +70,7 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 ## Still open
 
 - user-facing Settings backup selection/confirmation for staging a restore archive; the validated restore backend and restart-time apply path are implemented,
-- deeper long-term theater evolution beyond the first recovery/consolidation cycle layer, including reinforcement/replacement policy, operation termination/renewal and richer faction behavior,
+- operation renewal/new-campaign transition after a terminal outcome plus richer long-term faction behavior,
 - player career onboarding/persistence for military affiliation and qualifications,
 - authoritative aircraft assignment issuance through the fleet/dispatch system,
 - authoritative job/economy settlement integration,
