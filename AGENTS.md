@@ -714,6 +714,35 @@ Use feature branches and draft PRs for substantial work. Keep `main` stable.
 
 CI should build important projects and run deterministic smoke/tests.
 
+## 30A. Checkpointed development and anti-hang workflow
+
+For substantial AI-assisted development, work in **small, recoverable slices** rather than one long tool chain.
+
+Required working pattern:
+
+1. Verify the current remote branch head before the first write.
+2. Choose one bounded feature/fix with clear acceptance criteria. Target roughly 15–30 minutes of implementation scope when practical.
+3. Implement only that slice and its directly required tests.
+4. Create a Git commit as soon as the slice is coherent and reviewable. Do not wait to combine several unrelated subsystems into one commit.
+5. Run the relevant automated verification after the code commit. Fix failures in another bounded pass.
+6. Update ASTRA/project-state/master trackers when verified status changes. Tracking updates may be a separate focused docs commit.
+7. Start the next feature slice with a fresh remote-head check.
+
+Avoid giant sequences such as implementation + unrelated feature expansion + UI + persistence + docs + branch synchronization in one uninterrupted tool run.
+
+Recovery rules:
+
+- A Git commit is the authoritative checkpoint. Temporary blobs, generated trees, local scratch state, or unfinished tool output do not count as completed project work.
+- If the same Git/tool operation fails repeatedly, or several consecutive writes fail, stop expanding scope. Re-read the branch head, preserve/commit the last coherent work, and begin a fresh tool sequence.
+- Never force-push or overwrite parallel work merely to recover from a stalled sequence.
+- Before synchronizing a long-lived feature branch, compare it against the newest integration head and preserve unrelated changes from other chats.
+- If a chat or tool session stalls, a new chat should resume from the latest committed branch head plus `ASTRA.md` / `docs/project-state.md`, not by reconstructing hours of work from chat history.
+- Prefer several small reviewable commits over a single mega-commit, even when all commits belong to one feature.
+- CI/test results must be attached to the exact code head being described. Do not claim later unverified code is green because an earlier commit passed.
+- For long-running work, periodic progress check-ins should report the latest commit, verification state, blocker, and next bounded slice.
+
+This workflow exists to limit lost work, reduce tool/chat stalls, protect parallel branches, and make continuation from another chat predictable.
+
 ## 31. Current build strategy
 
 Build vertically so there is frequently a working application.

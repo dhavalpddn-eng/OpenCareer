@@ -15,7 +15,11 @@ At the start of each task:
 6. Commit code and update project-state.md with results, limitations and the next task.
 7. When verified project status changes, update the master development checklist in the same change so its checkboxes and Mermaid graphics stay current.
 
-Keep one bounded task per chat where practical. Consult past chats only for necessary missing decisions. Do not repeat full-repository audits or unrelated tests without a concrete reason. Runtime/API changes require current official documentation. Use Wolfram for calculations that benefit from independent verification, not routine edits.
+Keep one bounded task per chat where practical. For longer tasks, split work into recoverable 15–30 minute slices: implement one coherent slice, commit it, run relevant verification, then begin the next slice with a fresh remote-head check. Do not stack several unrelated features, tests, docs updates and branch synchronization into one giant tool sequence.
+
+A Git commit is the authoritative checkpoint. Temporary blobs/trees or unfinished tool output do not count as completed work. If the same write/tool action fails repeatedly, stop expanding scope, verify the branch head, preserve the last coherent commit, and restart from a fresh tool sequence. CI claims must correspond to the exact code head being described.
+
+Consult past chats only for necessary missing decisions. Do not repeat full-repository audits or unrelated tests without a concrete reason. Runtime/API changes require current official documentation. Use Wolfram for calculations that benefit from independent verification, not routine edits.
 
 Exit gate: a new chat can identify the current branch, implemented features, unresolved limitations and next task from repository files alone.
 
