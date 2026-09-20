@@ -29,6 +29,7 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
     internal int HeartbeatResult { get; set; }
     internal ConcurrentQueue<(uint DefinitionId, string DatumName, string Units)> DataDefinitions { get; } = new();
     internal int AddDefinitionResult { get; set; }
+    internal HashSet<uint> FailedDataDefinitionIds { get; } = [];
     internal ConcurrentQueue<(uint RequestId, uint DefinitionId, SimConnectPeriod Period)> TelemetryRequests { get; } = new();
     internal int TelemetryRequestResult { get; set; }
     internal ConcurrentQueue<(uint EventId, string EventName)> SystemEvents { get; } = new();
@@ -90,7 +91,9 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         try
         {
             DataDefinitions.Enqueue((definitionId, datumName, unitsName));
-            return AddDefinitionResult;
+            return FailedDataDefinitionIds.Contains(definitionId)
+                ? Failure
+                : AddDefinitionResult;
         }
         finally { Exit(); }
     }
