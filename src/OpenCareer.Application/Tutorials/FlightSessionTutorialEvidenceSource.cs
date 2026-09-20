@@ -32,6 +32,10 @@ public sealed class FlightSessionTutorialEvidenceSource :
                     static session =>
                         session.Milestones.EngineStartAt is not null,
 
+                "job-taxi-out" =>
+                    static session =>
+                        session.Milestones.TaxiOutAt is not null,
+
                 "job-fly" =>
                     static session =>
                         session.Tracking.TakeoffCount > 0,

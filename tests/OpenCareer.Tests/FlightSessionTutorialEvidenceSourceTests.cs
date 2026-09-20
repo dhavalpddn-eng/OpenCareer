@@ -139,6 +139,38 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
     }
 
     [Fact]
+    public void FirstJobTaxiOutRequiresTaxiOutMilestone()
+    {
+        var sessions =
+            new FlightSessionCoordinator();
+
+        var source =
+            new FlightSessionTutorialEvidenceSource(
+                sessions);
+
+        FlightSession engineStarted =
+            ToEngineStart(
+                ToAircraftReady(
+                    FlightSession.Start(Epoch)));
+
+        sessions.Restore(engineStarted);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            source.GetState(
+                Step("job-taxi-out")));
+
+        sessions.CommitPersisted(
+            ToTaxiOutFromEngineStart(
+                engineStarted));
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Satisfied,
+            source.GetState(
+                Step("job-taxi-out")));
+    }
+
+    [Fact]
     public void FirstJobFlightRequiresRecordedTakeoff()
     {
         var sessions =
@@ -286,13 +318,40 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
             TutorialStepEvidenceState.Waiting,
             coordinator.Current.EvidenceState);
 
+        FlightSession engineStarted =
+            ToEngineStart(ready);
+
         sessions.CommitPersisted(
-            ToEngineStart(ready));
+            engineStarted);
 
         coordinator.RefreshLiveEvidence();
 
         Assert.Equal(
             "job-engine-start",
+            coordinator.Current.Step?.Id);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Satisfied,
+            coordinator.Current.EvidenceState);
+
+        await coordinator.NextAsync();
+
+        Assert.Equal(
+            "job-taxi-out",
+            coordinator.Current.Step?.Id);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            coordinator.Current.EvidenceState);
+
+        sessions.CommitPersisted(
+            ToTaxiOutFromEngineStart(
+                engineStarted));
+
+        coordinator.RefreshLiveEvidence();
+
+        Assert.Equal(
+            "job-taxi-out",
             coordinator.Current.Step?.Id);
 
         Assert.Equal(
@@ -342,7 +401,12 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
         session =
             ToEngineStart(session);
 
-        return FlightSessionEngine.Advance(
+        return ToTaxiOutFromEngineStart(session);
+    }
+
+    private static FlightSession ToTaxiOutFromEngineStart(
+        FlightSession session) =>
+        FlightSessionEngine.Advance(
             session,
             new FlightSessionAdvance(
                 new FlightStateEvidence(
@@ -350,7 +414,6 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
                     Connected: true,
                     ContinuityPlausible: true,
                     SelfPoweredMovementForFlight: true)));
-    }
 
     private static FlightSession ToAirborne(
         FlightSession session)
