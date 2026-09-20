@@ -4,7 +4,8 @@ param(
     [string]$Output = "",
     [ValidateRange(0, 86400)]
     [int]$DurationSeconds = 0,
-    [switch]$FlightSession
+    [switch]$FlightSession,
+    [string]$Airport = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,6 +49,10 @@ if ($DurationSeconds -gt 0) {
 
 if ($FlightSession) {
     $dotnetArgs += "--flight-session"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($Airport)) {
+    $dotnetArgs += @("--airport", $Airport.Trim())
 }
 
 & dotnet @dotnetArgs
