@@ -29,6 +29,7 @@ public sealed class MilitaryGovernmentViewModelTests
         Assert.Empty(viewModel.Objectives);
         Assert.Empty(viewModel.CompletedOperations);
         Assert.Null(viewModel.SelectedCompletedOperation);
+        Assert.Null(viewModel.SelectedCompletedOperationDetail);
         Assert.Empty(viewModel.OperationalMapMarkers);
         Assert.Empty(viewModel.Communications);
         Assert.Equal("Schematic map • no plotted markers", viewModel.OperationalMapBoundsText);
@@ -317,6 +318,139 @@ public sealed class MilitaryGovernmentViewModelTests
     }
 
     [Fact]
+    public void SelectedCompletedOperationDetailUsesPersistedDrilldownProjection()
+    {
+        var runtime = CreateRuntime();
+        var archived = ConflictCampaignHistoryEntry.FromCheckpoint(
+            CompletedRecord().Checkpoint);
+        var friendlyPosture =
+            archived.Identity.FriendlyFaction.Posture
+                == ConflictFactionOperationalPosture.LogisticsFocused
+                ? ConflictFactionOperationalPosture.AirFocused
+                : ConflictFactionOperationalPosture.LogisticsFocused;
+        var hostilePosture =
+            archived.Identity.HostileFaction.Posture
+                == ConflictFactionOperationalPosture.Defensive
+                ? ConflictFactionOperationalPosture.Aggressive
+                : ConflictFactionOperationalPosture.Defensive;
+        var endedAt = Epoch.AddHours(-3);
+        var selected = archived with
+        {
+            CampaignId = "detail-selection",
+            Identity = archived.Identity with
+            {
+                OperationId = "operation:detail-selection",
+                OperationName = "Operation Detail Selection"
+            },
+            TheaterId = "FICTIONAL-DETAIL-SELECTION",
+            Outcome = ConflictCampaignOutcome.Ceasefire,
+            FinalPhase = ConflictCampaignPhase.HostilePressure,
+            FinalFriendlyControlAverage = 0.37,
+            EndedAt = endedAt,
+            FinalFriendlyPosture = friendlyPosture,
+            FinalHostilePosture = hostilePosture
+        };
+        runtime.Replace(
+            new ConflictCampaignStoreRecord(
+                1,
+                CreateCheckpoint("detail-selection-current") with
+                {
+                    History = [selected]
+                }));
+        var viewModel = CreateViewModel(runtime);
+
+        viewModel.Refresh();
+        Assert.True(
+            viewModel.SelectCompletedOperation(
+                selected.CampaignId));
+
+        MilitaryCompletedOperationDetailViewModel detail =
+            Assert.IsType<MilitaryCompletedOperationDetailViewModel>(
+                viewModel.SelectedCompletedOperationDetail);
+        CompletedMilitaryOperationDetailProjection expected =
+            CompletedMilitaryOperationDetailProjectionBuilder.Build(
+                selected);
+
+        Assert.Equal(expected.CampaignId, detail.CampaignId);
+        Assert.Equal($"Campaign {expected.CampaignId}", detail.CampaignText);
+        Assert.Equal(expected.OperationName, detail.OperationName);
+        Assert.Equal(expected.TheaterId, detail.TheaterId);
+        Assert.Equal($"Theater {expected.TheaterId}", detail.TheaterText);
+        Assert.Equal(expected.Outcome, detail.Outcome);
+        Assert.Equal(
+            MilitaryGovernmentViewModel.FormatWords(
+                expected.Outcome.ToString()),
+            detail.OutcomeText);
+        Assert.Equal(expected.FinalPhase, detail.FinalPhase);
+        Assert.Equal(
+            MilitaryGovernmentViewModel.FormatWords(
+                expected.FinalPhase.ToString()),
+            detail.FinalPhaseText);
+        Assert.Equal(
+            expected.FinalFriendlyControlAverage,
+            detail.FinalFriendlyControlAverage);
+        Assert.Equal(
+            $"{expected.FinalFriendlyControlAverage:P0} friendly control",
+            detail.FinalControlText);
+        Assert.Equal(expected.EndedAt, detail.EndedAt);
+        Assert.Equal(
+            $"Ended {expected.EndedAt.LocalDateTime:g}",
+            detail.EndedText);
+        Assert.Equal(
+            expected.FriendlyFactionCode,
+            detail.FriendlyFactionCode);
+        Assert.Equal(
+            expected.FriendlyFactionName,
+            detail.FriendlyFactionName);
+        Assert.Equal(
+            expected.FriendlyPosture,
+            detail.FriendlyPosture);
+        Assert.Equal(
+            expected.HostileFactionCode,
+            detail.HostileFactionCode);
+        Assert.Equal(
+            expected.HostileFactionName,
+            detail.HostileFactionName);
+        Assert.Equal(
+            expected.HostilePosture,
+            detail.HostilePosture);
+        Assert.Contains(
+            MilitaryGovernmentViewModel.FormatWords(
+                friendlyPosture.ToString()),
+            detail.FriendlyFactionText);
+        Assert.Contains(
+            MilitaryGovernmentViewModel.FormatWords(
+                hostilePosture.ToString()),
+            detail.HostileFactionText);
+        Assert.DoesNotContain(
+            MilitaryGovernmentViewModel.FormatWords(
+                selected.Identity.FriendlyFaction.Posture.ToString())
+                + " posture",
+            detail.FriendlyFactionText);
+        Assert.DoesNotContain(
+            MilitaryGovernmentViewModel.FormatWords(
+                selected.Identity.HostileFaction.Posture.ToString())
+                + " posture",
+            detail.HostileFactionText);
+
+        MilitaryCompletedOperationDetailViewModel initial = detail;
+        viewModel.Refresh();
+
+        MilitaryCompletedOperationDetailViewModel refreshed =
+            Assert.IsType<MilitaryCompletedOperationDetailViewModel>(
+                viewModel.SelectedCompletedOperationDetail);
+        Assert.NotSame(initial, refreshed);
+        Assert.Equal(initial.CampaignId, refreshed.CampaignId);
+        Assert.Equal(initial.FriendlyPosture, refreshed.FriendlyPosture);
+        Assert.Equal(initial.HostilePosture, refreshed.HostilePosture);
+
+        viewModel.ClearCompletedOperationSelection();
+
+        Assert.Null(viewModel.SelectedCompletedOperation);
+        Assert.Null(viewModel.SelectedCompletedOperationDetail);
+    }
+
+    [Fact]
     public void MissingCompletedOperationSelectionClearsCurrentSelection()
     {
         var runtime = CreateRuntime();
@@ -342,6 +476,7 @@ public sealed class MilitaryGovernmentViewModelTests
                 "missing-campaign"));
 
         Assert.Null(viewModel.SelectedCompletedOperation);
+        Assert.Null(viewModel.SelectedCompletedOperationDetail);
     }
 
     [Fact]
@@ -392,6 +527,7 @@ public sealed class MilitaryGovernmentViewModelTests
         viewModel.Refresh();
 
         Assert.Null(viewModel.SelectedCompletedOperation);
+        Assert.Null(viewModel.SelectedCompletedOperationDetail);
         Assert.Single(viewModel.CompletedOperations);
         Assert.Equal(
             remaining.CampaignId,
