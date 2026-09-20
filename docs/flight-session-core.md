@@ -188,3 +188,19 @@ The first-job tutorial now separates preparation from engine start:
 - the first-job tutorial definition is version 2 so older completed progress does not silently skip the added step.
 
 This slice intentionally does not add taxi, takeoff, route coaching, bindings, checklist automation or economy behavior.
+
+
+## MBL-03 Taxi Out tutorial slice
+
+Branch: `feature/mbl03-taxi-out`.
+
+The first-job tutorial now separates taxi-out from engine start and flight:
+
+- new `job-taxi-out` sits between Engine Start and Fly;
+- it is satisfied only by the persisted `TaxiOutAt` FlightSession milestone;
+- taxi evidence remains owned by the existing normalized telemetry / FlightSession pipeline;
+- tutorial confirmation still does not auto-advance;
+- the copy explicitly excludes pushback, slew and unstable telemetry from claimed taxi progress;
+- the first-job tutorial definition is version 3 so previously completed version-2 progress does not skip the new step.
+
+This slice intentionally does not add takeoff, route coaching, taxi routing/guidance, controller bindings, checklist automation, jobs or economy behavior.

@@ -112,6 +112,9 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
             Step("job-engine-start", "Start the engine",
                 "Start the aircraft using its normal aircraft-specific procedure. OpenCareer waits for trustworthy live engine-start evidence; it does not assume one universal cockpit switch or key binding.",
                 "current-flight", "current-flight"),
+            Step("job-taxi-out", "Taxi to departure",
+                "Taxi under the aircraft's own power toward the assigned departure point. OpenCareer confirms taxi-out from trustworthy movement evidence; pushback, slew and unstable telemetry do not count as taxi progress.",
+                "current-flight", "current-flight"),
             Step("job-fly", "Fly the mission",
                 "Follow the route and mission-specific objectives. Go-arounds and legitimate diversions are evaluated by context rather than treated as automatic failures.",
                 "current-flight", "current-flight"),
@@ -123,7 +126,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 2, steps);
+        return new TutorialDefinition(FirstJobId, 3, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()
