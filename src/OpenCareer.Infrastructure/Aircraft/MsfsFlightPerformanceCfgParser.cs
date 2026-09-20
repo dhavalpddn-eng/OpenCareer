@@ -229,8 +229,13 @@ internal static class MsfsFlightPerformanceCfgParser
         if (valueGroups.LongLength != expectedGroups)
             return null;
 
-        var values = new List<double>(
-            checked(weights.Length * temperatures.Length * altitudes.Length));
+        long expectedValues =
+            expectedGroups * altitudes.Length;
+
+        if (expectedValues > int.MaxValue)
+            return null;
+
+        var values = new List<double>((int)expectedValues);
 
         foreach (string group in valueGroups)
         {
