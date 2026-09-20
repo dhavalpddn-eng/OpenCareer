@@ -59,10 +59,13 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<IConflictCampaignRecoverySource>(provider =>
             provider.GetRequiredService<SqliteConflictCampaignStore>());
         services.AddSingleton<ConflictCampaignRuntimeState>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IConflictTheaterCatalog, DefaultConflictTheaterCatalog>();
         services.AddSingleton<ConflictOperationsService>();
         services.AddSingleton<ConflictCampaignCoordinator>();
         services.AddSingleton<MilitaryDispatchService>();
         services.AddSingleton<MilitaryCampaignMissionService>();
+        services.AddSingleton<MilitaryCampaignTransitionService>();
         services.AddSingleton<LogbookCommitCoordinator>();
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
