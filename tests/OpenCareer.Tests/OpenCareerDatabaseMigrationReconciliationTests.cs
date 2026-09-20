@@ -8,7 +8,7 @@ namespace OpenCareer.Tests;
 public sealed class OpenCareerDatabaseMigrationReconciliationTests
 {
     [Fact]
-    public async Task FlightOnlyLegacyV2AddsConflictSchemaAndAdvancesToV3()
+    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV4()
     {
         string directory = CreateTempDirectory();
 
@@ -46,7 +46,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task ConflictOnlyLegacyV2AddsFlightSchemaAndAdvancesToV3()
+    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV4()
     {
         string directory = CreateTempDirectory();
 
@@ -71,6 +71,85 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
                 new SqliteFlightSessionCheckpointStore(path);
 
             Assert.Null(await flightStore.LoadAsync());
+
+            await AssertUnifiedSchemaAsync(path);
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
+    public async Task UnifiedLegacyV3AddsMilitaryCareerProfileAndAdvancesToV4()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            string path = Path.Combine(directory, "opencareer.db");
+
+            await using (var connection =
+                new SqliteConnection(
+                    new SqliteConnectionStringBuilder
+                    {
+                        DataSource = path,
+                        Mode = SqliteOpenMode.ReadWriteCreate,
+                        Pooling = false
+                    }.ToString()))
+            {
+                await connection.OpenAsync();
+
+                await using SqliteCommand command =
+                    connection.CreateCommand();
+
+                command.CommandText =
+                    """
+                    CREATE TABLE logbook_entries (
+                        entry_id TEXT NOT NULL PRIMARY KEY,
+                        idempotency_key TEXT NOT NULL UNIQUE,
+                        payload_schema_version INTEGER NOT NULL,
+                        committed_at_ms INTEGER NOT NULL,
+                        ended_at_ms INTEGER NOT NULL,
+                        entry_kind INTEGER NOT NULL,
+                        safety_outcome INTEGER NOT NULL,
+                        mission_outcome INTEGER NOT NULL,
+                        aircraft_name TEXT NOT NULL,
+                        departure TEXT NULL,
+                        arrival TEXT NULL,
+                        contract_id TEXT NULL,
+                        search_text TEXT NOT NULL,
+                        payload_json TEXT NOT NULL
+                    );
+                    CREATE TABLE flight_session_checkpoint (
+                        slot_id INTEGER NOT NULL PRIMARY KEY,
+                        session_id TEXT NOT NULL,
+                        payload_schema_version INTEGER NOT NULL,
+                        status INTEGER NOT NULL,
+                        updated_at_utc_ticks INTEGER NOT NULL,
+                        payload_json TEXT NOT NULL,
+                        CHECK (slot_id = 1)
+                    );
+                    CREATE TABLE conflict_campaigns (
+                        campaign_id TEXT NOT NULL PRIMARY KEY,
+                        revision INTEGER NOT NULL CHECK (revision >= 1),
+                        checkpoint_schema_version INTEGER NOT NULL,
+                        saved_at_ms INTEGER NOT NULL,
+                        world_updated_at_ms INTEGER NOT NULL,
+                        payload_json TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 3;
+                    """;
+
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var profileStore =
+                new SqliteMilitaryCareerProfileStore(
+                    new OpenCareerDatabaseOptions(path),
+                    NullLogger<SqliteMilitaryCareerProfileStore>.Instance);
+
+            Assert.Null(await profileStore.LoadAsync());
 
             await AssertUnifiedSchemaAsync(path);
         }
@@ -147,13 +226,18 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
                 connection,
                 "conflict_campaigns"));
 
+        Assert.True(
+            await TableExistsAsync(
+                connection,
+                "military_career_profile"));
+
         await using SqliteCommand version =
             connection.CreateCommand();
 
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            3L,
+            4L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));
