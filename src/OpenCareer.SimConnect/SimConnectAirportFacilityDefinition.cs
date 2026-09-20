@@ -11,9 +11,14 @@ internal static class SimConnectAirportFacilityDefinition
     internal static readonly string[] Fields =
     [
         "OPEN AIRPORT",
+        "LATITUDE",
+        "LONGITUDE",
         "NAME64",
         "ICAO",
         "OPEN RUNWAY",
+        "LATITUDE",
+        "LONGITUDE",
+        "HEADING",
         "LENGTH",
         "WIDTH",
         "SURFACE",
@@ -31,6 +36,8 @@ internal static class SimConnectAirportFacilityDefinition
 internal sealed record SimConnectAirportFacilitySnapshot(
     string Icao,
     string Name,
+    double LatitudeDegrees,
+    double LongitudeDegrees,
     IReadOnlyList<SimConnectRunwayFacilityData> Runways);
 
 internal sealed class SimConnectAirportFacilityQuery(
@@ -125,6 +132,8 @@ internal sealed class ActiveSimConnectAirportFacilityRequest(
         return new(
             _airport.Icao.Trim().ToUpperInvariant(),
             _airport.Name.Trim(),
+            _airport.LatitudeDegrees,
+            _airport.LongitudeDegrees,
             runways);
     }
 }
