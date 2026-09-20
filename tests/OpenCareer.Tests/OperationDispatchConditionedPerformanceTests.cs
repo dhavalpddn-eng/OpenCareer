@@ -319,6 +319,45 @@ public sealed class OperationDispatchConditionedPerformanceTests
                 issue.Reason == DispatchFeasibilityReason.RunwaySurfaceUnsupported);
     }
 
+    [Fact]
+    public async Task ZeroConditionedDistanceFailsClosedInsteadOfThrowing()
+    {
+        var service = Service(
+            Resolution(
+                runwayPerformance: RunwayProfile(
+                    takeoff: 1000,
+                    landing: 1000),
+                conditioned: Conditioned(
+                    takeoffTotal: SinglePointGrid(
+                        6000,
+                        15,
+                        1000,
+                        0))),
+            Airport("KAAA", Runway("18", lengthFeet: 5000)),
+            Airport("KBBB", Runway("36", lengthFeet: 5000)));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB",
+            Requirements(
+                takeoff: Conditions(6000, 15, 1000)));
+
+        Assert.Equal(DispatchFeasibilityStatus.InsufficientData, result.Status);
+
+        DispatchFeasibilityIssue issue = Assert.Single(
+            result.Issues,
+            static issue =>
+                issue.Reason
+                    == DispatchFeasibilityReason.AircraftTakeoffPerformanceValueInvalid);
+
+        Assert.Equal(0, issue.RequiredFeet);
+        Assert.DoesNotContain(
+            result.Issues,
+            static issue =>
+                issue.Reason == DispatchFeasibilityReason.AircraftTakeoffLengthUnknown);
+    }
+
     [Theory]
     [InlineData(0, 15, 1000)]
     [InlineData(-1, 15, 1000)]
