@@ -89,7 +89,7 @@ public sealed class SimConnectAirportFacilityTests
             secondaryNumber: 36,
             secondaryDesignator: 0);
 
-        Array.Resize(ref packet, packet.Length - 1);
+        Array.Resize(ref packet, packet.Length - 4);
         BitConverter.GetBytes((uint)packet.Length).CopyTo(packet, 0);
 
         SimConnectPackets.WithPointer(
