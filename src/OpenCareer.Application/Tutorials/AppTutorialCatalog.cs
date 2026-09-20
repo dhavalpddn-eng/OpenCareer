@@ -118,6 +118,9 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
             Step("job-takeoff", "Take off",
                 "Line up and depart using the aircraft and runway's normal procedure. OpenCareer confirms takeoff only after trustworthy airborne evidence; entering the takeoff roll by itself is not enough.",
                 "current-flight", "current-flight"),
+            Step("job-initial-climb", "Establish the initial climb",
+                "Continue the departure until the aircraft is clearly established in a sustained climb. OpenCareer waits for repeated airborne altitude and positive vertical-speed evidence rather than treating liftoff alone as a completed climb.",
+                "current-flight", "current-flight"),
             Step("job-fly", "Fly the mission",
                 "Follow the route and mission-specific objectives. Go-arounds and legitimate diversions are evaluated by context rather than treated as automatic failures.",
                 "current-flight", "current-flight"),
@@ -129,7 +132,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 4, steps);
+        return new TutorialDefinition(FirstJobId, 5, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()

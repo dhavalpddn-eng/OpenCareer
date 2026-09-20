@@ -3,12 +3,15 @@ namespace OpenCareer.Application.Flights;
 public sealed record FlightEvidenceProcessorOptions(
     int StableTelemetrySamples = 3,
     int AirborneConfirmationSamples = 2,
+    int InitialClimbConfirmationSamples = 2,
     int GroundConfirmationSamples = 2,
     double TaxiGroundSpeedKnots = 3,
     double TakeoffCandidateGroundSpeedKnots = 25,
     double TakeoffCandidateIndicatedAirspeedKnots = 25,
     double RejectedTakeoffGroundSpeedKnots = 10,
     double AirborneMinimumAglFeet = 15,
+    double InitialClimbMinimumAglFeet = 200,
+    double InitialClimbMinimumVerticalSpeedFeetPerMinute = 100,
     double ApproachMaximumAglFeet = 2_000,
     double ApproachMaximumVerticalSpeedFeetPerMinute = -100,
     double ParkingMaximumGroundSpeedKnots = 1)
@@ -20,6 +23,9 @@ public sealed record FlightEvidenceProcessorOptions(
 
         if (AirborneConfirmationSamples < 1)
             throw new ArgumentOutOfRangeException(nameof(AirborneConfirmationSamples));
+
+        if (InitialClimbConfirmationSamples < 1)
+            throw new ArgumentOutOfRangeException(nameof(InitialClimbConfirmationSamples));
 
         if (GroundConfirmationSamples < 1)
             throw new ArgumentOutOfRangeException(nameof(GroundConfirmationSamples));
@@ -43,6 +49,14 @@ public sealed record FlightEvidenceProcessorOptions(
         ValidateNonNegativeFinite(
             AirborneMinimumAglFeet,
             nameof(AirborneMinimumAglFeet));
+
+        ValidateNonNegativeFinite(
+            InitialClimbMinimumAglFeet,
+            nameof(InitialClimbMinimumAglFeet));
+
+        ValidateNonNegativeFinite(
+            InitialClimbMinimumVerticalSpeedFeetPerMinute,
+            nameof(InitialClimbMinimumVerticalSpeedFeetPerMinute));
 
         ValidateNonNegativeFinite(
             ApproachMaximumAglFeet,

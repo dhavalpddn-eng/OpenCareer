@@ -13,6 +13,7 @@ public sealed record FlightStateEvidence(
     bool TakeoffCandidate = false,
     bool RejectedTakeoffConfirmed = false,
     bool AirborneConfirmed = false,
+    bool InitialClimbConfirmed = false,
     bool ApproachConfirmed = false,
     bool TouchdownConfirmed = false,
     bool BounceRecontact = false,

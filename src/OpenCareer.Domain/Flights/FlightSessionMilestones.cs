@@ -6,6 +6,7 @@ public sealed record FlightSessionMilestones(
     DateTimeOffset? TaxiOutAt = null,
     DateTimeOffset? TakeoffRollAt = null,
     DateTimeOffset? TakeoffAt = null,
+    DateTimeOffset? InitialClimbAt = null,
     DateTimeOffset? ApproachAt = null,
     DateTimeOffset? FirstTouchdownAt = null,
     DateTimeOffset? LandingAt = null,
