@@ -2,11 +2,12 @@ using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using OpenCareer.Application.Flights;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Infrastructure.Persistence;
 
 namespace OpenCareer.Infrastructure.Flights;
 
-public sealed class SqliteFlightSessionCheckpointStore :
-    IFlightSessionCheckpointStore
+public sealed class Sqliteflight_session_checkpointStore :
+    Iflight_session_checkpointStore
 {
     private const int CurrentSchemaVersion = 1;
     private const long CurrentSlotId = 1;
@@ -22,7 +23,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private bool _initialized;
 
-    public SqliteFlightSessionCheckpointStore(
+    public Sqliteflight_session_checkpointStore(
         string databasePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
@@ -79,13 +80,13 @@ public sealed class SqliteFlightSessionCheckpointStore :
 
             command.CommandText =
                 """
-                INSERT INTO FlightSessionCheckpoint (
-                    SlotId,
-                    SessionId,
-                    SchemaVersion,
-                    Status,
-                    UpdatedAtUtcTicks,
-                    PayloadJson
+                INSERT INTO flight_session_checkpoint (
+                    slot_id,
+                    session_id,
+                    payload_schema_version,
+                    status,
+                    updated_at_utc_ticks,
+                    payload_json
                 )
                 VALUES (
                     $slotId,
@@ -95,14 +96,14 @@ public sealed class SqliteFlightSessionCheckpointStore :
                     $updatedAtUtcTicks,
                     $payloadJson
                 )
-                ON CONFLICT(SlotId) DO UPDATE SET
-                    SessionId = excluded.SessionId,
-                    SchemaVersion = excluded.SchemaVersion,
-                    Status = excluded.Status,
-                    UpdatedAtUtcTicks = excluded.UpdatedAtUtcTicks,
-                    PayloadJson = excluded.PayloadJson
-                WHERE excluded.UpdatedAtUtcTicks
-                    >= FlightSessionCheckpoint.UpdatedAtUtcTicks;
+                ON CONFLICT(slot_id) DO UPDATE SET
+                    session_id = excluded.session_id,
+                    payload_schema_version = excluded.payload_schema_version,
+                    status = excluded.status,
+                    updated_at_utc_ticks = excluded.updated_at_utc_ticks,
+                    payload_json = excluded.payload_json
+                WHERE excluded.updated_at_utc_ticks
+                    >= flight_session_checkpoint.updated_at_utc_ticks;
                 """;
 
             command.Parameters.AddWithValue(
@@ -158,13 +159,13 @@ public sealed class SqliteFlightSessionCheckpointStore :
         command.CommandText =
             """
             SELECT
-                SessionId,
-                SchemaVersion,
-                Status,
-                UpdatedAtUtcTicks,
-                PayloadJson
-            FROM FlightSessionCheckpoint
-            WHERE SlotId = $slotId
+                session_id,
+                payload_schema_version,
+                status,
+                updated_at_utc_ticks,
+                payload_json
+            FROM flight_session_checkpoint
+            WHERE slot_id = $slotId
             LIMIT 1;
             """;
 
@@ -246,8 +247,8 @@ public sealed class SqliteFlightSessionCheckpointStore :
 
             command.CommandText =
                 """
-                DELETE FROM FlightSessionCheckpoint
-                WHERE SlotId = $slotId;
+                DELETE FROM flight_session_checkpoint
+                WHERE slot_id = $slotId;
                 """;
 
             command.Parameters.AddWithValue(
@@ -286,24 +287,8 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 .OpenAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            await using var command =
-                connection.CreateCommand();
-
-            command.CommandText =
-                """
-                CREATE TABLE IF NOT EXISTS FlightSessionCheckpoint (
-                    SlotId INTEGER NOT NULL PRIMARY KEY,
-                    SessionId TEXT NOT NULL,
-                    SchemaVersion INTEGER NOT NULL,
-                    Status INTEGER NOT NULL,
-                    UpdatedAtUtcTicks INTEGER NOT NULL,
-                    PayloadJson TEXT NOT NULL,
-                    CHECK (SlotId = 1)
-                );
-                """;
-
-            await command
-                .ExecuteNonQueryAsync(cancellationToken)
+            await OpenCareerDatabaseMigrator
+                .MigrateAsync(connection, cancellationToken)
                 .ConfigureAwait(false);
 
             _initialized = true;
