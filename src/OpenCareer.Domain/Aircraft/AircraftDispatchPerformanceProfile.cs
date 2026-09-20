@@ -29,13 +29,19 @@ public sealed record AircraftDispatchPerformanceProfile(
     double? MaximumFuelWeightPounds,
     IReadOnlyList<AircraftPayloadRangePoint>? PayloadRangeEnvelope,
     AircraftDataConfidence Confidence,
-    string? Source = null)
+    string? Source = null,
+    double? ConfiguredEmptyWeightPounds = null,
+    double? MaximumLandingWeightPounds = null,
+    double? MaximumZeroFuelWeightPounds = null)
 {
     public void Validate()
     {
         ValidateOptionalPositive(OperatingEmptyWeightPounds, nameof(OperatingEmptyWeightPounds));
         ValidateOptionalPositive(MaximumTakeoffWeightPounds, nameof(MaximumTakeoffWeightPounds));
-        ValidateOptionalPositive(MaximumFuelWeightPounds, nameof(MaximumFuelWeightPounds));
+        ValidateOptionalNonNegative(MaximumFuelWeightPounds, nameof(MaximumFuelWeightPounds));
+        ValidateOptionalPositive(ConfiguredEmptyWeightPounds, nameof(ConfiguredEmptyWeightPounds));
+        ValidateOptionalPositive(MaximumLandingWeightPounds, nameof(MaximumLandingWeightPounds));
+        ValidateOptionalPositive(MaximumZeroFuelWeightPounds, nameof(MaximumZeroFuelWeightPounds));
 
         if (OperatingEmptyWeightPounds is { } empty
             && MaximumTakeoffWeightPounds is { } mtow
@@ -43,6 +49,14 @@ public sealed record AircraftDispatchPerformanceProfile(
         {
             throw new ArgumentException(
                 "Operating empty weight cannot exceed maximum takeoff weight.");
+        }
+
+        if (ConfiguredEmptyWeightPounds is { } configuredEmpty
+            && MaximumTakeoffWeightPounds is { } configuredMtow
+            && configuredEmpty > configuredMtow)
+        {
+            throw new ArgumentException(
+                "Configured empty weight cannot exceed maximum takeoff weight.");
         }
 
         if (!Enum.IsDefined(Confidence))
@@ -99,6 +113,12 @@ public sealed record AircraftDispatchPerformanceProfile(
     private static void ValidateOptionalPositive(double? value, string name)
     {
         if (value is { } number && (!double.IsFinite(number) || number <= 0))
+            throw new ArgumentOutOfRangeException(name);
+    }
+
+    private static void ValidateOptionalNonNegative(double? value, string name)
+    {
+        if (value is { } number && (!double.IsFinite(number) || number < 0))
             throw new ArgumentOutOfRangeException(name);
     }
 }
