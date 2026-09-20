@@ -10,7 +10,7 @@ public interface IConflictTheaterCatalog
 public sealed class DefaultConflictTheaterCatalog : IConflictTheaterCatalog
 {
     private static readonly IReadOnlyList<ConflictTheaterTemplate> Candidates =
-        Array.AsReadOnly(new[]
+        Array.AsReadOnly(new ConflictTheaterTemplate[]
     {
         new(
             "FICTIONAL-HIGHLANDS",
