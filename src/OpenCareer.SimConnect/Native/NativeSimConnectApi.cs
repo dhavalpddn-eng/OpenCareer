@@ -93,6 +93,9 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         string region) =>
         SimConnect_RequestFacilityData(handle, definitionId, requestId, icao, region);
 
+    public int GetLastSentPacketId(nint handle, out uint sendId) =>
+        SimConnect_GetLastSentPacketID(handle, out sendId);
+
     public int Close(nint handle) => SimConnect_Close(handle);
 
     // Official native ABI; no dependency on the legacy .NET Framework managed wrapper.
@@ -167,6 +170,12 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         uint requestId,
         string icao,
         string region);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_GetLastSentPacketID(
+        nint handle,
+        out uint sendId);
 
     [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
