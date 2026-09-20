@@ -34,6 +34,13 @@ public sealed class MilitaryCampaignMissionService
         CancellationToken cancellationToken = default)
     {
         current.Validate();
+
+        if (current.Checkpoint.CampaignState.IsTerminal)
+        {
+            throw new InvalidOperationException(
+                "This military campaign has ended and cannot accept new operations.");
+        }
+
         EnsureNoActiveMission(current.Checkpoint);
 
         if (acceptedAt < current.Checkpoint.SavedAt)
