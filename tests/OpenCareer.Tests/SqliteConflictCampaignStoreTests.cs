@@ -27,6 +27,13 @@ public sealed class SqliteConflictCampaignStoreTests
             Assert.Equal(checkpoint.CampaignId, loaded!.Checkpoint.CampaignId);
             Assert.Equal(checkpoint.MilitaryCareer, loaded.Checkpoint.MilitaryCareer);
             Assert.Equal(checkpoint.PlayerCombatState, loaded.Checkpoint.PlayerCombatState);
+            Assert.Equal(checkpoint.CampaignState.Phase, loaded.Checkpoint.CampaignState.Phase);
+            Assert.Equal(
+                checkpoint.CampaignState.FriendlyControlAverage,
+                loaded.Checkpoint.CampaignState.FriendlyControlAverage);
+            Assert.Equal(
+                checkpoint.CampaignState.Objectives,
+                loaded.Checkpoint.CampaignState.Objectives);
             Assert.Equal(checkpoint.World.TheaterId, loaded.Checkpoint.World.TheaterId);
             Assert.Equal(checkpoint.World.TheaterSeed, loaded.Checkpoint.World.TheaterSeed);
             Assert.Equal(checkpoint.World.Units, loaded.Checkpoint.World.Units);
@@ -68,6 +75,21 @@ public sealed class SqliteConflictCampaignStoreTests
         {
             Directory.Delete(dir, true);
         }
+    }
+
+    [Fact]
+    public void StrategicCampaignStateMustMatchCheckpointTheater()
+    {
+        var checkpoint = Checkpoint("campaign-theater-mismatch");
+        var invalid = checkpoint with
+        {
+            CampaignState = checkpoint.CampaignState with
+            {
+                TheaterId = "FICTIONAL-OTHER"
+            }
+        };
+
+        Assert.Throws<ArgumentException>(() => invalid.Validate());
     }
 
     [Fact]
