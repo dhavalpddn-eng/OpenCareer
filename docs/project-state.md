@@ -2,14 +2,14 @@
 
 **Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
 
-Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
+Updated: 2026-09-20.
 
 ## Resume here
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Latest implementation: `73bb123b1fbd40b6690e50935d762375d74721c7` (MBL-12 Debrief + Logbook foundation, filters, multi-leg evidence, route projection and compile fix). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
-- WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. A versioned tutorial engine is also implemented with persistent progress, first-run overlay navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews. **Live simulator/runtime validation remains open.**
+- Parent M1 integration head at this slice branch point: `92990f438a3155efc0594f38e39f9199fb41f32a`, containing the completed FlightSession recovery/tracking/live-validation work from PR #14.
+- WinUI 3 shell, resilient SimConnect connection/reconnect, normalized telemetry, `FlightTelemetryEvidenceProcessor`, persistent/recoverable SQLite `FlightSession`, continuity protection, Current Flight integration, tutorial evidence and logbook/debrief projection foundations are implemented. Real MSFS 2024 validation completed the full tested lifecycle through clean shutdown; do not repeat it unless new changes affect that area.
 - [Windows CI run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135): WinUI x64 and live-probe Release builds passed with 0 warnings/errors; **104/104 xUnit tests passed**, including the compiled trace analyzer.
 - [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
 - Tutorial-engine CI at `f6b1cc7`: **118/118 xUnit + 29/29 SimLab passed**, and the Windows WinUI app/live-probe build passed. Automated UI compilation does not replace local interactive/visual acceptance or live MSFS verification.
@@ -43,12 +43,12 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 ## Implemented domain foundation
 
 - Deterministic economy/world events, replay/checkpoints, contract lifecycle/dispatch guards.
-- Pure Chapter 4 flight reducer foundation: `FlightTrackingStateMachine` consumes classified evidence without raw telemetry thresholds; `FlightTimeLedger` separates simulated/block/flight/career-credit/pause/slew/night/instrument time; conventional commercial leg terminal policy requires parking/shutdown/servicing. Synthetic xUnit coverage is included; live telemetry calibration remains open.
+- Pure Chapter 4 flight reducer foundation plus the production `FlightTelemetryEvidenceProcessor` are implemented and tested. The real F-22/KRME validation exercised the complete state path through shutdown/complete with one takeoff and one landing episode and no interruption; thresholds remain configurable because aircraft telemetry behavior can differ.
 - Location/home-base connection rules and travel-history guards.
 - Protected-absence policy, session preferences, bankruptcy stages and bounded manual-ground reward quotes.
 - Career-derived credit model, fictional lenders, affordability/debt-service checks.
 - Fictional aircraft dealers, seeded offers/discounts, stock validation and cash/finance eligibility.
-- Domain baseline remains **35 xUnit tests** plus **29 deterministic SimLab scenarios**. Connection/telemetry/decoder/ViewModel, flight-core, trace-analysis and tutorial-engine coverage bring the current total to **118 passing in CI**, plus **29/29 SimLab**.
+- The merged FlightSession head passed the final Release xUnit suite and Windows x64 Release WinUI build. Older test-count snapshots in historical sections are not the current acceptance authority.
 
 ## Tutorial engine implementation
 
@@ -78,7 +78,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - OpenCareer now writes an application log under `Logs/opencareer.log` with bounded rotation.
 - Diagnostic export creates a ZIP with environment, connection state, non-coordinate telemetry diagnostics, preferences and local logs/settings. Exact aircraft latitude/longitude are intentionally excluded.
 - Current local-data backup creates a ZIP plus manifest while excluding backup/export recursion. It is suitable for currently implemented settings/tutorial/log data.
-- **Do not treat the current backup as SQLite career-save consistency.** MBL-07 owns authoritative FlightSession/SQLite checkpoint/recovery and must integrate its own safe backup semantics.
+- FlightSession checkpoint/recovery is now authoritative and SQLite-backed. The existing Settings backup feature still must not be described as a transactionally consistent whole-career database backup until that separate backup integration is implemented.
 - **Do not treat input-hint preference as binding discovery.** MBL-05 owns actual controller/keyboard profile resolution.
 - MBL-23 is code-complete but remains unremoved until Windows build and local interactive persistence/backup/export verification are available. GitHub Actions currently fails before runner steps are created, so those failures are not compiler/test evidence.
 
@@ -156,14 +156,15 @@ The shell starts the simulator service, refreshes immutable connection/telemetry
 
 ## Material limits
 
-No live native SimConnect/UI interaction verification, robust flight-state detector, durable SQLite flight recovery, installed-aircraft registry, dispatch/runway planner or market-driven job generator yet. The first telemetry path and live-probe executable are CI-built/tested, but neither has been observed against the installed MSFS 2024 runtime or a real aircraft. Long simulator stalls may cause a safe reconnect; native calls themselves cannot be forcibly interrupted. Loan/dealer/manual-ground outputs remain quotes until authoritative persistence and one-time settlement exist. Ownership balance numbers are provisional until real job income is wired and playtested.
+Installed/known-aircraft discovery adapters, authoritative airport/runway source adapters, full operation-specific dispatch performance, and market-driven Jobs generation are not implemented yet. The new registry/runway Slice 1 foundation is provider-neutral and intentionally does not invent MSFS SDK discovery capabilities. External aviation APIs may enrich/reference records but are not gameplay authority. F-22/KRME remains a developer fixture only. The live F-22 showed nearly constant fuel quantity, so generic fuel burn must remain non-authoritative until aircraft-specific fuel telemetry is validated.
 
 ## Next bounded work
 
-1. **Run the live probe on the user's Windows/MSFS machine before calibrating raw-telemetry detection thresholds.** From the repo root use `./tools/run-live-probe.ps1` (or pass `-SimConnectNativePath`). Verify simulator absence, 1 Hz telemetry, menus/pause/resume, quit/restart, abrupt simulator exit and final telemetry clearing. Use `docs/simulator-connection.md`; no live-test claim until observed. F-22/KRME remains the first **developer validation test only**, not a player career-start requirement. Analyze the captured JSONL with `tools/OpenCareer.TraceAnalysis`; exit 0 means structural checks passed, not live acceptance. No real trace or Windows/MSFS runtime was available in the 2026-09-18 Linux work session.
-2. Correct any SimVar/unit/runtime discrepancy found by that live test without broadening scope.
-3. Implement the `FlightEvidenceProcessor` that converts normalized telemetry/events into the already-tested reducer evidence, keeping all speed/AGL/hysteresis values configurable until live calibration.
-4. Add versioned SQLite FlightSession/FlightLeg checkpoint/recovery around the pure reducer/time ledger, then connect registry/runway feasibility/jobs/economy settlement.
+1. Implement provider-neutral aircraft registry records while preserving the existing `AircraftCapabilityProfile` contract/dealer consumers.
+2. Add physical airport/runway records separate from `AirportCareerProfile` economic/opportunity data.
+3. Add deterministic `Feasible / Infeasible / InsufficientData` runway compatibility with explicit blocking reasons and fail-closed unknown data.
+4. Add Application source interfaces for later installed-aircraft and airport-data adapters. Do not add SimConnect/API code to Domain and do not start market-driven Jobs yet.
+5. After this foundation, extend dispatch with payload/weight/range/weather/safety-margin planning and only then feed eligible combinations into Jobs.
 
 Do **not** expand finance complexity before the playable flight foundation unless explicitly requested.
 
