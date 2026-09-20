@@ -29,7 +29,7 @@ internal static class AircraftCfgParser
         string? typeDesignator = ReadOptionalText(general, "icao_type_designator");
         string? manufacturer = ReadOptionalText(general, "icao_manufacturer");
         string? model = ReadOptionalText(general, "icao_model");
-        AircraftEngineType? engineType = ParseEngineType(ReadOptionalText(general, "icao_engine_type"));
+        AircraftEngineType? engineType = ParseEngineType(ReadRawText(general, "icao_engine_type"));
         int? engineCount = ParseNonNegativeInt(ReadOptionalText(general, "icao_engine_count"));
 
         AircraftCfgVariation[] variations = sections
@@ -135,12 +135,16 @@ internal static class AircraftCfgParser
         IReadOnlyDictionary<string, string>? values,
         string key)
     {
-        if (values is null
-            || !values.TryGetValue(key, out string? value)
-            || string.IsNullOrWhiteSpace(value))
-        {
+        string? value = ReadRawText(values, key);
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static string? ReadRawText(
+        IReadOnlyDictionary<string, string>? values,
+        string key)
+    {
+        if (values is null || !values.TryGetValue(key, out string? value))
             return null;
-        }
 
         return value.Trim();
     }

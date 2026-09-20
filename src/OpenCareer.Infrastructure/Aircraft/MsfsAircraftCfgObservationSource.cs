@@ -65,7 +65,7 @@ public sealed class MsfsAircraftCfgObservationSource(
         var observation = new AircraftRegistryObservation(
             canonicalAircraftId,
             ProviderId,
-            $"{match.Path}#{variation.SectionName}",
+            match.ProviderRecordId,
             AircraftDataConfidence.Reference,
             IsInstalled: false,
             MaximumRangeNauticalMiles: variation.MaximumRangeNauticalMiles,
@@ -79,26 +79,29 @@ public sealed class MsfsAircraftCfgObservationSource(
         string exactTitle,
         CancellationToken cancellationToken)
     {
-        foreach (string root in _packageRoots)
+        for (int rootIndex = 0; rootIndex < _packageRoots.Length; rootIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            string root = _packageRoots[rootIndex];
             if (!Directory.Exists(root))
                 continue;
 
-            IEnumerable<string> files;
+            string[] files;
             try
             {
                 files = Directory.EnumerateFiles(
-                    root,
-                    "aircraft.cfg",
-                    new EnumerationOptions
-                    {
-                        RecurseSubdirectories = true,
-                        IgnoreInaccessible = true,
-                        MatchCasing = MatchCasing.CaseInsensitive,
-                        ReturnSpecialDirectories = false
-                    });
+                        root,
+                        "aircraft.cfg",
+                        new EnumerationOptions
+                        {
+                            RecurseSubdirectories = true,
+                            IgnoreInaccessible = true,
+                            MatchCasing = MatchCasing.CaseInsensitive,
+                            ReturnSpecialDirectories = false
+                        })
+                    .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
             }
             catch (IOException)
             {
@@ -109,7 +112,7 @@ public sealed class MsfsAircraftCfgObservationSource(
                 continue;
             }
 
-            foreach (string path in files.OrderBy(static path => path, StringComparer.OrdinalIgnoreCase))
+            foreach (string path in files)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -120,7 +123,16 @@ public sealed class MsfsAircraftCfgObservationSource(
                 foreach (AircraftCfgVariation variation in document.Variations)
                 {
                     if (string.Equals(variation.Title, exactTitle, StringComparison.Ordinal))
-                        yield return new(Path.GetFullPath(path), document, variation);
+                    {
+                        string relativePath = Path.GetRelativePath(root, path)
+                            .Replace(Path.DirectorySeparatorChar, '/')
+                            .Replace(Path.AltDirectorySeparatorChar, '/');
+
+                        yield return new(
+                            $"root-{rootIndex}:{relativePath}#{variation.SectionName}",
+                            document,
+                            variation);
+                    }
                 }
             }
         }
@@ -143,7 +155,7 @@ public sealed class MsfsAircraftCfgObservationSource(
     }
 
     private sealed record MatchingVariation(
-        string Path,
+        string ProviderRecordId,
         AircraftCfgDocument Document,
         AircraftCfgVariation Variation);
 }
