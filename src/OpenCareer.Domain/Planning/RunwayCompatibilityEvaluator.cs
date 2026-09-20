@@ -128,9 +128,9 @@ public sealed record DispatchFeasibilityResult
 }
 
 /// <summary>
-/// Pure baseline runway compatibility. Licensing, ratings, career level,
-/// authorization, weather and operation-specific weight performance are separate
-/// dispatch gates and cannot override a physical incompatibility reported here.
+/// Pure runway compatibility with optional normalized physical weather constraints.
+/// Licensing, ratings, career level and authorization remain separate gates and
+/// cannot override a physical incompatibility reported here.
 /// </summary>
 public static class RunwayCompatibilityEvaluator
 {
