@@ -29,7 +29,9 @@ public sealed class MilitaryGovernmentViewModelTests
         Assert.Empty(viewModel.Objectives);
         Assert.Empty(viewModel.CompletedOperations);
         Assert.Empty(viewModel.OperationalMapMarkers);
+        Assert.Empty(viewModel.Communications);
         Assert.Equal("Schematic map • no plotted markers", viewModel.OperationalMapBoundsText);
+        Assert.Contains("No operational communications", viewModel.CommunicationsStatusText);
         Assert.Contains("No archived operations", viewModel.CompletedOperationStatusText);
         Assert.Contains(
             "No military campaign is active",
@@ -117,6 +119,20 @@ public sealed class MilitaryGovernmentViewModelTests
         Assert.Contains(
             "Schematic map",
             viewModel.OperationalMapBoundsText,
+            StringComparison.Ordinal);
+
+        ConflictCommunicationEntry[] expectedCommunications =
+            ConflictCommunicationsBuilder.Build(snapshot);
+
+        Assert.Equal(
+            expectedCommunications.Length,
+            viewModel.Communications.Count);
+        Assert.Equal(
+            expectedCommunications.Select(entry => entry.Message),
+            viewModel.Communications.Select(item => item.Message));
+        Assert.Contains(
+            "deterministic operational message",
+            viewModel.CommunicationsStatusText,
             StringComparison.Ordinal);
 
         Assert.Contains(

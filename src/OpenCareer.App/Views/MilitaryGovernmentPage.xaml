@@ -210,6 +210,51 @@
                 </StackPanel>
             </Border>
 
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="22">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="COMMUNICATIONS"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="{Binding CommunicationsStatusText}"
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding Communications}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource OpenCareerTableRowStyle}">
+                                    <Grid ColumnSpacing="14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding TimestampText}"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                                   MinWidth="54" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding ChannelText}"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                                   MinWidth="90" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding PriorityText}"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                                   MinWidth="82" />
+                                        <TextBlock Grid.Column="3"
+                                                   Text="{Binding Message}"
+                                                   Style="{StaticResource OpenCareerTableCellTextStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="1.2*" />

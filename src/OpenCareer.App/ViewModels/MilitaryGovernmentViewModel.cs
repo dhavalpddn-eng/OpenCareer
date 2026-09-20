@@ -25,6 +25,8 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         Array.Empty<MilitaryCompletedOperationItemViewModel>();
     private IReadOnlyList<MilitaryOperationalMapMarkerViewModel> _operationalMapMarkers =
         Array.Empty<MilitaryOperationalMapMarkerViewModel>();
+    private IReadOnlyList<MilitaryCommunicationItemViewModel> _communications =
+        Array.Empty<MilitaryCommunicationItemViewModel>();
     private string _statusMessage =
         "No military campaign is active. Military/Government operations will appear here when a campaign is available.";
     private bool _successorDeclined;
@@ -157,6 +159,14 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
     public string OperationalMapBoundsText =>
         MilitaryOperationalMapMarkerViewModel.FormatBounds(_operationalMapMarkers);
 
+    public IReadOnlyList<MilitaryCommunicationItemViewModel> Communications =>
+        _communications;
+
+    public string CommunicationsStatusText =>
+        _communications.Count == 0
+            ? "No operational communications are available."
+            : $"{_communications.Count} deterministic operational message(s), current state only.";
+
     public string CompletedOperationStatusText =>
         _completedOperations.Count == 0
             ? "No archived operations. Completed campaigns appear here after a successor operation is accepted."
@@ -242,6 +252,13 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         _operationalMapMarkers = _snapshot is null
             ? Array.Empty<MilitaryOperationalMapMarkerViewModel>()
             : MilitaryOperationalMapMarkerViewModel.Build(_snapshot);
+
+        _communications = _snapshot is null
+            ? Array.Empty<MilitaryCommunicationItemViewModel>()
+            : ConflictCommunicationsBuilder.Build(_snapshot)
+                .Select(static entry =>
+                    new MilitaryCommunicationItemViewModel(entry))
+                .ToArray();
 
         _successorOffer = _transitions.GetCurrentOffer();
         _successorPresentation = _successorOffer is null
@@ -393,6 +410,8 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             nameof(OperationalMapMarkers),
             nameof(OperationalMapStatusText),
             nameof(OperationalMapBoundsText),
+            nameof(Communications),
+            nameof(CommunicationsStatusText),
             nameof(CompletedOperationStatusText),
             nameof(SupportRequestStatusText),
             nameof(ObjectiveStatusText),
@@ -436,6 +455,29 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(
             this,
             new PropertyChangedEventArgs(propertyName));
+}
+
+public sealed class MilitaryCommunicationItemViewModel
+{
+    public MilitaryCommunicationItemViewModel(
+        ConflictCommunicationEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        entry.Validate();
+
+        TimestampText = entry.Timestamp.LocalDateTime.ToString("t");
+        ChannelText = entry.Channel.ToString().ToUpperInvariant();
+        PriorityText =
+            MilitaryGovernmentViewModel.FormatWords(
+                entry.Priority.ToString())
+            .ToUpperInvariant();
+        Message = entry.Message;
+    }
+
+    public string TimestampText { get; }
+    public string ChannelText { get; }
+    public string PriorityText { get; }
+    public string Message { get; }
 }
 
 public enum MilitaryOperationalMapMarkerKind
