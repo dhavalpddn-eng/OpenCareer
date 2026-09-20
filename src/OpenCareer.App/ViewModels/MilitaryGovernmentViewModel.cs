@@ -634,21 +634,38 @@ public sealed class MilitaryOperationalMapMarkerViewModel
 public sealed class MilitaryCompletedOperationItemViewModel
 {
     public MilitaryCompletedOperationItemViewModel(ConflictCampaignHistoryEntry entry)
+        : this(CompletedMilitaryOperationDetailProjectionBuilder.Build(entry))
     {
-        ArgumentNullException.ThrowIfNull(entry);
+    }
 
-        CampaignId = entry.CampaignId;
-        OperationName = entry.Identity.OperationName;
-        TheaterText = $"Theater {entry.TheaterId}";
-        OutcomeText = MilitaryGovernmentViewModel.FormatWords(entry.Outcome.ToString());
-        FinalStateText = $"Final phase: {MilitaryGovernmentViewModel.FormatWords(entry.FinalPhase.ToString())} • " +
-            $"{entry.FinalFriendlyControlAverage:P0} friendly control";
-        EndedText = $"Ended {entry.EndedAt.LocalDateTime:g}";
-        FriendlyFactionText = FormatFaction(entry.Identity.FriendlyFaction);
-        HostileFactionText = FormatFaction(entry.Identity.HostileFaction);
+    public MilitaryCompletedOperationItemViewModel(
+        CompletedMilitaryOperationDetailProjection detail)
+    {
+        ArgumentNullException.ThrowIfNull(detail);
+
+        CampaignId = detail.CampaignId;
+        CampaignText = $"Campaign {detail.CampaignId}";
+        OperationName = detail.OperationName;
+        TheaterText = $"Theater {detail.TheaterId}";
+        OutcomeText =
+            MilitaryGovernmentViewModel.FormatWords(
+                detail.Outcome.ToString());
+        FinalStateText =
+            $"Final phase: {MilitaryGovernmentViewModel.FormatWords(detail.FinalPhase.ToString())} • " +
+            $"{detail.FinalFriendlyControlAverage:P0} friendly control";
+        EndedText = $"Ended {detail.EndedAt.LocalDateTime:g}";
+        FriendlyFactionText = FormatFaction(
+            detail.FriendlyFactionCode,
+            detail.FriendlyFactionName,
+            detail.FriendlyPosture);
+        HostileFactionText = FormatFaction(
+            detail.HostileFactionCode,
+            detail.HostileFactionName,
+            detail.HostilePosture);
     }
 
     public string CampaignId { get; }
+    public string CampaignText { get; }
     public string OperationName { get; }
     public string TheaterText { get; }
     public string OutcomeText { get; }
@@ -657,9 +674,12 @@ public sealed class MilitaryCompletedOperationItemViewModel
     public string FriendlyFactionText { get; }
     public string HostileFactionText { get; }
 
-    private static string FormatFaction(ConflictFactionIdentity faction) =>
-        $"{faction.ShortCode} • {faction.DisplayName} • " +
-        $"{MilitaryGovernmentViewModel.FormatWords(faction.Posture.ToString())} posture";
+    private static string FormatFaction(
+        string shortCode,
+        string displayName,
+        ConflictFactionOperationalPosture posture) =>
+        $"{shortCode} • {displayName} • " +
+        $"{MilitaryGovernmentViewModel.FormatWords(posture.ToString())} posture";
 }
 
 public sealed class MilitarySupportRequestItemViewModel
