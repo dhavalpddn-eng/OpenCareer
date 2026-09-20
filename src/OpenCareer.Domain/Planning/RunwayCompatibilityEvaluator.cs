@@ -37,7 +37,15 @@ public enum DispatchFeasibilityReason
     AircraftPayloadCapacityUnknown,
     AircraftRangeUnknown,
     PayloadExceedsAircraftMaximum,
-    RangeExceedsAircraftMaximum
+    RangeExceedsAircraftMaximum,
+    AircraftDispatchPerformanceUnknown,
+    AircraftOperatingEmptyWeightUnknown,
+    AircraftMaximumTakeoffWeightUnknown,
+    AircraftMaximumFuelWeightUnknown,
+    FuelExceedsAircraftMaximum,
+    TakeoffWeightExceedsMaximum,
+    PayloadRangeEnvelopeDoesNotCoverPayload,
+    PayloadRangeExceeded
 }
 
 public sealed record DispatchFeasibilityIssue(
@@ -115,7 +123,8 @@ public static class RunwayCompatibilityEvaluator
     public static DispatchFeasibilityResult Evaluate(
         AircraftRegistryRecord aircraft,
         AirportRecord origin,
-        AirportRecord destination)
+        AirportRecord destination,
+        double runwayLengthSafetyMarginPercent = 0)
     {
         ArgumentNullException.ThrowIfNull(aircraft);
         ArgumentNullException.ThrowIfNull(origin);
@@ -126,19 +135,22 @@ public static class RunwayCompatibilityEvaluator
         return Evaluate(
             aircraft.RunwayPerformance,
             origin,
-            destination);
+            destination,
+            runwayLengthSafetyMarginPercent);
     }
 
     public static DispatchFeasibilityResult Evaluate(
         AircraftRunwayPerformanceProfile? performance,
         AirportRecord origin,
-        AirportRecord destination)
+        AirportRecord destination,
+        double runwayLengthSafetyMarginPercent = 0)
     {
         ArgumentNullException.ThrowIfNull(origin);
         ArgumentNullException.ThrowIfNull(destination);
 
         origin.Validate();
         destination.Validate();
+        ValidateSafetyMargin(runwayLengthSafetyMarginPercent);
 
         if (performance is null)
         {
@@ -154,12 +166,14 @@ public static class RunwayCompatibilityEvaluator
         EndpointEvaluation originResult = EvaluateEndpoint(
             performance,
             origin,
-            DispatchEndpoint.Origin);
+            DispatchEndpoint.Origin,
+            runwayLengthSafetyMarginPercent);
 
         EndpointEvaluation destinationResult = EvaluateEndpoint(
             performance,
             destination,
-            DispatchEndpoint.Destination);
+            DispatchEndpoint.Destination,
+            runwayLengthSafetyMarginPercent);
 
         DispatchFeasibilityStatus status =
             originResult.Status == DispatchFeasibilityStatus.Infeasible
@@ -180,7 +194,8 @@ public static class RunwayCompatibilityEvaluator
     private static EndpointEvaluation EvaluateEndpoint(
         AircraftRunwayPerformanceProfile performance,
         AirportRecord airport,
-        DispatchEndpoint endpoint)
+        DispatchEndpoint endpoint,
+        double runwayLengthSafetyMarginPercent)
     {
         if (airport.Runways.Count == 0)
         {
@@ -195,7 +210,12 @@ public static class RunwayCompatibilityEvaluator
 
         CandidateEvaluation[] candidates = airport.Runways
             .OrderBy(static runway => runway.Identifier, StringComparer.OrdinalIgnoreCase)
-            .Select(runway => EvaluateRunway(performance, airport.Icao, runway, endpoint))
+            .Select(runway => EvaluateRunway(
+                performance,
+                airport.Icao,
+                runway,
+                endpoint,
+                runwayLengthSafetyMarginPercent))
             .ToArray();
 
         CandidateEvaluation[] feasible = candidates
@@ -232,7 +252,8 @@ public static class RunwayCompatibilityEvaluator
         AircraftRunwayPerformanceProfile performance,
         string airportIcao,
         RunwayRecord runway,
-        DispatchEndpoint endpoint)
+        DispatchEndpoint endpoint,
+        double runwayLengthSafetyMarginPercent)
     {
         if (runway.IsClosed)
         {
@@ -248,9 +269,13 @@ public static class RunwayCompatibilityEvaluator
         var definiteFailures = new List<DispatchFeasibilityIssue>();
         var unknowns = new List<DispatchFeasibilityIssue>();
 
-        double? requiredLength = endpoint == DispatchEndpoint.Origin
+        double? baseRequiredLength = endpoint == DispatchEndpoint.Origin
             ? performance.MinimumTakeoffRunwayFeet
             : performance.MinimumLandingRunwayFeet;
+
+        double? requiredLength = baseRequiredLength is { } knownLength
+            ? ApplySafetyMargin(knownLength, runwayLengthSafetyMarginPercent)
+            : null;
 
         if (requiredLength is null)
         {
@@ -343,6 +368,15 @@ public static class RunwayCompatibilityEvaluator
             runway,
             Array.Empty<DispatchFeasibilityIssue>());
     }
+
+    private static void ValidateSafetyMargin(double percentage)
+    {
+        if (!double.IsFinite(percentage) || percentage < 0 || percentage > 100)
+            throw new ArgumentOutOfRangeException(nameof(percentage));
+    }
+
+    private static double ApplySafetyMargin(double value, double percentage) =>
+        value * (1 + (percentage / 100d));
 
     private static RunwaySurfaceSupport? MapSurface(RunwaySurface surface) =>
         surface switch
