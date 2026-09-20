@@ -99,7 +99,8 @@ public sealed record FuelWeightConversionResult
 
 /// <summary>
 /// Converts the Slice 16 gallons requirement to pounds using only the fuel
-/// density whose index exactly matches the selected Slice 15 cruise profile.
+/// density whose zero-based index exactly matches the selected Slice 15 cruise
+/// profile's documented MSFS <c>fuel_type_idx</c>. No other density is substituted.
 /// </summary>
 public static class RouteFuelWeightBridge
 {
