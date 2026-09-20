@@ -243,17 +243,17 @@ public static class AircraftRegistryResolver
                 pair.Value.Observation.IsInstalled));
 
         var capabilities = new ResolvedAircraftCapabilities(
-            Value<string>(AircraftRegistryField.DisplayName),
-            Value<AircraftCapability>(AircraftRegistryField.Capabilities),
-            Value<AircraftAccess>(AircraftRegistryField.Access),
-            Value<double>(AircraftRegistryField.MaximumPayloadPounds),
-            Value<double>(AircraftRegistryField.MaximumRangeNauticalMiles),
-            Value<double>(AircraftRegistryField.TypicalCruiseKnots),
-            Value<int>(AircraftRegistryField.Seats),
-            Value<int>(AircraftRegistryField.EngineCount),
-            Value<bool>(AircraftRegistryField.IfrCapable),
-            Value<bool>(AircraftRegistryField.Pressurized),
-            Value<bool>(AircraftRegistryField.RetractableGear));
+            ReferenceValue<string>(AircraftRegistryField.DisplayName),
+            StructValue<AircraftCapability>(AircraftRegistryField.Capabilities),
+            StructValue<AircraftAccess>(AircraftRegistryField.Access),
+            StructValue<double>(AircraftRegistryField.MaximumPayloadPounds),
+            StructValue<double>(AircraftRegistryField.MaximumRangeNauticalMiles),
+            StructValue<double>(AircraftRegistryField.TypicalCruiseKnots),
+            StructValue<int>(AircraftRegistryField.Seats),
+            StructValue<int>(AircraftRegistryField.EngineCount),
+            StructValue<bool>(AircraftRegistryField.IfrCapable),
+            StructValue<bool>(AircraftRegistryField.Pressurized),
+            StructValue<bool>(AircraftRegistryField.RetractableGear));
 
         return new(
             canonicalId,
@@ -261,7 +261,7 @@ public static class AircraftRegistryResolver
                 ? AircraftInstallationStatus.Installed
                 : AircraftInstallationStatus.KnownOnly,
             capabilities,
-            Value<AircraftRunwayPerformanceProfile>(AircraftRegistryField.RunwayPerformance),
+            ReferenceValue<AircraftRunwayPerformanceProfile>(AircraftRegistryField.RunwayPerformance),
             unresolved,
             provenance);
 
@@ -271,10 +271,20 @@ public static class AircraftRegistryResolver
                 selected.Add(field, candidate);
         }
 
-        T? Value<T>(AircraftRegistryField field)
+        T? StructValue<T>(AircraftRegistryField field)
+            where T : struct
         {
             if (!selected.TryGetValue(field, out FieldCandidate? candidate))
-                return default;
+                return null;
+
+            return (T)candidate.Value;
+        }
+
+        T? ReferenceValue<T>(AircraftRegistryField field)
+            where T : class
+        {
+            if (!selected.TryGetValue(field, out FieldCandidate? candidate))
+                return null;
 
             return (T)candidate.Value;
         }
