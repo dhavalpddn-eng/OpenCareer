@@ -472,7 +472,7 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: code head `b4e3ca81` is green on both platforms. Linux PR CI passed **376/376 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **376/376 xUnit**.
+Verification note: current verified military implementation head `018e1da5` is green. Linux PR CI passed **402/402 xUnit + 29/29 SimLab**. The latest production WinUI head `555b9dc7` built the WinUI app and live probe with **0 errors** and passed **402/402 xUnit** on Windows; exact-head `018e1da5` Windows CI also passed with its build job skipped because the final slice changed tests only.
 
 ## Remaining
 
@@ -489,7 +489,9 @@ Verification note: code head `b4e3ca81` is green on both platforms. Linux PR CI 
 - [x] Add deterministic successor-operation offer planning across fictional theater candidates, avoiding an immediate theater repeat when alternatives exist and previewing the exact operation identity acceptance will create.
 - [x] Add an application-layer successor-operation flow with `IConflictTheaterCatalog`, offer projection, accept/decline/reconsider actions, stale-offer rejection and runtime-state replacement after acceptance.
 - [x] Persist completed-operation history through SQLite and expose it in the Military/Government operations snapshot.
-- [x] Display read-only archived operation history in Military/Government, with deterministic newest-first ordering, empty/reset states and SQLite recovery coverage (`b07d40a2` / test fix `e0a9df5d`; 370 Linux tests + 29 SimLab passed, Windows WinUI/LiveProbe builds passed; see `docs/conflict-system.md` for exact validation limits).
+- [x] Display read-only archived operation history in Military/Government, with deterministic newest-first ordering, empty/reset states and SQLite recovery coverage.
+- [x] Add completed-operation drill-down selection/detail UX: campaign-ID-stable selection across polling/current-campaign replacement/successor activation, safe stale-history clearing, persisted terminal posture projection, native keyboard/focus behavior, long-text handling and read-only archive labeling.
+- [x] Verify completed-operation drill-down across real SQLite restart with exact field fidelity and a before/after `conflict_campaigns` fingerprint proving select/refresh/clear/reselect performs no database writes (`018e1da5`; Linux 402/402 xUnit + 29/29 SimLab; latest production Windows head `555b9dc7` WinUI/LiveProbe 0 errors + 402/402 xUnit).
 - [x] Add deterministic faction operational posture (Defensive / Aggressive / LogisticsFocused / AirFocused) and use it to bias replacement priority plus support-request thresholds/urgency/range without making AI authoritative.
 - [x] Add the user-facing Military/Government successor-operation presentation with Accept / Decline / Reconsider routed through the application transition service.
 - [x] Verify successor UI storage-failure/cancellation recovery, stable action feedback, stale-campaign refresh, duplicate-click protection and SQLite successor recovery at `4c63e365` in Linux/Windows CI; local MSBuild execution was blocked by workspace socket restrictions.
@@ -609,7 +611,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement first Military / Government screen using the production design system and application-layer conflict projections/actions.
 - [x] Add a read-only schematic Operational Map to Military/Government using existing conflict snapshot units/threats/support targets, with accessible text/automation labels and no UI-owned conflict rules.
 - [x] Add deterministic Communications panel from current campaign/support/threat/active-operation snapshot state; no AI or fabricated event history.
-- [ ] Complete local visual/accessibility acceptance and later deeper operational drill-down.
+- [ ] Complete local visual/accessibility acceptance of the Military/Government history/drill-down and surrounding operational surface.
 - [x] Implement production Logbook / Debrief screen with committed-flight list, aggregate totals, filters, multi-leg detail, route-track rendering, landing evidence, incidents and settlement summary.
 - [ ] Implement Career screen.
 - [x] Implement production Settings screen.
