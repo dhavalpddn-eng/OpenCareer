@@ -54,6 +54,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
         Assert.Equal("DA 62", metadata.IcaoModel);
         Assert.Equal(AircraftEngineType.Piston, metadata.EngineType);
         Assert.Equal(5, metadata.PassengerCapacity);
+        Assert.Null(observation.DispatchPerformance);
         Assert.DoesNotContain(_tempRoot, observation.ProviderRecordId, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -197,6 +198,294 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
         Assert.Empty(
             await source.FindAircraftObservationsAsync(
                 AircraftCanonicalIdentity.FromMsfsTitle("Streamed Aircraft")));
+    }
+
+    [Fact]
+    public async Task FlightModelWeightFactsPopulateDispatchProfileWithoutRelabelingEmptyWeight()
+    {
+        string root = CreatePackageRoot("Official2024");
+
+        WriteAircraftCfg(
+            root,
+            "weight-fixture",
+            """
+            [GENERAL]
+            icao_engine_count = 2
+
+            [FLTSIM.0]
+            title = "Weight Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "weight-fixture",
+            "flight_model.cfg",
+            """
+            [WEIGHT_AND_BALANCE]
+            max_gross_weight = 9000
+            max_takeoff_weight = 8500
+            max_landing_weight = 8200
+            max_zero_fuel_weight = 7000
+            empty_weight = 5000
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle("Weight Fixture")));
+
+        AircraftDispatchPerformanceProfile profile =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                observation.DispatchPerformance);
+
+        Assert.Null(profile.OperatingEmptyWeightPounds);
+        Assert.Equal(5000, profile.ConfiguredEmptyWeightPounds);
+        Assert.Equal(8500, profile.MaximumTakeoffWeightPounds);
+        Assert.Equal(8200, profile.MaximumLandingWeightPounds);
+        Assert.Equal(7000, profile.MaximumZeroFuelWeightPounds);
+        Assert.Null(profile.MaximumFuelWeightPounds);
+        Assert.Equal(AircraftDataConfidence.Reference, profile.Confidence);
+    }
+
+    [Fact]
+    public async Task MissingTakeoffAndLandingWeightsUseDocumentedGrossWeightFallback()
+    {
+        string root = CreatePackageRoot("Official2024");
+
+        WriteAircraftCfg(
+            root,
+            "fallback-fixture",
+            """
+            [FLTSIM.0]
+            title = "Fallback Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "fallback-fixture",
+            "flight_model.cfg",
+            """
+            [WEIGHT_AND_BALANCE]
+            max_gross_weight = 9100
+            empty_weight = 5000
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftDispatchPerformanceProfile profile =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                Assert.Single(
+                    await source.FindAircraftObservationsAsync(
+                        AircraftCanonicalIdentity.FromMsfsTitle(
+                            "Fallback Fixture")))
+                .DispatchPerformance);
+
+        Assert.Equal(9100, profile.MaximumTakeoffWeightPounds);
+        Assert.Equal(9100, profile.MaximumLandingWeightPounds);
+        Assert.Equal(9100, profile.MaximumZeroFuelWeightPounds);
+    }
+
+    [Fact]
+    public async Task InvalidExplicitTakeoffWeightDoesNotSilentlyUseGrossWeight()
+    {
+        string root = CreatePackageRoot("Official2024");
+
+        WriteAircraftCfg(
+            root,
+            "invalid-takeoff",
+            """
+            [FLTSIM.0]
+            title = "Invalid Takeoff Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "invalid-takeoff",
+            "flight_model.cfg",
+            """
+            [WEIGHT_AND_BALANCE]
+            max_gross_weight = 9000
+            max_takeoff_weight = invalid
+            empty_weight = 5000
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftDispatchPerformanceProfile profile =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                Assert.Single(
+                    await source.FindAircraftObservationsAsync(
+                        AircraftCanonicalIdentity.FromMsfsTitle(
+                            "Invalid Takeoff Fixture")))
+                .DispatchPerformance);
+
+        Assert.Null(profile.MaximumTakeoffWeightPounds);
+        Assert.Equal(9000, profile.MaximumLandingWeightPounds);
+        Assert.Equal(9000, profile.MaximumZeroFuelWeightPounds);
+        Assert.Equal(5000, profile.ConfiguredEmptyWeightPounds);
+    }
+
+    [Fact]
+    public async Task SingleFuelDensityConvertsDocumentedCapacityToMaximumFuelWeight()
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "fuel-fixture",
+            """
+            [FLTSIM.0]
+            title = "Fuel Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "fuel-fixture",
+            "flight_performance.cfg",
+            """
+            [ENGINE_PERFORMANCE]
+            fuel_density_table = 6.7
+
+            [AIRCRAFT_LOADING]
+            fuel_capacity = 100
+            passenger_capacity = 4
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftDispatchPerformanceProfile profile =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                Assert.Single(
+                    await source.FindAircraftObservationsAsync(
+                        AircraftCanonicalIdentity.FromMsfsTitle(
+                            "Fuel Fixture")))
+                .DispatchPerformance);
+
+        Assert.Equal(670, profile.MaximumFuelWeightPounds);
+        Assert.Null(profile.MaximumTakeoffWeightPounds);
+    }
+
+    [Fact]
+    public async Task MultipleFuelDensitiesRemainUnknownInsteadOfChoosingOne()
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "multi-fuel-fixture",
+            """
+            [FLTSIM.0]
+            title = "Multi Fuel Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "multi-fuel-fixture",
+            "flight_model.cfg",
+            """
+            [WEIGHT_AND_BALANCE]
+            max_takeoff_weight = 8000
+            empty_weight = 4500
+            """);
+
+        WriteAircraftFile(
+            root,
+            "multi-fuel-fixture",
+            "flight_performance.cfg",
+            """
+            [ENGINE_PERFORMANCE]
+            fuel_density_table = 6.0, 6.7
+
+            [AIRCRAFT_LOADING]
+            fuel_capacity = 120
+            passenger_capacity = 4
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftDispatchPerformanceProfile profile =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                Assert.Single(
+                    await source.FindAircraftObservationsAsync(
+                        AircraftCanonicalIdentity.FromMsfsTitle(
+                            "Multi Fuel Fixture")))
+                .DispatchPerformance);
+
+        Assert.Equal(8000, profile.MaximumTakeoffWeightPounds);
+        Assert.Null(profile.MaximumFuelWeightPounds);
+    }
+
+    [Fact]
+    public async Task ZeroFuelCapacityIsPreservedAsKnownZero()
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "electric-fixture",
+            """
+            [FLTSIM.0]
+            title = "Electric Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "electric-fixture",
+            "flight_performance.cfg",
+            """
+            [ENGINE_PERFORMANCE]
+            fuel_density_table = 6.0
+
+            [AIRCRAFT_LOADING]
+            fuel_capacity = 0
+            passenger_capacity = 2
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftDispatchPerformanceProfile profile =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                Assert.Single(
+                    await source.FindAircraftObservationsAsync(
+                        AircraftCanonicalIdentity.FromMsfsTitle(
+                            "Electric Fixture")))
+                .DispatchPerformance);
+
+        Assert.Equal(0, profile.MaximumFuelWeightPounds);
+    }
+
+    [Fact]
+    public async Task ContradictoryConfiguredEmptyAndTakeoffWeightsFailClosed()
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "contradictory-fixture",
+            """
+            [FLTSIM.0]
+            title = "Contradictory Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "contradictory-fixture",
+            "flight_model.cfg",
+            """
+            [WEIGHT_AND_BALANCE]
+            max_takeoff_weight = 4000
+            empty_weight = 5000
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle(
+                    "Contradictory Fixture")));
+
+        Assert.Null(observation.DispatchPerformance);
     }
 
     [Fact]
@@ -362,6 +651,17 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
     private static void WriteAircraftCfg(
         string root,
         string packageName,
+        string content) =>
+        WriteAircraftFile(
+            root,
+            packageName,
+            "aircraft.cfg",
+            content);
+
+    private static void WriteAircraftFile(
+        string root,
+        string packageName,
+        string fileName,
         string content)
     {
         string aircraftDirectory = Path.Combine(
@@ -373,7 +673,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
 
         Directory.CreateDirectory(aircraftDirectory);
         File.WriteAllText(
-            Path.Combine(aircraftDirectory, "aircraft.cfg"),
+            Path.Combine(aircraftDirectory, fileName),
             content);
     }
 }
