@@ -94,6 +94,24 @@ public sealed class ConflictOperationsSnapshotTests
             null,
             Epoch.AddMinutes(1));
 
+        checkpoint = checkpoint with
+        {
+            History = new[]
+            {
+                new ConflictCampaignHistoryEntry(
+                    "snapshot-prior",
+                    "FICTIONAL-PRIOR",
+                    ConflictCampaignIdentityGenerator.Create(
+                        "snapshot-prior",
+                        world),
+                    ConflictCampaignOutcome.Ceasefire,
+                    ConflictCampaignPhase.Contested,
+                    EvaluationSequence: 7,
+                    FinalFriendlyControlAverage: 0.51,
+                    EndedAt: Epoch.AddMinutes(-30))
+            }
+        };
+
         ConflictOperationsSnapshot snapshot =
             ConflictOperationsSnapshotBuilder.Build(checkpoint);
 
@@ -112,6 +130,10 @@ public sealed class ConflictOperationsSnapshotTests
         Assert.Equal(2, snapshot.Units.Length);
         Assert.Single(snapshot.Threats);
         Assert.Single(snapshot.SupportRequests);
+        Assert.Single(snapshot.CompletedCampaigns);
+        Assert.Equal(
+            "snapshot-prior",
+            snapshot.CompletedCampaigns[0].CampaignId);
         Assert.NotNull(snapshot.ActiveOperation);
         Assert.Equal(
             SupportRequestType.CloseAirSupport,

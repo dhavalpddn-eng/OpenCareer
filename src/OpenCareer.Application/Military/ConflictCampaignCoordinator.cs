@@ -72,6 +72,17 @@ public sealed class ConflictCampaignCoordinator
                 "A successor military campaign can only begin after the current campaign has ended.");
         }
 
+        int activeMissionCount =
+            completed.Checkpoint.CombatSupportMissions.Length
+            + completed.Checkpoint.AreaSupportMissions.Length
+            + completed.Checkpoint.AirOperationMissions.Length;
+
+        if (activeMissionCount != 0)
+        {
+            throw new InvalidOperationException(
+                "A successor military campaign cannot begin while an operation is still active.");
+        }
+
         if (string.Equals(
             completed.Checkpoint.CampaignId,
             campaignId,
@@ -81,6 +92,16 @@ public sealed class ConflictCampaignCoordinator
                 "A successor military campaign requires a new campaign ID.");
         }
 
+        if (completed.Checkpoint.History.Any(entry =>
+            string.Equals(
+                entry.CampaignId,
+                campaignId,
+                StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                "A successor military campaign cannot reuse a historical campaign ID.");
+        }
+
         if (createdAt < completed.Checkpoint.SavedAt)
         {
             throw new ArgumentOutOfRangeException(
@@ -88,14 +109,62 @@ public sealed class ConflictCampaignCoordinator
                 "A successor military campaign cannot begin before the completed campaign checkpoint.");
         }
 
-        return await CreateAsync(
-                campaignId,
+        ConflictCampaignHistoryEntry completedEntry =
+            ConflictCampaignHistoryEntry.FromCheckpoint(
+                completed.Checkpoint);
+
+        ConflictCampaignHistoryEntry[] history =
+            completed.Checkpoint.History
+                .Append(completedEntry)
+                .ToArray();
+
+        ConflictWorldState world =
+            ConflictTheaterGenerator.Generate(
                 template,
                 theaterSeed,
-                createdAt,
+                createdAt);
+
+        ConflictCampaignState campaignState =
+            ConflictCampaignDirector.Create(
+                campaignId,
+                world);
+
+        ConflictCampaignCheckpoint checkpoint =
+            ConflictCampaignCheckpoint.Create(
+                campaignId,
+                world,
                 completed.Checkpoint.MilitaryCareer,
+                completed.Checkpoint.PlayerCombatState,
+                combatSupportMissions: null,
+                areaSupportMissions: null,
+                airOperationMissions: null,
+                savedAt: createdAt,
+                campaignState,
+                history);
+
+        return await _store
+            .SaveAsync(
+                checkpoint,
+                expectedRevision: null,
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public Task<ConflictCampaignStoreRecord> CreateSuccessorAsync(
+        ConflictCampaignStoreRecord completed,
+        ConflictCampaignSuccessorOffer offer,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(offer);
+        offer.Validate();
+
+        return CreateSuccessorAsync(
+            completed,
+            offer.CampaignId,
+            offer.Theater,
+            offer.TheaterSeed,
+            offer.AvailableAt,
+            cancellationToken);
     }
 
     public Task<ConflictCampaignStoreRecord?> LoadAsync(

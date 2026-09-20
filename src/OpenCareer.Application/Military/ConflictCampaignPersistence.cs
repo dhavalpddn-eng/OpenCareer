@@ -15,6 +15,9 @@ public sealed record ConflictCampaignCheckpoint(
     AirOperationMission[] AirOperationMissions,
     DateTimeOffset SavedAt)
 {
+    public ConflictCampaignHistoryEntry[] History { get; init; } =
+        Array.Empty<ConflictCampaignHistoryEntry>();
+
     public const int CurrentSchemaVersion = 2;
 
     public static ConflictCampaignCheckpoint Create(
@@ -26,7 +29,8 @@ public sealed record ConflictCampaignCheckpoint(
         IEnumerable<AreaSupportMission>? areaSupportMissions,
         IEnumerable<AirOperationMission>? airOperationMissions,
         DateTimeOffset savedAt,
-        ConflictCampaignState? campaignState = null)
+        ConflictCampaignState? campaignState = null,
+        IEnumerable<ConflictCampaignHistoryEntry>? history = null)
     {
         var checkpoint = new ConflictCampaignCheckpoint(
             CurrentSchemaVersion,
@@ -38,7 +42,11 @@ public sealed record ConflictCampaignCheckpoint(
             combatSupportMissions?.ToArray() ?? Array.Empty<AirSupportMission>(),
             areaSupportMissions?.ToArray() ?? Array.Empty<AreaSupportMission>(),
             airOperationMissions?.ToArray() ?? Array.Empty<AirOperationMission>(),
-            savedAt);
+            savedAt)
+        {
+            History = history?.ToArray()
+                ?? Array.Empty<ConflictCampaignHistoryEntry>()
+        };
 
         checkpoint.Validate();
         return checkpoint;
@@ -57,6 +65,7 @@ public sealed record ConflictCampaignCheckpoint(
         ArgumentNullException.ThrowIfNull(CombatSupportMissions);
         ArgumentNullException.ThrowIfNull(AreaSupportMissions);
         ArgumentNullException.ThrowIfNull(AirOperationMissions);
+        ArgumentNullException.ThrowIfNull(History);
 
         ConflictValidation.Validate(World);
         CampaignState.Validate();
@@ -72,6 +81,44 @@ public sealed record ConflictCampaignCheckpoint(
             throw new ArgumentException("Campaign state must match checkpoint world time.");
 
         PlayerCombatState.Validate();
+
+        foreach (ConflictCampaignHistoryEntry entry in History)
+            entry.Validate();
+
+        if (History.Any(entry =>
+            string.Equals(
+                entry.CampaignId,
+                CampaignId,
+                StringComparison.Ordinal)))
+        {
+            throw new ArgumentException(
+                "Completed campaign history cannot contain the active campaign ID.");
+        }
+
+        if (History.Select(entry => entry.CampaignId)
+            .Distinct(StringComparer.Ordinal)
+            .Count() != History.Length)
+        {
+            throw new ArgumentException(
+                "Completed campaign history cannot contain duplicate campaign IDs.");
+        }
+
+        if (History.Select(entry => entry.Identity.OperationId)
+            .Distinct(StringComparer.Ordinal)
+            .Count() != History.Length)
+        {
+            throw new ArgumentException(
+                "Completed campaign history cannot contain duplicate operation IDs.");
+        }
+
+        for (int index = 1; index < History.Length; index++)
+        {
+            if (History[index].EndedAt < History[index - 1].EndedAt)
+            {
+                throw new ArgumentException(
+                    "Completed campaign history must be ordered by end time.");
+            }
+        }
 
         if (SavedAt < World.UpdatedAt)
             throw new ArgumentException("Checkpoint save time cannot precede world time.");

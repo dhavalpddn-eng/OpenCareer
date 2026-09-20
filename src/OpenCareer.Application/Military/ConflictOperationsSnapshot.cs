@@ -58,6 +58,7 @@ public sealed record ConflictOperationsSnapshot(
     ConflictMapUnitProjection[] Units,
     ConflictThreatProjection[] Threats,
     ConflictSupportProjection[] SupportRequests,
+    ConflictCampaignHistoryEntry[] CompletedCampaigns,
     ActiveMilitaryOperationProjection? ActiveOperation,
     DateTimeOffset AsOf);
 
@@ -152,6 +153,7 @@ public static class ConflictOperationsSnapshotBuilder
             ground.Concat(air).ToArray(),
             threats,
             requests,
+            checkpoint.History.ToArray(),
             BuildActiveOperation(checkpoint),
             checkpoint.SavedAt);
     }

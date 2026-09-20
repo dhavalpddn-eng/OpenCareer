@@ -19,6 +19,26 @@ public sealed class SqliteConflictCampaignStoreTests
         {
             var store = Store(dir);
             var checkpoint = Checkpoint("roundtrip");
+
+            var historyEntry = new ConflictCampaignHistoryEntry(
+                "prior-roundtrip",
+                checkpoint.World.TheaterId,
+                ConflictCampaignIdentityGenerator.Create(
+                    "prior-roundtrip",
+                    checkpoint.World),
+                ConflictCampaignOutcome.Victory,
+                ConflictCampaignPhase.FriendlySecured,
+                EvaluationSequence: 5,
+                FinalFriendlyControlAverage: 0.82,
+                EndedAt: Epoch.AddMinutes(-10));
+
+            checkpoint = checkpoint with
+            {
+                History = new[] { historyEntry }
+            };
+
+            checkpoint.Validate();
+
             var saved = await store.SaveAsync(checkpoint, null);
             var loaded = await store.LoadAsync(checkpoint.CampaignId);
 
@@ -37,6 +57,9 @@ public sealed class SqliteConflictCampaignStoreTests
             Assert.Equal(
                 checkpoint.CampaignState.Objectives,
                 loaded.Checkpoint.CampaignState.Objectives);
+            Assert.Equal(
+                checkpoint.History,
+                loaded.Checkpoint.History);
             Assert.Equal(checkpoint.World.TheaterId, loaded.Checkpoint.World.TheaterId);
             Assert.Equal(checkpoint.World.TheaterSeed, loaded.Checkpoint.World.TheaterSeed);
             Assert.Equal(checkpoint.World.Units, loaded.Checkpoint.World.Units);

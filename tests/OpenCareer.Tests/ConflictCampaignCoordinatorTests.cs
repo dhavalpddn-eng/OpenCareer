@@ -71,6 +71,10 @@ public sealed class ConflictCampaignCoordinatorTests
                 Outcome = ConflictCampaignOutcome.Ceasefire,
                 Objectives = Array.Empty<ConflictStrategicObjective>()
             },
+            PlayerCombatState = new PlayerCombatState(
+                AirframeDamage: 0.12,
+                PropulsionDamage: 0.04,
+                SystemsDamage: 0.07),
             SavedAt = Epoch.AddHours(4)
         };
 
@@ -90,13 +94,104 @@ public sealed class ConflictCampaignCoordinatorTests
         Assert.Equal(ConflictCampaignOutcome.Ongoing, successor.Checkpoint.CampaignState.Outcome);
         Assert.Equal(0, successor.Checkpoint.CampaignState.EvaluationSequence);
         Assert.Equal(completed.Checkpoint.MilitaryCareer, successor.Checkpoint.MilitaryCareer);
-        Assert.Equal(PlayerCombatState.Undamaged, successor.Checkpoint.PlayerCombatState);
+        Assert.Equal(completed.Checkpoint.PlayerCombatState, successor.Checkpoint.PlayerCombatState);
+        Assert.Single(successor.Checkpoint.History);
+        Assert.Equal(
+            completed.Checkpoint.CampaignId,
+            successor.Checkpoint.History[0].CampaignId);
+        Assert.Equal(
+            ConflictCampaignOutcome.Ceasefire,
+            successor.Checkpoint.History[0].Outcome);
+        Assert.Equal(
+            completed.Checkpoint.CampaignState.Identity,
+            successor.Checkpoint.History[0].Identity);
         Assert.Empty(successor.Checkpoint.CombatSupportMissions);
         Assert.Empty(successor.Checkpoint.AreaSupportMissions);
         Assert.Empty(successor.Checkpoint.AirOperationMissions);
         Assert.NotEqual(
             completed.Checkpoint.CampaignState.Identity?.OperationName,
             successor.Checkpoint.CampaignState.Identity?.OperationName);
+    }
+
+    [Fact]
+    public async Task SuccessorHistoryAccumulatesAcrossOperations()
+    {
+        var store = new MemoryStore();
+        var coordinator = new ConflictCampaignCoordinator(store);
+
+        ConflictCampaignStoreRecord first =
+            await coordinator.CreateAsync(
+                "campaign-history-1",
+                Template(),
+                theaterSeed: 101,
+                Epoch,
+                MilitaryCareerState.Civilian);
+
+        ConflictCampaignStoreRecord firstTerminal =
+            await coordinator.SaveMutationAsync(
+                first,
+                first.Checkpoint with
+                {
+                    CampaignState = first.Checkpoint.CampaignState with
+                    {
+                        Outcome = ConflictCampaignOutcome.Victory,
+                        Objectives = Array.Empty<ConflictStrategicObjective>()
+                    },
+                    SavedAt = Epoch.AddHours(2)
+                });
+
+        ConflictCampaignStoreRecord second =
+            await coordinator.CreateSuccessorAsync(
+                firstTerminal,
+                "campaign-history-2",
+                Template() with
+                {
+                    TheaterId = "FICTIONAL-COORDINATOR-2"
+                },
+                theaterSeed: 102,
+                Epoch.AddHours(3));
+
+        ConflictCampaignStoreRecord secondTerminal =
+            await coordinator.SaveMutationAsync(
+                second,
+                second.Checkpoint with
+                {
+                    CampaignState = second.Checkpoint.CampaignState with
+                    {
+                        Outcome = ConflictCampaignOutcome.Stalemate,
+                        Objectives = Array.Empty<ConflictStrategicObjective>()
+                    },
+                    SavedAt = Epoch.AddHours(5)
+                });
+
+        ConflictCampaignStoreRecord third =
+            await coordinator.CreateSuccessorAsync(
+                secondTerminal,
+                "campaign-history-3",
+                Template() with
+                {
+                    TheaterId = "FICTIONAL-COORDINATOR-3"
+                },
+                theaterSeed: 103,
+                Epoch.AddHours(6));
+
+        Assert.Equal(2, third.Checkpoint.History.Length);
+        Assert.Equal(
+            new[]
+            {
+                "campaign-history-1",
+                "campaign-history-2"
+            },
+            third.Checkpoint.History.Select(entry => entry.CampaignId));
+        Assert.Equal(
+            ConflictCampaignOutcome.Victory,
+            third.Checkpoint.History[0].Outcome);
+        Assert.Equal(
+            ConflictCampaignOutcome.Stalemate,
+            third.Checkpoint.History[1].Outcome);
+        Assert.NotEqual(
+            third.Checkpoint.History[0].Identity.OperationId,
+            third.Checkpoint.History[1].Identity.OperationId);
     }
 
     [Fact]
