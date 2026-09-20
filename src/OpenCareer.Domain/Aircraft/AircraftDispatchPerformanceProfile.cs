@@ -164,21 +164,25 @@ public sealed record AircraftDispatchPerformanceProfile(
     {
         Validate();
 
-        if (MaximumFuelWeightPounds is { } knownMaximum)
-            return knownMaximum;
+        double? typeSpecificMaximum = null;
 
-        if (fuelTypeIndex is null
-            || FuelCapacityGallons is null)
+        if (fuelTypeIndex is { } index
+            && FuelCapacityGallons is { } capacity
+            && ResolveFuelDensityPoundsPerGallon(index) is { } density)
         {
-            return null;
+            double calculated = capacity * density;
+            if (double.IsFinite(calculated))
+                typeSpecificMaximum = calculated;
         }
 
-        double? density = ResolveFuelDensityPoundsPerGallon(fuelTypeIndex.Value);
-        if (density is null)
-            return null;
-
-        double maximum = FuelCapacityGallons.Value * density.Value;
-        return double.IsFinite(maximum) ? maximum : null;
+        return (MaximumFuelWeightPounds, typeSpecificMaximum) switch
+        {
+            ({ } knownMaximum, { } selectedMaximum) =>
+                Math.Min(knownMaximum, selectedMaximum),
+            ({ } knownMaximum, null) => knownMaximum,
+            (null, { } selectedMaximum) => selectedMaximum,
+            _ => null
+        };
     }
 
     private static void ValidateOptionalPositive(double? value, string name)
