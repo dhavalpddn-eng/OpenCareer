@@ -173,3 +173,18 @@ Draft implementation PR remains #11 into `feature/m1-simulation-core`. No merge 
 ## API-ready next seam
 
 External flight-information/airport/route APIs should feed later planning/reference adapters, not become authoritative FlightSession state. The next route/leg models should store provider-neutral planned/actual locations and evidence provenance so OurAirports, AirLabs or another approved source can enrich them without coupling the domain to one vendor.
+
+## MBL-03 Engine Start tutorial slice
+
+Branch: `feature/mbl03-engine-start`.
+
+The first-job tutorial now separates preparation from engine start:
+
+- `job-prepare` is satisfied by the persisted `AircraftReadyAt` FlightSession milestone rather than waiting for TaxiOut;
+- new `job-engine-start` is satisfied only by the persisted `EngineStartAt` milestone;
+- the tutorial stays on the current instruction after evidence is confirmed; the player still presses Next;
+- interrupted and cancelled sessions cannot satisfy live tutorial evidence;
+- the tutorial copy remains aircraft-neutral and does not invent a universal cockpit switch or key binding;
+- the first-job tutorial definition is version 2 so older completed progress does not silently skip the added step.
+
+This slice intentionally does not add taxi, takeoff, route coaching, bindings, checklist automation or economy behavior.

@@ -26,9 +26,11 @@ public sealed class FlightSessionTutorialEvidenceSource :
             {
                 "job-prepare" =>
                     static session =>
-                        Reached(
-                            session,
-                            FlightOperationState.TaxiOut),
+                        session.Milestones.AircraftReadyAt is not null,
+
+                "job-engine-start" =>
+                    static session =>
+                        session.Milestones.EngineStartAt is not null,
 
                 "job-fly" =>
                     static session =>
