@@ -35,6 +35,12 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
     internal int SubscribeResult { get; set; }
     internal ConcurrentQueue<(uint RequestId, SimConnectSimObjectType Type)> AircraftEnumerations { get; } = new();
     internal int AircraftEnumerationResult { get; set; }
+    internal ConcurrentQueue<(uint DefinitionId, string FieldName)> FacilityDefinitions { get; } = new();
+    internal int FacilityDefinitionResult { get; set; }
+    internal ConcurrentQueue<(uint DefinitionId, uint RequestId, string Icao, string Region)> FacilityRequests { get; } = new();
+    internal int FacilityRequestResult { get; set; }
+    internal int GetLastSentPacketIdResult { get; set; }
+    internal uint LastSentPacketId { get; set; } = 700;
 
     internal void Enqueue(byte[]? packet = null, int result = 0, Action? action = null) =>
         _dispatch.Enqueue((packet, result, action));
@@ -129,6 +135,47 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         finally { Exit(); }
     }
 
+    public int AddToFacilityDefinition(
+        nint handle,
+        uint definitionId,
+        string fieldName)
+    {
+        Enter();
+        try
+        {
+            FacilityDefinitions.Enqueue((definitionId, fieldName));
+            return FacilityDefinitionResult;
+        }
+        finally { Exit(); }
+    }
+
+    public int RequestFacilityData(
+        nint handle,
+        uint definitionId,
+        uint requestId,
+        string icao,
+        string region)
+    {
+        Enter();
+        try
+        {
+            FacilityRequests.Enqueue((definitionId, requestId, icao, region));
+            return FacilityRequestResult;
+        }
+        finally { Exit(); }
+    }
+
+    public int GetLastSentPacketId(nint handle, out uint sendId)
+    {
+        Enter();
+        try
+        {
+            sendId = LastSentPacketId;
+            return GetLastSentPacketIdResult;
+        }
+        finally { Exit(); }
+    }
+
     public int Close(nint handle)
     {
         Enter();
@@ -182,12 +229,15 @@ internal static class SimConnectPackets
         return bytes;
     }
 
-    internal static byte[] Exception(uint code)
+    internal static byte[] Exception(
+        uint code,
+        uint sendId = 19,
+        uint parameterIndex = 4)
     {
         byte[] bytes = Header(1, 24);
         BitConverter.GetBytes(code).CopyTo(bytes, 12);
-        BitConverter.GetBytes(19u).CopyTo(bytes, 16);
-        BitConverter.GetBytes(4u).CopyTo(bytes, 20);
+        BitConverter.GetBytes(sendId).CopyTo(bytes, 16);
+        BitConverter.GetBytes(parameterIndex).CopyTo(bytes, 20);
         return bytes;
     }
 
@@ -233,6 +283,70 @@ internal static class SimConnectPackets
         return bytes;
     }
 
+    internal static byte[] AirportFacility(
+        uint requestId,
+        uint uniqueRequestId,
+        string name,
+        string icao)
+    {
+        const int payloadOffset = 40;
+        byte[] bytes = Header(29, payloadOffset + 72);
+        BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
+        BitConverter.GetBytes(uniqueRequestId).CopyTo(bytes, 16);
+        BitConverter.GetBytes(0u).CopyTo(bytes, 20);
+        BitConverter.GetBytes(0u).CopyTo(bytes, 24);
+        bytes[28] = 0;
+        BitConverter.GetBytes(0u).CopyTo(bytes, 32);
+        BitConverter.GetBytes(0u).CopyTo(bytes, 36);
+        WriteFixedString(bytes, payloadOffset, name, 64);
+        WriteFixedString(bytes, payloadOffset + 64, icao, 8);
+        return bytes;
+    }
+
+    internal static byte[] RunwayFacility(
+        uint requestId,
+        uint uniqueRequestId,
+        uint parentUniqueRequestId,
+        uint itemIndex,
+        uint listSize,
+        float lengthMeters,
+        float widthMeters,
+        int surface,
+        int primaryNumber,
+        int primaryDesignator,
+        int secondaryNumber,
+        int secondaryDesignator,
+        bool primaryClosed = false,
+        bool secondaryClosed = false)
+    {
+        const int payloadOffset = 40;
+        byte[] bytes = Header(29, payloadOffset + 32);
+        BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
+        BitConverter.GetBytes(uniqueRequestId).CopyTo(bytes, 16);
+        BitConverter.GetBytes(parentUniqueRequestId).CopyTo(bytes, 20);
+        BitConverter.GetBytes(1u).CopyTo(bytes, 24);
+        bytes[28] = 1;
+        BitConverter.GetBytes(itemIndex).CopyTo(bytes, 32);
+        BitConverter.GetBytes(listSize).CopyTo(bytes, 36);
+        BitConverter.GetBytes(lengthMeters).CopyTo(bytes, payloadOffset);
+        BitConverter.GetBytes(widthMeters).CopyTo(bytes, payloadOffset + 4);
+        BitConverter.GetBytes(surface).CopyTo(bytes, payloadOffset + 8);
+        BitConverter.GetBytes(primaryNumber).CopyTo(bytes, payloadOffset + 12);
+        BitConverter.GetBytes(primaryDesignator).CopyTo(bytes, payloadOffset + 16);
+        BitConverter.GetBytes(secondaryNumber).CopyTo(bytes, payloadOffset + 20);
+        BitConverter.GetBytes(secondaryDesignator).CopyTo(bytes, payloadOffset + 24);
+        bytes[payloadOffset + 28] = primaryClosed ? (byte)1 : (byte)0;
+        bytes[payloadOffset + 29] = secondaryClosed ? (byte)1 : (byte)0;
+        return bytes;
+    }
+
+    internal static byte[] FacilityDataEnd(uint requestId)
+    {
+        byte[] bytes = Header(30, 16);
+        BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
+        return bytes;
+    }
+
     internal static byte[] SystemState(uint requestId, uint inFlight = 0)
     {
         byte[] bytes = Header(15, 284);
@@ -241,10 +355,14 @@ internal static class SimConnectPackets
         return bytes;
     }
 
-    private static void WriteFixedString(byte[] bytes, int offset, string value)
+    private static void WriteFixedString(
+        byte[] bytes,
+        int offset,
+        string value,
+        int capacity = 256)
     {
         byte[] encoded = Encoding.ASCII.GetBytes(value);
-        if (encoded.Length > 255)
+        if (encoded.Length >= capacity)
             throw new ArgumentOutOfRangeException(nameof(value));
 
         encoded.CopyTo(bytes, offset);
