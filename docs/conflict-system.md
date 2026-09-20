@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `b4e3ca81` is green: Linux passed 376/376 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 376/376 xUnit.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Current verified military implementation head `018e1da5` is green: Linux passed 402/402 xUnit + 29/29 SimLab. The latest production WinUI head `555b9dc7` built WinUI/live-probe with 0 errors and passed 402/402 xUnit on Windows; exact-head `018e1da5` Windows CI also passed with the build job intentionally skipped because the final slice was test-only.
 
 ## Boundary
 
@@ -59,7 +59,8 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - telemetry-only mission progress synchronization updates campaign timestamps/state without falsely incrementing strategic evaluation counters,
 - terminal campaigns refuse new military mission acceptance,
 - terminal campaigns can transition into a fresh successor campaign while preserving military career state and simulated player damage rather than silently repairing the player,
-- completed operation summaries persist in checkpoint history with operation/faction identity, theater, terminal outcome, final phase/control, evaluation count and end time; history round-trips through SQLite and is exposed to the future Military/Government UI,
+- completed operation summaries persist in checkpoint history with operation/faction identity, theater, terminal outcome, final phase/control, evaluation count and end time; history round-trips through SQLite and is exposed to the production Military/Government UI,
+- completed-operation history has a selectable read-only drill-down driven by `CompletedMilitaryOperationDetailProjection`; selection is preserved by campaign ID across polling/current-campaign replacement, safely clears when history disappears, uses persisted terminal faction postures rather than recalculating history, keeps native WinUI keyboard/focus behavior, and is verified across SQLite restart with byte-for-byte-stable persisted campaign rows while viewing/refreshing/reselecting,
 - deterministic successor-offer planning selects from eligible fictional theaters, avoids immediately repeating the current theater when alternatives exist, derives a stable successor seed/campaign ID and previews the same operation identity that acceptance will create,
 - application-layer `MilitaryCampaignTransitionService` exposes the current successor offer, accept/decline/reconsider decisions, stale-offer protection and atomic runtime replacement after acceptance; ViewModels do not need theater seeds or campaign-generation logic,
 - default successor theaters are abstract fictional operation regions and are supplied through an `IConflictTheaterCatalog` boundary so future world/career sources can replace the built-in catalog without changing transition rules,
@@ -85,7 +86,7 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 
 ## Still open
 
-Completed-operation history UI was implemented in `b07d40a2`, with its distinct-operation-ID test fixture corrected in `e0a9df5d`. The read-only list shows archived operation/theater, factions/postures, outcome, final phase/control and end time; tests cover ordering, empty/reset state, no campaign mutation and SQLite recovery. [Linux CI at e0a9df5d](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35497370572) passed 370 tests and 29 SimLab scenarios. [Windows at b07d40a2](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35497273711) built WinUI/LiveProbe successfully but failed the subsequently corrected test fixture; the test-only correction skipped the Windows build. Local tests remain blocked by workspace socket restrictions. Later branch commits extend this history surface; these results describe this slice only, not acceptance of later changes or interactive Windows/MSFS behavior.
+Completed-operation drill-down is now CI-verified through `018e1da5`. The production history surface supports deterministic newest-first rows, selectable read-only details, stable selection across the two-second poll/current-campaign replacement/successor activation, safe clearing when history disappears, native keyboard/focus behavior, persisted terminal posture display, and SQLite restart fidelity. The final persistence test compares every drill-down field before/after restart and snapshots every `conflict_campaigns` row before/after viewing to prove selection/refresh/clear/reselect does not write or mutate stored campaign state. Linux CI passed 402/402 xUnit + 29/29 SimLab. The last production WinUI head `555b9dc7` built WinUI/LiveProbe with 0 errors and passed 402/402 xUnit on Windows; exact-head `018e1da5` Windows CI passed with the build step skipped because only tests changed.
 
 Successor acceptance recovery is CI-verified at `4c63e365`: expected SQLite/file/access failures and cancellation return a retryable UI state; action messages survive timer refresh until the campaign revision changes. Failed saves preserve the current campaign, stale offers refresh the full presentation, and repeated clicks cannot replay acceptance. Eight new test cases cover failures/retry, cancellation, duplicate actions, stale state, decline/reconsider, and accepted-successor SQLite restart recovery. Linux CI: [368 tests + 29 scenarios](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35496373910). Windows CI: [x64 Release WinUI/LiveProbe builds + 368 tests](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35496373807). Local Linux execution was blocked before tests by the workspace's MSBuild socket restriction; these results are hosted CI verification. Interactive Windows/MSFS acceptance remains open.
 
@@ -98,7 +99,7 @@ Communications slice is CI-verified at `b4e3ca81`: Linux passed 376/376 xUnit + 
 - player career onboarding/persistence for military affiliation and qualifications,
 - authoritative aircraft assignment issuance through the fleet/dispatch system,
 - authoritative job/economy settlement integration,
-- local visual/accessibility acceptance and richer Conflict Operations UI detail beyond the current schematic map/history/communications surface (deeper drill-down),
+- local visual/accessibility acceptance of the Military/Government surface,
 - large deterministic balance/stress scenarios,
 - live telemetry gameplay verification after the flight-runtime evidence pipeline is ready.
 
