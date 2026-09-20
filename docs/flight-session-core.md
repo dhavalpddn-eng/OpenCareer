@@ -276,3 +276,11 @@ Branch: `feature/mbl03-landing`.
 The first-job tutorial adds `job-land` after approach. Initial touchdown records `FirstTouchdownAt` but does not satisfy the step. The telemetry processor confirms landing rollout only after continued operational ground contact beyond touchdown confirmation and ground speed at or below 20 knots. The existing flight state engine then records `LandingAt` on transition to TaxiIn. The tutorial reads that persisted milestone after mission flight progress and approach; it still requires a manual Next. The first-job tutorial definition is version 8.
 
 This confirms the aircraft landed and slowed down. It does not validate destination, parking, shutdown, unloading, or job completion.
+
+## MBL-03 Taxi In tutorial slice
+
+Branch: `feature/mbl03-taxi-in`.
+
+The first-job tutorial adds `job-taxi-in` after landing. `TaxiInAt` is recorded on the same transition as landing rollout, so the tutorial uses a separate `TaxiInProgressAt` milestone recorded only on a later TaxiIn sample with stable, operational, self-powered ground movement between 3 and 15 knots. It remains on the step until the player selects Next. The first-job tutorial definition is version 9.
+
+This confirms movement after landing. It does not verify a specific taxi route, parking stand, or arrival completion.

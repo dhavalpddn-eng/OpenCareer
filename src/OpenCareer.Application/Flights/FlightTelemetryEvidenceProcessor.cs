@@ -98,6 +98,12 @@ public sealed class FlightTelemetryEvidenceProcessor
             && telemetry.GroundSpeedKnots
                 >= _options.TaxiGroundSpeedKnots;
 
+        bool taxiInMovementConfirmed =
+            selfPoweredMovement
+            && stableTelemetry
+            && telemetry.GroundSpeedKnots
+                <= _options.TaxiInMaximumGroundSpeedKnots;
+
         bool takeoffCandidate =
             operationalSample
             && telemetry.OnGround
@@ -320,7 +326,9 @@ public sealed class FlightTelemetryEvidenceProcessor
                 CrashReported:
                     observation.CrashReported,
                 MissionFlightProgressConfirmed:
-                    missionFlightProgressConfirmed);
+                    missionFlightProgressConfirmed,
+                TaxiInMovementConfirmed:
+                    taxiInMovementConfirmed);
 
         _previous = telemetry;
 

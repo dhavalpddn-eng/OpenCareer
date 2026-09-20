@@ -240,6 +240,31 @@ public sealed class FlightSessionEngineTests
     }
 
     [Fact]
+    public void TaxiInProgressRequiresMovementAfterLandingRollout()
+    {
+        FlightSession session = AirborneSession();
+        session = Advance(session, 6, approach: true);
+        session = Advance(session, 7, touchdown: true);
+        session = Advance(session, 8, rollout: true);
+
+        Assert.Equal(Epoch.AddSeconds(8), session.Milestones.LandingAt);
+        Assert.Null(session.Milestones.TaxiInProgressAt);
+
+        session = FlightSessionEngine.Advance(session,
+            new FlightSessionAdvance(new FlightStateEvidence(
+                Epoch.AddSeconds(9), Connected: true,
+                ContinuityPlausible: true)));
+        Assert.Null(session.Milestones.TaxiInProgressAt);
+
+        session = FlightSessionEngine.Advance(session,
+            new FlightSessionAdvance(new FlightStateEvidence(
+                Epoch.AddSeconds(10), Connected: true,
+                ContinuityPlausible: true,
+                TaxiInMovementConfirmed: true)));
+        Assert.Equal(Epoch.AddSeconds(10), session.Milestones.TaxiInProgressAt);
+    }
+
+    [Fact]
     public void DisconnectSuspendsWithoutLosingOperationalPhase()
     {
         FlightSession session =

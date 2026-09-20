@@ -23,4 +23,5 @@ public sealed record FlightStateEvidence(
     bool ParkingConfirmed = false,
     bool OperationCompleteConfirmed = false,
     bool CrashReported = false,
-    bool MissionFlightProgressConfirmed = false);
+    bool MissionFlightProgressConfirmed = false,
+    bool TaxiInMovementConfirmed = false);
