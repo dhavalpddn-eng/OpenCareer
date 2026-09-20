@@ -7,6 +7,7 @@ public sealed record ConflictCampaignCheckpoint(
     int SchemaVersion,
     string CampaignId,
     ConflictWorldState World,
+    ConflictCampaignState CampaignState,
     MilitaryCareerState MilitaryCareer,
     PlayerCombatState PlayerCombatState,
     AirSupportMission[] CombatSupportMissions,
@@ -14,7 +15,7 @@ public sealed record ConflictCampaignCheckpoint(
     AirOperationMission[] AirOperationMissions,
     DateTimeOffset SavedAt)
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public static ConflictCampaignCheckpoint Create(
         string campaignId,
@@ -24,12 +25,14 @@ public sealed record ConflictCampaignCheckpoint(
         IEnumerable<AirSupportMission>? combatSupportMissions,
         IEnumerable<AreaSupportMission>? areaSupportMissions,
         IEnumerable<AirOperationMission>? airOperationMissions,
-        DateTimeOffset savedAt)
+        DateTimeOffset savedAt,
+        ConflictCampaignState? campaignState = null)
     {
         var checkpoint = new ConflictCampaignCheckpoint(
             CurrentSchemaVersion,
             campaignId,
             world,
+            campaignState ?? ConflictCampaignDirector.Create(campaignId, world),
             militaryCareer,
             playerCombatState,
             combatSupportMissions?.ToArray() ?? Array.Empty<AirSupportMission>(),
@@ -48,6 +51,7 @@ public sealed record ConflictCampaignCheckpoint(
 
         ArgumentException.ThrowIfNullOrWhiteSpace(CampaignId);
         ArgumentNullException.ThrowIfNull(World);
+        ArgumentNullException.ThrowIfNull(CampaignState);
         ArgumentNullException.ThrowIfNull(MilitaryCareer);
         ArgumentNullException.ThrowIfNull(PlayerCombatState);
         ArgumentNullException.ThrowIfNull(CombatSupportMissions);
@@ -55,7 +59,17 @@ public sealed record ConflictCampaignCheckpoint(
         ArgumentNullException.ThrowIfNull(AirOperationMissions);
 
         ConflictValidation.Validate(World);
+        CampaignState.Validate();
         MilitaryCareer.Validate();
+
+        if (!string.Equals(CampaignState.CampaignId, CampaignId, StringComparison.Ordinal))
+            throw new ArgumentException("Campaign IDs do not match.");
+
+        if (!string.Equals(CampaignState.TheaterId, World.TheaterId, StringComparison.Ordinal))
+            throw new ArgumentException("Campaign theater does not match checkpoint world.");
+
+        if (CampaignState.UpdatedAt != World.UpdatedAt)
+            throw new ArgumentException("Campaign state must match checkpoint world time.");
         PlayerCombatState.Validate();
 
         if (SavedAt < World.UpdatedAt)
