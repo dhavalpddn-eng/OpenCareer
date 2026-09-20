@@ -307,6 +307,12 @@ public sealed class SqliteFlightSessionCheckpointStore :
                     cancellationToken)
                 .ConfigureAwait(false);
 
+            await ExecutePragmaAsync(
+                    connection,
+                    "PRAGMA journal_mode = WAL;",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
             await OpenCareerDatabaseMigrator
                 .MigrateAsync(connection, cancellationToken)
                 .ConfigureAwait(false);
