@@ -14,6 +14,9 @@ public sealed record MilitaryCareerProfileStoreRecord(
 
         ArgumentNullException.ThrowIfNull(Career);
         Career.Validate();
+
+        if (SavedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(SavedAt));
     }
 }
 
