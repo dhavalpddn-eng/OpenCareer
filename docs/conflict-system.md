@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `4c63e365` is green: Linux passed 368/368 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 368/368 xUnit.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `69337761` is green: Linux passed 373/373 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 373/373 xUnit.
 
 ## Boundary
 
@@ -70,6 +70,8 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - first production WinUI Military/Government screen replacing the placeholder: active operation, faction names/postures, phase/outcome, control/momentum, replacement reserves, trust, OpenCareer damage, front/threat summary, support requests and strategic objectives are projected through `MilitaryGovernmentViewModel` without moving campaign logic into the UI,
 - successor-operation offer presentation with Accept / Decline for now / Reconsider actions routed through `MilitaryCampaignTransitionService`, including stale-offer protection already enforced by the application layer,
 - page-scoped refresh while the Military/Government screen is visible, with the view reading immutable application snapshots instead of simulator/database objects directly,
+- read-only schematic operational map on Military/Government that projects friendly/hostile/neutral units, threats and support targets from the existing conflict snapshot; marker coordinates are normalized only for presentation, and the map is explicitly labeled not for navigation,
+- operational-map markers expose text labels/tooltips and automation names so color is not the sole carrier of meaning,
 - shared SQLite schema v3 reconciliation after synchronizing FlightSession and military persistence: databases previously stamped v2 by either parallel branch idempotently gain the missing flight-session or conflict-campaign table before advancing to v3,
 - deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation, SQLite campaign recovery, strategic evolution, dispatch authorization and the operations snapshot.
 
@@ -83,14 +85,14 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 
 Successor acceptance recovery is CI-verified at `4c63e365`: expected SQLite/file/access failures and cancellation return a retryable UI state; action messages survive timer refresh until the campaign revision changes. Failed saves preserve the current campaign, stale offers refresh the full presentation, and repeated clicks cannot replay acceptance. Eight new test cases cover failures/retry, cancellation, duplicate actions, stale state, decline/reconsider, and accepted-successor SQLite restart recovery. Linux CI: [368 tests + 29 scenarios](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35496373910). Windows CI: [x64 Release WinUI/LiveProbe builds + 368 tests](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35496373807). Local Linux execution was blocked before tests by the workspace's MSBuild socket restriction; these results are hosted CI verification. Interactive Windows/MSFS acceptance remains open.
 
-Next bounded UI slice: read-only completed-operation history from the existing persisted projection, without campaign mutations or economy integration.
+Operational-map slice is CI-verified at `69337761`: Linux passed 373/373 xUnit + 29/29 SimLab; Windows built WinUI and LiveProbe with 0 errors and passed 373/373 xUnit.
 
 - user-facing Settings backup selection/confirmation for staging a restore archive; the validated restore backend and restart-time apply path are implemented,
-- dynamic faction-posture evolution across campaign phases/outcomes; the current posture is deterministic and fixed for each operation,
+- further tuning/expansion of persisted deterministic faction-posture evolution across campaign phases/outcomes,
 - player career onboarding/persistence for military affiliation and qualifications,
 - authoritative aircraft assignment issuance through the fleet/dispatch system,
 - authoritative job/economy settlement integration,
-- local visual/accessibility acceptance and richer Conflict Operations UI detail beyond the first production screen (operational map/comms/history drill-down),
+- local visual/accessibility acceptance and richer Conflict Operations UI detail beyond the current schematic map/history surface (communications and deeper drill-down),
 - large deterministic balance/stress scenarios,
 - live telemetry gameplay verification after the flight-runtime evidence pipeline is ready.
 
