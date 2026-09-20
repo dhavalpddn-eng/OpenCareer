@@ -15,7 +15,8 @@ public sealed record ConflictFactionProjection(
     string FactionId,
     string DisplayName,
     string ShortCode,
-    ConflictSide Side);
+    ConflictSide Side,
+    ConflictFactionOperationalPosture Posture);
 
 public sealed record ConflictThreatProjection(
     Guid ThreatId,
@@ -164,7 +165,8 @@ public static class ConflictOperationsSnapshotBuilder
             faction.FactionId,
             faction.DisplayName,
             faction.ShortCode,
-            faction.Side);
+            faction.Side,
+            faction.Posture);
 
     private static ActiveMilitaryOperationProjection? BuildActiveOperation(
         ConflictCampaignCheckpoint checkpoint)

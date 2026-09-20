@@ -8,6 +8,9 @@ public sealed record ConflictFactionIdentity(
     string ShortCode,
     ConflictSide Side)
 {
+    public ConflictFactionOperationalPosture Posture { get; init; } =
+        ConflictFactionOperationalPosture.Defensive;
+
     public void Validate()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(FactionId);
@@ -19,6 +22,13 @@ public sealed record ConflictFactionIdentity(
             throw new ArgumentException(
                 "Campaign belligerent identity cannot use the neutral side.",
                 nameof(Side));
+        }
+
+        if (!Enum.IsDefined(Posture))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(Posture),
+                "Faction operational posture is not supported.");
         }
 
         if (ShortCode.Length is < 2 or > 6
@@ -146,6 +156,12 @@ public static class ConflictCampaignIdentityGenerator
         FactionName friendly = Factions[friendlyIndex];
         FactionName hostile = Factions[hostileIndex];
 
+        ConflictFactionOperationalPosture friendlyPosture =
+            NextPosture(random);
+
+        ConflictFactionOperationalPosture hostilePosture =
+            NextPosture(random);
+
         string operationName =
             $"Operation {OperationAdjectives[random.NextInt(0, OperationAdjectives.Length)]} " +
             OperationNouns[random.NextInt(0, OperationNouns.Length)];
@@ -157,14 +173,29 @@ public static class ConflictCampaignIdentityGenerator
                 $"faction:{friendly.Code.ToLowerInvariant()}",
                 friendly.Name,
                 friendly.Code,
-                ConflictSide.Friendly),
+                ConflictSide.Friendly)
+            {
+                Posture = friendlyPosture
+            },
             new ConflictFactionIdentity(
                 $"faction:{hostile.Code.ToLowerInvariant()}",
                 hostile.Name,
                 hostile.Code,
-                ConflictSide.Hostile));
+                ConflictSide.Hostile)
+            {
+                Posture = hostilePosture
+            });
 
         identity.Validate();
         return identity;
+    }
+
+    private static ConflictFactionOperationalPosture NextPosture(
+        DeterministicRandom random)
+    {
+        ConflictFactionOperationalPosture[] values =
+            Enum.GetValues<ConflictFactionOperationalPosture>();
+
+        return values[random.NextInt(0, values.Length)];
     }
 }

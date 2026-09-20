@@ -64,6 +64,14 @@ public static class ConflictCampaignCycleEngine
 
         double hours = elapsed.TotalHours;
 
+        ConflictFactionOperationalPosture friendlyPosture =
+            campaign.Identity?.FriendlyFaction.Posture
+            ?? ConflictFactionOperationalPosture.Defensive;
+
+        ConflictFactionOperationalPosture hostilePosture =
+            campaign.Identity?.HostileFaction.Posture
+            ?? ConflictFactionOperationalPosture.Defensive;
+
         GroundUnitState[] groundUnits = world.Units
             .Select(unit => RecoverGroundUnit(
                 unit,
@@ -76,7 +84,8 @@ public static class ConflictCampaignCycleEngine
                 groundUnits,
                 ConflictSide.Friendly,
                 campaign.FriendlyReplacementReserve,
-                hours);
+                hours,
+                friendlyPosture);
 
         groundUnits = friendlyReplacement.Units;
         double friendlyReserve =
@@ -87,7 +96,8 @@ public static class ConflictCampaignCycleEngine
                 groundUnits,
                 ConflictSide.Hostile,
                 campaign.HostileReplacementReserve,
-                hours);
+                hours,
+                hostilePosture);
 
         groundUnits = hostileReplacement.Units;
         double hostileReserve =
@@ -117,7 +127,8 @@ public static class ConflictCampaignCycleEngine
         evolved = ConflictWorldEngine.RecalculatePressureAndThreats(evolved);
         evolved = SupportRequestGenerator.Refresh(
             evolved,
-            evolved.UpdatedAt);
+            evolved.UpdatedAt,
+            friendlyPosture);
 
         ConflictValidation.Validate(evolved);
 
@@ -132,7 +143,8 @@ public static class ConflictCampaignCycleEngine
             GroundUnitState[] units,
             ConflictSide side,
             double replacementReserve,
-            double hours)
+            double hours,
+            ConflictFactionOperationalPosture posture)
     {
         if (replacementReserve <= 0)
             return (units, 0);
@@ -159,9 +171,12 @@ public static class ConflictCampaignCycleEngine
             .Where(unit =>
                 unit.Side == side
                 && unit.IsOperational
-                && unit.Role != GroundUnitRole.Logistics
                 && unit.Strength < ReplacementStrengthCeiling)
-            .OrderBy(unit => unit.Strength)
+            .OrderBy(unit =>
+                ConflictFactionBehaviorPolicy.ReplacementPriority(
+                    posture,
+                    unit.Role))
+            .ThenBy(unit => unit.Strength)
             .ThenBy(unit => unit.UnitId)
             .ToArray())
         {

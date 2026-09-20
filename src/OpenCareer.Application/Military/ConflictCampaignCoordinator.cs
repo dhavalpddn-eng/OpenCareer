@@ -189,9 +189,15 @@ public sealed class ConflictCampaignCoordinator
                 nameof(savedAt),
                 "Checkpoint save time cannot precede the requested campaign time.");
 
+        ConflictFactionOperationalPosture friendlyPosture =
+            current.Checkpoint.CampaignState.Identity?
+                .FriendlyFaction.Posture
+            ?? ConflictFactionOperationalPosture.Defensive;
+
         ConflictWorldState world = ConflictWorldEngine.Advance(
             current.Checkpoint.World,
-            through);
+            through,
+            friendlyPosture);
 
         ConflictCampaignCycleResult cycle =
             ConflictCampaignCycleEngine.ApplyCycle(

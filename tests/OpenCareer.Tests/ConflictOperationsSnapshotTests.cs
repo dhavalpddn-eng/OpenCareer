@@ -121,6 +121,14 @@ public sealed class ConflictOperationsSnapshotTests
         Assert.StartsWith("Operation ", snapshot.OperationName);
         Assert.Equal(ConflictSide.Friendly, snapshot.FriendlyFaction.Side);
         Assert.Equal(ConflictSide.Hostile, snapshot.HostileFaction.Side);
+        Assert.True(
+            Enum.IsDefined(
+                typeof(ConflictFactionOperationalPosture),
+                snapshot.FriendlyFaction.Posture));
+        Assert.True(
+            Enum.IsDefined(
+                typeof(ConflictFactionOperationalPosture),
+                snapshot.HostileFaction.Posture));
         Assert.Equal(ConflictCampaignOutcome.Ongoing, snapshot.Outcome);
         Assert.InRange(snapshot.FriendlyReplacementReserve, 0, 1);
         Assert.InRange(snapshot.HostileReplacementReserve, 0, 1);

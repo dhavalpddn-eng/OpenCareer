@@ -7,7 +7,9 @@ public static class ConflictWorldEngine
 
     public static ConflictWorldState Advance(
         ConflictWorldState state,
-        DateTimeOffset through)
+        DateTimeOffset through,
+        ConflictFactionOperationalPosture friendlyPosture =
+            ConflictFactionOperationalPosture.Defensive)
     {
         ConflictValidation.Validate(state);
 
@@ -16,7 +18,12 @@ public static class ConflictWorldEngine
 
         var elapsed = through - state.UpdatedAt;
         if (elapsed == TimeSpan.Zero)
-            return SupportRequestGenerator.Refresh(state, through);
+        {
+            return SupportRequestGenerator.Refresh(
+                state,
+                through,
+                friendlyPosture);
+        }
 
         if (elapsed > TimeSpan.FromHours(24))
             throw new ArgumentOutOfRangeException(nameof(through), "Advance conflict simulation in bounded increments of 24 hours or less.");
@@ -53,7 +60,10 @@ public static class ConflictWorldEngine
                 .ToArray()
         };
 
-        return SupportRequestGenerator.Refresh(advanced, through);
+        return SupportRequestGenerator.Refresh(
+            advanced,
+            through,
+            friendlyPosture);
     }
 
     internal static ConflictWorldState RecalculatePressureAndThreats(ConflictWorldState state)
@@ -228,14 +238,17 @@ public static class ConflictWorldEngine
 public static class SupportRequestGenerator
 {
     private const double NearbyHostileRadiusNm = 20;
-    private const double LowReadinessThreshold = 0.35;
-    private const double LowIntelligenceThreshold = 0.30;
 
     public static ConflictWorldState Refresh(
         ConflictWorldState state,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        ConflictFactionOperationalPosture posture =
+            ConflictFactionOperationalPosture.Defensive)
     {
         ConflictValidation.Validate(state);
+
+        ConflictFactionBehaviorProfile behavior =
+            ConflictFactionBehaviorPolicy.For(posture);
 
         var tracked = state.SupportRequests
             .Select(request => request.IsPastOpenDeadline(now)
@@ -248,11 +261,36 @@ public static class SupportRequestGenerator
             .Select(request => (request.RequestingUnitId, request.Type))
             .ToHashSet();
 
-        AddBattlefieldRequests(state, now, tracked, activeKeys);
-        AddLogisticsRequests(state, now, tracked, activeKeys);
-        AddReconnaissanceRequests(state, now, tracked, activeKeys);
-        AddPatrolRequests(state, now, tracked, activeKeys);
-        AddAirOperationRequests(state, now, tracked, activeKeys);
+        AddBattlefieldRequests(
+            state,
+            now,
+            tracked,
+            activeKeys,
+            behavior);
+        AddLogisticsRequests(
+            state,
+            now,
+            tracked,
+            activeKeys,
+            behavior);
+        AddReconnaissanceRequests(
+            state,
+            now,
+            tracked,
+            activeKeys,
+            behavior);
+        AddPatrolRequests(
+            state,
+            now,
+            tracked,
+            activeKeys,
+            behavior);
+        AddAirOperationRequests(
+            state,
+            now,
+            tracked,
+            activeKeys,
+            behavior);
 
         return state with
         {
@@ -269,12 +307,13 @@ public static class SupportRequestGenerator
         ConflictWorldState state,
         DateTimeOffset now,
         ICollection<AirSupportRequest> tracked,
-        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys,
+        ConflictFactionBehaviorProfile behavior)
     {
         foreach (var friendly in state.Units
             .Where(unit => unit.Side == ConflictSide.Friendly
                 && unit.IsOperational
-                && unit.Pressure >= 0.55)
+                && unit.Pressure >= behavior.BattlefieldPressureThreshold)
             .OrderByDescending(unit => unit.Pressure)
             .ThenBy(unit => unit.UnitId))
         {
@@ -290,6 +329,11 @@ public static class SupportRequestGenerator
                 continue;
 
             var urgency = GetUrgency(friendly.Pressure);
+            if (behavior.PromoteBattlefieldUrgency)
+            {
+                urgency = ConflictFactionBehaviorPolicy.Promote(
+                    urgency);
+            }
             var maneuverTarget = hostiles
                 .Where(unit => unit.Role != GroundUnitRole.AirDefense)
                 .OrderByDescending(unit => unit.Role == GroundUnitRole.Armor)
@@ -339,16 +383,28 @@ public static class SupportRequestGenerator
         ConflictWorldState state,
         DateTimeOffset now,
         ICollection<AirSupportRequest> tracked,
-        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys,
+        ConflictFactionBehaviorProfile behavior)
     {
         foreach (var friendly in state.Units
             .Where(unit => unit.Side == ConflictSide.Friendly
                 && unit.IsOperational
-                && unit.Readiness <= LowReadinessThreshold
+                && unit.Readiness <= behavior.LowReadinessThreshold
                 && unit.Pressure < 0.55)
             .OrderBy(unit => unit.Readiness)
             .ThenBy(unit => unit.UnitId))
         {
+            SupportUrgency urgency =
+                friendly.Readiness < 0.20
+                    ? SupportUrgency.Priority
+                    : SupportUrgency.Routine;
+
+            if (behavior.PromoteLogisticsUrgency)
+            {
+                urgency = ConflictFactionBehaviorPolicy.Promote(
+                    urgency);
+            }
+
             AddRequestIfNeeded(
                 tracked,
                 activeKeys,
@@ -358,8 +414,11 @@ public static class SupportRequestGenerator
                 friendly.UnitId,
                 friendly.Position,
                 SupportRequestType.Logistics,
-                friendly.Readiness < 0.20 ? SupportUrgency.Priority : SupportUrgency.Routine,
-                requiredEffect: Math.Clamp(0.60 - friendly.Readiness, 0.10, 0.40));
+                urgency,
+                requiredEffect: Math.Clamp(
+                    0.60 - friendly.Readiness,
+                    0.10,
+                    0.40));
         }
     }
 
@@ -367,10 +426,13 @@ public static class SupportRequestGenerator
         ConflictWorldState state,
         DateTimeOffset now,
         ICollection<AirSupportRequest> tracked,
-        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys,
+        ConflictFactionBehaviorProfile behavior)
     {
         foreach (var sector in state.Sectors
-            .Where(sector => sector.IntelligenceConfidence < LowIntelligenceThreshold)
+            .Where(sector =>
+                sector.IntelligenceConfidence
+                    < behavior.LowIntelligenceThreshold)
             .OrderBy(sector => sector.IntelligenceConfidence)
             .ThenBy(sector => sector.SectorId, StringComparer.Ordinal))
         {
@@ -396,10 +458,13 @@ public static class SupportRequestGenerator
         ConflictWorldState state,
         DateTimeOffset now,
         ICollection<AirSupportRequest> tracked,
-        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys,
+        ConflictFactionBehaviorProfile behavior)
     {
         foreach (var sector in state.Sectors
-            .Where(sector => sector.FriendlyControl is >= 0.40 and <= 0.60
+            .Where(sector =>
+                sector.FriendlyControl >= behavior.PatrolControlMinimum
+                && sector.FriendlyControl <= behavior.PatrolControlMaximum
                 && sector.IntelligenceConfidence >= 0.50)
             .OrderBy(sector => Math.Abs(sector.FriendlyControl - 0.50))
             .ThenBy(sector => sector.SectorId, StringComparer.Ordinal))
@@ -426,7 +491,8 @@ public static class SupportRequestGenerator
         ConflictWorldState state,
         DateTimeOffset now,
         ICollection<AirSupportRequest> tracked,
-        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys)
+        ISet<(Guid RequestingUnitId, SupportRequestType Type)> activeKeys,
+        ConflictFactionBehaviorProfile behavior)
     {
         var friendlyAir = state.AirUnits
             .Where(unit => unit.Side == ConflictSide.Friendly && unit.IsOperational)
@@ -459,8 +525,22 @@ public static class SupportRequestGenerator
             var closestFriendlyAsset =
                 Math.Min(nearestFriendlyAirDistance, groundDistance);
 
-            if (closestFriendlyAsset > 120)
+            if (closestFriendlyAsset
+                > behavior.InterceptRangeNauticalMiles)
+            {
                 continue;
+            }
+
+            SupportUrgency urgency =
+                closestFriendlyAsset <= 45
+                    ? SupportUrgency.Priority
+                    : SupportUrgency.Routine;
+
+            if (behavior.PromoteAirUrgency)
+            {
+                urgency = ConflictFactionBehaviorPolicy.Promote(
+                    urgency);
+            }
 
             AddRequestIfNeeded(
                 tracked,
@@ -471,9 +551,7 @@ public static class SupportRequestGenerator
                 hostile.UnitId,
                 hostile.Position,
                 SupportRequestType.Intercept,
-                closestFriendlyAsset <= 45
-                    ? SupportUrgency.Priority
-                    : SupportUrgency.Routine,
+                urgency,
                 requiredEffect: 0.20);
         }
 
@@ -491,12 +569,26 @@ public static class SupportRequestGenerator
                 .DefaultIfEmpty(double.MaxValue)
                 .Min();
 
-            if (nearestThreat > 100)
+            if (nearestThreat
+                > behavior.EscortRangeNauticalMiles)
+            {
                 continue;
+            }
 
             var requester = NearestFriendly(state, package.Position);
             if (requester is null)
                 continue;
+
+            SupportUrgency urgency =
+                nearestThreat <= 40
+                    ? SupportUrgency.Priority
+                    : SupportUrgency.Routine;
+
+            if (behavior.PromoteAirUrgency)
+            {
+                urgency = ConflictFactionBehaviorPolicy.Promote(
+                    urgency);
+            }
 
             AddRequestIfNeeded(
                 tracked,
@@ -507,9 +599,7 @@ public static class SupportRequestGenerator
                 package.UnitId,
                 package.Position,
                 SupportRequestType.Escort,
-                nearestThreat <= 40
-                    ? SupportUrgency.Priority
-                    : SupportUrgency.Routine,
+                urgency,
                 requiredEffect: 0.15);
         }
     }
