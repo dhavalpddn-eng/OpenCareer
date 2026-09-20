@@ -621,14 +621,29 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
         coordinator.RefreshLiveEvidence();
         Assert.Equal(TutorialStepEvidenceState.Waiting, coordinator.Current.EvidenceState);
 
-        sessions.CommitPersisted(FlightSessionEngine.Advance(
+        FlightSession landed = FlightSessionEngine.Advance(
             touchdown,
             new FlightSessionAdvance(new FlightStateEvidence(
                 Epoch.AddSeconds(10), Connected: true,
-                ContinuityPlausible: true, LandingRolloutConfirmed: true))));
+                ContinuityPlausible: true, LandingRolloutConfirmed: true)));
+        sessions.CommitPersisted(landed);
         coordinator.RefreshLiveEvidence();
 
         Assert.Equal("job-land", coordinator.Current.Step?.Id);
+        Assert.Equal(TutorialStepEvidenceState.Satisfied, coordinator.Current.EvidenceState);
+
+        await coordinator.NextAsync();
+        Assert.Equal("job-taxi-in", coordinator.Current.Step?.Id);
+        Assert.Equal(TutorialStepEvidenceState.Waiting, coordinator.Current.EvidenceState);
+
+        sessions.CommitPersisted(FlightSessionEngine.Advance(
+            landed,
+            new FlightSessionAdvance(new FlightStateEvidence(
+                Epoch.AddSeconds(11), Connected: true,
+                ContinuityPlausible: true, TaxiInMovementConfirmed: true))));
+        coordinator.RefreshLiveEvidence();
+
+        Assert.Equal("job-taxi-in", coordinator.Current.Step?.Id);
         Assert.Equal(TutorialStepEvidenceState.Satisfied, coordinator.Current.EvidenceState);
     }
 

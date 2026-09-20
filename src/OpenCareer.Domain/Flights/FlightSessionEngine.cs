@@ -53,6 +53,7 @@ public static class FlightSessionEngine
                 update.Evidence.Timestamp,
                 update.Evidence.InitialClimbConfirmed,
                 update.Evidence.MissionFlightProgressConfirmed,
+                update.Evidence.TaxiInMovementConfirmed,
                 update.ShutdownConfirmed);
 
         if (update.ShutdownConfirmed
@@ -153,6 +154,7 @@ public static class FlightSessionEngine
         DateTimeOffset timestamp,
         bool initialClimbConfirmed,
         bool missionFlightProgressConfirmed,
+        bool taxiInMovementConfirmed,
         bool shutdownConfirmed)
     {
         FlightSessionMilestones milestones =
@@ -296,6 +298,15 @@ public static class FlightSessionEngine
                         milestones.TaxiInAt
                         ?? timestamp
                 };
+        }
+
+        if (milestones.LandingAt is not null
+            && milestones.TaxiInProgressAt is null
+            && previous.State == FlightTrackingState.TaxiIn
+            && next.State == FlightTrackingState.TaxiIn
+            && taxiInMovementConfirmed)
+        {
+            milestones = milestones with { TaxiInProgressAt = timestamp };
         }
 
         if (Entered(

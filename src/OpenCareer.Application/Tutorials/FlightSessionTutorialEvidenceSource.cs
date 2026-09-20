@@ -62,6 +62,16 @@ public sealed class FlightSessionTutorialEvidenceSource :
                         && approachAt > progressAt
                         && landingAt > approachAt,
 
+                "job-taxi-in" =>
+                    static session =>
+                        session.Milestones.MissionFlightProgressAt is { } progressAt
+                        && session.Milestones.ApproachAt is { } approachAt
+                        && session.Milestones.LandingAt is { } landingAt
+                        && session.Milestones.TaxiInProgressAt is { } taxiAt
+                        && approachAt > progressAt
+                        && landingAt > approachAt
+                        && taxiAt > landingAt,
+
                 "job-arrive" =>
                     static session =>
                         session.Status

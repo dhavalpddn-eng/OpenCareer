@@ -130,6 +130,9 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
             Step("job-land", "Land and slow down",
                 "Touch down and slow to taxi speed. OpenCareer confirms landing only after continued ground contact and a controlled rollout; first contact alone does not complete this step.",
                 "current-flight", "current-flight"),
+            Step("job-taxi-in", "Taxi after landing",
+                "Continue moving under the aircraft's own power at taxi speed after landing. OpenCareer confirms ground movement after rollout; it does not yet verify the assigned parking route.",
+                "current-flight", "current-flight"),
             Step("job-arrive", "Finish the operation",
                 "A landing alone is normally not enough. Conventional jobs require the mission-defined arrival state, usually taxi, parking, unloading or servicing, and shutdown.",
                 "current-flight", "current-flight"),
@@ -138,7 +141,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 8, steps);
+        return new TutorialDefinition(FirstJobId, 9, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()

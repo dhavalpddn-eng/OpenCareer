@@ -468,6 +468,30 @@ public sealed class FlightTelemetryEvidenceProcessorTests
     }
 
     [Fact]
+    public void TaxiInMovementRequiresStableSelfPoweredMovementAtTaxiSpeed()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor(
+            new FlightEvidenceProcessorOptions(StableTelemetrySamples: 2));
+
+        FlightStateEvidence first = processor.Process(Observation(Telemetry(
+            0, enginesRunning: 1, groundSpeed: 10)));
+        FlightStateEvidence pushback = processor.Process(Observation(Telemetry(
+            1, enginesRunning: 0, groundSpeed: 10)));
+        FlightStateEvidence rollout = processor.Process(Observation(Telemetry(
+            2, enginesRunning: 1, groundSpeed: 20)));
+        FlightStateEvidence paused = processor.Process(Observation(Telemetry(
+            3, enginesRunning: 1, groundSpeed: 10, paused: true)));
+        FlightStateEvidence taxi = processor.Process(Observation(Telemetry(
+            4, enginesRunning: 1, groundSpeed: 10)));
+
+        Assert.False(first.TaxiInMovementConfirmed);
+        Assert.False(pushback.TaxiInMovementConfirmed);
+        Assert.False(rollout.TaxiInMovementConfirmed);
+        Assert.False(paused.TaxiInMovementConfirmed);
+        Assert.True(taxi.TaxiInMovementConfirmed);
+    }
+
+    [Fact]
     public void BounceAndPauseDoNotConfirmLandingRollout()
     {
         var processor = new FlightTelemetryEvidenceProcessor(
