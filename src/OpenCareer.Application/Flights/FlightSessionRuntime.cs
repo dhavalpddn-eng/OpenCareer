@@ -160,13 +160,38 @@ public sealed class FlightSessionRuntime
                         ContinuityPlausible:
                             continuityPlausible));
 
-            FlightContinuityAnchor? anchor =
+            bool trustworthyObservation =
                 evidence.StableTelemetry
                 && continuityPlausible
-                && !telemetry.SlewActive
+                && !telemetry.SlewActive;
+
+            FlightContinuityAnchor? anchor =
+                trustworthyObservation
                     ? FlightContinuityPolicy
                         .CreateAnchor(telemetry)
                     : null;
+
+            FlightSessionObservation? observation =
+                trustworthyObservation
+                    ? new FlightSessionObservation(
+                        telemetry.Timestamp,
+                        telemetry.LatitudeDegrees,
+                        telemetry.LongitudeDegrees,
+                        telemetry.AltitudeMslFeet,
+                        telemetry.IndicatedAirspeedKnots,
+                        telemetry.GroundSpeedKnots,
+                        telemetry.FuelTotalPounds,
+                        telemetry.PayloadPounds,
+                        ShouldCaptureTrackPoint(
+                            current,
+                            evidence,
+                            telemetry.Timestamp))
+                    : null;
+
+            FlightTimeInterval? timeInterval =
+                CreateTimeInterval(
+                    current,
+                    telemetry);
 
             bool shutdownConfirmed =
                 evidence.ParkingConfirmed
@@ -176,10 +201,14 @@ public sealed class FlightSessionRuntime
                 .AdvanceAsync(
                     new FlightSessionAdvance(
                         evidence,
+                        TimeInterval:
+                            timeInterval,
                         ShutdownConfirmed:
                             shutdownConfirmed,
                         ContinuityAnchor:
-                            anchor),
+                            anchor,
+                        Observation:
+                            observation),
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -192,6 +221,102 @@ public sealed class FlightSessionRuntime
         {
             _refreshGate.Release();
         }
+    }
+
+    private bool ShouldCaptureTrackPoint(
+        FlightSession session,
+        FlightStateEvidence evidence,
+        DateTimeOffset timestamp)
+    {
+        IReadOnlyList<FlightSessionTrackPoint> track =
+            session.EffectiveStatistics.RouteTrack;
+
+        if (track.Count == 0)
+            return true;
+
+        if (track.Count
+            >= FlightSessionStatistics.MaximumTrackPoints)
+        {
+            return false;
+        }
+
+        if (evidence.TakeoffCandidate
+            || evidence.AirborneConfirmed
+            || evidence.TouchdownConfirmed
+            || evidence.ParkingConfirmed)
+        {
+            return true;
+        }
+
+        return timestamp - track[^1].Timestamp
+            >= TimeSpan.FromMinutes(5);
+    }
+
+    private FlightTimeInterval? CreateTimeInterval(
+        FlightSession session,
+        AircraftTelemetrySnapshot telemetry)
+    {
+        if (_lastTelemetryTimestamp is not { } previous
+            || session.Status
+                != FlightSessionStatus.Active)
+        {
+            return null;
+        }
+
+        TimeSpan wallDuration =
+            telemetry.Timestamp - previous;
+
+        if (wallDuration <= TimeSpan.Zero
+            || wallDuration > TimeSpan.FromSeconds(30))
+        {
+            return null;
+        }
+
+        bool taxiOut =
+            session.OperationState
+                is FlightOperationState.TaxiOut
+                    or FlightOperationState.DepartureReady;
+
+        bool airborne =
+            session.OperationState
+                is FlightOperationState.Airborne
+                    or FlightOperationState.Landed;
+
+        bool taxiIn =
+            session.OperationState
+                == FlightOperationState.TaxiIn;
+
+        bool countsTowardFlightTime =
+            taxiOut
+            || airborne
+            || taxiIn;
+
+        bool countsTowardBlockTime =
+            session.OperationState
+                is FlightOperationState.EngineStart
+                    or FlightOperationState.Ramp
+                    or FlightOperationState.TaxiOut
+                    or FlightOperationState.DepartureReady
+                    or FlightOperationState.Airborne
+                    or FlightOperationState.Landed
+                    or FlightOperationState.TaxiIn
+                    or FlightOperationState.Parked;
+
+        return new FlightTimeInterval(
+            wallDuration,
+            SimulationRate: 1d,
+            ValidOperationalEvidence: true,
+            Paused: telemetry.Paused,
+            SlewActive: telemetry.SlewActive,
+            CountsTowardBlockTime:
+                countsTowardBlockTime,
+            CountsTowardFlightTime:
+                countsTowardFlightTime,
+            Airborne: airborne,
+            TaxiOut: taxiOut,
+            TaxiIn: taxiIn,
+            Night: false,
+            ActualInstrument: false);
     }
 
     private void EnsureProcessorContext(
