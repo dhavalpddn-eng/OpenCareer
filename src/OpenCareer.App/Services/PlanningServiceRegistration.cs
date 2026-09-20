@@ -38,6 +38,11 @@ internal static class PlanningServiceRegistration
             new RouteFuelPlanningService(
                 provider.GetRequiredService<CruisePerformancePlanningService>()));
 
+        services.AddSingleton<RouteFuelWeightPlanningService>(provider =>
+            new RouteFuelWeightPlanningService(
+                provider.GetRequiredService<IAircraftRegistrySource>(),
+                provider.GetRequiredService<RouteFuelPlanningService>()));
+
         services.AddSingleton<SimConnectAirportDataObservationSource>();
         services.AddSingleton<IAirportDataObservationSource>(provider =>
             provider.GetRequiredService<SimConnectAirportDataObservationSource>());
