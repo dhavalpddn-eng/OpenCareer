@@ -18,10 +18,8 @@ public sealed class AircraftConditionedPerformanceTests : IDisposable
             MsfsFlightPerformanceCfgParser.Parse(
                 """
                 [TAKEOFF_PERFORMANCE]
-                takeoff_total_distance_table_by_weight_and_OAT_and_altitude =
-                    1000, 2000 : 0, 20 : 0, 5000 ::
-                    100, 200 : 110, 210 : 120, 220 : 130, 230
-                """.Replace(Environment.NewLine + "    ", " "));
+                takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 1000, 2000 : 0, 20 : 0, 5000 :: 100, 200 : 110, 210 : 120, 220 : 130, 230
+                """);
 
         AircraftPerformanceGrid3D table =
             Assert.IsType<AircraftPerformanceGrid3D>(
