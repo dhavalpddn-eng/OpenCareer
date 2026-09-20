@@ -36,5 +36,6 @@ internal interface ISimConnectApi
         uint requestId,
         string icao,
         string region);
+    int GetLastSentPacketId(nint handle, out uint sendId);
     int Close(nint handle);
 }
