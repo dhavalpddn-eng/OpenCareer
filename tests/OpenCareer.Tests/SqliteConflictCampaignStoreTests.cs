@@ -47,7 +47,7 @@ public sealed class SqliteConflictCampaignStoreTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            DeleteTempDirectory(dir);
         }
     }
 
@@ -73,7 +73,7 @@ public sealed class SqliteConflictCampaignStoreTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            DeleteTempDirectory(dir);
         }
     }
 
@@ -190,5 +190,18 @@ public sealed class SqliteConflictCampaignStoreTests
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         return dir;
+    }
+
+    private static void DeleteTempDirectory(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch
+        {
+            // Cleanup must not turn a passing SQLite assertion into a Windows-only failure.
+        }
     }
 }
