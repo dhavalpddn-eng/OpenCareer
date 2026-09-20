@@ -11,7 +11,8 @@ namespace OpenCareer.LiveProbe;
 internal sealed class LiveProbeSession(
     SimConnectConnection connection,
     LiveProbeOptions options,
-    LiveFlightSessionValidator? flightSessionValidator = null)
+    LiveFlightSessionValidator? flightSessionValidator = null,
+    LiveAirportValidator? airportValidator = null)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -22,6 +23,8 @@ internal sealed class LiveProbeSession(
     private int _connectionTransitions;
     private int _reconnectTransitions;
     private bool _sawConnected;
+    private bool _airportValidationAttempted;
+    private bool _airportValidationSucceeded;
 
     internal async Task<int> RunAsync()
     {
@@ -70,7 +73,8 @@ internal sealed class LiveProbeSession(
                 processArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),
                 framework = RuntimeInformation.FrameworkDescription,
                 processId = Environment.ProcessId,
-                flightSessionValidation = flightSessionValidator is not null
+                flightSessionValidation = flightSessionValidator is not null,
+                airportValidationIcao = options.AirportValidationIcao
             }).ConfigureAwait(false);
 
             connection.Start();
@@ -100,6 +104,9 @@ internal sealed class LiveProbeSession(
                 finalConnectionState = connection.Current.State.ToString(),
                 finalConnectionIssue = connection.Current.Issue.ToString(),
                 telemetryCleared = connection.Latest is null,
+                airportValidationRequested = airportValidator is not null,
+                airportValidationAttempted = _airportValidationAttempted,
+                airportValidationSucceeded = _airportValidationSucceeded,
                 flightSession = finalFlightSession is null
                     ? null
                     : new
@@ -129,7 +136,9 @@ internal sealed class LiveProbeSession(
             }
         }
 
-        return 0;
+        return airportValidator is null || _airportValidationSucceeded
+            ? 0
+            : 2;
     }
 
     private async Task ObserveAsync(
@@ -176,10 +185,111 @@ internal sealed class LiveProbeSession(
                 lastTelemetry = telemetry;
             }
 
+            if (airportValidator is not null
+                && !_airportValidationAttempted
+                && current.State == SimulatorConnectionState.Connected
+                && _telemetrySamples >= 2)
+            {
+                await RecordAirportValidationAsync(
+                        writer,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             await Task.Delay(
                     TimeSpan.FromMilliseconds(100),
                     cancellationToken)
                 .ConfigureAwait(false);
+        }
+    }
+
+    private async Task RecordAirportValidationAsync(
+        StreamWriter writer,
+        CancellationToken cancellationToken)
+    {
+        _airportValidationAttempted = true;
+
+        try
+        {
+            LiveAirportValidationResult result = await airportValidator!
+                .ValidateAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            _airportValidationSucceeded = result.Succeeded;
+
+            await WriteJsonAsync(writer, new
+            {
+                type = "airportValidation",
+                observedAtUtc = DateTimeOffset.UtcNow,
+                result.Icao,
+                succeeded = result.Succeeded,
+                facility = result.Airport is null
+                    ? null
+                    : new
+                    {
+                        sourceId = result.Airport.Provenance.SourceId,
+                        authority = result.Airport.Provenance.Authority.ToString(),
+                        observedAtUtc = result.Airport.Provenance.ObservedAt,
+                        airport = new
+                        {
+                            result.Airport.Airport.Icao,
+                            result.Airport.Airport.Name,
+                            runways = result.Airport.Airport.Runways.Select(
+                                static runway => new
+                                {
+                                    runway.Identifier,
+                                    runway.UsableLengthFeet,
+                                    runway.WidthFeet,
+                                    surface = runway.Surface.ToString(),
+                                    runway.IsClosed
+                                })
+                        }
+                    },
+                weather = result.Weather is null
+                    ? null
+                    : new
+                    {
+                        result.Weather.SourceId,
+                        authority = result.Weather.Authority.ToString(),
+                        observedAtUtc = result.Weather.ObservedAt,
+                        result.Weather.DensityAltitudeFeet,
+                        runwayWinds = result.Weather.RunwayWinds.Select(
+                            static wind => new
+                            {
+                                wind.RunwayIdentifier,
+                                wind.SustainedHeadwindKnots,
+                                wind.SustainedCrosswindKnots,
+                                wind.GustHeadwindKnots,
+                                wind.GustCrosswindKnots
+                            })
+                    }
+            }).ConfigureAwait(false);
+
+            Console.WriteLine(
+                $"*** AIRPORT VALIDATION: icao={result.Icao} " +
+                $"facility={(result.Airport is null ? "unavailable" : "available")} " +
+                $"localWeather={(result.Weather is null ? "unavailable" : "available")} " +
+                $"success={result.Succeeded}");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _airportValidationSucceeded = false;
+
+            await WriteJsonAsync(writer, new
+            {
+                type = "airportValidationError",
+                observedAtUtc = DateTimeOffset.UtcNow,
+                icao = options.AirportValidationIcao,
+                exception = ex.GetType().Name,
+                message = ex.Message
+            }).ConfigureAwait(false);
+
+            Console.Error.WriteLine(
+                $"*** AIRPORT VALIDATION ERROR: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
