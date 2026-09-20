@@ -256,7 +256,7 @@ public sealed record AircraftConditionedPerformanceProfile(
         || TakeoffTotalDistanceFeet is not null
         || LandingGroundRollDistanceFeet is not null
         || LandingTotalDistanceFeet is not null
-        || CruiseProfiles.Count > 0;
+        || CruiseProfiles is { Count: > 0 };
 
     public void Validate()
     {
