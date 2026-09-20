@@ -422,25 +422,34 @@
 
                         <ListView x:Name="CompletedOperationsList"
                                   ItemsSource="{Binding CompletedOperations}"
+                                  Style="{StaticResource OpenCareerListViewStyle}"
+                                  ItemContainerStyle="{StaticResource OpenCareerListViewItemStyle}"
                                   SelectionMode="Single"
                                   IsItemClickEnabled="False"
+                                  AutomationProperties.Name="Completed operations history"
+                                  AutomationProperties.HelpText="Use Up and Down Arrow keys to move between archived operations. The selected operation details appear to the right."
                                   SelectionChanged="CompletedOperationsList_SelectionChanged">
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Style="{StaticResource OpenCareerTableRowStyle}">
+                                    <Border Style="{StaticResource OpenCareerTableRowStyle}"
+                                            Background="Transparent"
+                                            AutomationProperties.Name="{Binding OperationName}">
                                         <StackPanel Spacing="8">
                                             <TextBlock Text="{Binding OperationName}"
                                                        Style="{StaticResource OpenCareerPaperTitleStyle}"
                                                        TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding OutcomeText}"
-                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                       TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding TheaterText}"
-                                                       Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                                       Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                                       TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding CampaignText}"
                                                        Style="{StaticResource OpenCareerPaperDataLabelStyle}"
                                                        TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding EndedText}"
-                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
@@ -463,9 +472,22 @@
                                 <StackPanel x:Name="CompletedOperationDetailPanel"
                                             Spacing="10"
                                             Visibility="Collapsed"
-                                            DataContext="{Binding SelectedCompletedOperationDetail}">
-                                    <TextBlock Text="OPERATION DETAILS"
-                                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                                            DataContext="{Binding SelectedCompletedOperationDetail}"
+                                            AutomationProperties.Name="Selected archived operation details">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="OPERATION DETAILS"
+                                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}"
+                                                   VerticalAlignment="Center" />
+                                        <Border Grid.Column="1"
+                                                Style="{StaticResource OpenCareerStatusBadgeStyle}">
+                                            <TextBlock Text="READ-ONLY ARCHIVE"
+                                                       Style="{StaticResource OpenCareerStatusBadgeTextStyle}" />
+                                        </Border>
+                                    </Grid>
                                     <TextBlock Text="{Binding OperationName}"
                                                Style="{StaticResource OpenCareerPaperTitleStyle}"
                                                TextWrapping="Wrap" />
@@ -473,7 +495,8 @@
                                                Style="{StaticResource OpenCareerPaperDataLabelStyle}"
                                                TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding TheaterText}"
-                                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                               Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                               TextWrapping="Wrap" />
 
                                     <Grid ColumnSpacing="18"
                                           RowSpacing="10">
@@ -490,26 +513,30 @@
                                             <TextBlock Text="RESULT"
                                                        Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                                             <TextBlock Text="{Binding OutcomeText}"
-                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1">
                                             <TextBlock Text="FINAL PHASE"
                                                        Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                                             <TextBlock Text="{Binding FinalPhaseText}"
-                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
                                         <StackPanel Grid.Row="1">
                                             <TextBlock Text="FINAL CONTROL"
                                                        Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                                             <TextBlock Text="{Binding FinalControlText}"
-                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
                                         <StackPanel Grid.Row="1"
                                                     Grid.Column="1">
                                             <TextBlock Text="COMPLETED"
                                                        Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                                             <TextBlock Text="{Binding EndedText}"
-                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Grid>
 
