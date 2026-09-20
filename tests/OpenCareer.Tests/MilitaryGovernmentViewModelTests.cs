@@ -1,7 +1,10 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Military;
 using OpenCareer.Domain.Conflict;
 using OpenCareer.Domain.Military;
+using OpenCareer.Infrastructure.Persistence;
 
 namespace OpenCareer.Tests;
 
@@ -98,10 +101,219 @@ public sealed class MilitaryGovernmentViewModelTests
                 "CloseAirSupport"));
     }
 
-    private static MilitaryGovernmentViewModel CreateViewModel(
-        ConflictCampaignRuntimeState runtime)
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("io")]
+    [InlineData("access")]
+    public async Task SaveFailureRemainsVisibleAndCanBeRetried(string failure)
     {
+        var runtime = CreateRuntime();
+        var completed = CompletedRecord();
+        runtime.Replace(completed);
+        var store = new MemoryStore
+        {
+            BeforeSave = _ => Task.FromException(failure switch
+            {
+                "sqlite" => new SqliteException("private database detail", 5),
+                "io" => new IOException("private path"),
+                _ => new UnauthorizedAccessException("private path")
+            })
+        };
+        var viewModel = CreateViewModel(runtime, store);
+        viewModel.Refresh();
+        string offeredName = viewModel.SuccessorOperationName;
+
+        await viewModel.AcceptSuccessorAsync();
+        string failureMessage = viewModel.StatusMessage;
+        viewModel.Refresh(); // The production page polls every two seconds.
+
+        Assert.Same(completed, runtime.Current);
+        Assert.False(viewModel.IsBusy);
+        Assert.True(viewModel.CanAcceptSuccessor);
+        Assert.Equal(failureMessage, viewModel.StatusMessage);
+        Assert.Contains("could not be saved", failureMessage);
+        Assert.DoesNotContain("private", failureMessage);
+        Assert.Equal(offeredName, viewModel.SuccessorOperationName);
+        Assert.Empty(store.Saved);
+
+        store.BeforeSave = null;
+        await viewModel.AcceptSuccessorAsync();
+        viewModel.Refresh();
+
+        Assert.Equal(offeredName, viewModel.OperationName);
+        Assert.Contains("accepted and activated", viewModel.StatusMessage);
+        Assert.False(viewModel.CanAcceptSuccessor);
+        Assert.Single(store.Saved);
+        Assert.Single(runtime.Current!.Checkpoint.History);
+    }
+
+    [Fact]
+    public async Task PendingAcceptanceBlocksRepeatedActionsAndSavesOnce()
+    {
+        var runtime = CreateRuntime();
+        runtime.Replace(CompletedRecord());
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var store = new MemoryStore { BeforeSave = _ => release.Task };
+        var viewModel = CreateViewModel(runtime, store);
+        viewModel.Refresh();
+
+        Task acceptance = viewModel.AcceptSuccessorAsync();
+        Assert.True(viewModel.IsBusy);
+        Assert.False(viewModel.CanAcceptSuccessor);
+        Assert.False(viewModel.CanDeclineSuccessor);
+        Assert.False(viewModel.CanReconsiderSuccessor);
+        viewModel.Refresh();
+        viewModel.DeclineSuccessor();
+        viewModel.ReconsiderSuccessor();
+        await viewModel.AcceptSuccessorAsync();
+        Assert.Equal(1, store.SaveAttempts);
+
+        release.SetResult();
+        await acceptance;
+        await viewModel.AcceptSuccessorAsync();
+
+        Assert.False(viewModel.IsBusy);
+        Assert.Equal(1, store.SaveAttempts);
+        Assert.Single(runtime.Current!.Checkpoint.History);
+    }
+
+    [Fact]
+    public async Task CancelledSavePreservesCampaignAndAllowsRetry()
+    {
+        var runtime = CreateRuntime();
+        var completed = CompletedRecord();
+        runtime.Replace(completed);
+        var store = new MemoryStore
+        {
+            BeforeSave = token => Task.Delay(Timeout.Infinite, token)
+        };
+        var viewModel = CreateViewModel(runtime, store);
+        viewModel.Refresh();
+        using var cancellation = new CancellationTokenSource();
+
+        Task acceptance = viewModel.AcceptSuccessorAsync(cancellation.Token);
+        cancellation.Cancel();
+        await acceptance;
+        viewModel.Refresh();
+
+        Assert.Same(completed, runtime.Current);
+        Assert.Empty(store.Saved);
+        Assert.False(viewModel.IsBusy);
+        Assert.True(viewModel.CanAcceptSuccessor);
+        Assert.Contains("cancelled", viewModel.StatusMessage);
+        store.BeforeSave = null;
+        await viewModel.AcceptSuccessorAsync();
+        Assert.Single(store.Saved);
+    }
+
+    [Fact]
+    public async Task StaleAcceptanceRefreshesEntireCampaignWithoutSaving()
+    {
+        var runtime = CreateRuntime();
+        runtime.Replace(CompletedRecord());
         var store = new MemoryStore();
+        var viewModel = CreateViewModel(runtime, store);
+        viewModel.Refresh();
+        var active = new ConflictCampaignStoreRecord(1, CreateCheckpoint("new-active"));
+        runtime.Replace(active);
+
+        await viewModel.AcceptSuccessorAsync();
+
+        Assert.Same(active, runtime.Current);
+        Assert.Equal(active.Checkpoint.CampaignState.Identity!.OperationName, viewModel.OperationName);
+        Assert.Contains("Ongoing", viewModel.CampaignStateText);
+        Assert.False(viewModel.HasSuccessorOffer);
+        Assert.False(viewModel.CanAcceptSuccessor);
+        Assert.Contains("could not be accepted", viewModel.StatusMessage);
+        Assert.Equal(0, store.SaveAttempts);
+
+        runtime.Replace(new ConflictCampaignStoreRecord(2, active.Checkpoint));
+        viewModel.Refresh();
+        Assert.Contains("Campaign state is live", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void DeclineAndReconsiderPreserveOfferWithoutSaving()
+    {
+        var runtime = CreateRuntime();
+        var completed = CompletedRecord();
+        runtime.Replace(completed);
+        var store = new MemoryStore();
+        var viewModel = CreateViewModel(runtime, store);
+        viewModel.Refresh();
+        string offeredName = viewModel.SuccessorOperationName;
+
+        viewModel.DeclineSuccessor();
+        viewModel.Refresh();
+        Assert.True(viewModel.CanReconsiderSuccessor);
+        Assert.False(viewModel.CanAcceptSuccessor);
+        Assert.Contains("deferred", viewModel.StatusMessage);
+
+        viewModel.ReconsiderSuccessor();
+        Assert.Equal(offeredName, viewModel.SuccessorOperationName);
+        Assert.True(viewModel.CanAcceptSuccessor);
+        Assert.False(viewModel.CanReconsiderSuccessor);
+        Assert.Same(completed, runtime.Current);
+        Assert.Equal(0, store.SaveAttempts);
+    }
+
+    [Fact]
+    public async Task AcceptedSuccessorRecoversFromSqliteWithoutReplayingTransition()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"military-ui-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var options = new OpenCareerDatabaseOptions(Path.Combine(directory, "campaign.db"));
+        try
+        {
+            var store = new SqliteConflictCampaignStore(options, NullLogger<SqliteConflictCampaignStore>.Instance);
+            var completed = await store.SaveAsync(CompletedRecord().Checkpoint, null);
+            var runtime = CreateRuntime();
+            runtime.Replace(completed);
+            var viewModel = CreateViewModel(runtime, store);
+            viewModel.Refresh();
+            string offeredName = viewModel.SuccessorOperationName;
+            await viewModel.AcceptSuccessorAsync();
+
+            var recoveredStore = new SqliteConflictCampaignStore(options, NullLogger<SqliteConflictCampaignStore>.Instance);
+            var recoveredRuntime = new ConflictCampaignRuntimeState(recoveredStore);
+            await recoveredRuntime.InitializeAsync();
+            var recoveredViewModel = CreateViewModel(recoveredRuntime, recoveredStore);
+            recoveredViewModel.Refresh();
+            await recoveredViewModel.AcceptSuccessorAsync();
+
+            Assert.Equal(offeredName, recoveredViewModel.OperationName);
+            Assert.False(recoveredViewModel.HasSuccessorOffer);
+            Assert.Equal(runtime.Current!.Checkpoint.CampaignId, recoveredRuntime.Current!.Checkpoint.CampaignId);
+            Assert.Equal(1, recoveredRuntime.Current.Revision);
+            Assert.Single(recoveredRuntime.Current.Checkpoint.History);
+            Assert.Equal(completed.Checkpoint.MilitaryCareer, recoveredRuntime.Current.Checkpoint.MilitaryCareer);
+            Assert.Equal(completed.Checkpoint.PlayerCombatState, recoveredRuntime.Current.Checkpoint.PlayerCombatState);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static ConflictCampaignStoreRecord CompletedRecord()
+    {
+        var checkpoint = CreateCheckpoint("completed-ui");
+        return new ConflictCampaignStoreRecord(1, checkpoint with
+        {
+            CampaignState = checkpoint.CampaignState with
+            {
+                Outcome = ConflictCampaignOutcome.Victory,
+                Objectives = Array.Empty<ConflictStrategicObjective>()
+            }
+        });
+    }
+
+    private static MilitaryGovernmentViewModel CreateViewModel(
+        ConflictCampaignRuntimeState runtime,
+        IConflictCampaignStore? store = null)
+    {
+        store ??= new MemoryStore();
 
         return new MilitaryGovernmentViewModel(
             runtime,
@@ -179,20 +391,31 @@ public sealed class MilitaryGovernmentViewModelTests
 
     private sealed class MemoryStore : IConflictCampaignStore
     {
+        public Func<CancellationToken, Task>? BeforeSave { get; set; }
+        public int SaveAttempts { get; private set; }
+        public List<ConflictCampaignCheckpoint> Saved { get; } = new();
+
         public Task<ConflictCampaignStoreRecord?> LoadAsync(
             string campaignId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<ConflictCampaignStoreRecord?>(null);
 
-        public Task<ConflictCampaignStoreRecord> SaveAsync(
+        public async Task<ConflictCampaignStoreRecord> SaveAsync(
             ConflictCampaignCheckpoint checkpoint,
             long? expectedRevision,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(
-                new ConflictCampaignStoreRecord(
+            CancellationToken cancellationToken = default)
+        {
+            SaveAttempts++;
+            if (BeforeSave is not null)
+                await BeforeSave(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            checkpoint.Validate();
+            Saved.Add(checkpoint);
+            return new ConflictCampaignStoreRecord(
                     expectedRevision is long revision
                         ? checked(revision + 1)
                         : 1,
-                    checkpoint));
+                    checkpoint);
+        }
     }
 }

@@ -1,5 +1,8 @@
 using System.ComponentModel;
+using System.Data.Common;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.Application.Military;
 using OpenCareer.Domain.Conflict;
 
@@ -9,6 +12,7 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
 {
     private readonly ConflictCampaignRuntimeState _runtime;
     private readonly MilitaryCampaignTransitionService _transitions;
+    private readonly ILogger<MilitaryGovernmentViewModel> _logger;
 
     private ConflictOperationsSnapshot? _snapshot;
     private MilitarySuccessorOperationOffer? _successorOffer;
@@ -21,13 +25,17 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         "No military campaign is active. Military/Government operations will appear here when a campaign is available.";
     private bool _successorDeclined;
     private bool _isBusy;
+    private string? _actionMessage;
+    private (string? CampaignId, long? Revision) _messageSource;
 
     public MilitaryGovernmentViewModel(
         ConflictCampaignRuntimeState runtime,
-        MilitaryCampaignTransitionService transitions)
+        MilitaryCampaignTransitionService transitions,
+        ILogger<MilitaryGovernmentViewModel>? logger = null)
     {
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _transitions = transitions ?? throw new ArgumentNullException(nameof(transitions));
+        _logger = logger ?? NullLogger<MilitaryGovernmentViewModel>.Instance;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -171,7 +179,18 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
 
     public void Refresh()
     {
+        // Keep the displayed offer stable while its acceptance is being saved.
+        if (_isBusy)
+            return;
+
         ConflictCampaignStoreRecord? current = _runtime.Current;
+        var source = (current?.Checkpoint.CampaignId, current?.Revision);
+        if (_messageSource != source)
+        {
+            _actionMessage = null;
+            _successorDeclined = false;
+            _messageSource = source;
+        }
 
         _snapshot = current is null
             ? null
@@ -198,7 +217,7 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         if (_successorPresentation is not null)
             _successorDeclined = false;
 
-        _statusMessage = _snapshot switch
+        _statusMessage = _actionMessage ?? (_snapshot switch
         {
             null =>
                 "No military campaign is active. Military/Government operations will appear here when a campaign is available.",
@@ -210,7 +229,7 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
                 "The successor operation is deferred. You can reconsider it without changing the completed campaign.",
             _ =>
                 "This campaign has ended. No successor operation is currently available."
-        };
+        });
 
         RaiseAll();
     }
@@ -222,6 +241,7 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             return;
 
         SetBusy(true);
+        _actionMessage = null;
 
         try
         {
@@ -229,23 +249,30 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
                 _successorOffer,
                 cancellationToken);
 
-            _statusMessage =
-                "Successor operation accepted and activated.";
+            SetActionMessage("Successor operation accepted and activated.");
             _successorDeclined = false;
-            Refresh();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            SetActionMessage("Operation acceptance cancelled. You can try again.");
+        }
+        catch (Exception ex) when (ex is DbException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not save successor military operation.");
+            SetActionMessage("The operation could not be saved. Check local storage and try again.");
         }
         catch (Exception ex) when (
             ex is ConflictCampaignConcurrencyException
                 or InvalidOperationException
                 or ArgumentException)
         {
-            _statusMessage =
-                $"Successor operation could not be accepted: {ex.Message}";
-            RefreshOfferOnly();
+            _logger.LogWarning(ex, "Successor military operation acceptance was rejected.");
+            SetActionMessage("The operation could not be accepted. Review the current campaign and offer.");
         }
         finally
         {
             SetBusy(false);
+            Refresh();
         }
     }
 
@@ -259,16 +286,14 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             _successorOffer = null;
             _successorPresentation = null;
             _successorDeclined = true;
-            _statusMessage =
-                "Successor operation deferred. The completed campaign remains unchanged.";
+            SetActionMessage("Successor operation deferred. The completed campaign remains unchanged.");
         }
         else
         {
-            _statusMessage =
-                "The successor operation changed before it could be deferred.";
+            SetActionMessage("The successor operation changed before it could be deferred.");
         }
 
-        RaiseAll();
+        Refresh();
     }
 
     public void ReconsiderSuccessor()
@@ -277,18 +302,15 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             return;
 
         _successorDeclined = false;
+        _actionMessage = null;
         Refresh();
     }
 
-    private void RefreshOfferOnly()
+    private void SetActionMessage(string message)
     {
-        _successorOffer = _transitions.GetCurrentOffer();
-        _successorPresentation = _successorOffer is null
-            ? null
-            : MilitarySuccessorOperationPresentationBuilder.Build(
-                _successorOffer);
-
-        RaiseAll();
+        ConflictCampaignStoreRecord? current = _runtime.Current;
+        _messageSource = (current?.Checkpoint.CampaignId, current?.Revision);
+        _actionMessage = message;
     }
 
     private void SetBusy(bool value)
