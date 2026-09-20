@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Ai;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
@@ -11,6 +12,7 @@ using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Infrastructure.Ai;
 using OpenCareer.Infrastructure.Flights;
 using OpenCareer.Infrastructure.Persistence;
 using OpenCareer.SimConnect;
@@ -43,6 +45,10 @@ public partial class App : Microsoft.UI.Xaml.Application
         });
 
         services.AddSingleton<IAppSettingsService, JsonAppSettingsService>();
+        services.AddSingleton(OpenAiNarrativeOptions.FromEnvironment());
+        services.AddSingleton<IAiNarrativeProvider, OpenAiNarrativeProvider>();
+        services.AddSingleton<IAiNarrativeService, AiNarrativeService>();
+
         services.AddSingleton<IDashboardSnapshotSource, UnavailableDashboardSnapshotSource>();
         services.AddSingleton(provider =>
             new OpenCareerDatabaseOptions(
