@@ -10,7 +10,9 @@ public sealed class OperationDispatchWeatherTests
     [Fact]
     public async Task WeatherIsNotQueriedWhenNoWeatherLimitsAreRequested()
     {
-        var weather = new StubWeatherSource([]);
+        var weather = new StubWeatherSource(
+            new Dictionary<string, AirportDispatchWeatherObservation>(
+                StringComparer.OrdinalIgnoreCase));
         var service = Service(
             weather,
             Resolution(),
@@ -311,7 +313,7 @@ public sealed class OperationDispatchWeatherTests
             Requirements());
 
         Assert.Equal(DispatchFeasibilityStatus.Feasible, result.Status);
-        Assert.Equal(["KAAA"], weather.RequestedIcaos);
+        Assert.Equal(new[] { "KAAA" }, weather.RequestedIcaos);
     }
 
     [Fact]
