@@ -79,6 +79,10 @@ public sealed class ConflictCampaignCoordinator
             current.Checkpoint.World,
             through);
 
+        world = ConflictCampaignCycleEngine.Apply(
+            world,
+            current.Checkpoint.CampaignState);
+
         ConflictCampaignState campaignState =
             ConflictCampaignDirector.Advance(
                 current.Checkpoint.CampaignState,
