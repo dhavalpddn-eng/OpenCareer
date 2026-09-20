@@ -51,7 +51,11 @@ public enum DispatchFeasibilityReason
     CrosswindExceedsLimit,
     TailwindExceedsLimit,
     DensityAltitudeUnknown,
-    DensityAltitudeExceedsLimit
+    DensityAltitudeExceedsLimit,
+    AircraftTakeoffPerformanceConditionsMissing,
+    AircraftLandingPerformanceConditionsMissing,
+    AircraftTakeoffPerformanceOutsideEnvelope,
+    AircraftLandingPerformanceOutsideEnvelope
 }
 
 public sealed record DispatchFeasibilityIssue(
@@ -69,7 +73,9 @@ public sealed record DispatchFeasibilityIssue(
     double? ObservedKnots = null,
     double? LimitKnots = null,
     double? ObservedDensityAltitudeFeet = null,
-    double? MaximumDensityAltitudeFeet = null);
+    double? MaximumDensityAltitudeFeet = null,
+    double? OutsideAirTemperatureCelsius = null,
+    double? PressureAltitudeFeet = null);
 
 public sealed record DispatchFeasibilityResult
 {
@@ -115,6 +121,8 @@ public sealed record DispatchFeasibilityResult
             .ThenBy(static issue => issue.LimitKnots)
             .ThenBy(static issue => issue.ObservedDensityAltitudeFeet)
             .ThenBy(static issue => issue.MaximumDensityAltitudeFeet)
+            .ThenBy(static issue => issue.OutsideAirTemperatureCelsius)
+            .ThenBy(static issue => issue.PressureAltitudeFeet)
             .ToArray();
 
         if (status == DispatchFeasibilityStatus.Feasible && orderedIssues.Length != 0)
