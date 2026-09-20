@@ -1,11 +1,11 @@
 # Simulator connection and first telemetry boundary
 
-Scope: resilient SimConnect connection/reconnect plus first normalized user-aircraft telemetry. No flight-state detector, mission completion or save mutation.
+Scope: resilient SimConnect connection/reconnect, normalized user-aircraft telemetry, installed-aircraft enumeration, and read-only airport/runway facility lookup. No mission completion or save mutation occurs in the SimConnect boundary.
 
 ## Structure and behavior
 
 - `OpenCareer.Application/Simulator` owns `ISimulatorConnection`, `ISimulatorTelemetrySource` and immutable status/identity boundaries. It contains no WinUI, native SDK or database code.
-- `OpenCareer.SimConnect` owns the native ABI and a single dedicated worker. Open, data-definition setup, subscriptions, dispatch, system-state requests and close all run on that worker. Start is nonblocking/idempotent; Stop/Dispose await cleanup. A stopped instance may restart until disposed.
+- `OpenCareer.SimConnect` owns the native ABI and a single dedicated worker. Open, telemetry/facility definition setup, subscriptions, dispatch, system-state requests, aircraft enumeration, facility requests and close all run on that worker. Start is nonblocking/idempotent; Stop/Dispose await cleanup. A stopped instance may restart until disposed.
 - Open success creates a handle; **only `SIMCONNECT_RECV_OPEN` plus successful telemetry setup confirms Connected**. Missing acknowledgement expires after 10 seconds. Duplicate acknowledgements do not create sessions.
 - Quit, transport failure, protocol errors and an unresponsive connection close the current handle before another opens. Identity and telemetry clear when the current simulator session ends.
 - Automatic retries back off 1, 2, 4, 8, then 15 seconds maximum. Missing/wrong runtime and version mismatch wait 30 seconds. Cancellation interrupts the waits. Unexpected implementation errors stop the worker with a Faulted status.
@@ -23,6 +23,16 @@ After the OPEN acknowledgement the same SimConnect worker:
 4. maps SDK values into the existing `AircraftTelemetrySnapshot` domain record.
 
 All fields use `SIMCONNECT_DATATYPE_FLOAT64` so the callback payload has one fixed numeric layout. Booleans are normalized as false only for zero; nonzero values, including `-1`, are true.
+
+## Airport / runway facility lookup
+
+On each SimConnect session the worker installs one documented nested facility definition: `OPEN AIRPORT` -> `NAME64`, `ICAO` -> `OPEN RUNWAY` -> `LENGTH`, `WIDTH`, `SURFACE`, primary/secondary runway number/designator and closed flags -> close markers. Application requests are queued and only one `SimConnect_RequestFacilityData` request is active at a time.
+
+`SIMCONNECT_RECV_FACILITY_DATA` AIRPORT/RUNWAY messages are correlated by request/parent IDs and completed only at `SIMCONNECT_RECV_FACILITY_DATA_END`. Incomplete or inconsistent child lists fail closed. Runway meters are converted to feet; invalid/nonpositive dimensions and unknown/undefined surface codes remain unknown. The adapter publishes `AirportDataAuthority.LocalSimulator` observations, which outrank lower-authority reference providers and are never cross-filled from them.
+
+Facility definition/request failure is nonfatal to telemetry. Immediate HRESULT failures, timeout/cancellation, disconnect and request-specific asynchronous `SIMCONNECT_RECV_EXCEPTION` responses return no local airport observation. Asynchronous failures are isolated using `SimConnect_GetLastSentPacketID` / exception send-ID correlation.
+
+Hosted tests use synthetic native buffers and verify decoder layouts, one-worker ownership, mapping and failure isolation. They do not execute the native DLL. A focused real-MSFS airport lookup remains required before calling the facility path live-validated; it does not require another full FlightSession flight.
 
 | Normalized field | MSFS 2024 source | Requested units / mapping |
 | --- | --- | --- |
@@ -121,3 +131,11 @@ Any live discrepancy should be corrected at the SimConnect mapping boundary befo
 - MSFS 2024 Aircraft SimVar tables for misc/flight-model/control/fuel variables under the official SDK documentation.
 
 Context7 was used to locate current SDK documentation. Exact native ABI/layout details and SimVar semantics were kept behind tests because generated documentation summaries can omit or normalize SDK-specific details.
+
+
+### Facility API references
+
+- [AddToFacilityDefinition](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Facilities/SimConnect_AddToFacilityDefinition.htm)
+- [RequestFacilityData](https://docs.flightsimulator.com/msfs2024/retail/programming-apis/simconnect/api-reference/facilities/simconnect_requestfacilitydata/)
+- [SIMCONNECT_RECV_FACILITY_DATA](https://docs.flightsimulator.com/msfs2024/retail/programming-apis/simconnect/api-reference/structures-and-enumerations/simconnect_recv_facility_data/)
+- [GetLastSentPacketID](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/General/SimConnect_GetLastSentPacketID.htm)
