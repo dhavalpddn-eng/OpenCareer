@@ -336,7 +336,8 @@ public sealed class MilitaryCampaignMissionService
                 ? current.Checkpoint.CampaignState
                 : ConflictCampaignDirector.Advance(
                     current.Checkpoint.CampaignState,
-                    updatedWorld);
+                    updatedWorld,
+                    evaluateCampaignOutcome: false);
 
         ConflictCampaignCheckpoint checkpoint = missionUpdate(
             current.Checkpoint with

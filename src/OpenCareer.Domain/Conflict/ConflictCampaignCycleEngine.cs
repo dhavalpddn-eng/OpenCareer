@@ -1,5 +1,10 @@
 namespace OpenCareer.Domain.Conflict;
 
+public sealed record ConflictCampaignCycleResult(
+    ConflictWorldState World,
+    double FriendlyReplacementReserve,
+    double HostileReplacementReserve);
+
 public static class ConflictCampaignCycleEngine
 {
     private const double LogisticsSupportRadiusNauticalMiles = 45;
@@ -9,8 +14,15 @@ public static class ConflictCampaignCycleEngine
     private const double MomentumControlShiftPerHour = 0.003;
     private const double MaximumStateValue = 0.98;
     private const double MaximumControlShiftPerCycle = 0.025;
+    private const double ReplacementStrengthPerHour = 0.0015;
+    private const double ReplacementStrengthCeiling = 0.90;
 
     public static ConflictWorldState Apply(
+        ConflictWorldState world,
+        ConflictCampaignState campaign) =>
+        ApplyCycle(world, campaign).World;
+
+    public static ConflictCampaignCycleResult ApplyCycle(
         ConflictWorldState world,
         ConflictCampaignState campaign)
     {
@@ -35,8 +47,13 @@ public static class ConflictCampaignCycleEngine
         }
 
         TimeSpan elapsed = world.UpdatedAt - campaign.UpdatedAt;
-        if (elapsed == TimeSpan.Zero)
-            return world;
+        if (elapsed == TimeSpan.Zero || campaign.IsTerminal)
+        {
+            return new ConflictCampaignCycleResult(
+                world,
+                campaign.FriendlyReplacementReserve,
+                campaign.HostileReplacementReserve);
+        }
 
         if (elapsed > TimeSpan.FromHours(24))
         {
@@ -53,6 +70,28 @@ public static class ConflictCampaignCycleEngine
                 world.Units,
                 hours))
             .ToArray();
+
+        var friendlyReplacement =
+            ApplyGroundReplacements(
+                groundUnits,
+                ConflictSide.Friendly,
+                campaign.FriendlyReplacementReserve,
+                hours);
+
+        groundUnits = friendlyReplacement.Units;
+        double friendlyReserve =
+            friendlyReplacement.RemainingReserve;
+
+        var hostileReplacement =
+            ApplyGroundReplacements(
+                groundUnits,
+                ConflictSide.Hostile,
+                campaign.HostileReplacementReserve,
+                hours);
+
+        groundUnits = hostileReplacement.Units;
+        double hostileReserve =
+            hostileReplacement.RemainingReserve;
 
         SimulatedAirUnitState[] airUnits = world.AirUnits
             .Select(unit => RecoverAirUnit(
@@ -81,7 +120,78 @@ public static class ConflictCampaignCycleEngine
             evolved.UpdatedAt);
 
         ConflictValidation.Validate(evolved);
-        return evolved;
+
+        return new ConflictCampaignCycleResult(
+            evolved,
+            friendlyReserve,
+            hostileReserve);
+    }
+
+    private static (GroundUnitState[] Units, double RemainingReserve)
+        ApplyGroundReplacements(
+            GroundUnitState[] units,
+            ConflictSide side,
+            double replacementReserve,
+            double hours)
+    {
+        if (replacementReserve <= 0)
+            return (units, 0);
+
+        bool hasLogistics = units.Any(unit =>
+            unit.Side == side
+            && unit.Role == GroundUnitRole.Logistics
+            && unit.IsOperational
+            && unit.Readiness >= 0.25);
+
+        if (!hasLogistics)
+            return (units, replacementReserve);
+
+        double budget = Math.Min(
+            replacementReserve,
+            ReplacementStrengthPerHour * hours);
+
+        if (budget <= 0)
+            return (units, replacementReserve);
+
+        GroundUnitState[] updated = units.ToArray();
+
+        foreach (GroundUnitState candidate in updated
+            .Where(unit =>
+                unit.Side == side
+                && unit.IsOperational
+                && unit.Role != GroundUnitRole.Logistics
+                && unit.Strength < ReplacementStrengthCeiling)
+            .OrderBy(unit => unit.Strength)
+            .ThenBy(unit => unit.UnitId)
+            .ToArray())
+        {
+            if (budget <= 0)
+                break;
+
+            int index = Array.FindIndex(
+                updated,
+                item => item.UnitId == candidate.UnitId);
+
+            if (index < 0)
+                continue;
+
+            double needed =
+                ReplacementStrengthCeiling - candidate.Strength;
+
+            double applied = Math.Min(needed, budget);
+
+            updated[index] = candidate with
+            {
+                Strength = candidate.Strength + applied
+            };
+
+            budget -= applied;
+            replacementReserve -= applied;
+        }
+
+        return (
+            updated,
+            Math.Clamp(replacementReserve, 0, 1));
     }
 
     private static GroundUnitState RecoverGroundUnit(

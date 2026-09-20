@@ -79,13 +79,25 @@ public sealed class ConflictCampaignCoordinator
             current.Checkpoint.World,
             through);
 
-        world = ConflictCampaignCycleEngine.Apply(
-            world,
-            current.Checkpoint.CampaignState);
+        ConflictCampaignCycleResult cycle =
+            ConflictCampaignCycleEngine.ApplyCycle(
+                world,
+                current.Checkpoint.CampaignState);
+
+        world = cycle.World;
+
+        ConflictCampaignState campaignBeforeAdvance =
+            current.Checkpoint.CampaignState with
+            {
+                FriendlyReplacementReserve =
+                    cycle.FriendlyReplacementReserve,
+                HostileReplacementReserve =
+                    cycle.HostileReplacementReserve
+            };
 
         ConflictCampaignState campaignState =
             ConflictCampaignDirector.Advance(
-                current.Checkpoint.CampaignState,
+                campaignBeforeAdvance,
                 world);
 
         var checkpoint = current.Checkpoint with

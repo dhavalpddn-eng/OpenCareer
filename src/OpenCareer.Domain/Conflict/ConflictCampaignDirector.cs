@@ -9,6 +9,15 @@ public enum ConflictCampaignPhase
     HostileSecured
 }
 
+public enum ConflictCampaignOutcome
+{
+    Ongoing,
+    Victory,
+    Defeat,
+    Stalemate,
+    Ceasefire
+}
+
 public enum StrategicObjectiveKind
 {
     GainSectorControl,
@@ -76,6 +85,19 @@ public sealed record ConflictCampaignState(
 {
     public const int CurrentSchemaVersion = 1;
 
+    public ConflictCampaignOutcome Outcome { get; init; } =
+        ConflictCampaignOutcome.Ongoing;
+
+    public int StableEvaluationCount { get; init; }
+
+    public int SecuredEvaluationCount { get; init; }
+
+    public double FriendlyReplacementReserve { get; init; } = 0.22;
+
+    public double HostileReplacementReserve { get; init; } = 0.22;
+
+    public bool IsTerminal => Outcome != ConflictCampaignOutcome.Ongoing;
+
     public void Validate()
     {
         if (SchemaVersion != CurrentSchemaVersion)
@@ -100,6 +122,20 @@ public sealed record ConflictCampaignState(
             throw new ArgumentOutOfRangeException(nameof(FriendlyMomentum));
         }
 
+        if (StableEvaluationCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(StableEvaluationCount));
+
+        if (SecuredEvaluationCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(SecuredEvaluationCount));
+
+        ValidateReserve(
+            FriendlyReplacementReserve,
+            nameof(FriendlyReplacementReserve));
+
+        ValidateReserve(
+            HostileReplacementReserve,
+            nameof(HostileReplacementReserve));
+
         Identity?.Validate();
 
         foreach (var objective in Objectives)
@@ -111,6 +147,18 @@ public sealed record ConflictCampaignState(
         {
             throw new ArgumentException("Strategic objective IDs must be unique.");
         }
+
+        if (IsTerminal && Objectives.Length != 0)
+        {
+            throw new ArgumentException(
+                "Terminal conflict campaigns cannot retain active strategic objectives.");
+        }
+    }
+
+    private static void ValidateReserve(double value, string name)
+    {
+        if (!double.IsFinite(value) || value is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(name);
     }
 }
 
@@ -143,11 +191,15 @@ public static class ConflictCampaignDirector
 
     public static ConflictCampaignState Advance(
         ConflictCampaignState previous,
-        ConflictWorldState world)
+        ConflictWorldState world,
+        bool evaluateCampaignOutcome = true)
     {
         ArgumentNullException.ThrowIfNull(previous);
         previous.Validate();
         ConflictValidation.Validate(world);
+
+        if (previous.IsTerminal)
+            throw new InvalidOperationException("Terminal conflict campaign cannot advance.");
 
         if (!string.Equals(previous.TheaterId, world.TheaterId, StringComparison.Ordinal))
             throw new InvalidOperationException("Campaign state belongs to another theater.");
@@ -162,14 +214,53 @@ public static class ConflictCampaignDirector
             -1,
             1);
 
+        ConflictCampaignPhase phase =
+            DeterminePhase(world, control);
+
+        int stableEvaluations = previous.StableEvaluationCount;
+        int securedEvaluations = previous.SecuredEvaluationCount;
+        long nextEvaluationSequence = previous.EvaluationSequence;
+        ConflictCampaignOutcome outcome = previous.Outcome;
+
+        if (evaluateCampaignOutcome)
+        {
+            stableEvaluations =
+                IsStrategicallyStable(control, momentum, delta)
+                    ? checked(previous.StableEvaluationCount + 1)
+                    : 0;
+
+            securedEvaluations =
+                phase is ConflictCampaignPhase.FriendlySecured
+                    or ConflictCampaignPhase.HostileSecured
+                    ? phase == previous.Phase
+                        ? checked(previous.SecuredEvaluationCount + 1)
+                        : 1
+                    : 0;
+
+            nextEvaluationSequence =
+                checked(previous.EvaluationSequence + 1);
+
+            outcome = DetermineOutcome(
+                world,
+                phase,
+                nextEvaluationSequence,
+                stableEvaluations,
+                securedEvaluations);
+        }
+
         var updated = previous with
         {
-            Phase = DeterminePhase(world, control),
-            EvaluationSequence = checked(previous.EvaluationSequence + 1),
+            Phase = phase,
+            EvaluationSequence = nextEvaluationSequence,
             UpdatedAt = world.UpdatedAt,
             FriendlyControlAverage = control,
             FriendlyMomentum = momentum,
-            Objectives = BuildObjectives(world),
+            StableEvaluationCount = stableEvaluations,
+            SecuredEvaluationCount = securedEvaluations,
+            Outcome = outcome,
+            Objectives = outcome == ConflictCampaignOutcome.Ongoing
+                ? BuildObjectives(world)
+                : Array.Empty<ConflictStrategicObjective>(),
             Identity = previous.Identity
                 ?? ConflictCampaignIdentityGenerator.Create(
                     previous.CampaignId,
@@ -179,6 +270,67 @@ public static class ConflictCampaignDirector
         updated.Validate();
         return updated;
     }
+
+    private static ConflictCampaignOutcome DetermineOutcome(
+        ConflictWorldState world,
+        ConflictCampaignPhase phase,
+        long evaluationSequence,
+        int stableEvaluations,
+        int securedEvaluations)
+    {
+        if (securedEvaluations >= 2)
+        {
+            if (phase == ConflictCampaignPhase.FriendlySecured)
+                return ConflictCampaignOutcome.Victory;
+
+            if (phase == ConflictCampaignPhase.HostileSecured)
+                return ConflictCampaignOutcome.Defeat;
+        }
+
+        if (evaluationSequence >= 4 && IsMutuallyExhausted(world))
+            return ConflictCampaignOutcome.Ceasefire;
+
+        if (stableEvaluations >= 8)
+            return ConflictCampaignOutcome.Stalemate;
+
+        return ConflictCampaignOutcome.Ongoing;
+    }
+
+    private static bool IsStrategicallyStable(
+        double friendlyControl,
+        double momentum,
+        double controlDelta) =>
+        friendlyControl is >= 0.40 and <= 0.60
+        && Math.Abs(momentum) <= 0.035
+        && Math.Abs(controlDelta) <= 0.01;
+
+    private static bool IsMutuallyExhausted(
+        ConflictWorldState world)
+    {
+        double friendlyPower = SidePower(
+            world,
+            ConflictSide.Friendly);
+
+        double hostilePower = SidePower(
+            world,
+            ConflictSide.Hostile);
+
+        double control = AverageFriendlyControl(world);
+
+        return control is >= 0.35 and <= 0.65
+            && friendlyPower <= 0.30
+            && hostilePower <= 0.30;
+    }
+
+    private static double SidePower(
+        ConflictWorldState world,
+        ConflictSide side) =>
+        world.Units
+            .Where(unit => unit.Side == side && unit.IsOperational)
+            .Sum(unit => unit.Strength * unit.Readiness)
+        + world.AirUnits
+            .Where(unit => unit.Side == side && unit.IsOperational)
+            .Sum(unit => unit.Strength * unit.Readiness * 0.50);
 
     private static ConflictCampaignPhase DeterminePhase(
         ConflictWorldState world,

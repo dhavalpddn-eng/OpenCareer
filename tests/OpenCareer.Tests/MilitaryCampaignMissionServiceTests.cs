@@ -62,6 +62,42 @@ public sealed class MilitaryCampaignMissionServiceTests
     }
 
     [Fact]
+    public async Task TerminalCampaignCannotAcceptNewMilitaryMission()
+    {
+        var store = new MemoryStore();
+        ConflictCampaignCheckpoint checkpoint = Checkpoint();
+
+        checkpoint = checkpoint with
+        {
+            CampaignState = checkpoint.CampaignState with
+            {
+                Outcome = ConflictCampaignOutcome.Victory,
+                Objectives = Array.Empty<ConflictStrategicObjective>()
+            }
+        };
+
+        var current = await store.SaveAsync(
+            checkpoint,
+            expectedRevision: null);
+
+        var campaigns = new ConflictCampaignCoordinator(store);
+        var operations = new ConflictOperationsService();
+        var service = new MilitaryCampaignMissionService(
+            new MilitaryDispatchService(operations),
+            operations,
+            campaigns);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AcceptAsync(
+                current,
+                current.Checkpoint.World.SupportRequests.Single().RequestId,
+                Guid.Parse("92500000-0000-0000-0000-000000000001"),
+                Epoch.AddMinutes(1),
+                Fighter(),
+                aircraftAssignedForOperation: true));
+    }
+
+    [Fact]
     public async Task SecondActiveMilitaryMissionIsRejected()
     {
         var store = new MemoryStore();

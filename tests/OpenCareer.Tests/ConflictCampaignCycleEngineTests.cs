@@ -224,6 +224,118 @@ public sealed class ConflictCampaignCycleEngineTests
     }
 
     [Fact]
+    public void ReplacementReserveIsFiniteAndRequiresLogistics()
+    {
+        GroundUnitState damaged = Unit(
+            "94500000-0000-0000-0000-000000000001",
+            ConflictSide.Friendly,
+            GroundUnitRole.Infantry,
+            new GeoPoint(35.00, -97.00),
+            strength: 0.55,
+            readiness: 0.70);
+
+        GroundUnitState logistics = Unit(
+            "94500000-0000-0000-0000-000000000002",
+            ConflictSide.Friendly,
+            GroundUnitRole.Logistics,
+            new GeoPoint(35.01, -97.01),
+            strength: 0.90,
+            readiness: 0.90);
+
+        ConflictWorldState world = World(
+            new[] { damaged, logistics },
+            airUnits: null,
+            threats: null);
+
+        ConflictCampaignState withReserve =
+            ConflictCampaignDirector.Create(
+                "cycle-replacements",
+                world) with
+            {
+                FriendlyReplacementReserve = 0.01
+            };
+
+        ConflictCampaignState withoutReserve =
+            withReserve with
+            {
+                FriendlyReplacementReserve = 0
+            };
+
+        ConflictWorldState input = world with
+        {
+            UpdatedAt = Epoch.AddHours(6)
+        };
+
+        ConflictCampaignCycleResult reinforced =
+            ConflictCampaignCycleEngine.ApplyCycle(
+                input,
+                withReserve);
+
+        ConflictCampaignCycleResult unreinforced =
+            ConflictCampaignCycleEngine.ApplyCycle(
+                input,
+                withoutReserve);
+
+        double reinforcedStrength =
+            reinforced.World.Units.Single(
+                unit => unit.UnitId == damaged.UnitId).Strength;
+
+        double unreinforcedStrength =
+            unreinforced.World.Units.Single(
+                unit => unit.UnitId == damaged.UnitId).Strength;
+
+        Assert.True(
+            reinforcedStrength > unreinforcedStrength);
+        Assert.InRange(
+            reinforced.FriendlyReplacementReserve,
+            0,
+            0.01);
+        Assert.True(
+            reinforced.FriendlyReplacementReserve < 0.01);
+        Assert.Equal(
+            0,
+            unreinforced.FriendlyReplacementReserve);
+    }
+
+    [Fact]
+    public void ReplacementReserveIsNotSpentWithoutOperationalLogistics()
+    {
+        GroundUnitState damaged = Unit(
+            "94600000-0000-0000-0000-000000000001",
+            ConflictSide.Friendly,
+            GroundUnitRole.Infantry,
+            new GeoPoint(35.00, -97.00),
+            strength: 0.55,
+            readiness: 0.70);
+
+        ConflictWorldState world = World(
+            new[] { damaged },
+            airUnits: null,
+            threats: null);
+
+        ConflictCampaignState campaign =
+            ConflictCampaignDirector.Create(
+                "cycle-reserve-no-logistics",
+                world) with
+            {
+                FriendlyReplacementReserve = 0.10
+            };
+
+        ConflictCampaignCycleResult result =
+            ConflictCampaignCycleEngine.ApplyCycle(
+                world with
+                {
+                    UpdatedAt = Epoch.AddHours(8)
+                },
+                campaign);
+
+        Assert.Equal(
+            0.10,
+            result.FriendlyReplacementReserve,
+            precision: 10);
+    }
+
+    [Fact]
     public void SameCycleInputProducesSameEvolution()
     {
         GroundUnitState supported = Unit(

@@ -86,6 +86,210 @@ public sealed class ConflictCampaignDirectorTests
     }
 
     [Fact]
+    public void SecuredCampaignRequiresTwoEvaluationsBeforeVictory()
+    {
+        ConflictWorldState world = World(0.82, 0.70) with
+        {
+            Units = World(0.82, 0.70).Units
+                .Select(unit => unit.Side == ConflictSide.Hostile
+                    ? unit with
+                    {
+                        Strength = 0.10,
+                        Readiness = 0.40
+                    }
+                    : unit)
+                .ToArray()
+        };
+
+        ConflictCampaignState campaign =
+            ConflictCampaignDirector.Create(
+                "campaign-victory",
+                world);
+
+        Assert.Equal(
+            ConflictCampaignPhase.FriendlySecured,
+            campaign.Phase);
+        Assert.Equal(
+            ConflictCampaignOutcome.Ongoing,
+            campaign.Outcome);
+
+        ConflictCampaignState first =
+            ConflictCampaignDirector.Advance(
+                campaign,
+                world with
+                {
+                    UpdatedAt = Epoch.AddHours(1)
+                });
+
+        Assert.Equal(
+            ConflictCampaignOutcome.Ongoing,
+            first.Outcome);
+        Assert.Equal(1, first.SecuredEvaluationCount);
+
+        ConflictCampaignState second =
+            ConflictCampaignDirector.Advance(
+                first,
+                world with
+                {
+                    UpdatedAt = Epoch.AddHours(2)
+                });
+
+        Assert.Equal(
+            ConflictCampaignOutcome.Victory,
+            second.Outcome);
+        Assert.True(second.IsTerminal);
+        Assert.Empty(second.Objectives);
+    }
+
+    [Fact]
+    public void SecuredHostileCampaignEndsInDefeatAfterTwoEvaluations()
+    {
+        ConflictWorldState world = World(0.18, 0.70) with
+        {
+            Units = World(0.18, 0.70).Units
+                .Select(unit => unit.Side == ConflictSide.Friendly
+                    ? unit with
+                    {
+                        Strength = 0.10,
+                        Readiness = 0.40
+                    }
+                    : unit)
+                .ToArray()
+        };
+
+        ConflictCampaignState campaign =
+            ConflictCampaignDirector.Create(
+                "campaign-defeat",
+                world);
+
+        Assert.Equal(
+            ConflictCampaignPhase.HostileSecured,
+            campaign.Phase);
+
+        ConflictCampaignState first =
+            ConflictCampaignDirector.Advance(
+                campaign,
+                world with
+                {
+                    UpdatedAt = Epoch.AddHours(1)
+                });
+
+        ConflictCampaignState second =
+            ConflictCampaignDirector.Advance(
+                first,
+                world with
+                {
+                    UpdatedAt = Epoch.AddHours(2)
+                });
+
+        Assert.Equal(
+            ConflictCampaignOutcome.Defeat,
+            second.Outcome);
+        Assert.True(second.IsTerminal);
+        Assert.Empty(second.Objectives);
+    }
+
+    [Fact]
+    public void ProlongedBalancedCampaignEndsInStalemate()
+    {
+        ConflictWorldState world = World(0.50, 0.70);
+        ConflictCampaignState campaign =
+            ConflictCampaignDirector.Create(
+                "campaign-stalemate",
+                world) with
+            {
+                StableEvaluationCount = 7,
+                EvaluationSequence = 7,
+                FriendlyMomentum = 0
+            };
+
+        ConflictCampaignState advanced =
+            ConflictCampaignDirector.Advance(
+                campaign,
+                world with
+                {
+                    UpdatedAt = Epoch.AddHours(1)
+                });
+
+        Assert.Equal(
+            ConflictCampaignOutcome.Stalemate,
+            advanced.Outcome);
+        Assert.True(advanced.IsTerminal);
+    }
+
+    [Fact]
+    public void MutualExhaustionCanEndInCeasefire()
+    {
+        ConflictWorldState world = World(0.50, 0.70) with
+        {
+            Units = World(0.50, 0.70).Units
+                .Select(unit => unit with
+                {
+                    Strength = 0.20,
+                    Readiness = 0.40
+                })
+                .ToArray()
+        };
+
+        ConflictCampaignState campaign =
+            ConflictCampaignDirector.Create(
+                "campaign-ceasefire",
+                world) with
+            {
+                EvaluationSequence = 3
+            };
+
+        ConflictCampaignState advanced =
+            ConflictCampaignDirector.Advance(
+                campaign,
+                world with
+                {
+                    UpdatedAt = Epoch.AddHours(1)
+                });
+
+        Assert.Equal(
+            ConflictCampaignOutcome.Ceasefire,
+            advanced.Outcome);
+        Assert.True(advanced.IsTerminal);
+    }
+
+    [Fact]
+    public void TelemetrySynchronizationDoesNotCountAsCampaignEvaluation()
+    {
+        ConflictWorldState world = World(0.50, 0.70);
+        ConflictCampaignState campaign =
+            ConflictCampaignDirector.Create(
+                "campaign-sync",
+                world) with
+            {
+                StableEvaluationCount = 4,
+                EvaluationSequence = 6
+            };
+
+        ConflictCampaignState synchronized =
+            ConflictCampaignDirector.Advance(
+                campaign,
+                world with
+                {
+                    UpdatedAt = Epoch.AddMinutes(5)
+                },
+                evaluateCampaignOutcome: false);
+
+        Assert.Equal(
+            campaign.EvaluationSequence,
+            synchronized.EvaluationSequence);
+        Assert.Equal(
+            campaign.StableEvaluationCount,
+            synchronized.StableEvaluationCount);
+        Assert.Equal(
+            ConflictCampaignOutcome.Ongoing,
+            synchronized.Outcome);
+        Assert.Equal(
+            Epoch.AddMinutes(5),
+            synchronized.UpdatedAt);
+    }
+
+    [Fact]
     public void CampaignCannotAdvanceWithAnotherTheater()
     {
         var campaign = ConflictCampaignDirector.Create(
