@@ -24,6 +24,7 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
     private IReadOnlyList<MilitaryCompletedOperationItemViewModel> _completedOperations =
         Array.Empty<MilitaryCompletedOperationItemViewModel>();
     private MilitaryCompletedOperationItemViewModel? _selectedCompletedOperation;
+    private MilitaryCompletedOperationDetailViewModel? _selectedCompletedOperationDetail;
     private IReadOnlyList<MilitaryOperationalMapMarkerViewModel> _operationalMapMarkers =
         Array.Empty<MilitaryOperationalMapMarkerViewModel>();
     private IReadOnlyList<MilitaryCommunicationItemViewModel> _communications =
@@ -151,6 +152,9 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
     public MilitaryCompletedOperationItemViewModel? SelectedCompletedOperation =>
         _selectedCompletedOperation;
 
+    public MilitaryCompletedOperationDetailViewModel? SelectedCompletedOperationDetail =>
+        _selectedCompletedOperationDetail;
+
     public IReadOnlyList<MilitaryOperationalMapMarkerViewModel> OperationalMapMarkers =>
         _operationalMapMarkers;
 
@@ -265,6 +269,11 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
                         selectedCompletedOperationCampaignId,
                         StringComparison.Ordinal));
 
+        _selectedCompletedOperationDetail =
+            BuildSelectedCompletedOperationDetail(
+                _snapshot,
+                _selectedCompletedOperation?.CampaignId);
+
         _operationalMapMarkers = _snapshot is null
             ? Array.Empty<MilitaryOperationalMapMarkerViewModel>()
             : MilitaryOperationalMapMarkerViewModel.Build(_snapshot);
@@ -317,17 +326,48 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             return selected is not null;
 
         _selectedCompletedOperation = selected;
+        _selectedCompletedOperationDetail =
+            BuildSelectedCompletedOperationDetail(
+                _snapshot,
+                selected?.CampaignId);
         OnPropertyChanged(nameof(SelectedCompletedOperation));
+        OnPropertyChanged(nameof(SelectedCompletedOperationDetail));
         return selected is not null;
     }
 
     public void ClearCompletedOperationSelection()
     {
-        if (_selectedCompletedOperation is null)
+        if (_selectedCompletedOperation is null
+            && _selectedCompletedOperationDetail is null)
+        {
             return;
+        }
 
         _selectedCompletedOperation = null;
+        _selectedCompletedOperationDetail = null;
         OnPropertyChanged(nameof(SelectedCompletedOperation));
+        OnPropertyChanged(nameof(SelectedCompletedOperationDetail));
+    }
+
+    private static MilitaryCompletedOperationDetailViewModel?
+        BuildSelectedCompletedOperationDetail(
+            ConflictOperationsSnapshot? snapshot,
+            string? campaignId)
+    {
+        if (snapshot is null || string.IsNullOrWhiteSpace(campaignId))
+            return null;
+
+        ConflictCampaignHistoryEntry? entry =
+            snapshot.CompletedCampaigns.FirstOrDefault(
+                candidate => string.Equals(
+                    candidate.CampaignId,
+                    campaignId,
+                    StringComparison.Ordinal));
+
+        return entry is null
+            ? null
+            : new MilitaryCompletedOperationDetailViewModel(
+                CompletedMilitaryOperationDetailProjectionBuilder.Build(entry));
     }
 
     public async Task AcceptSuccessorAsync(
@@ -452,6 +492,7 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             nameof(Objectives),
             nameof(CompletedOperations),
             nameof(SelectedCompletedOperation),
+            nameof(SelectedCompletedOperationDetail),
             nameof(OperationalMapMarkers),
             nameof(OperationalMapStatusText),
             nameof(OperationalMapBoundsText),
@@ -674,6 +715,78 @@ public sealed class MilitaryOperationalMapMarkerViewModel
         string Label,
         string Detail,
         GeoPoint Position);
+}
+
+public sealed class MilitaryCompletedOperationDetailViewModel
+{
+    public MilitaryCompletedOperationDetailViewModel(
+        CompletedMilitaryOperationDetailProjection detail)
+    {
+        ArgumentNullException.ThrowIfNull(detail);
+
+        CampaignId = detail.CampaignId;
+        CampaignText = $"Campaign {detail.CampaignId}";
+        OperationName = detail.OperationName;
+        TheaterId = detail.TheaterId;
+        TheaterText = $"Theater {detail.TheaterId}";
+        Outcome = detail.Outcome;
+        OutcomeText =
+            MilitaryGovernmentViewModel.FormatWords(
+                detail.Outcome.ToString());
+        FinalPhase = detail.FinalPhase;
+        FinalPhaseText =
+            MilitaryGovernmentViewModel.FormatWords(
+                detail.FinalPhase.ToString());
+        FinalFriendlyControlAverage =
+            detail.FinalFriendlyControlAverage;
+        FinalControlText =
+            $"{detail.FinalFriendlyControlAverage:P0} friendly control";
+        EndedAt = detail.EndedAt;
+        EndedText = $"Ended {detail.EndedAt.LocalDateTime:g}";
+        FriendlyFactionCode = detail.FriendlyFactionCode;
+        FriendlyFactionName = detail.FriendlyFactionName;
+        FriendlyPosture = detail.FriendlyPosture;
+        FriendlyFactionText = FormatFaction(
+            detail.FriendlyFactionCode,
+            detail.FriendlyFactionName,
+            detail.FriendlyPosture);
+        HostileFactionCode = detail.HostileFactionCode;
+        HostileFactionName = detail.HostileFactionName;
+        HostilePosture = detail.HostilePosture;
+        HostileFactionText = FormatFaction(
+            detail.HostileFactionCode,
+            detail.HostileFactionName,
+            detail.HostilePosture);
+    }
+
+    public string CampaignId { get; }
+    public string CampaignText { get; }
+    public string OperationName { get; }
+    public string TheaterId { get; }
+    public string TheaterText { get; }
+    public ConflictCampaignOutcome Outcome { get; }
+    public string OutcomeText { get; }
+    public ConflictCampaignPhase FinalPhase { get; }
+    public string FinalPhaseText { get; }
+    public double FinalFriendlyControlAverage { get; }
+    public string FinalControlText { get; }
+    public DateTimeOffset EndedAt { get; }
+    public string EndedText { get; }
+    public string FriendlyFactionCode { get; }
+    public string FriendlyFactionName { get; }
+    public ConflictFactionOperationalPosture FriendlyPosture { get; }
+    public string FriendlyFactionText { get; }
+    public string HostileFactionCode { get; }
+    public string HostileFactionName { get; }
+    public ConflictFactionOperationalPosture HostilePosture { get; }
+    public string HostileFactionText { get; }
+
+    private static string FormatFaction(
+        string shortCode,
+        string displayName,
+        ConflictFactionOperationalPosture posture) =>
+        $"{shortCode} • {displayName} • " +
+        $"{MilitaryGovernmentViewModel.FormatWords(posture.ToString())} posture";
 }
 
 public sealed class MilitaryCompletedOperationItemViewModel
