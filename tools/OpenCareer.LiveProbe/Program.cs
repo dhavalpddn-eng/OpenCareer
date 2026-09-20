@@ -30,10 +30,16 @@ try
             ? new LiveFlightSessionValidator(connection)
             : null;
 
+    LiveAirportValidator? airportValidator =
+        options.AirportValidationIcao is { } airportIcao
+            ? new LiveAirportValidator(connection, airportIcao)
+            : null;
+
     var session = new LiveProbeSession(
         connection,
         options,
-        flightSessionValidator);
+        flightSessionValidator,
+        airportValidator);
 
     return await session.RunAsync().ConfigureAwait(false);
 }
