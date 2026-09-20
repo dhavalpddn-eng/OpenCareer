@@ -16,7 +16,8 @@ public sealed record FlightEvidenceProcessorOptions(
     double ApproachMaximumVerticalSpeedFeetPerMinute = -100,
     double ParkingMaximumGroundSpeedKnots = 1,
     int MissionFlightConfirmationSamples = 3,
-    double MissionFlightMinimumDistanceNauticalMiles = 0.5)
+    double MissionFlightMinimumDistanceNauticalMiles = 0.5,
+    int ApproachConfirmationSamples = 2)
 {
     public void Validate()
     {
@@ -34,6 +35,9 @@ public sealed record FlightEvidenceProcessorOptions(
 
         if (MissionFlightConfirmationSamples < 1)
             throw new ArgumentOutOfRangeException(nameof(MissionFlightConfirmationSamples));
+
+        if (ApproachConfirmationSamples < 1)
+            throw new ArgumentOutOfRangeException(nameof(ApproachConfirmationSamples));
 
         ValidateNonNegativeFinite(
             TaxiGroundSpeedKnots,

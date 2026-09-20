@@ -309,6 +309,91 @@ public sealed class FlightTelemetryEvidenceProcessorTests
     }
 
     [Fact]
+    public void ApproachRequiresMissionProgressAndSustainedOperationalDescent()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor(
+            new FlightEvidenceProcessorOptions(
+                StableTelemetrySamples: 1,
+                AirborneConfirmationSamples: 1,
+                InitialClimbConfirmationSamples: 1,
+                MissionFlightConfirmationSamples: 2,
+                MissionFlightMinimumDistanceNauticalMiles: 0.5));
+
+        FlightStateEvidence earlyDescent = processor.Process(Observation(Telemetry(
+            0, onGround: false, altitudeAgl: 500, groundSpeed: 90,
+            verticalSpeed: -300, enginesRunning: 1)));
+        Assert.False(earlyDescent.ApproachConfirmed);
+
+        _ = processor.Process(Observation(Telemetry(
+            1, onGround: false, altitudeAgl: 600, groundSpeed: 95,
+            verticalSpeed: 400, enginesRunning: 1)));
+        _ = processor.Process(Observation(Telemetry(
+            2, onGround: false, altitudeAgl: 800, groundSpeed: 95,
+            verticalSpeed: 400, enginesRunning: 1)));
+        FlightStateEvidence progress = processor.Process(Observation(Telemetry(
+            3, onGround: false, altitudeAgl: 1500, groundSpeed: 95,
+            verticalSpeed: 400, enginesRunning: 1, latitude: 32.01)));
+        Assert.True(progress.MissionFlightProgressConfirmed);
+        Assert.False(progress.ApproachConfirmed);
+
+        FlightStateEvidence firstDescent = processor.Process(Observation(Telemetry(
+            4, onGround: false, altitudeAgl: 1800, groundSpeed: 85,
+            verticalSpeed: -250, enginesRunning: 1)));
+        FlightStateEvidence paused = processor.Process(Observation(Telemetry(
+            5, onGround: false, altitudeAgl: 1700, groundSpeed: 85,
+            verticalSpeed: -250, enginesRunning: 1, paused: true)));
+        FlightStateEvidence resumed = processor.Process(Observation(Telemetry(
+            6, onGround: false, altitudeAgl: 1600, groundSpeed: 85,
+            verticalSpeed: -250, enginesRunning: 1)));
+        FlightStateEvidence confirmed = processor.Process(Observation(Telemetry(
+            7, onGround: false, altitudeAgl: 1500, groundSpeed: 85,
+            verticalSpeed: -250, enginesRunning: 1)));
+
+        Assert.False(firstDescent.ApproachConfirmed);
+        Assert.False(paused.ApproachConfirmed);
+        Assert.False(resumed.ApproachConfirmed);
+        Assert.True(confirmed.ApproachConfirmed);
+    }
+
+    [Fact]
+    public void ApproachStreakResetsAcrossDisconnectAndRestoreUsesPersistedProgress()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor(
+            new FlightEvidenceProcessorOptions(StableTelemetrySamples: 1));
+        FlightSession session = FlightSession.Start(Epoch) with
+        {
+            Milestones = new FlightSessionMilestones(
+                InitialClimbAt: Epoch.AddSeconds(1),
+                MissionFlightProgressAt: Epoch.AddSeconds(2)),
+            Tracking = FlightTrackingSnapshot.Start(Epoch) with
+            {
+                State = FlightTrackingState.Airborne,
+                UpdatedAt = Epoch.AddSeconds(2)
+            }
+        };
+        processor.RestoreContext(session);
+
+        FlightStateEvidence first = processor.Process(Observation(Telemetry(
+            3, onGround: false, altitudeAgl: 1000, groundSpeed: 90,
+            verticalSpeed: -200, enginesRunning: 1)));
+        FlightStateEvidence disconnected = processor.Process(
+            new FlightEvidenceObservation(
+                SimulatorConnectionState.Disconnected, null,
+                ValidLoadedAircraft: true, ContinuityPlausible: true));
+        FlightStateEvidence resumed = processor.Process(Observation(Telemetry(
+            4, onGround: false, altitudeAgl: 900, groundSpeed: 90,
+            verticalSpeed: -200, enginesRunning: 1)));
+        FlightStateEvidence confirmed = processor.Process(Observation(Telemetry(
+            5, onGround: false, altitudeAgl: 800, groundSpeed: 90,
+            verticalSpeed: -200, enginesRunning: 1)));
+
+        Assert.False(first.ApproachConfirmed);
+        Assert.False(disconnected.ApproachConfirmed);
+        Assert.False(resumed.ApproachConfirmed);
+        Assert.True(confirmed.ApproachConfirmed);
+    }
+
+    [Fact]
     public void TouchdownRequiresGroundConfirmationAfterConfirmedAirborneFlight()
     {
         var processor =

@@ -124,6 +124,9 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
             Step("job-fly", "Fly the mission",
                 "Continue the operation after the initial climb. OpenCareer confirms that sustained airborne flight is genuinely underway from trustworthy movement evidence; mission-specific route and objective compliance remain separate checks.",
                 "current-flight", "current-flight"),
+            Step("job-approach", "Establish the approach",
+                "After the flight is underway, descend toward the arrival. OpenCareer confirms a sustained airborne descent below 2,000 ft above ground; this does not confirm arrival at the assigned airport or clearance to land.",
+                "current-flight", "current-flight"),
             Step("job-arrive", "Finish the operation",
                 "A landing alone is normally not enough. Conventional jobs require the mission-defined arrival state, usually taxi, parking, unloading or servicing, and shutdown.",
                 "current-flight", "current-flight"),
@@ -132,7 +135,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 6, steps);
+        return new TutorialDefinition(FirstJobId, 7, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()

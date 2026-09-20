@@ -14,10 +14,12 @@ public sealed class FlightTelemetryEvidenceProcessor
     private int _airborneSampleCount;
     private int _initialClimbSampleCount;
     private int _missionFlightSampleCount;
+    private int _approachSampleCount;
     private int _groundSampleCount;
     private double _missionFlightDistanceNauticalMiles;
     private bool _airborneConfirmedPreviously;
     private bool _initialClimbConfirmedPreviously;
+    private bool _missionFlightConfirmedPreviously;
     private bool _takeoffCandidateActive;
 
     public FlightTelemetryEvidenceProcessor(
@@ -225,13 +227,30 @@ public sealed class FlightTelemetryEvidenceProcessor
             && _groundSampleCount
                 == _options.GroundConfirmationSamples;
 
-        bool approachConfirmed =
+        bool approachSample =
             operationalSample
+            && stableTelemetry
+            && _missionFlightConfirmedPreviously
+            && _airborneConfirmedPreviously
             && !telemetry.OnGround
+            && telemetry.AltitudeAglFeet
+                >= _options.AirborneMinimumAglFeet
             && telemetry.AltitudeAglFeet
                 <= _options.ApproachMaximumAglFeet
             && telemetry.VerticalSpeedFeetPerMinute
                 <= _options.ApproachMaximumVerticalSpeedFeetPerMinute;
+
+        _approachSampleCount =
+            approachSample
+                ? _approachSampleCount + 1
+                : 0;
+
+        bool approachConfirmed =
+            _approachSampleCount
+            >= _options.ApproachConfirmationSamples;
+
+        if (missionFlightProgressConfirmed)
+            _missionFlightConfirmedPreviously = true;
 
         bool parkingConfirmed =
             operationalSample
@@ -313,6 +332,9 @@ public sealed class FlightTelemetryEvidenceProcessor
         _initialClimbConfirmedPreviously =
             session.Milestones.InitialClimbAt is not null;
 
+        _missionFlightConfirmedPreviously =
+            session.Milestones.MissionFlightProgressAt is not null;
+
         _takeoffCandidateActive =
             state == FlightTrackingState.TakeoffRoll;
     }
@@ -325,10 +347,12 @@ public sealed class FlightTelemetryEvidenceProcessor
         _airborneSampleCount = 0;
         _initialClimbSampleCount = 0;
         _missionFlightSampleCount = 0;
+        _approachSampleCount = 0;
         _groundSampleCount = 0;
         _missionFlightDistanceNauticalMiles = 0;
         _airborneConfirmedPreviously = false;
         _initialClimbConfirmedPreviously = false;
+        _missionFlightConfirmedPreviously = false;
         _takeoffCandidateActive = false;
     }
 
@@ -338,6 +362,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         _airborneSampleCount = 0;
         _initialClimbSampleCount = 0;
         _missionFlightSampleCount = 0;
+        _approachSampleCount = 0;
         _missionFlightPrevious = null;
         _groundSampleCount = 0;
         _takeoffCandidateActive = false;
