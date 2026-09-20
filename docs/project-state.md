@@ -1,6 +1,6 @@
 # OpenCareer project state
 
-Updated: 2026-09-18. **Read this after `AGENTS.md`; do not reread chat history unless a required decision is missing.**
+Updated: 2026-09-19. **Read this after `AGENTS.md`; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
@@ -44,6 +44,48 @@ Updated: 2026-09-18. **Read this after `AGENTS.md`; do not reread chat history u
 - Duplicate and even concurrent settlement attempts cannot credit the same contract twice in the current single-process application store.
 - Existing market simulation, route demand, economic cycles, bankruptcy/offline-liability policy, career credit and fictional aircraft-dealer quote systems are retained; this branch adds the missing authoritative money movement layer.
 - Detailed compact handoff: `docs/economy-foundation.md`.
+
+## 2026-09-19 Sidework continuation handoff
+
+Use this section to resume the work from the full Sidework/Sidework 2 chats without rereading those chats.
+
+### Historical economy calibration
+
+- Branch `feature/fse-history-calibration` was created from `review/economy-loan-balance-20260919`.
+- FSEconomy repository inspected: `SKCwillie/FSEconomy-service`.
+- FSEconomy is **historical calibration input only**. It must never override OpenCareer's economy, progression, market simulation, credit, dealers, ledger, mission rewards or ownership rules.
+- No runtime dependency on FSEconomy and no FSE account/API requirement.
+- The useful reference relationships are aircraft price/capacity, engine-price ratio, fuel burn, rental/value ratio, job pay per NM, passenger-NM/cargo-NM and earnings/cost ratios.
+- Historical FSE dollar values are not current real-world prices and are not authoritative gameplay values.
+- Checked-in small reference sample: `data/calibration/fseconomy-aircraft-reference.csv`.
+- Detailed method/provenance: `docs/economy-historical-calibration.md`.
+- OpenCareer calibration remains anchored to its own design: first meaningful ownership roughly 50-80 career-credit flight hours, representative acquisition cash/reserve about $64,000 and early net savings around $1,000 per career-credit flight hour.
+- Preferred calibration flow is now:
+  `historical relationship fitting -> OpenCareer constraints -> focused parameter sweep -> edge-case careers -> large regression/fuzz run`.
+- This is intended to reduce the broad blind tuning cycle used in the earlier 6,000-10,000 scenario work while preserving unique OpenCareer balance.
+- Known upstream caveat: the inspected FSE financial helper uses a questionable dry-rental fuel-cost expression. Use raw fields/relationships, not its derived financial formula, as authoritative input.
+
+### Polly SimConnect reconnect
+
+- Active continuation branch: `feature/polly-simconnect-reconnect`, based on `feature/fse-history-calibration`.
+- Added `Polly.Core` 8.8.0 to `OpenCareer.SimConnect`.
+- Polly controls retry timing only. All native SimConnect open/dispatch/setup/heartbeat/close calls remain serialized on the existing dedicated worker.
+- Normal simulator connection failures use exponential backoff from 1 second, capped at 15 seconds, with jitter.
+- Missing/incompatible SimConnect runtime and version mismatch use a 30-second retry delay.
+- Retry continues until success or cancellation; cancellation interrupts the retry wait.
+- A previously healthy session starts a fresh retry sequence after disconnect so old failures do not inflate a later reconnect delay.
+- No circuit breaker is used because MSFS being closed for long periods is a normal application state rather than a service fault that should be blocked.
+- Added a regression test proving recovery after a missing runtime becomes available.
+- Detailed behavior: `docs/simulator-connection.md`.
+- Polly 8.8.0 is BSD-licensed. Its current project notice says that beginning 2026-11-16, qualifying commercial users earning at least US $20,000 from a product/project using Polly are asked to pay a US $20/month maintenance fee; keep this in dependency/commercialization review.
+
+### Verification status
+
+- The Polly SimConnect project compiled successfully in Linux CI.
+- All 29 deterministic SimLab scenarios passed on the Polly branch.
+- The full unit-test workflow is currently blocked by an **unrelated pre-existing** xUnit analyzer error in `tests/OpenCareer.Tests/PersistedContractSettlementTests.cs` line 108: xUnit2031 (filtering with `Where` before `Assert.Single`). The exact same failure was present before the Polly changes.
+- Do not treat that analyzer failure as a Polly reconnect regression and do not modify unrelated economy code solely to hide it.
+- Windows CI for the Polly branch was still running when this handoff was written; re-check the current remote workflow status before claiming Windows verification.
 
 ## Fixed direction
 
