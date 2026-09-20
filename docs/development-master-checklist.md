@@ -472,7 +472,7 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: code head `4c63e365` is green on both platforms after successor acceptance recovery hardening. Linux PR CI passed **368/368 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **368/368 xUnit**.
+Verification note: code head `b4e3ca81` is green on both platforms. Linux PR CI passed **376/376 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **376/376 xUnit**.
 
 ## Remaining
 
@@ -497,9 +497,10 @@ Verification note: code head `4c63e365` is green on both platforms after success
 - [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
 - [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
 - [x] Implement the first production Military/Government WinUI screen against conflict application snapshots/services; it shows campaign/faction/posture/outcome/reserve/front/support/objective state without UI-owned game logic.
-- [ ] Expand Conflict Operations UI with the operational map/comms/history drill-down and complete local visual/accessibility acceptance.
+- [x] Add read-only completed-operation history, schematic Operational Map and deterministic Communications feed to Conflict Operations without UI-owned conflict authority.
+- [ ] Expand Conflict Operations UI with deeper drill-down and complete local visual/accessibility acceptance.
 - [ ] Add large deterministic campaign balance/stress batches.
-- [x] Record Linux + Windows validation for code head `69337761`: 373/373 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
+- [x] Record Linux + Windows validation for code head `b4e3ca81`: 376/376 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
 - [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
 - [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 
@@ -606,7 +607,8 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement Markets screen.
 - [x] Implement first Military / Government screen using the production design system and application-layer conflict projections/actions.
 - [x] Add a read-only schematic Operational Map to Military/Government using existing conflict snapshot units/threats/support targets, with accessible text/automation labels and no UI-owned conflict rules.
-- [ ] Complete local visual/accessibility acceptance and later communications/deeper operational drill-down.
+- [x] Add deterministic Communications panel from current campaign/support/threat/active-operation snapshot state; no AI or fabricated event history.
+- [ ] Complete local visual/accessibility acceptance and later deeper operational drill-down.
 - [x] Implement production Logbook / Debrief screen with committed-flight list, aggregate totals, filters, multi-leg detail, route-track rendering, landing evidence, incidents and settlement summary.
 - [ ] Implement Career screen.
 - [x] Implement production Settings screen.
