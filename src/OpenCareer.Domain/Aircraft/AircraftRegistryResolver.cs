@@ -19,7 +19,8 @@ public enum AircraftRegistryField
     IfrCapable,
     Pressurized,
     RetractableGear,
-    RunwayPerformance
+    RunwayPerformance,
+    ReferenceMetadata
 }
 
 public sealed record AircraftRegistryObservation(
@@ -39,7 +40,8 @@ public sealed record AircraftRegistryObservation(
     bool? IfrCapable = null,
     bool? Pressurized = null,
     bool? RetractableGear = null,
-    AircraftRunwayPerformanceProfile? RunwayPerformance = null)
+    AircraftRunwayPerformanceProfile? RunwayPerformance = null,
+    AircraftReferenceMetadata? ReferenceMetadata = null)
 {
     public void Validate()
     {
@@ -71,6 +73,7 @@ public sealed record AircraftRegistryObservation(
             throw new ArgumentOutOfRangeException(nameof(EngineCount));
 
         RunwayPerformance?.Validate();
+        ReferenceMetadata?.Validate();
     }
 
     private static void ValidateOptionalNonNegative(double? value, string name)
@@ -105,6 +108,7 @@ public sealed record AircraftRegistryResolution(
     AircraftInstallationStatus InstallationStatus,
     ResolvedAircraftCapabilities CapabilityValues,
     AircraftRunwayPerformanceProfile? RunwayPerformance,
+    AircraftReferenceMetadata? ReferenceMetadata,
     IReadOnlyList<AircraftRegistryField> UnresolvedCapabilityFields,
     IReadOnlyDictionary<AircraftRegistryField, AircraftRegistryFieldProvenance> Provenance)
 {
@@ -227,6 +231,9 @@ public static class AircraftRegistryResolver
                 items,
                 static item => item.RunwayPerformance,
                 static item => item.RunwayPerformance!.Confidence));
+        Add(
+            AircraftRegistryField.ReferenceMetadata,
+            Select(items, static item => item.ReferenceMetadata));
 
         AircraftRegistryField[] unresolved = RequiredCapabilityFields
             .Where(field => !selected.ContainsKey(field))
@@ -262,6 +269,7 @@ public static class AircraftRegistryResolver
                 : AircraftInstallationStatus.KnownOnly,
             capabilities,
             ReferenceValue<AircraftRunwayPerformanceProfile>(AircraftRegistryField.RunwayPerformance),
+            ReferenceValue<AircraftReferenceMetadata>(AircraftRegistryField.ReferenceMetadata),
             unresolved,
             provenance);
 

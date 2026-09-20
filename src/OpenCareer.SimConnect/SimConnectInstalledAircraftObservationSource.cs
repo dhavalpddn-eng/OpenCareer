@@ -8,7 +8,6 @@ public sealed class SimConnectInstalledAircraftObservationSource(
     : IAircraftRegistryObservationSource, IInstalledAircraftDiscoverySource
 {
     public const string ProviderId = "msfs-simconnect";
-    public const string CanonicalIdPrefix = "msfs-title:";
 
     public InstalledAircraftDiscoverySnapshot Current
     {
@@ -53,7 +52,7 @@ public sealed class SimConnectInstalledAircraftObservationSource(
     public static string CreateCanonicalAircraftId(string aircraftTitle)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftTitle);
-        return CanonicalIdPrefix + aircraftTitle.Trim();
+        return AircraftCanonicalIdentity.FromMsfsTitle(aircraftTitle);
     }
 
     private static AircraftRegistryObservation CreateObservation(string aircraftTitle) =>
