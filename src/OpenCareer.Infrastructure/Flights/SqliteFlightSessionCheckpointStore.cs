@@ -6,8 +6,8 @@ using OpenCareer.Infrastructure.Persistence;
 
 namespace OpenCareer.Infrastructure.Flights;
 
-public sealed class Sqliteflight_session_checkpointStore :
-    Iflight_session_checkpointStore
+public sealed class SqliteFlightSessionCheckpointStore :
+    IFlightSessionCheckpointStore
 {
     private const int CurrentSchemaVersion = 1;
     private const long CurrentSlotId = 1;
@@ -23,7 +23,7 @@ public sealed class Sqliteflight_session_checkpointStore :
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private bool _initialized;
 
-    public Sqliteflight_session_checkpointStore(
+    public SqliteFlightSessionCheckpointStore(
         string databasePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
