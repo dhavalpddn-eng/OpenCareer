@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. The branch is being kept synchronized with `feature/m1-simulation-core`. Post-sync Linux/Windows verification is required before the newest military slice is considered CI-green.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. The branch is being kept synchronized with `feature/m1-simulation-core`. The latest persistence/recovery slice is at `aec8fdfe`; it has not yet received a fresh CI run because the repository workflows currently target `main` PR/push events rather than this feature-to-feature PR.
 
 ## Boundary
 
@@ -41,7 +41,11 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - military affiliation, qualification, trust and assigned-aircraft authorization policy,
 - explicit rule that installation/ownership of a military-capable aircraft never grants mission authorization by itself,
 - application orchestration through `ConflictOperationsService`,
-- deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization and theater generation.
+- versioned `ConflictCampaignCheckpoint` covering world state, military career state, simulated player damage and active combat/area/air-operation missions,
+- checkpoint validation that rejects orphaned reserved requests, duplicate active mission IDs and request/mission type mismatches,
+- SQLite conflict-campaign persistence in the shared `opencareer.db`, including schema migration v2, WAL-compatible storage and optimistic revision checks against stale writers,
+- WinUI dependency-injection registration for `IConflictCampaignStore`,
+- deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation and SQLite campaign recovery.
 
 ## Deliberately abstract
 
@@ -51,8 +55,8 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 
 ## Still open
 
-- SQLite persistence/checkpoints for conflict state,
-- active mission/request recovery after application restart,
+- automatic runtime bootstrap that loads the active campaign checkpoint when the Military/Government feature becomes a production application flow,
+- database-consistent backup/restore coverage for conflict checkpoints,
 - richer named faction/campaign state beyond Friendly/Hostile/Neutral,
 - long-term theater objectives and campaign evolution,
 - player career onboarding/persistence for military affiliation and qualifications,
@@ -69,6 +73,7 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 - Processed player actions and threat engagements are idempotent.
 - A support request exists because simulated world state creates a need.
 - One active support request cannot be accepted by multiple missions.
+- A persisted reserved request must have exactly one recoverable active mission, and optimistic checkpoint revisions reject stale concurrent writes.
 - Mission objective completion is not career/job/economy settlement.
 - Pause/slew cannot advance military objectives.
 - Simulated damage remains OpenCareer state unless a separately verified simulator mechanism is explicitly implemented.
