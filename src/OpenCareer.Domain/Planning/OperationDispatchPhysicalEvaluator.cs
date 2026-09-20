@@ -3,6 +3,24 @@ using OpenCareer.Domain.Airports;
 
 namespace OpenCareer.Domain.Planning;
 
+public sealed record DispatchRunwayPerformanceConditions(
+    double WeightPounds,
+    double OutsideAirTemperatureCelsius,
+    double PressureAltitudeFeet)
+{
+    public void Validate()
+    {
+        if (!double.IsFinite(WeightPounds) || WeightPounds <= 0)
+            throw new ArgumentOutOfRangeException(nameof(WeightPounds));
+
+        if (!double.IsFinite(OutsideAirTemperatureCelsius))
+            throw new ArgumentOutOfRangeException(nameof(OutsideAirTemperatureCelsius));
+
+        if (!double.IsFinite(PressureAltitudeFeet))
+            throw new ArgumentOutOfRangeException(nameof(PressureAltitudeFeet));
+    }
+}
+
 /// <summary>
 /// Physical requirements for one operation. RequiredRangeNauticalMiles must already
 /// include route, alternate, reserve, reposition, or contingency distance selected
@@ -15,7 +33,9 @@ public sealed record OperationDispatchRequirements(
     double? PlannedFuelPounds = null,
     double RangeSafetyMarginPercent = 0,
     double RunwayLengthSafetyMarginPercent = 0,
-    DispatchWeatherLimits? WeatherLimits = null)
+    DispatchWeatherLimits? WeatherLimits = null,
+    DispatchRunwayPerformanceConditions? TakeoffPerformanceConditions = null,
+    DispatchRunwayPerformanceConditions? LandingPerformanceConditions = null)
 {
     public void Validate()
     {
@@ -34,6 +54,8 @@ public sealed record OperationDispatchRequirements(
         ValidatePercentage(RangeSafetyMarginPercent, nameof(RangeSafetyMarginPercent));
         ValidatePercentage(RunwayLengthSafetyMarginPercent, nameof(RunwayLengthSafetyMarginPercent));
         WeatherLimits?.Validate();
+        TakeoffPerformanceConditions?.Validate();
+        LandingPerformanceConditions?.Validate();
     }
 
     private static void ValidatePercentage(double value, string name)
@@ -167,8 +189,16 @@ public static class OperationDispatchPhysicalEvaluator
             }
         }
 
+        ConditionedRunwayResolution conditionedRunway =
+            ResolveConditionedRunwayPerformance(
+                aircraft.RunwayPerformance,
+                dispatchPerformance,
+                requirements,
+                origin,
+                destination);
+
         DispatchFeasibilityResult runway = RunwayCompatibilityEvaluator.Evaluate(
-            aircraft.RunwayPerformance,
+            conditionedRunway.EffectivePerformance,
             origin,
             destination,
             requirements.RunwayLengthSafetyMarginPercent,
@@ -176,11 +206,18 @@ public static class OperationDispatchPhysicalEvaluator
             destinationWeather,
             requirements.WeatherLimits);
 
+        IEnumerable<DispatchFeasibilityIssue> runwayIssues =
+            SuppressBaselineLengthUnknowns(
+                runway.Issues,
+                conditionedRunway.SuppressTakeoffLengthUnknown,
+                conditionedRunway.SuppressLandingLengthUnknown);
+
         DispatchFeasibilityStatus status =
             hasDefiniteCapabilityFailure
             || runway.Status == DispatchFeasibilityStatus.Infeasible
                 ? DispatchFeasibilityStatus.Infeasible
                 : capabilityIssues.Count > 0
+                  || conditionedRunway.Issues.Count > 0
                   || runway.Status == DispatchFeasibilityStatus.InsufficientData
                     ? DispatchFeasibilityStatus.InsufficientData
                     : DispatchFeasibilityStatus.Feasible;
@@ -189,8 +226,146 @@ public static class OperationDispatchPhysicalEvaluator
             status,
             runway.OriginRunwayIdentifier,
             runway.DestinationRunwayIdentifier,
-            capabilityIssues.Concat(runway.Issues));
+            capabilityIssues
+                .Concat(conditionedRunway.Issues)
+                .Concat(runwayIssues));
     }
+
+    private static ConditionedRunwayResolution ResolveConditionedRunwayPerformance(
+        AircraftRunwayPerformanceProfile? baseline,
+        AircraftDispatchPerformanceProfile? dispatchPerformance,
+        OperationDispatchRequirements requirements,
+        AirportRecord origin,
+        AirportRecord destination)
+    {
+        AircraftConditionedPerformanceProfile? conditioned =
+            dispatchPerformance?.ConditionedPerformance;
+
+        AircraftPerformanceGrid3D? takeoffTable =
+            conditioned?.TakeoffTotalDistanceFeet;
+
+        AircraftPerformanceGrid3D? landingTable =
+            conditioned?.LandingTotalDistanceFeet;
+
+        if (takeoffTable is null && landingTable is null)
+        {
+            return new(
+                baseline,
+                Array.Empty<DispatchFeasibilityIssue>(),
+                SuppressTakeoffLengthUnknown: false,
+                SuppressLandingLengthUnknown: false);
+        }
+
+        double? takeoffLength = baseline?.MinimumTakeoffRunwayFeet;
+        double? landingLength = baseline?.MinimumLandingRunwayFeet;
+        var issues = new List<DispatchFeasibilityIssue>();
+
+        bool suppressTakeoffUnknown = takeoffTable is not null;
+        bool suppressLandingUnknown = landingTable is not null;
+
+        if (takeoffTable is not null)
+        {
+            takeoffLength = ResolveConditionedDistance(
+                takeoffTable,
+                requirements.TakeoffPerformanceConditions,
+                DispatchEndpoint.Origin,
+                origin.Icao,
+                DispatchFeasibilityReason.AircraftTakeoffPerformanceConditionsMissing,
+                DispatchFeasibilityReason.AircraftTakeoffPerformanceOutsideEnvelope,
+                issues);
+        }
+
+        if (landingTable is not null)
+        {
+            landingLength = ResolveConditionedDistance(
+                landingTable,
+                requirements.LandingPerformanceConditions,
+                DispatchEndpoint.Destination,
+                destination.Icao,
+                DispatchFeasibilityReason.AircraftLandingPerformanceConditionsMissing,
+                DispatchFeasibilityReason.AircraftLandingPerformanceOutsideEnvelope,
+                issues);
+        }
+
+        AircraftRunwayPerformanceProfile effective =
+            baseline is null
+                ? new(
+                    takeoffLength,
+                    landingLength,
+                    MinimumRunwayWidthFeet: null,
+                    SupportedSurfaces: null,
+                    dispatchPerformance!.Confidence,
+                    dispatchPerformance.Source)
+                : baseline with
+                {
+                    MinimumTakeoffRunwayFeet = takeoffLength,
+                    MinimumLandingRunwayFeet = landingLength
+                };
+
+        effective.Validate();
+
+        return new(
+            effective,
+            issues,
+            suppressTakeoffUnknown,
+            suppressLandingUnknown);
+    }
+
+    private static double? ResolveConditionedDistance(
+        AircraftPerformanceGrid3D table,
+        DispatchRunwayPerformanceConditions? conditions,
+        DispatchEndpoint endpoint,
+        string airportIcao,
+        DispatchFeasibilityReason missingReason,
+        DispatchFeasibilityReason outsideEnvelopeReason,
+        ICollection<DispatchFeasibilityIssue> issues)
+    {
+        table.Validate();
+
+        if (conditions is null)
+        {
+            issues.Add(new(
+                missingReason,
+                endpoint,
+                airportIcao,
+                AircraftField: AircraftRegistryField.DispatchPerformance));
+
+            return null;
+        }
+
+        conditions.Validate();
+
+        double? distance = table.Interpolate(
+            conditions.WeightPounds,
+            conditions.OutsideAirTemperatureCelsius,
+            conditions.PressureAltitudeFeet);
+
+        if (distance is not null)
+            return distance.Value;
+
+        issues.Add(new(
+            outsideEnvelopeReason,
+            endpoint,
+            airportIcao,
+            AircraftField: AircraftRegistryField.DispatchPerformance,
+            RequiredPounds: conditions.WeightPounds,
+            OutsideAirTemperatureCelsius: conditions.OutsideAirTemperatureCelsius,
+            PressureAltitudeFeet: conditions.PressureAltitudeFeet));
+
+        return null;
+    }
+
+    private static IEnumerable<DispatchFeasibilityIssue> SuppressBaselineLengthUnknowns(
+        IEnumerable<DispatchFeasibilityIssue> issues,
+        bool suppressTakeoff,
+        bool suppressLanding) =>
+        issues.Where(issue =>
+            !(suppressTakeoff
+                && issue.Endpoint == DispatchEndpoint.Origin
+                && issue.Reason == DispatchFeasibilityReason.AircraftTakeoffLengthUnknown)
+            && !(suppressLanding
+                && issue.Endpoint == DispatchEndpoint.Destination
+                && issue.Reason == DispatchFeasibilityReason.AircraftLandingLengthUnknown));
 
     private static void EvaluateWeightAndFuel(
         AircraftDispatchPerformanceProfile performance,
@@ -287,6 +462,12 @@ public static class OperationDispatchPhysicalEvaluator
 
     private static double ApplySafetyMargin(double value, double percentage) =>
         value * (1 + (percentage / 100d));
+
+    private sealed record ConditionedRunwayResolution(
+        AircraftRunwayPerformanceProfile? EffectivePerformance,
+        IReadOnlyList<DispatchFeasibilityIssue> Issues,
+        bool SuppressTakeoffLengthUnknown,
+        bool SuppressLandingLengthUnknown);
 
     private static void ValidateResolvedNonNegative(
         double? value,
