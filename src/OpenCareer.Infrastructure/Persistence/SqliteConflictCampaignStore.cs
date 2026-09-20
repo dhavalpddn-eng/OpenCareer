@@ -6,7 +6,7 @@ using OpenCareer.Application.Military;
 
 namespace OpenCareer.Infrastructure.Persistence;
 
-public sealed class SqliteConflictCampaignStore : IConflictCampaignStore
+public sealed class SqliteConflictCampaignStore : IConflictCampaignStore, IConflictCampaignRecoverySource
 {
     private const int PayloadSchemaVersion = ConflictCampaignCheckpoint.CurrentSchemaVersion;
 
@@ -68,6 +68,49 @@ public sealed class SqliteConflictCampaignStore : IConflictCampaignStore
             reader.GetString(2));
 
         if (!string.Equals(checkpoint.CampaignId, campaignId, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                "Stored conflict checkpoint campaign ID does not match its database key.");
+        }
+
+        var record = new ConflictCampaignStoreRecord(revision, checkpoint);
+        record.Validate();
+        return record;
+    }
+
+    public async Task<ConflictCampaignStoreRecord?> LoadMostRecentlySavedAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        await using SqliteConnection connection =
+            await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using SqliteCommand command = connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT campaign_id, revision, checkpoint_schema_version, payload_json
+            FROM conflict_campaigns
+            ORDER BY saved_at_ms DESC, campaign_id ASC
+            LIMIT 1;
+            """;
+
+        await using SqliteDataReader reader = await command
+            .ExecuteReaderAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        string campaignId = reader.GetString(0);
+        long revision = reader.GetInt64(1);
+        var checkpoint = ReadCheckpoint(
+            reader.GetInt32(2),
+            reader.GetString(3));
+
+        if (!string.Equals(
+            checkpoint.CampaignId,
+            campaignId,
+            StringComparison.Ordinal))
         {
             throw new InvalidDataException(
                 "Stored conflict checkpoint campaign ID does not match its database key.");

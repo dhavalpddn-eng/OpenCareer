@@ -70,6 +70,7 @@ public sealed record ConflictCampaignCheckpoint(
 
         if (CampaignState.UpdatedAt != World.UpdatedAt)
             throw new ArgumentException("Campaign state must match checkpoint world time.");
+
         PlayerCombatState.Validate();
 
         if (SavedAt < World.UpdatedAt)
@@ -198,6 +199,12 @@ public interface IConflictCampaignStore
     Task<ConflictCampaignStoreRecord> SaveAsync(
         ConflictCampaignCheckpoint checkpoint,
         long? expectedRevision,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IConflictCampaignRecoverySource
+{
+    Task<ConflictCampaignStoreRecord?> LoadMostRecentlySavedAsync(
         CancellationToken cancellationToken = default);
 }
 

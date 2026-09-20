@@ -78,6 +78,35 @@ public sealed class SqliteConflictCampaignStoreTests
     }
 
     [Fact]
+    public async Task MostRecentlySavedCampaignIsRecovered()
+    {
+        string dir = TempDir();
+        try
+        {
+            var store = Store(dir);
+
+            var older = Checkpoint("older-campaign");
+            var newer = Checkpoint("newer-campaign") with
+            {
+                SavedAt = Epoch.AddMinutes(10)
+            };
+
+            await store.SaveAsync(older, null);
+            await store.SaveAsync(newer, null);
+
+            ConflictCampaignStoreRecord? recovered =
+                await store.LoadMostRecentlySavedAsync();
+
+            Assert.NotNull(recovered);
+            Assert.Equal("newer-campaign", recovered!.Checkpoint.CampaignId);
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
+    [Fact]
     public void StrategicCampaignStateMustMatchCheckpointTheater()
     {
         var checkpoint = Checkpoint("campaign-theater-mismatch");

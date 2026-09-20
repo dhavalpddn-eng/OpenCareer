@@ -53,6 +53,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<SqliteConflictCampaignStore>();
         services.AddSingleton<IConflictCampaignStore>(provider =>
             provider.GetRequiredService<SqliteConflictCampaignStore>());
+        services.AddSingleton<IConflictCampaignRecoverySource>(provider =>
+            provider.GetRequiredService<SqliteConflictCampaignStore>());
+        services.AddSingleton<ConflictCampaignRuntimeState>();
         services.AddSingleton<ConflictOperationsService>();
         services.AddSingleton<ConflictCampaignCoordinator>();
         services.AddSingleton<MilitaryDispatchService>();
@@ -105,6 +108,28 @@ public partial class App : Microsoft.UI.Xaml.Application
         _window.Activate();
 
         _services.GetRequiredService<ISimulatorConnection>().Start();
+
+        try
+        {
+            ConflictCampaignStoreRecord? recovered = await _services
+                .GetRequiredService<ConflictCampaignRuntimeState>()
+                .InitializeAsync();
+
+            if (recovered is not null)
+            {
+                logger.LogInformation(
+                    "Recovered military conflict campaign {CampaignId} at revision {Revision}.",
+                    recovered.Checkpoint.CampaignId,
+                    recovered.Revision);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Military conflict campaign recovery failed; the rest of OpenCareer will continue.");
+        }
+
         logger.LogInformation("OpenCareer application launched.");
     }
 
