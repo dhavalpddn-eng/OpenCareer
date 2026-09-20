@@ -171,7 +171,7 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
     }
 
     [Fact]
-    public void FirstJobFlightRequiresRecordedTakeoff()
+    public void FirstJobTakeoffWaitsThroughTakeoffRollUntilAirborne()
     {
         var sessions =
             new FlightSessionCoordinator();
@@ -189,13 +189,49 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
         Assert.Equal(
             TutorialStepEvidenceState.Waiting,
             source.GetState(
-                Step("job-fly")));
+                Step("job-takeoff")));
+
+        FlightSession takeoffRoll =
+            ToTakeoffRoll(taxi);
 
         sessions.CommitPersisted(
-            ToAirborne(taxi));
+            takeoffRoll);
+
+        Assert.Null(
+            takeoffRoll.Milestones.TakeoffAt);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            source.GetState(
+                Step("job-takeoff")));
+
+        sessions.CommitPersisted(
+            ToAirborneFromTakeoffRoll(
+                takeoffRoll));
 
         Assert.Equal(
             TutorialStepEvidenceState.Satisfied,
+            source.GetState(
+                Step("job-takeoff")));
+    }
+
+    [Fact]
+    public void FlyStepDoesNotTreatTakeoffAsMissionFlightCompletion()
+    {
+        var sessions =
+            new FlightSessionCoordinator();
+
+        sessions.Restore(
+            ToAirborne(
+                ToTaxiOut(
+                    FlightSession.Start(Epoch))));
+
+        var source =
+            new FlightSessionTutorialEvidenceSource(
+                sessions);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.NotApplicable,
             source.GetState(
                 Step("job-fly")));
     }
@@ -344,14 +380,57 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
             TutorialStepEvidenceState.Waiting,
             coordinator.Current.EvidenceState);
 
-        sessions.CommitPersisted(
+        FlightSession taxi =
             ToTaxiOutFromEngineStart(
-                engineStarted));
+                engineStarted);
+
+        sessions.CommitPersisted(
+            taxi);
 
         coordinator.RefreshLiveEvidence();
 
         Assert.Equal(
             "job-taxi-out",
+            coordinator.Current.Step?.Id);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Satisfied,
+            coordinator.Current.EvidenceState);
+
+        await coordinator.NextAsync();
+
+        Assert.Equal(
+            "job-takeoff",
+            coordinator.Current.Step?.Id);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            coordinator.Current.EvidenceState);
+
+        FlightSession takeoffRoll =
+            ToTakeoffRoll(taxi);
+
+        sessions.CommitPersisted(
+            takeoffRoll);
+
+        coordinator.RefreshLiveEvidence();
+
+        Assert.Equal(
+            "job-takeoff",
+            coordinator.Current.Step?.Id);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            coordinator.Current.EvidenceState);
+
+        sessions.CommitPersisted(
+            ToAirborneFromTakeoffRoll(
+                takeoffRoll));
+
+        coordinator.RefreshLiveEvidence();
+
+        Assert.Equal(
+            "job-takeoff",
             coordinator.Current.Step?.Id);
 
         Assert.Equal(
@@ -415,20 +494,20 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
                     ContinuityPlausible: true,
                     SelfPoweredMovementForFlight: true)));
 
-    private static FlightSession ToAirborne(
-        FlightSession session)
-    {
-        session =
-            FlightSessionEngine.Advance(
-                session,
-                new FlightSessionAdvance(
-                    new FlightStateEvidence(
-                        Epoch.AddSeconds(4),
-                        Connected: true,
-                        ContinuityPlausible: true,
-                        TakeoffCandidate: true)));
+    private static FlightSession ToTakeoffRoll(
+        FlightSession session) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(4),
+                    Connected: true,
+                    ContinuityPlausible: true,
+                    TakeoffCandidate: true)));
 
-        return FlightSessionEngine.Advance(
+    private static FlightSession ToAirborneFromTakeoffRoll(
+        FlightSession session) =>
+        FlightSessionEngine.Advance(
             session,
             new FlightSessionAdvance(
                 new FlightStateEvidence(
@@ -436,7 +515,11 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
                     Connected: true,
                     ContinuityPlausible: true,
                     AirborneConfirmed: true)));
-    }
+
+    private static FlightSession ToAirborne(
+        FlightSession session) =>
+        ToAirborneFromTakeoffRoll(
+            ToTakeoffRoll(session));
 
     private sealed class MemoryProgressStore :
         ITutorialProgressStore

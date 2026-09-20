@@ -115,6 +115,9 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
             Step("job-taxi-out", "Taxi to departure",
                 "Taxi under the aircraft's own power toward the assigned departure point. OpenCareer confirms taxi-out from trustworthy movement evidence; pushback, slew and unstable telemetry do not count as taxi progress.",
                 "current-flight", "current-flight"),
+            Step("job-takeoff", "Take off",
+                "Line up and depart using the aircraft and runway's normal procedure. OpenCareer confirms takeoff only after trustworthy airborne evidence; entering the takeoff roll by itself is not enough.",
+                "current-flight", "current-flight"),
             Step("job-fly", "Fly the mission",
                 "Follow the route and mission-specific objectives. Go-arounds and legitimate diversions are evaluated by context rather than treated as automatic failures.",
                 "current-flight", "current-flight"),
@@ -126,7 +129,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 3, steps);
+        return new TutorialDefinition(FirstJobId, 4, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()
