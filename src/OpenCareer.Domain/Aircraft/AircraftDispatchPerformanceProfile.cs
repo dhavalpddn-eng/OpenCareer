@@ -59,17 +59,20 @@ public sealed record AircraftDispatchPerformanceProfile(
                 "Payload-range envelope requires at least two points.",
                 nameof(PayloadRangeEnvelope));
 
+        if (PayloadRangeEnvelope.Any(static point => point is null))
+        {
+            throw new ArgumentException(
+                "Payload-range envelope cannot contain null points.",
+                nameof(PayloadRangeEnvelope));
+        }
+
         AircraftPayloadRangePoint[] ordered = PayloadRangeEnvelope
             .OrderBy(static point => point.PayloadPounds)
             .ToArray();
 
         for (int i = 0; i < ordered.Length; i++)
         {
-            AircraftPayloadRangePoint point = ordered[i]
-                ?? throw new ArgumentException(
-                    "Payload-range envelope cannot contain null points.",
-                    nameof(PayloadRangeEnvelope));
-
+            AircraftPayloadRangePoint point = ordered[i];
             point.Validate();
 
             if (i == 0)
