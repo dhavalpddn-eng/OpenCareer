@@ -88,6 +88,9 @@ public sealed class SqliteMilitaryCareerProfileStore
         ArgumentNullException.ThrowIfNull(career);
         career.Validate();
 
+        if (savedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(savedAt));
+
         if (expectedRevision is < 1)
             throw new ArgumentOutOfRangeException(nameof(expectedRevision));
 
