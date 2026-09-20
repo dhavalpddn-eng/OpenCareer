@@ -32,7 +32,8 @@ public sealed record AircraftDispatchPerformanceProfile(
     string? Source = null,
     double? ConfiguredEmptyWeightPounds = null,
     double? MaximumLandingWeightPounds = null,
-    double? MaximumZeroFuelWeightPounds = null)
+    double? MaximumZeroFuelWeightPounds = null,
+    AircraftConditionedPerformanceProfile? ConditionedPerformance = null)
 {
     public void Validate()
     {
@@ -58,6 +59,8 @@ public sealed record AircraftDispatchPerformanceProfile(
             throw new ArgumentException(
                 "Configured empty weight cannot exceed maximum takeoff weight.");
         }
+
+        ConditionedPerformance?.Validate();
 
         if (!Enum.IsDefined(Confidence))
             throw new ArgumentOutOfRangeException(nameof(Confidence));
