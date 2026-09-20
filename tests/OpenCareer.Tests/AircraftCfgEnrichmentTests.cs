@@ -273,6 +273,68 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
                 Path.Combine(_tempRoot, "missing", "UserCfg.opt")));
     }
 
+    [Fact]
+    public void ProductionUserConfigLocatorFindsExistingSteamAndStoreConfigs()
+    {
+        string roaming = Path.Combine(_tempRoot, "Roaming");
+        string local = Path.Combine(_tempRoot, "Local");
+
+        string steam = Path.Combine(
+            roaming,
+            "Microsoft Flight Simulator 2024",
+            "UserCfg.opt");
+
+        string store = Path.Combine(
+            local,
+            "Packages",
+            "Microsoft.Limitless_8wekyb3d8bbwe",
+            "LocalCache",
+            "UserCfg.opt");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(steam)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(store)!);
+        File.WriteAllText(steam, "InstalledPackagesPath \"X:\\SteamPackages\"");
+        File.WriteAllText(store, "InstalledPackagesPath \"X:\\StorePackages\"");
+
+        IReadOnlyList<string> found = MsfsUserConfigLocator.FindExisting(
+            configuredUserConfigPath: null,
+            roamingAppData: roaming,
+            localAppData: local);
+
+        Assert.Equal(
+            new[] { Path.GetFullPath(store), Path.GetFullPath(steam) }
+                .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            found);
+    }
+
+    [Fact]
+    public void ProductionUserConfigLocatorResolvesPackageRootsWithoutInventingMissingFolders()
+    {
+        string configured = Path.Combine(_tempRoot, "Configured", "UserCfg.opt");
+        string packages = Path.Combine(_tempRoot, "ConfiguredPackages");
+        string community = Path.Combine(packages, "Community2024");
+        string official = Path.Combine(packages, "Official2024");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(configured)!);
+        Directory.CreateDirectory(community);
+        Directory.CreateDirectory(official);
+        File.WriteAllText(
+            configured,
+            $"InstalledPackagesPath \"{packages}\"{Environment.NewLine}");
+
+        IReadOnlyList<string> roots = MsfsUserConfigLocator.FindPackageRoots(
+            configured,
+            roamingAppData: Path.Combine(_tempRoot, "missing-roaming"),
+            localAppData: Path.Combine(_tempRoot, "missing-local"));
+
+        Assert.Equal(
+            new[] { Path.GetFullPath(community), Path.GetFullPath(official) }
+                .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            roots);
+    }
+
     public void Dispose()
     {
         if (!Directory.Exists(_tempRoot))
