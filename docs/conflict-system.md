@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `4b0472b4` is green: Linux passed 352/352 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 352/352 xUnit.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `4c63e365` is green: Linux passed 368/368 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 368/368 xUnit.
 
 ## Boundary
 
@@ -80,6 +80,10 @@ This is a career/game simulation, not a real weapon-performance model.
 Mission effects use normalized game-quality inputs and authored mission windows rather than real weapon envelopes, current operational procedures or classified data. Conflict theaters are fictional/abstracted. Current real-world wars are not authoritative gameplay state.
 
 ## Still open
+
+Successor acceptance recovery is CI-verified at `4c63e365`: expected SQLite/file/access failures and cancellation return a retryable UI state; action messages survive timer refresh until the campaign revision changes. Failed saves preserve the current campaign, stale offers refresh the full presentation, and repeated clicks cannot replay acceptance. Eight new test cases cover failures/retry, cancellation, duplicate actions, stale state, decline/reconsider, and accepted-successor SQLite restart recovery. Linux CI: [368 tests + 29 scenarios](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35496373910). Windows CI: [x64 Release WinUI/LiveProbe builds + 368 tests](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35496373807). Local Linux execution was blocked before tests by the workspace's MSBuild socket restriction; these results are hosted CI verification. Interactive Windows/MSFS acceptance remains open.
+
+Next bounded UI slice: read-only completed-operation history from the existing persisted projection, without campaign mutations or economy integration.
 
 - user-facing Settings backup selection/confirmation for staging a restore archive; the validated restore backend and restart-time apply path are implemented,
 - dynamic faction-posture evolution across campaign phases/outcomes; the current posture is deterministic and fixed for each operation,
