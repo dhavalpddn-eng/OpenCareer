@@ -83,18 +83,20 @@ Optional narrative/dialogue layer that never owns authoritative game state.
 This estimate covers the first safe production integration, not an unlimited library of personalities/content.
 
 ### MBL-12 — Debrief + Logbook — IN PROGRESS
-**Estimated remaining direct effort: ~1.5–3.5 developer days plus MBL-07 / settlement integration**
+**Estimated remaining direct effort: ~1–3 developer days plus MBL-07 / settlement integration**
 
 The production Logbook/Debrief foundation is implemented: immutable historical debrief snapshots, FlightSession -> FlightLeg hierarchy, decimated multi-leg route tracks, independent time/experience dimensions, fuel/payload/assistance facts, landing episode metrics with evidence quality, incidents/events, mission/safety outcome separation, frozen settlement references, committed-logbook statistics, search/type/outcome filters, and a real Jet Age WinUI Logbook screen.
 
 An application-level idempotent commit coordinator prevents retry-created duplicate logbook entries and derives career-log idempotency from the authoritative settlement key. Free/practice flights use a separate manual-log path. Unknown evidence remains unknown rather than being inferred.
 
+SQLite persistence is now implemented in `OpenCareer.Infrastructure`: a versioned `opencareer.db` schema, persistent `ILogbookSource` / `ILogbookWriter`, indexed history/search fields, frozen JSON debrief payloads, WAL mode, startup migration, and idempotent duplicate protection. The WinUI app is wired to the SQLite store instead of the unavailable placeholder.
+
 Remaining before removal:
-- implement the persistent SQLite `ILogbookSource` / `ILogbookWriter` on top of MBL-07 FlightSession/FlightLeg recovery,
 - map real completed FlightSession evidence into `FlightDebrief`,
 - wire career settlement -> exactly-once Logbook commit,
 - wire free/practice **Log Flight / Discard from pilot logbook** postflight flow,
 - feed persisted route/landing/fuel/payload evidence from live sessions,
+- add database-consistent backup/recovery with MBL-07,
 - complete local interactive/visual acceptance.
 
 MBL-12 does not own mission success or economy settlement; it records their authoritative final results.

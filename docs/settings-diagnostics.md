@@ -16,6 +16,8 @@ OpenCareer uses the user's local application-data directory:
 OpenCareer/
   settings.json
   ui-preferences.json
+  opencareer.db
+  opencareer.db-wal / opencareer.db-shm (while WAL is active)
   Logs/
     opencareer.log
     opencareer.log.1
@@ -110,7 +112,7 @@ The backup:
 - skips temporary files,
 - contains a manifest.
 
-This is **not yet the authoritative SQLite career-save backup mechanism**. When MBL-07 introduces persistent FlightSession/career SQLite state, that system must provide database-consistent backup/recovery and integrate with this Settings surface.
+Logbook persistence now uses `opencareer.db`, but this ZIP routine is **not yet a database-consistent SQLite backup mechanism**. Copying a live WAL database as ordinary files is not sufficient for authoritative save/recovery guarantees. MBL-07 must add SQLite-consistent backup/recovery and integrate it with this Settings surface before career-save backups are considered reliable.
 
 ## Explicit dependencies
 

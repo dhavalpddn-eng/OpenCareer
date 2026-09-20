@@ -109,9 +109,10 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - `LogbookQuery` / `LogbookQueryMatcher` define search and type/outcome/date filters for the eventual SQLite implementation.
 - `LogbookCommitCoordinator` provides an exactly-once application boundary. Career entries derive idempotency from the authoritative settlement key; manual free/practice entries use the debrief id. A career entry cannot be committed while settlement is pending.
 - The top-level Logbook navigation destination is now a production WinUI page rather than a placeholder. It has committed-flight history, aggregate totals, search/filter controls, selected debrief details, flight-leg hierarchy, landing/event evidence and a projected multi-leg route-track schematic.
-- Production still uses `UnavailableLogbookSource` and therefore shows an honest empty state until MBL-07 supplies persistent FlightSession/FlightLeg storage and a real `ILogbookSource` / `ILogbookWriter`.
-- Remaining integration: completed FlightSession -> debrief mapping, SQLite persistence, career settlement -> commit, free/practice Log Flight/Discard, real persisted route/landing/fuel/payload evidence, and local visual acceptance.
-- CI at `73bb123` is green on both platforms: Linux build/SimLab/unit tests passed, and Windows WinUI/live-probe/unit-test validation passed.
+- Production now uses `SqliteLogbookStore` from the new `OpenCareer.Infrastructure` project. `opencareer.db` is created under the existing local-data root, migrated with `PRAGMA user_version`, uses WAL mode, stores immutable versioned debrief JSON plus indexed query fields, and enforces unique idempotency keys.
+- SQLite integration tests cover round-trip reload across store instances, indexed search/filter behavior, unknown lookup, concurrent retry collapse and idempotency collision rejection.
+- Remaining integration: completed FlightSession -> debrief mapping, career settlement -> commit, free/practice Log Flight/Discard, real persisted route/landing/fuel/payload evidence, database-consistent backup/recovery with MBL-07, and local visual acceptance.
+- SQLite persistence head `6319492` is Linux-green: 177/177 xUnit/integration tests + 29/29 SimLab. The SQLite-enabled WinUI app and native dependency restored and built successfully on Windows on the immediately preceding code head; the final assertion-only commit did not require another Windows build.
 
 ## CI cost controls
 

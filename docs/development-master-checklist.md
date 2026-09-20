@@ -307,7 +307,8 @@ Chapter status: **PLANNED, with contract/location foundations**
   - [x] Implement idempotent application-level LogbookCommitCoordinator.
   - [x] Require final authoritative career settlement before automatic career log commit.
   - [x] Keep manual free/practice logging separate from contract settlement.
-  - [ ] Implement persistent SQLite ILogbookWriter and wire settlement -> commit.
+  - [x] Implement persistent versioned SQLite ILogbookSource / ILogbookWriter with indexed filters, immutable payload storage and idempotency.
+  - [ ] Wire authoritative career settlement -> SQLite Logbook commit.
 - [ ] Atomically settle money once.
 - [ ] Atomically settle reputation/relationships once.
 - [ ] Atomically settle travel/location once.
