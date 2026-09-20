@@ -64,15 +64,10 @@ public sealed class SimConnectAirportDataObservationSource(
     {
         string? primary = FormatRunwayEnd(runway.PrimaryNumber, runway.PrimaryDesignator);
         string? secondary = FormatRunwayEnd(runway.SecondaryNumber, runway.SecondaryDesignator);
+        string? identifier = GetRunwayIdentifier(runway);
 
-        if (primary is null && secondary is null)
+        if (identifier is null)
             return null;
-
-        string identifier = primary is not null && secondary is not null
-            ? string.Equals(primary, secondary, StringComparison.OrdinalIgnoreCase)
-                ? primary
-                : $"{primary}/{secondary}"
-            : primary ?? secondary!;
 
         bool isClosed = primary is not null && secondary is not null
             ? runway.PrimaryClosed && runway.SecondaryClosed
@@ -110,6 +105,21 @@ public sealed class SimConnectAirportDataObservationSource(
             254 or 255 => RunwaySurface.Unknown,
             _ => RunwaySurface.Unknown
         };
+
+    internal static string? GetRunwayIdentifier(SimConnectRunwayFacilityData runway)
+    {
+        string? primary = FormatRunwayEnd(runway.PrimaryNumber, runway.PrimaryDesignator);
+        string? secondary = FormatRunwayEnd(runway.SecondaryNumber, runway.SecondaryDesignator);
+
+        if (primary is null && secondary is null)
+            return null;
+
+        return primary is not null && secondary is not null
+            ? string.Equals(primary, secondary, StringComparison.OrdinalIgnoreCase)
+                ? primary
+                : $"{primary}/{secondary}"
+            : primary ?? secondary;
+    }
 
     private static string? FormatRunwayEnd(int number, int designator)
     {
