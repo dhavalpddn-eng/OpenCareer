@@ -268,3 +268,11 @@ The first-job tutorial adds `job-approach` after `job-fly`. The step reads the p
 The telemetry processor now requires two consecutive stable, operational, airborne descending samples at or below 2,000 ft AGL, following confirmed mission-flight progress. Pause, slew, disconnect, ground contact, or an insufficient descent resets the approach streak. Restored sessions use the persisted mission-flight milestone to resume detection without carrying an old approach streak across the interruption.
 
 This confirms an airborne approach phase. It does not validate the destination, runway, clearance, route, landing or mission completion. The first-job tutorial definition is version 7.
+
+## MBL-03 Landing tutorial slice
+
+Branch: `feature/mbl03-landing`.
+
+The first-job tutorial adds `job-land` after approach. Initial touchdown records `FirstTouchdownAt` but does not satisfy the step. The telemetry processor confirms landing rollout only after continued operational ground contact beyond touchdown confirmation and ground speed at or below 20 knots. The existing flight state engine then records `LandingAt` on transition to TaxiIn. The tutorial reads that persisted milestone after mission flight progress and approach; it still requires a manual Next. The first-job tutorial definition is version 8.
+
+This confirms the aircraft landed and slowed down. It does not validate destination, parking, shutdown, unloading, or job completion.
