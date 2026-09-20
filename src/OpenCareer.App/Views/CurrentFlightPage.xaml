@@ -36,6 +36,8 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
@@ -55,6 +57,27 @@
                         <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="3">
                             <TextBlock Text="LATEST MILESTONE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                             <TextBlock Text="{Binding CurrentFlightMilestoneSummary}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Spacing="3">
+                            <TextBlock Text="ROUTE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightRouteSummary}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Grid.Column="0" Spacing="3">
+                            <TextBlock Text="PEAKS" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightPerformanceSummary}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="3">
+                            <TextBlock Text="FUEL" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightFuelSummary}"
                                        TextWrapping="Wrap"
                                        Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
