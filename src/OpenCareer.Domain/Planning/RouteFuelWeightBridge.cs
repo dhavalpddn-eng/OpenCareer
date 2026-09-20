@@ -139,12 +139,8 @@ public static class RouteFuelWeightBridge
             throw new ArgumentOutOfRangeException(nameof(estimate));
 
         double? maximumFuelGallons = dispatchPerformance.FuelCapacityGallons;
-        double? maximumFuelPounds = maximumFuelGallons is { } capacity
-            ? capacity * density.PoundsPerGallon
-            : dispatchPerformance.MaximumFuelWeightPounds;
-
-        if (maximumFuelPounds is { } maximum && !double.IsFinite(maximum))
-            maximumFuelPounds = null;
+        double? maximumFuelPounds =
+            dispatchPerformance.ResolveMaximumFuelWeightPounds(fuelTypeIndex);
 
         return FuelWeightConversionResult.Converted(
             new(
