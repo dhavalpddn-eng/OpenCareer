@@ -15,6 +15,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     private readonly TimeProvider _clock;
     private SimulatorConnectionSnapshot _current = new(SimulatorConnectionState.Disconnected);
     private AircraftTelemetrySnapshot? _latestTelemetry;
+    private SimConnectLocalWeatherSnapshot? _localWeather;
     private SimConnectAircraftCatalogSnapshot _aircraftCatalog = SimConnectAircraftCatalogSnapshot.Unavailable;
     private readonly ConcurrentQueue<SimConnectAirportFacilityQuery> _airportFacilityQueries = new();
     private CancellationTokenSource? _stop;
@@ -40,6 +41,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     public SimulatorConnectionSnapshot Current => Volatile.Read(ref _current);
     public AircraftTelemetrySnapshot? Latest => Volatile.Read(ref _latestTelemetry);
+    internal SimConnectLocalWeatherSnapshot? LocalWeather => Volatile.Read(ref _localWeather);
     internal SimConnectAircraftCatalogSnapshot AircraftCatalog => Volatile.Read(ref _aircraftCatalog);
 
     internal async Task<SimConnectAirportFacilitySnapshot?> RequestAirportFacilityAsync(
@@ -113,6 +115,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         bool everConnected = false;
         int failures = 0;
         PublishTelemetry(null);
+        PublishLocalWeather(null);
         PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
         Publish(new(SimulatorConnectionState.WaitingForSimulator));
         try
@@ -124,6 +127,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                 {
                     var issue = RunSession(token, ref everConnected, ref failures);
                     PublishTelemetry(null);
+                    PublishLocalWeather(null);
                     PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
                     if (token.IsCancellationRequested)
                         break;
@@ -138,6 +142,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                     or EntryPointNotFoundException or PlatformNotSupportedException)
                 {
                     PublishTelemetry(null);
+                    PublishLocalWeather(null);
                     PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
                     var issue = ex switch
                     {
@@ -158,6 +163,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         catch (Exception ex)
         {
             PublishTelemetry(null);
+            PublishLocalWeather(null);
             PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
             _logger.LogError(ex, "SimConnect connection worker stopped unexpectedly.");
             Publish(new(SimulatorConnectionState.Faulted, SimulatorConnectionIssue.UnexpectedError));
@@ -165,6 +171,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         finally
         {
             PublishTelemetry(null);
+            PublishLocalWeather(null);
             PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
             if (token.IsCancellationRequested)
                 Publish(new(SimulatorConnectionState.Disconnected));
@@ -196,6 +203,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             uint? pendingHeartbeat = null;
             bool acknowledged = false;
             bool paused = false;
+            bool localWeatherConfigured = false;
             bool airportFacilityConfigured = false;
             uint nextAirportFacilityRequestId = SimConnectAirportFacilityDefinition.FirstRequestId;
             uint? aircraftCatalogPageCount = null;
@@ -236,6 +244,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             if (!ConfigureTelemetry(handle))
                                 return SimulatorConnectionIssue.SimulatorError;
 
+                            localWeatherConfigured = ConfigureLocalWeather(handle);
                             airportFacilityConfigured = ConfigureAirportFacilities(handle);
                             acknowledged = true;
                             everConnected = true;
@@ -268,6 +277,19 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 PublishTelemetry(telemetry);
                             else
                                 _logger.LogDebug("Ignored invalid aircraft telemetry packet.");
+                            break;
+                        case SimConnectMessageKind.SimObjectData
+                            when acknowledged
+                                && localWeatherConfigured
+                                && message.RequestId == SimConnectLocalWeatherDefinition.RequestId
+                                && message.DefinitionId == SimConnectLocalWeatherDefinition.DefinitionId:
+                            var localWeather = SimConnectLocalWeatherMapper.Map(
+                                message.Data,
+                                _clock.GetUtcNow());
+                            if (localWeather is not null)
+                                PublishLocalWeather(localWeather);
+                            else
+                                _logger.LogDebug("Ignored invalid local weather packet.");
                             break;
                         case SimConnectMessageKind.SystemState when pendingHeartbeat == message.RequestId:
                             pendingHeartbeat = null;
@@ -519,6 +541,43 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         return true;
     }
 
+    private bool ConfigureLocalWeather(nint handle)
+    {
+        foreach (var datum in SimConnectLocalWeatherDefinition.Data)
+        {
+            int result = _api.AddToDataDefinition(
+                handle,
+                SimConnectLocalWeatherDefinition.DefinitionId,
+                datum.Name,
+                datum.Units);
+
+            if (result < 0)
+            {
+                _logger.LogWarning(
+                    "SimConnect rejected optional local weather definition {Datum} with HRESULT {HResult:X8}; weather dispatch data will remain unavailable.",
+                    datum.Name,
+                    result);
+                return false;
+            }
+        }
+
+        int requestResult = _api.RequestDataOnUserAircraft(
+            handle,
+            SimConnectLocalWeatherDefinition.RequestId,
+            SimConnectLocalWeatherDefinition.DefinitionId,
+            SimConnectPeriod.Second);
+
+        if (requestResult < 0)
+        {
+            _logger.LogWarning(
+                "SimConnect rejected optional local weather request with HRESULT {HResult:X8}; weather dispatch data will remain unavailable.",
+                requestResult);
+            return false;
+        }
+
+        return true;
+    }
+
     private void RequestAircraftCatalog(nint handle)
     {
         int result = _api.EnumerateSimObjectsAndLiveries(
@@ -591,6 +650,9 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     private void PublishTelemetry(AircraftTelemetrySnapshot? snapshot) =>
         Volatile.Write(ref _latestTelemetry, snapshot);
+
+    private void PublishLocalWeather(SimConnectLocalWeatherSnapshot? snapshot) =>
+        Volatile.Write(ref _localWeather, snapshot);
 
     private void PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot snapshot) =>
         Volatile.Write(ref _aircraftCatalog, snapshot);
