@@ -92,19 +92,21 @@ public sealed class AppDataBackupService(
                         archive.CreateEntry("backup-manifest.json");
 
                     await using Stream manifestStream = manifestEntry.Open();
+                    var manifest = new OpenCareerBackupManifest(
+                        OpenCareerBackupManifest.CurrentSchemaVersion,
+                        DateTimeOffset.Now,
+                        OpenCareerBackupManifest.ExpectedAppDataRoot,
+                        includedFiles.ToArray(),
+                        sqliteSnapshotIncluded,
+                        sqliteSnapshotIncluded
+                            ? "SQLite data was captured through SQLite backup semantics so WAL-backed career, logbook and military campaign state is internally consistent."
+                            : "No SQLite database existed at backup time; non-database local application data was backed up.");
+
+                    manifest.Validate();
+
                     await JsonSerializer.SerializeAsync(
                         manifestStream,
-                        new
-                        {
-                            schemaVersion = 2,
-                            createdAt = DateTimeOffset.Now,
-                            appDataRoot = "OpenCareer",
-                            includedFiles,
-                            sqliteSnapshotIncluded,
-                            note = sqliteSnapshotIncluded
-                                ? "SQLite data was captured through SQLite backup semantics so WAL-backed career, logbook and military campaign state is internally consistent."
-                                : "No SQLite database existed at backup time; non-database local application data was backed up."
-                        },
+                        manifest,
                         cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
 
@@ -151,6 +153,7 @@ public sealed class AppDataBackupService(
         string backupRoot = Path.GetFullPath(paths.BackupsFolder);
         string diagnosticsRoot = Path.GetFullPath(paths.DiagnosticsFolder);
         string databasePath = Path.GetFullPath(paths.DatabaseFile);
+        string pendingRestorePath = Path.GetFullPath(paths.PendingDatabaseRestoreFile);
 
         foreach (string file in Directory.EnumerateFiles(
                      paths.Root,
@@ -163,6 +166,14 @@ public sealed class AppDataBackupService(
 
             if (IsLiveDatabaseArtifact(fullPath, databasePath))
                 continue;
+
+            if (string.Equals(
+                fullPath,
+                pendingRestorePath,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
 
             if (fullPath.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
                 continue;

@@ -52,6 +52,8 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SqliteLogbookStore>());
         services.AddSingleton<SqliteConflictCampaignStore>();
         services.AddSingleton<SqliteDatabaseSnapshotService>();
+        services.AddSingleton<SqliteBackupArchiveRestoreService>();
+        services.AddSingleton<AppDataRestoreService>();
         services.AddSingleton<IConflictCampaignStore>(provider =>
             provider.GetRequiredService<SqliteConflictCampaignStore>());
         services.AddSingleton<IConflictCampaignRecoverySource>(provider =>
@@ -102,6 +104,22 @@ public partial class App : Microsoft.UI.Xaml.Application
         catch (Exception ex)
         {
             logger.LogError(ex, "OpenCareer settings initialization failed; using defaults.");
+        }
+
+        try
+        {
+            bool restored = await _services
+                .GetRequiredService<AppDataRestoreService>()
+                .ApplyPendingDatabaseRestoreAsync();
+
+            if (restored)
+                logger.LogInformation("Applied pending OpenCareer database restore before application data stores were opened.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Pending OpenCareer database restore failed; existing local data was preserved.");
         }
 
         _window = _services.GetRequiredService<MainWindow>();
