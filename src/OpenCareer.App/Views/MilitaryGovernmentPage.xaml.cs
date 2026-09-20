@@ -80,7 +80,7 @@ public sealed partial class MilitaryGovernmentPage : Page
                 Text = marker.Symbol,
                 FontSize = 9,
                 FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-                Foreground = (Brush)Application.Current.Resources[
+                Foreground = (Brush)Microsoft.UI.Xaml.Application.Current.Resources[
                     "OpenCareerShellTextBrush"],
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
@@ -92,7 +92,7 @@ public sealed partial class MilitaryGovernmentPage : Page
                 Height = size,
                 CornerRadius = new CornerRadius(size / 2),
                 Background = MarkerBrush(marker.Kind),
-                BorderBrush = (Brush)Application.Current.Resources[
+                BorderBrush = (Brush)Microsoft.UI.Xaml.Application.Current.Resources[
                     "OpenCareerShellTextBrush"],
                 BorderThickness = new Thickness(1),
                 Child = text
@@ -138,7 +138,7 @@ public sealed partial class MilitaryGovernmentPage : Page
             _ => "OpenCareerDisabledBrush"
         };
 
-        return (Brush)Application.Current.Resources[resourceKey];
+        return (Brush)Microsoft.UI.Xaml.Application.Current.Resources[resourceKey];
     }
 
     private async void AcceptSuccessor_Click(
