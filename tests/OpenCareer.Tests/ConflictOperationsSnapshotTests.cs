@@ -99,6 +99,13 @@ public sealed class ConflictOperationsSnapshotTests
 
         Assert.Equal("snapshot-campaign", snapshot.CampaignId);
         Assert.Equal("FICTIONAL-SNAPSHOT", snapshot.TheaterId);
+        Assert.StartsWith("operation:", snapshot.OperationId);
+        Assert.StartsWith("Operation ", snapshot.OperationName);
+        Assert.Equal(ConflictSide.Friendly, snapshot.FriendlyFaction.Side);
+        Assert.Equal(ConflictSide.Hostile, snapshot.HostileFaction.Side);
+        Assert.NotEqual(
+            snapshot.FriendlyFaction.DisplayName,
+            snapshot.HostileFaction.DisplayName);
         Assert.Equal(2, snapshot.Units.Length);
         Assert.Single(snapshot.Threats);
         Assert.Single(snapshot.SupportRequests);

@@ -71,7 +71,8 @@ public sealed record ConflictCampaignState(
     DateTimeOffset UpdatedAt,
     double FriendlyControlAverage,
     double FriendlyMomentum,
-    ConflictStrategicObjective[] Objectives)
+    ConflictStrategicObjective[] Objectives,
+    ConflictCampaignIdentity? Identity = null)
 {
     public const int CurrentSchemaVersion = 1;
 
@@ -98,6 +99,8 @@ public sealed record ConflictCampaignState(
         {
             throw new ArgumentOutOfRangeException(nameof(FriendlyMomentum));
         }
+
+        Identity?.Validate();
 
         foreach (var objective in Objectives)
             objective.Validate();
@@ -131,7 +134,8 @@ public static class ConflictCampaignDirector
             world.UpdatedAt,
             control,
             FriendlyMomentum: 0,
-            BuildObjectives(world));
+            BuildObjectives(world),
+            ConflictCampaignIdentityGenerator.Create(campaignId, world));
 
         state.Validate();
         return state;
@@ -165,7 +169,11 @@ public static class ConflictCampaignDirector
             UpdatedAt = world.UpdatedAt,
             FriendlyControlAverage = control,
             FriendlyMomentum = momentum,
-            Objectives = BuildObjectives(world)
+            Objectives = BuildObjectives(world),
+            Identity = previous.Identity
+                ?? ConflictCampaignIdentityGenerator.Create(
+                    previous.CampaignId,
+                    world)
         };
 
         updated.Validate();

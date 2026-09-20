@@ -11,6 +11,12 @@ public sealed record ConflictMapUnitProjection(
     double Readiness,
     bool Airborne);
 
+public sealed record ConflictFactionProjection(
+    string FactionId,
+    string DisplayName,
+    string ShortCode,
+    ConflictSide Side);
+
 public sealed record ConflictThreatProjection(
     Guid ThreatId,
     AirThreatType Type,
@@ -35,6 +41,10 @@ public sealed record ActiveMilitaryOperationProjection(
 public sealed record ConflictOperationsSnapshot(
     string CampaignId,
     string TheaterId,
+    string OperationId,
+    string OperationName,
+    ConflictFactionProjection FriendlyFaction,
+    ConflictFactionProjection HostileFaction,
     ConflictCampaignPhase Phase,
     double FriendlyControlAverage,
     double FriendlyMomentum,
@@ -58,6 +68,12 @@ public static class ConflictOperationsSnapshotBuilder
 
         ConflictFrontSnapshot front =
             ConflictFrontEstimator.Create(checkpoint.World);
+
+        ConflictCampaignIdentity identity =
+            checkpoint.CampaignState.Identity
+            ?? ConflictCampaignIdentityGenerator.Create(
+                checkpoint.CampaignId,
+                checkpoint.World);
 
         ConflictMapUnitProjection[] ground =
             checkpoint.World.Units
@@ -116,6 +132,10 @@ public static class ConflictOperationsSnapshotBuilder
         return new ConflictOperationsSnapshot(
             checkpoint.CampaignId,
             checkpoint.World.TheaterId,
+            identity.OperationId,
+            identity.OperationName,
+            ProjectFaction(identity.FriendlyFaction),
+            ProjectFaction(identity.HostileFaction),
             checkpoint.CampaignState.Phase,
             checkpoint.CampaignState.FriendlyControlAverage,
             checkpoint.CampaignState.FriendlyMomentum,
@@ -129,6 +149,14 @@ public static class ConflictOperationsSnapshotBuilder
             BuildActiveOperation(checkpoint),
             checkpoint.SavedAt);
     }
+
+    private static ConflictFactionProjection ProjectFaction(
+        ConflictFactionIdentity faction) =>
+        new(
+            faction.FactionId,
+            faction.DisplayName,
+            faction.ShortCode,
+            faction.Side);
 
     private static ActiveMilitaryOperationProjection? BuildActiveOperation(
         ConflictCampaignCheckpoint checkpoint)

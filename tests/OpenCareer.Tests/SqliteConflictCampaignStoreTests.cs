@@ -29,6 +29,9 @@ public sealed class SqliteConflictCampaignStoreTests
             Assert.Equal(checkpoint.PlayerCombatState, loaded.Checkpoint.PlayerCombatState);
             Assert.Equal(checkpoint.CampaignState.Phase, loaded.Checkpoint.CampaignState.Phase);
             Assert.Equal(
+                checkpoint.CampaignState.Identity,
+                loaded.Checkpoint.CampaignState.Identity);
+            Assert.Equal(
                 checkpoint.CampaignState.FriendlyControlAverage,
                 loaded.Checkpoint.CampaignState.FriendlyControlAverage);
             Assert.Equal(

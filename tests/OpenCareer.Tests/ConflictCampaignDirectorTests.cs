@@ -18,6 +18,12 @@ public sealed class ConflictCampaignDirectorTests
         Assert.Equal(first.Phase, second.Phase);
         Assert.Equal(first.FriendlyControlAverage, second.FriendlyControlAverage);
         Assert.Equal(first.Objectives, second.Objectives);
+        Assert.Equal(first.Identity, second.Identity);
+        Assert.NotNull(first.Identity);
+        Assert.NotEqual(
+            first.Identity!.FriendlyFaction.DisplayName,
+            first.Identity.HostileFaction.DisplayName);
+        Assert.StartsWith("Operation ", first.Identity.OperationName);
         Assert.Contains(
             first.Objectives,
             item => item.Kind == StrategicObjectiveKind.GainSectorControl);
@@ -46,6 +52,37 @@ public sealed class ConflictCampaignDirectorTests
         Assert.Equal(
             ConflictCampaignPhase.FriendlyPressure,
             advanced.Phase);
+    }
+
+    [Fact]
+    public void AdvanceBackfillsIdentityForLegacyCampaignState()
+    {
+        var world = World(0.50, 0.50);
+        var current = ConflictCampaignDirector.Create(
+            "campaign-legacy",
+            world) with
+        {
+            Identity = null
+        };
+
+        current.Validate();
+
+        var advancedWorld = world with
+        {
+            UpdatedAt = Epoch.AddMinutes(30)
+        };
+
+        ConflictCampaignState advanced =
+            ConflictCampaignDirector.Advance(
+                current,
+                advancedWorld);
+
+        Assert.NotNull(advanced.Identity);
+        Assert.Equal(
+            ConflictCampaignIdentityGenerator.Create(
+                current.CampaignId,
+                advancedWorld),
+            advanced.Identity);
     }
 
     [Fact]
