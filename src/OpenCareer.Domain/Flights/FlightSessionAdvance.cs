@@ -5,7 +5,8 @@ public sealed record FlightSessionAdvance(
     FlightTimeInterval? TimeInterval = null,
     bool ShutdownConfirmed = false,
     bool CancelRequested = false,
-    FlightContinuityAnchor? ContinuityAnchor = null)
+    FlightContinuityAnchor? ContinuityAnchor = null,
+    FlightSessionObservation? Observation = null)
 {
     public void Validate(DateTimeOffset previousUpdate)
     {
@@ -22,6 +23,16 @@ public sealed record FlightSessionAdvance(
         {
             throw new ArgumentException(
                 "A flight-session update cannot confirm shutdown and cancellation simultaneously.");
+        }
+
+        Observation?.Validate();
+
+        if (Observation is not null
+            && Observation.Timestamp > Evidence.Timestamp)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(Observation),
+                "A flight-session observation cannot be newer than its evidence.");
         }
 
         if (ContinuityAnchor is not null)
