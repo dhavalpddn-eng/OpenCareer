@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10, current head `040695f2`. GitHub Actions is currently failing before runner steps begin, so compilation/test execution for the newest military slices remains pending rather than reported as a code failure.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. The branch is being kept synchronized with `feature/m1-simulation-core`. Post-sync Linux/Windows verification is required before the newest military slice is considered CI-green.
 
 ## Boundary
 
@@ -26,14 +26,7 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - ground air-defense threats and airborne interceptor threats linked to simulated source units,
 - deterministic ground attrition/control advancement,
 - seeded fictional theater generator for repeatable sectors, ground units, air units and threats,
-- support generation driven by battlefield state:
-  - CAS,
-  - suppression,
-  - reconnaissance,
-  - logistics,
-  - patrol,
-  - escort,
-  - intercept,
+- battlefield-driven support generation for CAS, suppression, reconnaissance, logistics, patrol, escort and intercept,
 - support-request lifecycle: Open / Reserved / Completed / Failed / Cancelled / Expired,
 - duplicate-active-assignment protection,
 - CAS/suppression mission lifecycle through ingress, on-station, authorized action, egress and completion,
@@ -48,7 +41,7 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - military affiliation, qualification, trust and assigned-aircraft authorization policy,
 - explicit rule that installation/ownership of a military-capable aircraft never grants mission authorization by itself,
 - application orchestration through `ConflictOperationsService`,
-- deterministic xUnit tests added across ground conflict, air conflict, mission families, request lifecycle, authorization and theater generation.
+- deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization and theater generation.
 
 ## Deliberately abstract
 
@@ -63,11 +56,11 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 - richer named faction/campaign state beyond Friendly/Hostile/Neutral,
 - long-term theater objectives and campaign evolution,
 - player career onboarding/persistence for military affiliation and qualifications,
-- authoritative aircraft assignment issuance through the future fleet/dispatch system,
+- authoritative aircraft assignment issuance through the fleet/dispatch system,
 - authoritative job/economy settlement integration,
 - production Military/Government/Conflict UI,
 - large deterministic balance/stress scenarios,
-- Windows/xUnit/SimLab execution once GitHub runners execute job steps again,
+- post-sync Linux/Windows verification,
 - live telemetry gameplay verification after the flight-runtime evidence pipeline is ready.
 
 ## Invariants

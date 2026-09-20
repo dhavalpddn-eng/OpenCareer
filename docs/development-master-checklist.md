@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-09-19 on military branch `feature/military-conflict-system` through `040695f2`.
+Last reconciled: 2026-09-19 with current integration branch plus military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -299,7 +299,16 @@ Chapter status: **PLANNED, with contract/location foundations**
 - [ ] Implement mission-specific objective validation.
 - [ ] Require mission terminal conditions beyond landing.
 - [ ] Build result/debrief flow.
+  - [x] Define immutable FlightDebrief snapshot with separate flight-safety and mission outcomes.
+  - [x] Preserve multi-leg hierarchy, decimated route track, time/experience, fuel, payload, assistance, landing and event evidence.
+  - [x] Preserve evidence quality and unknown/unavailable values without fabrication.
+  - [ ] Map authoritative completed FlightSession data into the debrief automatically.
 - [ ] Add logbook commit flow.
+  - [x] Implement idempotent application-level LogbookCommitCoordinator.
+  - [x] Require final authoritative career settlement before automatic career log commit.
+  - [x] Keep manual free/practice logging separate from contract settlement.
+  - [x] Implement persistent versioned SQLite ILogbookSource / ILogbookWriter with indexed filters, immutable payload storage and idempotency.
+  - [ ] Wire authoritative career settlement -> SQLite Logbook commit.
 - [ ] Atomically settle money once.
 - [ ] Atomically settle reputation/relationships once.
 - [ ] Atomically settle travel/location once.
@@ -417,7 +426,7 @@ Exit gate: maintenance, staffing, facilities and geography affect availability/p
 
 # Chapter 10 — Military/government careers, simulated conflict and special events
 
-Chapter status: **ACTIVE IMPLEMENTATION — MULTI-MISSION CONFLICT FOUNDATION ON PR #10; CI EXECUTION PENDING**
+Chapter status: **ACTIVE IMPLEMENTATION — MULTI-MISSION CONFLICT FOUNDATION ON PR #10; VERIFICATION PENDING AFTER SYNC**
 
 ## Completed design/foundation
 
@@ -455,7 +464,7 @@ Chapter status: **ACTIVE IMPLEMENTATION — MULTI-MISSION CONFLICT FOUNDATION ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy and theater generation.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: PR #10 contains the implementation and tests, but current GitHub Actions attempts fail before runner steps begin. Do not claim this branch compiled/passed CI until runner execution resumes.
+Verification note: the military branch now compiles past the initial theater-generator defect. Three test assertion issues were corrected in the latest military commit. Re-run/branch-sync CI is still pending; do not claim final green verification until the post-sync workflow completes.
 
 ## Remaining
 
@@ -463,12 +472,12 @@ Verification note: PR #10 contains the implementation and tests, but current Git
 - [ ] Restore reserved support requests and active mission state safely after app restart.
 - [ ] Add richer faction/campaign state beyond Friendly/Hostile/Neutral sides.
 - [ ] Add longer-term campaign objectives and theater evolution across multiple operations.
-- [ ] Integrate military authorization with the future player-career persistence/onboarding flow.
+- [ ] Integrate military authorization with authoritative player-career persistence/onboarding.
 - [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
-- [ ] Add aircraft assignment issuance/revocation to the future fleet/dispatch system.
+- [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
 - [ ] Implement production Military/Government/Conflict UI against the conflict application service.
 - [ ] Add large deterministic campaign balance/stress batches.
-- [ ] Run xUnit/SimLab/Windows builds once GitHub runner execution is available.
+- [ ] Run/record post-sync Linux + Windows validation.
 - [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
 - [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 
@@ -544,6 +553,15 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Define adaptive-layout/accessibility rules.
 - [x] Implement production shell.
 - [x] Implement initial Dashboard.
+- [x] Implement production Dashboard layout and data contract without fabricated career/job/economy values.
+- [x] Implement deterministic dynamic Dashboard guidance/routing foundation.
+- [x] Implement Top Opportunities selection: four highest available jobs by tier -> fit -> economics/reposition tie-breakers.
+- [x] Lock opportunity tiers: Green Standard / Blue Specialist / Purple Elite / Orange-Gold Legendary with text labels.
+- [x] Add career/company/finance/aircraft/world/recent-activity/social-feed Dashboard modules.
+- [x] Add searchable OpenCareer Network in-world social-feed surface.
+- [x] Remove KRME as a hard-coded production Home base; keep it developer-fixture only.
+- [ ] Wire Dashboard to authoritative Jobs/Career/Company/Aircraft/Economy/World snapshot sources as those systems are implemented.
+- [ ] Verify production Dashboard adaptive layout, keyboard navigation and visual hierarchy on Windows.
 - [x] Implement initial Current Flight telemetry page.
 - [x] Define per-flight contextual checklist UX with inline controller/keyboard binding state.
 - [x] Define layered onboarding: app tutorial, first-job tutorial and first-time mission-family tutorials.
@@ -561,10 +579,11 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.
+- [ ] Implement employer rank/standing lifecycle with deterministic probation, demotion, suspension and firing/termination plus recovery/rehire rules.
 - [ ] Implement Finances screen.
 - [ ] Implement Markets screen.
 - [ ] Implement Military / Government screen.
-- [ ] Implement Logbook screen.
+- [x] Implement production Logbook / Debrief screen with committed-flight list, aggregate totals, filters, multi-leg detail, route-track rendering, landing evidence, incidents and settlement summary.
 - [ ] Implement Career screen.
 - [x] Implement production Settings screen.
 - [x] Persist versioned app preferences independently from career state.

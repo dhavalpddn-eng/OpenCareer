@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using OpenCareer.App.ViewModels;
 using OpenCareer.App.Views;
+using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Tutorials;
 
 namespace OpenCareer.App;
@@ -15,18 +16,23 @@ public sealed partial class MainWindow : Window
 
     public MainWindow(
         ShellViewModel viewModel,
+        DashboardViewModel dashboard,
+        LogbookViewModel logbook,
         TutorialViewModel tutorial,
         SettingsViewModel settings)
     {
         ViewModel = viewModel;
+        Dashboard = dashboard;
+        Logbook = logbook;
         Tutorial = tutorial;
         Settings = settings;
 
         InitializeComponent();
 
         NavView.SelectedItem = DashboardItem;
-        ContentFrame.Navigate(typeof(DashboardPage), ViewModel);
+        ContentFrame.Navigate(typeof(DashboardPage), Dashboard);
 
+        Dashboard.NavigationRequested += OnDashboardNavigationRequested;
         Tutorial.PropertyChanged += OnTutorialPropertyChanged;
         Tutorial.NavigationRequested += OnTutorialNavigationRequested;
         Activated += OnWindowActivated;
@@ -40,6 +46,8 @@ public sealed partial class MainWindow : Window
     }
 
     public ShellViewModel ViewModel { get; }
+    public DashboardViewModel Dashboard { get; }
+    public LogbookViewModel Logbook { get; }
     public TutorialViewModel Tutorial { get; }
     public SettingsViewModel Settings { get; }
 
@@ -47,6 +55,7 @@ public sealed partial class MainWindow : Window
     {
         _statusTimer.Stop();
         _statusTimer.Tick -= OnStatusTimerTick;
+        Dashboard.NavigationRequested -= OnDashboardNavigationRequested;
         Tutorial.PropertyChanged -= OnTutorialPropertyChanged;
         Tutorial.NavigationRequested -= OnTutorialNavigationRequested;
         Activated -= OnWindowActivated;
@@ -85,10 +94,13 @@ public sealed partial class MainWindow : Window
         switch (tag)
         {
             case "dashboard":
-                Navigate(typeof(DashboardPage), ViewModel);
+                Navigate(typeof(DashboardPage), Dashboard);
                 break;
             case "current-flight":
                 Navigate(typeof(CurrentFlightPage), ViewModel);
+                break;
+            case "logbook":
+                Navigate(typeof(LogbookPage), Logbook);
                 break;
             case "settings":
                 Navigate(
@@ -99,6 +111,41 @@ public sealed partial class MainWindow : Window
                 Navigate(typeof(PlaceholderPage), displayName ?? tag);
                 break;
         }
+    }
+
+
+    private void OnDashboardNavigationRequested(
+        object? sender,
+        DashboardNavigationRequestedEventArgs e)
+    {
+        string? tag = e.Target switch
+        {
+            DashboardActionTarget.Jobs => "jobs",
+            DashboardActionTarget.Dispatch => "dispatch",
+            DashboardActionTarget.CurrentFlight => "current-flight",
+            DashboardActionTarget.MapWorld => "world",
+            DashboardActionTarget.Aircraft => "aircraft",
+            DashboardActionTarget.Maintenance => "maintenance",
+            DashboardActionTarget.Company => "company",
+            DashboardActionTarget.Finances => "finances",
+            DashboardActionTarget.Career => "career",
+            DashboardActionTarget.Logbook => "logbook",
+            _ => null
+        };
+
+        if (tag is null)
+            return;
+
+        NavigationViewItem? item = NavView.MenuItems
+            .OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate =>
+                string.Equals(
+                    candidate.Tag?.ToString(),
+                    tag,
+                    StringComparison.Ordinal));
+
+        if (item is not null)
+            NavView.SelectedItem = item;
     }
 
     private void OnTutorialNavigationRequested(

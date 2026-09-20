@@ -35,6 +35,11 @@
     <Color x:Key="OpenCareerDisabledColor">#7B878E</Color>
     <Color x:Key="OpenCareerTutorialScrimColor">#B30A1118</Color>
 
+    <Color x:Key="OpenCareerOpportunityStandardColor">#3E7E57</Color>
+    <Color x:Key="OpenCareerOpportunitySpecialistColor">#4D78A8</Color>
+    <Color x:Key="OpenCareerOpportunityEliteColor">#7456A8</Color>
+    <Color x:Key="OpenCareerOpportunityLegendaryColor">#C47A2C</Color>
+
     <SolidColorBrush x:Key="OpenCareerShellBackgroundBrush" Color="{StaticResource OpenCareerShellBackgroundColor}" />
     <SolidColorBrush x:Key="OpenCareerShellRaisedBrush" Color="{StaticResource OpenCareerShellRaisedColor}" />
     <SolidColorBrush x:Key="OpenCareerShellInsetBrush" Color="{StaticResource OpenCareerShellInsetColor}" />
@@ -61,6 +66,11 @@
     <SolidColorBrush x:Key="OpenCareerDangerBrush" Color="{StaticResource OpenCareerDangerColor}" />
     <SolidColorBrush x:Key="OpenCareerDisabledBrush" Color="{StaticResource OpenCareerDisabledColor}" />
     <SolidColorBrush x:Key="OpenCareerTutorialScrimBrush" Color="{StaticResource OpenCareerTutorialScrimColor}" />
+
+    <SolidColorBrush x:Key="OpenCareerOpportunityStandardBrush" Color="{StaticResource OpenCareerOpportunityStandardColor}" />
+    <SolidColorBrush x:Key="OpenCareerOpportunitySpecialistBrush" Color="{StaticResource OpenCareerOpportunitySpecialistColor}" />
+    <SolidColorBrush x:Key="OpenCareerOpportunityEliteBrush" Color="{StaticResource OpenCareerOpportunityEliteColor}" />
+    <SolidColorBrush x:Key="OpenCareerOpportunityLegendaryBrush" Color="{StaticResource OpenCareerOpportunityLegendaryColor}" />
 
     <!-- Compatibility aliases for existing pages while the app is migrated onto canonical names. -->
     <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource OpenCareerShellBackgroundColor}" />

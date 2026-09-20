@@ -8,14 +8,14 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/m1-simulation-core`; draft PR #2. Keep `main` stable.
-- Latest implementation: `c4a52c955b080aceb73e0b1d762d90c8dbc54506` (MBL-23 settings/diagnostics; UI-thread-safe preference notifications). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
+- Latest implementation: `73bb123b1fbd40b6690e50935d762375d74721c7` (MBL-12 Debrief + Logbook foundation, filters, multi-leg evidence, route projection and compile fix). Pure flight-core foundation: `bd86bd33da14eda5c7c2087017d0b4ae76768282`; production telemetry: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
 - WinUI 3 shell, resilient SimConnect connection/reconnect and first normalized aircraft telemetry are implemented. A versioned tutorial engine is also implemented with persistent progress, first-run overlay navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews. **Live simulator/runtime validation remains open.**
 - [Windows CI run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135): WinUI x64 and live-probe Release builds passed with 0 warnings/errors; **104/104 xUnit tests passed**, including the compiled trace analyzer.
 - [Linux CI run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186): **104/104 xUnit + 29/29 SimLab** passed. Local Release verification also passed those gates plus analyzer CLI report/exit-code/input-preservation checks.
 - Tutorial-engine CI at `f6b1cc7`: **118/118 xUnit + 29/29 SimLab passed**, and the Windows WinUI app/live-probe build passed. Automated UI compilation does not replace local interactive/visual acceptance or live MSFS verification.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
 - UI visual language: `docs/ui-design-language.md` is canonical for palette/material/aesthetic; implementation tokens/layout remain in `docs/ui-design-system.md`, and screen behavior in `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
-- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. Current head `040695f2`. Ground + air conflict, CAS/suppression, recon/logistics/patrol, escort/intercept, military authorization, and seeded fictional theater generation are implemented. GitHub Actions currently fails before runner steps begin, so execution verification remains pending rather than failed. See `docs/conflict-system.md`.
+- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. Ground + air conflict, CAS/suppression/recon/logistics/patrol/escort/intercept, support reservation, military authorization, and seeded fictional theater generation are implemented. The branch is being synchronized with the latest integration head; post-sync CI verification is pending. See `docs/conflict-system.md`.
 - Verify remote branch head before edits because other chats may change it.
 
 ## Fixed direction
@@ -56,15 +56,15 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - `OpenCareer.Domain/Conflict` contains versioned deterministic conflict state with ground units, simulated air units, sectors, derived front snapshots, linked threats and support requests.
 - The world engine advances ground pressure/control and simulated air movement deterministically.
 - Battlefield state can generate CAS, suppression, reconnaissance, logistics, patrol, escort and intercept requests.
-- Support requests have Open/Reserved/Completed/Failed/Cancelled/Expired lifecycle state so an active need cannot be accepted twice.
+- Support requests have Open/Reserved/Completed/Failed/Cancelled/Expired lifecycle state so one active need cannot be accepted twice.
 - `AirSupportMissionEngine` handles CAS/suppression; `AreaSupportMissionEngine` handles recon/logistics/patrol; `AirOperationMissionEngine` handles escort/intercept.
 - All player flight evidence comes from normalized `AircraftTelemetrySnapshot`; pause/slew and invalid ground/air states cannot advance objectives.
 - Precision, suppression, reconnaissance and intercept effects are abstract deterministic OpenCareer effects; no native MSFS weapons/hits/damage are assumed.
 - `ThreatExposureEvaluator` and `ThreatEngagementResolver` model simulated air-defense/interceptor threats and OpenCareer-only player damage.
 - `MilitaryAuthorizationPolicy` separates affiliation, qualifications, aircraft assignment, aircraft capability/access and damage state. Installing/owning a military-capable aircraft never grants mission access by itself.
-- `ConflictTheaterGenerator` creates repeatable fictional theater state from a seed and template; it does not ingest current wars as authoritative gameplay.
-- Deterministic tests cover conflict state, request lifecycle, mission families, effects, threat resolution, authorization and theater generation. Current GitHub runner failures occur before any job step starts, so the newly added tests are not yet execution-verified.
-- Still open: persistence/recovery, richer faction/campaign evolution, integration with authoritative player career/dispatch/job settlement, production Military/Government UI and large balance/stress runs.
+- `ConflictTheaterGenerator` creates repeatable fictional theater state from a seed/template; current wars never become authoritative gameplay state.
+- Deterministic tests cover conflict state, request lifecycle, mission families, effects, threat resolution, authorization and theater generation. Initial compile/test defects found by CI were corrected; post-sync verification remains pending.
+- Still open: persistence/recovery, richer faction/campaign evolution, authoritative career/dispatch/job settlement integration, production Military/Government UI, large balance/stress runs and live telemetry gameplay verification.
 
 ## Tutorial engine implementation
 
@@ -98,6 +98,48 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - **Do not treat input-hint preference as binding discovery.** MBL-05 owns actual controller/keyboard profile resolution.
 - MBL-23 is code-complete but remains unremoved until Windows build and local interactive persistence/backup/export verification are available. GitHub Actions currently fails before runner steps are created, so those failures are not compiler/test evidence.
 
+## Production Dashboard implementation
+
+- `OpenCareer.Application/Dashboard` defines stable Dashboard snapshot contracts, opportunity tiers, company-employment status, guidance targets, a deterministic primary-guidance selector and Top Opportunities ranking.
+- `DashboardOpportunitySelector` returns at most four **available** jobs, ordering by tier -> fit -> estimated net -> reposition distance -> stable ID.
+- Tiers are fixed as Green **Standard**, Blue **Specialist**, Purple **Elite**, Orange/Gold **Legendary**. The UI renders the tier name as well as color.
+- `DashboardViewModel` owns presentation/routing logic and consumes `IDashboardSnapshotSource`; no Jobs/Career/Company/Economy values are fabricated while those systems are unavailable.
+- The Dashboard now includes a first-class Active Operation panel for accepted work, stage, checklist requirement, contract economics, blockers and the next routed action.
+- Snapshot guidance is centralized in `DashboardGuidanceEngine`; active-operation, maintenance, company probation/suspension/termination and jobs guidance are domain-tested.
+- Home refreshes its snapshot every 10 seconds while visible, skips overlapping refreshes and cancels cleanly when navigating away.
+- The production Home layout contains split flight/career hero, daily P/L header, dynamic recommendation, Top Opportunities, career Level/XP/licenses/hours/owned count/next/recent, company rank/standing/employment state, aircraft readiness/location/distance, finance summary, recent activity, condensed world activity and searchable OpenCareer Network feed.
+- KRME was removed as a hard-coded production Home base. KRME/F-22 remains a developer validation fixture only.
+- Career Level + XP are now accepted as meta-progression but cannot bypass licenses/ratings, employer standing, military authorization, capability, affordability or dispatch/safety requirements.
+- Company employment is required to support deterministic rank/standing plus probation, demotion, suspension and firing/termination. Normal safety choices and one routine rough landing are not arbitrary termination triggers; other-employer/independent recovery paths remain available.
+- OpenCareer Network is an in-world simulated feed generated from structured career/world events. It is searchable by area/airport/company/text. Optional AI may phrase posts but cannot authoritatively create money, mission outcomes or reputation changes.
+- The temporary `UnavailableDashboardSnapshotSource` intentionally returns an empty snapshot. Later authoritative systems replace/wrap it without changing the Home page contract.
+- MBL-01 remains active until Jobs/Career/Company/Aircraft/Economy/World integrations and local visual/runtime acceptance are complete. Current public-repo CI passes Windows WinUI/live-probe and Linux/SimLab/unit-test validation.
+
+## Production Logbook / Debrief implementation
+
+- MBL-12 is **IN PROGRESS**.
+- `OpenCareer.Domain/Logbook` now defines frozen postflight snapshots rather than recalculating historical flights from future tuning.
+- Debriefs preserve FlightSession -> FlightLeg hierarchy, planned/actual route identity, decimated multi-leg route-track points, independent time/experience dimensions, aircraft identity, fuel, payload, assistance/route-integrity flags, landing episodes, incidents/events, evidence quality, separate safety/mission outcomes and authoritative settlement references.
+- Unknown landing/runway/fuel/payload evidence remains unavailable; the Logbook never manufactures legal-style credit or mission proof.
+- `LogbookStatisticsCalculator` aggregates committed records only.
+- `LogbookQuery` / `LogbookQueryMatcher` define search and type/outcome/date filters for the eventual SQLite implementation.
+- `LogbookCommitCoordinator` provides an exactly-once application boundary. Career entries derive idempotency from the authoritative settlement key; manual free/practice entries use the debrief id. A career entry cannot be committed while settlement is pending.
+- The top-level Logbook navigation destination is now a production WinUI page rather than a placeholder. It has committed-flight history, aggregate totals, search/filter controls, selected debrief details, flight-leg hierarchy, landing/event evidence and a projected multi-leg route-track schematic.
+- Production now uses `SqliteLogbookStore` from the new `OpenCareer.Infrastructure` project. `opencareer.db` is created under the existing local-data root, migrated with `PRAGMA user_version`, uses WAL mode, stores immutable versioned debrief JSON plus indexed query fields, and enforces unique idempotency keys.
+- SQLite integration tests cover round-trip reload across store instances, indexed search/filter behavior, unknown lookup, concurrent retry collapse and idempotency collision rejection.
+- Remaining integration: completed FlightSession -> debrief mapping, career settlement -> commit, free/practice Log Flight/Discard, real persisted route/landing/fuel/payload evidence, database-consistent backup/recovery with MBL-07, and local visual acceptance.
+- SQLite persistence head `6319492` is Linux-green: 177/177 xUnit/integration tests + 29/29 SimLab. The SQLite-enabled WinUI app and native dependency restored and built successfully on Windows on the immediately preceding code head; the final assertion-only commit did not require another Windows build.
+
+## CI cost controls
+
+- Feature-branch pushes no longer run the same CI that an open pull request already runs.
+- Documentation-only changes do not trigger build workflows.
+- Feature-branch pushes do not duplicate open-PR validation.
+- Documentation-only updates are excluded from full code builds; a lightweight changed-files gate also prevents an open PR's cumulative diff from forcing irrelevant full validation.
+- Linux validates relevant domain/application/test changes; Windows validates WinUI/Application/Domain/SimConnect/live-probe changes.
+- Public-repository standard hosted runners are active, so the former private-repository minute gate no longer blocks jobs before step 1.
+- Relevant Windows and Linux validation run throughout the draft PR; no merge to main occurs without explicit user approval.
+
 ## Chapter 2 shell and simulator boundary
 
 `src/OpenCareer.App` contains:
@@ -106,7 +148,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - application resources and DI/logging startup,
 - `NavigationView` shell,
 - observable simulator connection and telemetry ViewModel,
-- disconnected Dashboard with KRME home-base placeholder,
+- dynamic production Dashboard shell with honest empty states and no hard-coded production home base,
 - Current Flight view that displays telemetry while explicitly remaining **No active flight**,
 - placeholders for later sections,
 - Windows GitHub Actions build workflow.
@@ -144,7 +186,7 @@ Do **not** expand finance complexity before the playable flight foundation unles
 ## Detail only when needed
 
 - `docs/development-master-checklist.md` — live master roadmap/checklist and progress graphics.
-- `docs/conflict-system.md` — deterministic military/conflict foundation, MSFS boundary and remaining conflict work.
+- `docs/conflict-system.md` — deterministic military/conflict implementation boundary and current remaining work.
 - `docs/ui-concept.md` — short UI direction and level policy.
 - `docs/ui-design-system.md` — canonical shell, tokens, layout/adaptive/accessibility rules.
 - `docs/ui-screen-spec.md` — target UX for all 15 current navigation destinations, including Conflict Operations.
