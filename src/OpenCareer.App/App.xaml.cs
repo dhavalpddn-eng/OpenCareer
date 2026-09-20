@@ -53,6 +53,10 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<SqliteConflictCampaignStore>();
         services.AddSingleton<IConflictCampaignStore>(provider =>
             provider.GetRequiredService<SqliteConflictCampaignStore>());
+        services.AddSingleton<ConflictOperationsService>();
+        services.AddSingleton<ConflictCampaignCoordinator>();
+        services.AddSingleton<MilitaryDispatchService>();
+        services.AddSingleton<MilitaryCampaignMissionService>();
         services.AddSingleton<LogbookCommitCoordinator>();
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
