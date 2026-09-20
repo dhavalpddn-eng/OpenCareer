@@ -53,6 +53,115 @@ public sealed class ConflictCampaignCoordinatorTests
     }
 
     [Fact]
+    public async Task CreateSuccessorCarriesCareerIntoFreshCampaign()
+    {
+        var store = new MemoryStore();
+        var coordinator = new ConflictCampaignCoordinator(store);
+        ConflictCampaignStoreRecord created = await coordinator.CreateAsync(
+            "campaign-finished",
+            Template(),
+            theaterSeed: 17,
+            Epoch,
+            MilitaryCareerState.Civilian);
+
+        var terminalCheckpoint = created.Checkpoint with
+        {
+            CampaignState = created.Checkpoint.CampaignState with
+            {
+                Outcome = ConflictCampaignOutcome.Ceasefire,
+                Objectives = Array.Empty<ConflictStrategicObjective>()
+            },
+            SavedAt = Epoch.AddHours(4)
+        };
+
+        ConflictCampaignStoreRecord completed =
+            await coordinator.SaveMutationAsync(created, terminalCheckpoint);
+
+        ConflictCampaignStoreRecord successor =
+            await coordinator.CreateSuccessorAsync(
+                completed,
+                "campaign-successor",
+                Template(),
+                theaterSeed: 18,
+                Epoch.AddHours(5));
+
+        Assert.Equal(1, successor.Revision);
+        Assert.Equal("campaign-successor", successor.Checkpoint.CampaignId);
+        Assert.Equal(ConflictCampaignOutcome.Ongoing, successor.Checkpoint.CampaignState.Outcome);
+        Assert.Equal(0, successor.Checkpoint.CampaignState.EvaluationSequence);
+        Assert.Equal(completed.Checkpoint.MilitaryCareer, successor.Checkpoint.MilitaryCareer);
+        Assert.Equal(PlayerCombatState.Undamaged, successor.Checkpoint.PlayerCombatState);
+        Assert.Empty(successor.Checkpoint.CombatSupportMissions);
+        Assert.Empty(successor.Checkpoint.AreaSupportMissions);
+        Assert.Empty(successor.Checkpoint.AirOperationMissions);
+        Assert.NotEqual(
+            completed.Checkpoint.CampaignState.Identity?.OperationName,
+            successor.Checkpoint.CampaignState.Identity?.OperationName);
+    }
+
+    [Fact]
+    public async Task CreateSuccessorRejectsOngoingCampaign()
+    {
+        var coordinator = new ConflictCampaignCoordinator(new MemoryStore());
+        ConflictCampaignStoreRecord current = await coordinator.CreateAsync(
+            "campaign-ongoing",
+            Template(),
+            theaterSeed: 23,
+            Epoch,
+            MilitaryCareerState.Civilian);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.CreateSuccessorAsync(
+                current,
+                "campaign-too-early",
+                Template(),
+                theaterSeed: 24,
+                Epoch.AddHours(1)));
+    }
+
+    [Fact]
+    public async Task CreateSuccessorRejectsReusedIdentityAndBackwardTime()
+    {
+        var store = new MemoryStore();
+        var coordinator = new ConflictCampaignCoordinator(store);
+        ConflictCampaignStoreRecord created = await coordinator.CreateAsync(
+            "campaign-terminal",
+            Template(),
+            theaterSeed: 31,
+            Epoch,
+            MilitaryCareerState.Civilian);
+
+        var terminalCheckpoint = created.Checkpoint with
+        {
+            CampaignState = created.Checkpoint.CampaignState with
+            {
+                Outcome = ConflictCampaignOutcome.Stalemate,
+                Objectives = Array.Empty<ConflictStrategicObjective>()
+            },
+            SavedAt = Epoch.AddHours(3)
+        };
+
+        ConflictCampaignStoreRecord completed =
+            await coordinator.SaveMutationAsync(created, terminalCheckpoint);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.CreateSuccessorAsync(
+                completed,
+                completed.Checkpoint.CampaignId,
+                Template(),
+                theaterSeed: 32,
+                Epoch.AddHours(4)));
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => coordinator.CreateSuccessorAsync(
+                completed,
+                "campaign-backward",
+                Template(),
+                theaterSeed: 33,
+                Epoch.AddHours(2)));
+    }
+
+    [Fact]
     public async Task AdvanceRejectsSaveTimeBeforeWorldTime()
     {
         var coordinator = new ConflictCampaignCoordinator(new MemoryStore());
@@ -106,22 +215,16 @@ public sealed class ConflictCampaignCoordinatorTests
 
     private sealed class MemoryStore : IConflictCampaignStore
     {
-        private ConflictCampaignStoreRecord? _record;
+        private readonly Dictionary<string, ConflictCampaignStoreRecord> _records =
+            new(StringComparer.Ordinal);
 
         public Task<ConflictCampaignStoreRecord?> LoadAsync(
             string campaignId,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            return Task.FromResult(
-                _record is not null
-                && string.Equals(
-                    _record.Checkpoint.CampaignId,
-                    campaignId,
-                    StringComparison.Ordinal)
-                    ? _record
-                    : null);
+            _records.TryGetValue(campaignId, out ConflictCampaignStoreRecord? record);
+            return Task.FromResult(record);
         }
 
         public Task<ConflictCampaignStoreRecord> SaveAsync(
@@ -132,23 +235,25 @@ public sealed class ConflictCampaignCoordinatorTests
             cancellationToken.ThrowIfCancellationRequested();
             checkpoint.Validate();
 
-            if (_record is null)
+            if (!_records.TryGetValue(checkpoint.CampaignId, out ConflictCampaignStoreRecord? current))
             {
                 if (expectedRevision is not null)
                     throw new ConflictCampaignConcurrencyException("Missing record.");
 
-                _record = new ConflictCampaignStoreRecord(1, checkpoint);
-                return Task.FromResult(_record);
+                var created = new ConflictCampaignStoreRecord(1, checkpoint);
+                _records.Add(checkpoint.CampaignId, created);
+                return Task.FromResult(created);
             }
 
-            if (expectedRevision != _record.Revision)
+            if (expectedRevision != current.Revision)
                 throw new ConflictCampaignConcurrencyException("Stale revision.");
 
-            _record = new ConflictCampaignStoreRecord(
-                checked(_record.Revision + 1),
+            var updated = new ConflictCampaignStoreRecord(
+                checked(current.Revision + 1),
                 checkpoint);
 
-            return Task.FromResult(_record);
+            _records[checkpoint.CampaignId] = updated;
+            return Task.FromResult(updated);
         }
     }
 }

@@ -53,6 +53,51 @@ public sealed class ConflictCampaignCoordinator
             .ConfigureAwait(false);
     }
 
+    public async Task<ConflictCampaignStoreRecord> CreateSuccessorAsync(
+        ConflictCampaignStoreRecord completed,
+        string campaignId,
+        ConflictTheaterTemplate template,
+        ulong theaterSeed,
+        DateTimeOffset createdAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(completed);
+        ArgumentException.ThrowIfNullOrWhiteSpace(campaignId);
+        ArgumentNullException.ThrowIfNull(template);
+        completed.Validate();
+
+        if (!completed.Checkpoint.CampaignState.IsTerminal)
+        {
+            throw new InvalidOperationException(
+                "A successor military campaign can only begin after the current campaign has ended.");
+        }
+
+        if (string.Equals(
+            completed.Checkpoint.CampaignId,
+            campaignId,
+            StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "A successor military campaign requires a new campaign ID.");
+        }
+
+        if (createdAt < completed.Checkpoint.SavedAt)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(createdAt),
+                "A successor military campaign cannot begin before the completed campaign checkpoint.");
+        }
+
+        return await CreateAsync(
+                campaignId,
+                template,
+                theaterSeed,
+                createdAt,
+                completed.Checkpoint.MilitaryCareer,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public Task<ConflictCampaignStoreRecord?> LoadAsync(
         string campaignId,
         CancellationToken cancellationToken = default)
