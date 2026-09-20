@@ -345,6 +345,8 @@ public static class OperationDispatchPhysicalEvaluator
 
         if (distance is { } knownDistance)
         {
+            // A zero direct-distance cell cannot represent a usable runway requirement.
+            // Treat malformed source data as unknown rather than weakening screening.
             if (knownDistance > 0)
                 return knownDistance;
 
