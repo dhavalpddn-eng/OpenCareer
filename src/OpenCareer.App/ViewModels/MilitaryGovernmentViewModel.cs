@@ -23,6 +23,8 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         Array.Empty<MilitaryStrategicObjectiveItemViewModel>();
     private IReadOnlyList<MilitaryCompletedOperationItemViewModel> _completedOperations =
         Array.Empty<MilitaryCompletedOperationItemViewModel>();
+    private IReadOnlyList<MilitaryOperationalMapMarkerViewModel> _operationalMapMarkers =
+        Array.Empty<MilitaryOperationalMapMarkerViewModel>();
     private string _statusMessage =
         "No military campaign is active. Military/Government operations will appear here when a campaign is available.";
     private bool _successorDeclined;
@@ -143,6 +145,18 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
     public IReadOnlyList<MilitaryCompletedOperationItemViewModel> CompletedOperations =>
         _completedOperations;
 
+    public IReadOnlyList<MilitaryOperationalMapMarkerViewModel> OperationalMapMarkers =>
+        _operationalMapMarkers;
+
+    public string OperationalMapStatusText =>
+        _snapshot is null
+            ? "No tactical picture is available."
+            : $"{_snapshot.Units.Length} unit(s) • {_snapshot.Threats.Length} threat(s) • " +
+              $"{_snapshot.SupportRequests.Length} support target(s)";
+
+    public string OperationalMapBoundsText =>
+        MilitaryOperationalMapMarkerViewModel.FormatBounds(_operationalMapMarkers);
+
     public string CompletedOperationStatusText =>
         _completedOperations.Count == 0
             ? "No archived operations. Completed campaigns appear here after a successor operation is accepted."
@@ -224,6 +238,10 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             .Select(static entry => new MilitaryCompletedOperationItemViewModel(entry))
             .ToArray()
             ?? Array.Empty<MilitaryCompletedOperationItemViewModel>();
+
+        _operationalMapMarkers = _snapshot is null
+            ? Array.Empty<MilitaryOperationalMapMarkerViewModel>()
+            : MilitaryOperationalMapMarkerViewModel.Build(_snapshot);
 
         _successorOffer = _transitions.GetCurrentOffer();
         _successorPresentation = _successorOffer is null
@@ -372,6 +390,9 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             nameof(SupportRequests),
             nameof(Objectives),
             nameof(CompletedOperations),
+            nameof(OperationalMapMarkers),
+            nameof(OperationalMapStatusText),
+            nameof(OperationalMapBoundsText),
             nameof(CompletedOperationStatusText),
             nameof(SupportRequestStatusText),
             nameof(ObjectiveStatusText),
@@ -415,6 +436,157 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(
             this,
             new PropertyChangedEventArgs(propertyName));
+}
+
+public enum MilitaryOperationalMapMarkerKind
+{
+    FriendlyUnit,
+    HostileUnit,
+    NeutralUnit,
+    Threat,
+    SupportRequest
+}
+
+public sealed class MilitaryOperationalMapMarkerViewModel
+{
+    private const double EdgePadding = 0.06;
+
+    private MilitaryOperationalMapMarkerViewModel(
+        MilitaryOperationalMapMarkerKind kind,
+        string symbol,
+        string label,
+        string detail,
+        GeoPoint position,
+        double normalizedX,
+        double normalizedY)
+    {
+        Kind = kind;
+        Symbol = symbol;
+        Label = label;
+        Detail = detail;
+        Position = position;
+        NormalizedX = normalizedX;
+        NormalizedY = normalizedY;
+    }
+
+    public MilitaryOperationalMapMarkerKind Kind { get; }
+    public string Symbol { get; }
+    public string Label { get; }
+    public string Detail { get; }
+    public GeoPoint Position { get; }
+    public double NormalizedX { get; }
+    public double NormalizedY { get; }
+
+    internal static IReadOnlyList<MilitaryOperationalMapMarkerViewModel> Build(
+        ConflictOperationsSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        var raw = new List<RawMarker>(
+            snapshot.Units.Length
+            + snapshot.Threats.Length
+            + snapshot.SupportRequests.Length);
+
+        raw.AddRange(snapshot.Units.Select(static unit =>
+            new RawMarker(
+                UnitKind(unit.Side),
+                unit.Side switch
+                {
+                    ConflictSide.Friendly => "F",
+                    ConflictSide.Hostile => "H",
+                    _ => "N"
+                },
+                $"{MilitaryGovernmentViewModel.FormatWords(unit.Role)} unit",
+                $"{unit.Side} • strength {unit.Strength:P0} • readiness {unit.Readiness:P0}" +
+                (unit.Airborne ? " • airborne" : string.Empty),
+                unit.Position)));
+
+        raw.AddRange(snapshot.Threats.Select(static threat =>
+            new RawMarker(
+                MilitaryOperationalMapMarkerKind.Threat,
+                "!",
+                MilitaryGovernmentViewModel.FormatWords(threat.Type.ToString()),
+                $"{threat.RadiusNauticalMiles:0} NM radius • severity {threat.Severity:P0}",
+                threat.Center)));
+
+        raw.AddRange(snapshot.SupportRequests.Select(static request =>
+            new RawMarker(
+                MilitaryOperationalMapMarkerKind.SupportRequest,
+                "S",
+                MilitaryGovernmentViewModel.FormatWords(request.Type.ToString()),
+                $"{request.Urgency} • {MilitaryGovernmentViewModel.FormatWords(request.Status.ToString())}",
+                request.TargetPosition)));
+
+        if (raw.Count == 0)
+            return Array.Empty<MilitaryOperationalMapMarkerViewModel>();
+
+        double minLatitude = raw.Min(static item => item.Position.LatitudeDegrees);
+        double maxLatitude = raw.Max(static item => item.Position.LatitudeDegrees);
+        double minLongitude = raw.Min(static item => item.Position.LongitudeDegrees);
+        double maxLongitude = raw.Max(static item => item.Position.LongitudeDegrees);
+
+        double latitudeSpan = Math.Max(maxLatitude - minLatitude, 0.01);
+        double longitudeSpan = Math.Max(maxLongitude - minLongitude, 0.01);
+        double usable = 1 - (EdgePadding * 2);
+
+        return raw
+            .Select(item =>
+            {
+                double x = EdgePadding
+                    + ((item.Position.LongitudeDegrees - minLongitude)
+                        / longitudeSpan * usable);
+                double y = EdgePadding
+                    + ((maxLatitude - item.Position.LatitudeDegrees)
+                        / latitudeSpan * usable);
+
+                return new MilitaryOperationalMapMarkerViewModel(
+                    item.Kind,
+                    item.Symbol,
+                    item.Label,
+                    item.Detail,
+                    item.Position,
+                    Math.Clamp(x, EdgePadding, 1 - EdgePadding),
+                    Math.Clamp(y, EdgePadding, 1 - EdgePadding));
+            })
+            .OrderBy(static item => item.Kind)
+            .ThenBy(static item => item.Label, StringComparer.Ordinal)
+            .ThenBy(static item => item.Position.LatitudeDegrees)
+            .ThenBy(static item => item.Position.LongitudeDegrees)
+            .ToArray();
+    }
+
+    internal static string FormatBounds(
+        IReadOnlyList<MilitaryOperationalMapMarkerViewModel> markers)
+    {
+        ArgumentNullException.ThrowIfNull(markers);
+
+        if (markers.Count == 0)
+            return "Schematic map • no plotted markers";
+
+        double minLatitude = markers.Min(static item => item.Position.LatitudeDegrees);
+        double maxLatitude = markers.Max(static item => item.Position.LatitudeDegrees);
+        double minLongitude = markers.Min(static item => item.Position.LongitudeDegrees);
+        double maxLongitude = markers.Max(static item => item.Position.LongitudeDegrees);
+
+        return $"Schematic map • {minLatitude:0.00}–{maxLatitude:0.00}° lat • " +
+               $"{minLongitude:0.00}–{maxLongitude:0.00}° lon";
+    }
+
+    private static MilitaryOperationalMapMarkerKind UnitKind(
+        ConflictSide side) =>
+        side switch
+        {
+            ConflictSide.Friendly => MilitaryOperationalMapMarkerKind.FriendlyUnit,
+            ConflictSide.Hostile => MilitaryOperationalMapMarkerKind.HostileUnit,
+            _ => MilitaryOperationalMapMarkerKind.NeutralUnit
+        };
+
+    private sealed record RawMarker(
+        MilitaryOperationalMapMarkerKind Kind,
+        string Symbol,
+        string Label,
+        string Detail,
+        GeoPoint Position);
 }
 
 public sealed class MilitaryCompletedOperationItemViewModel

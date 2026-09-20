@@ -158,6 +158,58 @@
                 </Border>
             </Grid>
 
+            <Border Style="{StaticResource OpenCareerMetalCardStyle}"
+                    Padding="18">
+                <StackPanel Spacing="12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="OPERATIONAL MAP"
+                                       Foreground="{StaticResource OpenCareerShellTextBrush}"
+                                       FontWeight="SemiBold"
+                                       CharacterSpacing="70" />
+                            <TextBlock Text="{Binding OperationalMapStatusText}"
+                                       Foreground="{StaticResource OpenCareerShellMutedTextBrush}" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding OperationalMapBoundsText}"
+                                   Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
+                                   VerticalAlignment="Bottom" />
+                    </Grid>
+
+                    <Grid Height="360">
+                        <Canvas x:Name="OperationalMapCanvas"
+                                Background="{StaticResource OpenCareerShellInsetBrush}"
+                                SizeChanged="OperationalMapCanvas_SizeChanged" />
+                        <Border BorderBrush="{StaticResource OpenCareerSteelBorderBrush}"
+                                BorderThickness="1"
+                                IsHitTestVisible="False" />
+                        <TextBlock Text="SCHEMATIC • NOT FOR NAVIGATION"
+                                   Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
+                                   FontSize="10"
+                                   CharacterSpacing="80"
+                                   Margin="12"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Bottom"
+                                   IsHitTestVisible="False" />
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Spacing="18">
+                        <TextBlock Text="● Friendly"
+                                   Foreground="{StaticResource OpenCareerSuccessBrush}" />
+                        <TextBlock Text="● Hostile"
+                                   Foreground="{StaticResource OpenCareerDangerBrush}" />
+                        <TextBlock Text="● Threat"
+                                   Foreground="{StaticResource OpenCareerWarningBrush}" />
+                        <TextBlock Text="● Support target"
+                                   Foreground="{StaticResource OpenCareerBrassBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="1.2*" />

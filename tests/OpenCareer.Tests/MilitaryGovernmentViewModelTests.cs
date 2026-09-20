@@ -28,6 +28,8 @@ public sealed class MilitaryGovernmentViewModelTests
         Assert.Empty(viewModel.SupportRequests);
         Assert.Empty(viewModel.Objectives);
         Assert.Empty(viewModel.CompletedOperations);
+        Assert.Empty(viewModel.OperationalMapMarkers);
+        Assert.Equal("Schematic map • no plotted markers", viewModel.OperationalMapBoundsText);
         Assert.Contains("No archived operations", viewModel.CompletedOperationStatusText);
         Assert.Contains(
             "No military campaign is active",
@@ -84,6 +86,39 @@ public sealed class MilitaryGovernmentViewModelTests
         Assert.Equal(
             checkpoint.CampaignState.Objectives.Length,
             viewModel.Objectives.Count);
+
+        ConflictOperationsSnapshot snapshot =
+            ConflictOperationsSnapshotBuilder.Build(checkpoint);
+
+        Assert.Equal(
+            snapshot.Units.Length
+                + snapshot.Threats.Length
+                + snapshot.SupportRequests.Length,
+            viewModel.OperationalMapMarkers.Count);
+
+        Assert.All(
+            viewModel.OperationalMapMarkers,
+            marker =>
+            {
+                Assert.InRange(marker.NormalizedX, 0, 1);
+                Assert.InRange(marker.NormalizedY, 0, 1);
+            });
+
+        Assert.Contains(
+            viewModel.OperationalMapMarkers,
+            marker => marker.Kind
+                == MilitaryOperationalMapMarkerKind.FriendlyUnit);
+
+        Assert.Contains(
+            viewModel.OperationalMapMarkers,
+            marker => marker.Kind
+                == MilitaryOperationalMapMarkerKind.HostileUnit);
+
+        Assert.Contains(
+            "Schematic map",
+            viewModel.OperationalMapBoundsText,
+            StringComparison.Ordinal);
+
         Assert.Contains(
             "OpenCareer remains authoritative",
             viewModel.StatusMessage,
