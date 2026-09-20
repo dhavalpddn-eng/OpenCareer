@@ -115,7 +115,8 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
     public string FrontText =>
         _snapshot is null
             ? "Front —"
-            : $"{_snapshot.Front.ContestedSectorCount} contested sector(s) • " +
+            : $"{_snapshot.Front.Points.Length} front point(s) • " +
+              $"{_snapshot.Front.ContestedSectorShare:P0} contested share • " +
               $"{_snapshot.Threats.Length} active threat envelope(s)";
 
     public string AsOfText =>
