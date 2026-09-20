@@ -290,12 +290,12 @@ public static class OperationDispatchPhysicalEvaluator
         AircraftRunwayPerformanceProfile effective =
             baseline is null
                 ? new(
-                    takeoffLength,
-                    landingLength,
+                    MinimumTakeoffRunwayFeet: takeoffLength,
+                    MinimumLandingRunwayFeet: landingLength,
                     MinimumRunwayWidthFeet: null,
                     SupportedSurfaces: null,
-                    dispatchPerformance!.Confidence,
-                    dispatchPerformance.Source)
+                    Confidence: dispatchPerformance!.Confidence,
+                    Source: dispatchPerformance.Source)
                 : baseline with
                 {
                     MinimumTakeoffRunwayFeet = takeoffLength,
