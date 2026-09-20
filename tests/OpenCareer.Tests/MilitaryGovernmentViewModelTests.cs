@@ -172,6 +172,16 @@ public sealed class MilitaryGovernmentViewModelTests
             Identity = archived.Identity with { OperationId = "operation:z-tied" },
             EndedAt = Epoch.AddHours(-1)
         };
+        var finalFriendlyPosture =
+            archived.Identity.FriendlyFaction.Posture
+                == ConflictFactionOperationalPosture.LogisticsFocused
+                ? ConflictFactionOperationalPosture.AirFocused
+                : ConflictFactionOperationalPosture.LogisticsFocused;
+        var finalHostilePosture =
+            archived.Identity.HostileFaction.Posture
+                == ConflictFactionOperationalPosture.AirFocused
+                ? ConflictFactionOperationalPosture.Defensive
+                : ConflictFactionOperationalPosture.AirFocused;
         var tiedA = archived with
         {
             CampaignId = "a-tied",
@@ -179,7 +189,9 @@ public sealed class MilitaryGovernmentViewModelTests
             Outcome = ConflictCampaignOutcome.Ceasefire,
             FinalPhase = ConflictCampaignPhase.HostilePressure,
             FinalFriendlyControlAverage = 0.25,
-            EndedAt = Epoch.AddHours(-1)
+            EndedAt = Epoch.AddHours(-1),
+            FinalFriendlyPosture = finalFriendlyPosture,
+            FinalHostilePosture = finalHostilePosture
         };
         ConflictCampaignHistoryEntry[] history = [older, tiedZ, tiedA];
         var checkpoint = CreateCheckpoint("current-campaign") with { History = history };
@@ -196,14 +208,27 @@ public sealed class MilitaryGovernmentViewModelTests
             viewModel.CompletedOperations.Select(item => item.CampaignId));
         var first = viewModel.CompletedOperations[0];
         Assert.Equal(tiedA.Identity.OperationName, first.OperationName);
+        Assert.Equal($"Campaign {tiedA.CampaignId}", first.CampaignText);
         Assert.Equal($"Theater {tiedA.TheaterId}", first.TheaterText);
         Assert.Equal("Ceasefire", first.OutcomeText);
         Assert.Equal($"Final phase: Hostile Pressure • {0.25:P0} friendly control", first.FinalStateText);
         Assert.Equal($"Ended {tiedA.EndedAt.LocalDateTime:g}", first.EndedText);
         Assert.Contains(tiedA.Identity.FriendlyFaction.DisplayName, first.FriendlyFactionText);
         Assert.Contains(tiedA.Identity.HostileFaction.DisplayName, first.HostileFactionText);
-        Assert.Contains(MilitaryGovernmentViewModel.FormatWords(tiedA.Identity.FriendlyFaction.Posture.ToString()), first.FriendlyFactionText);
-        Assert.Contains(MilitaryGovernmentViewModel.FormatWords(tiedA.Identity.HostileFaction.Posture.ToString()), first.HostileFactionText);
+        Assert.Contains(
+            MilitaryGovernmentViewModel.FormatWords(finalFriendlyPosture.ToString()),
+            first.FriendlyFactionText);
+        Assert.Contains(
+            MilitaryGovernmentViewModel.FormatWords(finalHostilePosture.ToString()),
+            first.HostileFactionText);
+        Assert.DoesNotContain(
+            MilitaryGovernmentViewModel.FormatWords(
+                tiedA.Identity.FriendlyFaction.Posture.ToString()) + " posture",
+            first.FriendlyFactionText);
+        Assert.DoesNotContain(
+            MilitaryGovernmentViewModel.FormatWords(
+                tiedA.Identity.HostileFaction.Posture.ToString()) + " posture",
+            first.HostileFactionText);
         Assert.Contains("3 archived operation(s)", viewModel.CompletedOperationStatusText);
         Assert.Contains(nameof(viewModel.CompletedOperations), notifications);
         Assert.Contains(nameof(viewModel.CompletedOperationStatusText), notifications);
