@@ -71,15 +71,15 @@ public sealed partial class MilitaryGovernmentPage : Page
         }
 
         if (CompletedOperationsList.SelectedItem
-            is MilitaryCompletedOperationItemViewModel selected)
+            is not MilitaryCompletedOperationItemViewModel selected)
         {
-            _viewModel.SelectCompletedOperation(selected.CampaignId);
-        }
-        else
-        {
-            _viewModel.ClearCompletedOperationSelection();
+            // ItemsSource replacement can transiently clear ListView selection
+            // during polling. The ViewModel owns whether the archived selection
+            // is still valid, so only a concrete row selection changes it here.
+            return;
         }
 
+        _viewModel.SelectCompletedOperation(selected.CampaignId);
         UpdateCompletedOperationDetailVisibility();
     }
 
