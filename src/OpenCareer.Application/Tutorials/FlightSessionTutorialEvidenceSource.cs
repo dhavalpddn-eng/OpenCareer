@@ -48,6 +48,12 @@ public sealed class FlightSessionTutorialEvidenceSource :
                     static session =>
                         session.Milestones.MissionFlightProgressAt is not null,
 
+                "job-approach" =>
+                    static session =>
+                        session.Milestones.MissionFlightProgressAt is { } progressAt
+                        && session.Milestones.ApproachAt is { } approachAt
+                        && approachAt > progressAt,
+
                 "job-arrive" =>
                     static session =>
                         session.Status

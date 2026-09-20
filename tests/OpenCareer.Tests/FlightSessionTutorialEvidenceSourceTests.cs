@@ -279,6 +279,63 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
     }
 
     [Fact]
+    public void FirstJobApproachRequiresApproachAfterMissionFlightProgress()
+    {
+        var sessions = new FlightSessionCoordinator();
+        var source = new FlightSessionTutorialEvidenceSource(sessions);
+        TutorialStep step = Step("job-approach");
+
+        Assert.Equal(TutorialStepEvidenceState.Waiting, source.GetState(step));
+
+        FlightSession climbed = ToInitialClimb(
+            ToAirborne(ToTaxiOut(FlightSession.Start(Epoch))));
+        sessions.Restore(climbed);
+        Assert.Equal(TutorialStepEvidenceState.Waiting, source.GetState(step));
+
+        FlightSession progressing = ToMissionFlightProgress(climbed);
+        sessions.CommitPersisted(progressing);
+        Assert.Equal(TutorialStepEvidenceState.Waiting, source.GetState(step));
+
+        FlightSession approaching = FlightSessionEngine.Advance(
+            progressing,
+            new FlightSessionAdvance(new FlightStateEvidence(
+                Epoch.AddSeconds(8), Connected: true,
+                ContinuityPlausible: true, ApproachConfirmed: true)));
+        sessions.CommitPersisted(approaching);
+        Assert.Equal(TutorialStepEvidenceState.Satisfied, source.GetState(step));
+
+        FlightSession interrupted = FlightSessionEngine.Advance(
+            approaching,
+            new FlightSessionAdvance(new FlightStateEvidence(
+                Epoch.AddSeconds(9), Connected: true, CrashReported: true)));
+        sessions.CommitPersisted(interrupted);
+        Assert.Equal(TutorialStepEvidenceState.Waiting, source.GetState(step));
+    }
+
+    [Fact]
+    public void ApproachRecordedBeforeFlightProgressCannotSatisfyTutorial()
+    {
+        var sessions = new FlightSessionCoordinator();
+        var source = new FlightSessionTutorialEvidenceSource(sessions);
+
+        FlightSession climbed = ToInitialClimb(
+            ToAirborne(ToTaxiOut(FlightSession.Start(Epoch))));
+        FlightSession previousApproach = climbed with
+        {
+            Milestones = climbed.Milestones with
+            {
+                ApproachAt = Epoch.AddSeconds(6)
+            }
+        };
+
+        sessions.Restore(ToMissionFlightProgress(previousApproach));
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            source.GetState(Step("job-approach")));
+    }
+
+    [Fact]
     public void InterruptedSessionDoesNotSatisfyArrival()
     {
         var sessions =
@@ -518,8 +575,8 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
             TutorialStepEvidenceState.Waiting,
             coordinator.Current.EvidenceState);
 
-        sessions.CommitPersisted(
-            ToMissionFlightProgress(climbed));
+        FlightSession inFlight = ToMissionFlightProgress(climbed);
+        sessions.CommitPersisted(inFlight);
 
         coordinator.RefreshLiveEvidence();
 
@@ -527,6 +584,25 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
             "job-fly",
             coordinator.Current.Step?.Id);
 
+        Assert.Equal(
+            TutorialStepEvidenceState.Satisfied,
+            coordinator.Current.EvidenceState);
+
+        await coordinator.NextAsync();
+
+        Assert.Equal("job-approach", coordinator.Current.Step?.Id);
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            coordinator.Current.EvidenceState);
+
+        sessions.CommitPersisted(FlightSessionEngine.Advance(
+            inFlight,
+            new FlightSessionAdvance(new FlightStateEvidence(
+                Epoch.AddSeconds(8), Connected: true,
+                ContinuityPlausible: true, ApproachConfirmed: true))));
+        coordinator.RefreshLiveEvidence();
+
+        Assert.Equal("job-approach", coordinator.Current.Step?.Id);
         Assert.Equal(
             TutorialStepEvidenceState.Satisfied,
             coordinator.Current.EvidenceState);

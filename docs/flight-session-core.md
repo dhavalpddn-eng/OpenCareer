@@ -258,3 +258,13 @@ The first-job tutorial now gives `job-fly` a real live-evidence definition witho
 - the first-job tutorial definition is version 6.
 
 Actual route geometry, waypoint sequencing and mission-objective compliance remain separate future mission-system work.
+
+## MBL-03 Approach tutorial slice
+
+Branch: `feature/mbl03-approach`.
+
+The first-job tutorial adds `job-approach` after `job-fly`. The step reads the persisted `ApproachAt` milestone only when it was recorded after `MissionFlightProgressAt`. The tutorial remains on this step until the player selects Next.
+
+The telemetry processor now requires two consecutive stable, operational, airborne descending samples at or below 2,000 ft AGL, following confirmed mission-flight progress. Pause, slew, disconnect, ground contact, or an insufficient descent resets the approach streak. Restored sessions use the persisted mission-flight milestone to resume detection without carrying an old approach streak across the interruption.
+
+This confirms an airborne approach phase. It does not validate the destination, runway, clearance, route, landing or mission completion. The first-job tutorial definition is version 7.
