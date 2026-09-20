@@ -115,6 +115,86 @@ public sealed class FlightTelemetryEvidenceProcessorTests
     }
 
     [Fact]
+    public void InitialClimbRequiresPriorAirborneConfirmationAndSustainedClimb()
+    {
+        var processor =
+            new FlightTelemetryEvidenceProcessor(
+                new FlightEvidenceProcessorOptions(
+                    StableTelemetrySamples: 1,
+                    AirborneConfirmationSamples: 1,
+                    InitialClimbConfirmationSamples: 2,
+                    InitialClimbMinimumAglFeet: 200,
+                    InitialClimbMinimumVerticalSpeedFeetPerMinute: 100));
+
+        FlightStateEvidence takeoff =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        0,
+                        onGround: false,
+                        altitudeAgl: 50,
+                        groundSpeed: 70,
+                        indicatedAirspeed: 70,
+                        enginesRunning: 1,
+                        verticalSpeed: 600)));
+
+        FlightStateEvidence firstClimb =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        1,
+                        onGround: false,
+                        altitudeAgl: 220,
+                        groundSpeed: 75,
+                        indicatedAirspeed: 72,
+                        enginesRunning: 1,
+                        verticalSpeed: 600)));
+
+        FlightStateEvidence interruptedClimb =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        2,
+                        onGround: false,
+                        altitudeAgl: 250,
+                        groundSpeed: 76,
+                        indicatedAirspeed: 73,
+                        enginesRunning: 1,
+                        verticalSpeed: 50)));
+
+        FlightStateEvidence restartedClimb =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        3,
+                        onGround: false,
+                        altitudeAgl: 275,
+                        groundSpeed: 77,
+                        indicatedAirspeed: 74,
+                        enginesRunning: 1,
+                        verticalSpeed: 500)));
+
+        FlightStateEvidence confirmedClimb =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        4,
+                        onGround: false,
+                        altitudeAgl: 320,
+                        groundSpeed: 78,
+                        indicatedAirspeed: 75,
+                        enginesRunning: 1,
+                        verticalSpeed: 450)));
+
+        Assert.True(takeoff.AirborneConfirmed);
+        Assert.False(takeoff.InitialClimbConfirmed);
+        Assert.False(firstClimb.InitialClimbConfirmed);
+        Assert.False(interruptedClimb.InitialClimbConfirmed);
+        Assert.False(restartedClimb.InitialClimbConfirmed);
+        Assert.True(confirmedClimb.InitialClimbConfirmed);
+    }
+
+    [Fact]
     public void TouchdownRequiresGroundConfirmationAfterConfirmedAirborneFlight()
     {
         var processor =
@@ -371,7 +451,8 @@ public sealed class FlightTelemetryEvidenceProcessorTests
         int enginesRunning = 0,
         bool parkingBrake = false,
         bool paused = false,
-        bool slew = false) =>
+        bool slew = false,
+        double? verticalSpeed = null) =>
         new(
             Epoch.AddSeconds(seconds),
             LatitudeDegrees: 32.0,
@@ -381,7 +462,8 @@ public sealed class FlightTelemetryEvidenceProcessorTests
             IndicatedAirspeedKnots: indicatedAirspeed,
             GroundSpeedKnots: groundSpeed,
             VerticalSpeedFeetPerMinute:
-                onGround ? 0 : -150,
+                verticalSpeed
+                ?? (onGround ? 0 : -150),
             HeadingDegrees: 180,
             PitchDegrees: 2,
             BankDegrees: 0,

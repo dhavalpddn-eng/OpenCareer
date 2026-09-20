@@ -220,3 +220,23 @@ The first-job tutorial now separates takeoff from the general mission-flight ste
 - the first-job tutorial definition is version 4 so previously completed version-3 progress does not skip the new step.
 
 This slice intentionally does not add climb, route coaching, approach, landing, controller bindings, checklist automation, jobs or economy behavior.
+
+
+## MBL-03 Initial Climb tutorial slice
+
+Branch: `feature/mbl03-initial-climb`.
+
+The first-job tutorial now separates initial climb from liftoff and later mission flying:
+
+- new `job-initial-climb` sits between Takeoff and Fly;
+- `FlightTelemetryEvidenceProcessor` derives climb evidence only after airborne flight has already been confirmed;
+- default climb evidence requires 2 consecutive operational samples at at least 200 ft AGL and at least +100 ft/min vertical speed;
+- pause, slew, descent, low climb rate or dropping below the AGL threshold resets the climb streak;
+- confirmed climb is persisted as `InitialClimbAt` on `FlightSessionMilestones`;
+- `job-fly` remains intentionally unmapped until route/mission-flight evidence is implemented in its own slice;
+- tutorial confirmation still does not auto-advance;
+- the first-job tutorial definition is version 5.
+
+Thresholds are configurable and remain provisional until broader real-aircraft MSFS calibration is available.
+
+This slice intentionally does not add route tracking, cruise, approach, landing, controller bindings, checklist automation, jobs or economy behavior.

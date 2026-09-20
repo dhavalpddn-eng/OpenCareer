@@ -11,6 +11,7 @@ public sealed class FlightTelemetryEvidenceProcessor
     private AircraftTelemetrySnapshot? _previous;
     private int _stableSampleCount;
     private int _airborneSampleCount;
+    private int _initialClimbSampleCount;
     private int _groundSampleCount;
     private bool _airborneConfirmedPreviously;
     private bool _takeoffCandidateActive;
@@ -142,11 +143,32 @@ public sealed class FlightTelemetryEvidenceProcessor
             _airborneSampleCount
             >= _options.AirborneConfirmationSamples;
 
+        bool wasAirborneConfirmed =
+            _airborneConfirmedPreviously;
+
         if (airborneConfirmed)
         {
             _airborneConfirmedPreviously = true;
             _takeoffCandidateActive = false;
         }
+
+        bool initialClimbSample =
+            operationalSample
+            && wasAirborneConfirmed
+            && !telemetry.OnGround
+            && telemetry.AltitudeAglFeet
+                >= _options.InitialClimbMinimumAglFeet
+            && telemetry.VerticalSpeedFeetPerMinute
+                >= _options.InitialClimbMinimumVerticalSpeedFeetPerMinute;
+
+        if (initialClimbSample)
+            _initialClimbSampleCount++;
+        else
+            _initialClimbSampleCount = 0;
+
+        bool initialClimbConfirmed =
+            _initialClimbSampleCount
+            >= _options.InitialClimbConfirmationSamples;
 
         bool touchdownConfirmed =
             operationalSample
@@ -200,6 +222,8 @@ public sealed class FlightTelemetryEvidenceProcessor
                     rejectedTakeoff,
                 AirborneConfirmed:
                     airborneConfirmed,
+                InitialClimbConfirmed:
+                    initialClimbConfirmed,
                 ApproachConfirmed:
                     approachConfirmed,
                 TouchdownConfirmed:
@@ -245,6 +269,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         _previous = null;
         _stableSampleCount = 0;
         _airborneSampleCount = 0;
+        _initialClimbSampleCount = 0;
         _groundSampleCount = 0;
         _airborneConfirmedPreviously = false;
         _takeoffCandidateActive = false;
@@ -254,6 +279,7 @@ public sealed class FlightTelemetryEvidenceProcessor
     {
         _stableSampleCount = 0;
         _airborneSampleCount = 0;
+        _initialClimbSampleCount = 0;
         _groundSampleCount = 0;
         _takeoffCandidateActive = false;
     }
