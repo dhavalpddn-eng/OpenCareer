@@ -425,6 +425,9 @@
                                                    Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                                         <TextBlock Text="{Binding TheaterText}"
                                                    Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                        <TextBlock Text="{Binding CampaignText}"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                                   TextWrapping="Wrap" />
                                         <TextBlock Text="{Binding EndedText}"
                                                    Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                                         <TextBlock Text="{Binding FinalStateText}"
