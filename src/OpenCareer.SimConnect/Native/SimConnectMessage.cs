@@ -12,12 +12,35 @@ internal enum SimConnectMessageKind : uint
     Event = 4,
     SimObjectData = 8,
     SystemState = 15,
+    FacilityData = 29,
+    FacilityDataEnd = 30,
     EnumerateSimObjectAndLiveryList = 39
+}
+
+internal enum SimConnectFacilityDataType : uint
+{
+    Airport = 0,
+    Runway = 1
 }
 
 internal sealed record SimConnectObjectLivery(
     string AircraftTitle,
     string LiveryName);
+
+internal sealed record SimConnectAirportFacilityData(
+    string Name,
+    string Icao);
+
+internal sealed record SimConnectRunwayFacilityData(
+    float LengthMeters,
+    float WidthMeters,
+    int Surface,
+    int PrimaryNumber,
+    int PrimaryDesignator,
+    int SecondaryNumber,
+    int SecondaryDesignator,
+    bool PrimaryClosed,
+    bool SecondaryClosed);
 
 internal sealed record SimConnectMessage(
     SimConnectMessageKind Kind,
@@ -32,4 +55,12 @@ internal sealed record SimConnectMessage(
     double[]? Data = null,
     uint ListEntryNumber = 0,
     uint ListOutOf = 0,
-    IReadOnlyList<SimConnectObjectLivery>? ObjectLiveries = null);
+    IReadOnlyList<SimConnectObjectLivery>? ObjectLiveries = null,
+    SimConnectFacilityDataType? FacilityDataType = null,
+    uint UniqueRequestId = 0,
+    uint ParentUniqueRequestId = 0,
+    bool IsListItem = false,
+    uint ItemIndex = 0,
+    uint ListSize = 0,
+    SimConnectAirportFacilityData? AirportFacilityData = null,
+    SimConnectRunwayFacilityData? RunwayFacilityData = null);

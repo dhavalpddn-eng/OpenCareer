@@ -13,6 +13,9 @@ internal static class SimConnectMessageDecoder
     private const int SimObjectDataHeaderSize = HeaderSize + 7 * sizeof(uint);
     private const int ListHeaderSize = HeaderSize + 4 * sizeof(uint);
     private const int SimObjectLiverySize = 512;
+    private const int FacilityDataPayloadOffset = 40;
+    private const int AirportFacilityPayloadSize = 72;
+    private const int RunwayFacilityPayloadSize = 30;
 
     internal static SimConnectMessage Decode(nint data, uint bufferSize)
     {
@@ -32,6 +35,8 @@ internal static class SimConnectMessageDecoder
             SimConnectMessageKind.Event => DecodeEvent(data, declaredSize),
             SimConnectMessageKind.SimObjectData => DecodeSimObjectData(data, declaredSize),
             SimConnectMessageKind.SystemState => DecodeSystemState(data, declaredSize),
+            SimConnectMessageKind.FacilityData => DecodeFacilityData(data, declaredSize),
+            SimConnectMessageKind.FacilityDataEnd => DecodeFacilityDataEnd(data, declaredSize),
             SimConnectMessageKind.EnumerateSimObjectAndLiveryList =>
                 DecodeSimObjectAndLiveryList(data, declaredSize),
             _ => new(SimConnectMessageKind.None)
@@ -93,6 +98,116 @@ internal static class SimConnectMessageDecoder
             DefinitionId: definitionId,
             Data: values);
     }
+
+    private static SimConnectMessage DecodeFacilityData(nint data, uint size)
+    {
+        RequireSize(size, FacilityDataPayloadOffset + sizeof(uint));
+
+        uint requestId = unchecked((uint)Marshal.ReadInt32(data, 12));
+        uint uniqueRequestId = unchecked((uint)Marshal.ReadInt32(data, 16));
+        uint parentUniqueRequestId = unchecked((uint)Marshal.ReadInt32(data, 20));
+        var type = (SimConnectFacilityDataType)unchecked((uint)Marshal.ReadInt32(data, 24));
+        bool isListItem = Marshal.ReadByte(data, 28) != 0;
+        uint itemIndex = unchecked((uint)Marshal.ReadInt32(data, 32));
+        uint listSize = unchecked((uint)Marshal.ReadInt32(data, 36));
+
+        return type switch
+        {
+            SimConnectFacilityDataType.Airport => DecodeAirportFacilityData(
+                data,
+                size,
+                requestId,
+                uniqueRequestId,
+                parentUniqueRequestId,
+                isListItem,
+                itemIndex,
+                listSize),
+            SimConnectFacilityDataType.Runway => DecodeRunwayFacilityData(
+                data,
+                size,
+                requestId,
+                uniqueRequestId,
+                parentUniqueRequestId,
+                isListItem,
+                itemIndex,
+                listSize),
+            _ => throw new InvalidDataException("Unexpected SimConnect facility data type.")
+        };
+    }
+
+    private static SimConnectMessage DecodeAirportFacilityData(
+        nint data,
+        uint size,
+        uint requestId,
+        uint uniqueRequestId,
+        uint parentUniqueRequestId,
+        bool isListItem,
+        uint itemIndex,
+        uint listSize)
+    {
+        RequireSize(size, FacilityDataPayloadOffset + AirportFacilityPayloadSize);
+
+        var payload = new SimConnectAirportFacilityData(
+            ReadFixedAnsi(data + FacilityDataPayloadOffset, 64).Trim(),
+            ReadFixedAnsi(data + FacilityDataPayloadOffset + 64, 8).Trim());
+
+        return new(
+            SimConnectMessageKind.FacilityData,
+            RequestId: requestId,
+            FacilityDataType: SimConnectFacilityDataType.Airport,
+            UniqueRequestId: uniqueRequestId,
+            ParentUniqueRequestId: parentUniqueRequestId,
+            IsListItem: isListItem,
+            ItemIndex: itemIndex,
+            ListSize: listSize,
+            AirportFacilityData: payload);
+    }
+
+    private static SimConnectMessage DecodeRunwayFacilityData(
+        nint data,
+        uint size,
+        uint requestId,
+        uint uniqueRequestId,
+        uint parentUniqueRequestId,
+        bool isListItem,
+        uint itemIndex,
+        uint listSize)
+    {
+        RequireSize(size, FacilityDataPayloadOffset + RunwayFacilityPayloadSize);
+
+        var payload = new SimConnectRunwayFacilityData(
+            ReadSingle(data, FacilityDataPayloadOffset),
+            ReadSingle(data, FacilityDataPayloadOffset + 4),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 8),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 12),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 16),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 20),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 24),
+            Marshal.ReadByte(data, FacilityDataPayloadOffset + 28) != 0,
+            Marshal.ReadByte(data, FacilityDataPayloadOffset + 29) != 0);
+
+        return new(
+            SimConnectMessageKind.FacilityData,
+            RequestId: requestId,
+            FacilityDataType: SimConnectFacilityDataType.Runway,
+            UniqueRequestId: uniqueRequestId,
+            ParentUniqueRequestId: parentUniqueRequestId,
+            IsListItem: isListItem,
+            ItemIndex: itemIndex,
+            ListSize: listSize,
+            RunwayFacilityData: payload);
+    }
+
+    private static SimConnectMessage DecodeFacilityDataEnd(nint data, uint size)
+    {
+        RequireSize(size, HeaderSize + sizeof(uint));
+        return new(
+            SimConnectMessageKind.FacilityDataEnd,
+            RequestId: unchecked((uint)Marshal.ReadInt32(data, 12)));
+    }
+
+    private static float ReadSingle(nint data, int offset) =>
+        BitConverter.Int32BitsToSingle(Marshal.ReadInt32(data, offset));
 
     private static SimConnectMessage DecodeSimObjectAndLiveryList(nint data, uint size)
     {

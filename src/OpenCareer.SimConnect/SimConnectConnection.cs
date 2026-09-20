@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Telemetry;
@@ -15,6 +16,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     private SimulatorConnectionSnapshot _current = new(SimulatorConnectionState.Disconnected);
     private AircraftTelemetrySnapshot? _latestTelemetry;
     private SimConnectAircraftCatalogSnapshot _aircraftCatalog = SimConnectAircraftCatalogSnapshot.Unavailable;
+    private readonly ConcurrentQueue<SimConnectAirportFacilityQuery> _airportFacilityQueries = new();
     private CancellationTokenSource? _stop;
     private Task _worker = Task.CompletedTask;
     private bool _disposed;
@@ -39,6 +41,28 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     public SimulatorConnectionSnapshot Current => Volatile.Read(ref _current);
     public AircraftTelemetrySnapshot? Latest => Volatile.Read(ref _latestTelemetry);
     internal SimConnectAircraftCatalogSnapshot AircraftCatalog => Volatile.Read(ref _aircraftCatalog);
+
+    internal async Task<SimConnectAirportFacilitySnapshot?> RequestAirportFacilityAsync(
+        string icao,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(icao);
+
+        if (Current.State != SimulatorConnectionState.Connected)
+            return null;
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var query = new SimConnectAirportFacilityQuery(
+            icao.Trim().ToUpperInvariant(),
+            cancellationToken);
+
+        _airportFacilityQueries.Enqueue(query);
+
+        return await query.Completion.Task
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     public void Start()
     {
@@ -152,6 +176,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         using var notification = new AutoResetEvent(false);
         WaitHandle[] waits = [token.WaitHandle, notification];
         nint handle = nint.Zero;
+        ActiveSimConnectAirportFacilityRequest? activeAirportFacilityRequest = null;
         try
         {
             int result = _api.Open(out handle, notification.SafeWaitHandle.DangerousGetHandle());
@@ -171,6 +196,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             uint? pendingHeartbeat = null;
             bool acknowledged = false;
             bool paused = false;
+            bool airportFacilityConfigured = false;
+            uint nextAirportFacilityRequestId = SimConnectAirportFacilityDefinition.FirstRequestId;
             uint? aircraftCatalogPageCount = null;
             var aircraftCatalogPages = new Dictionary<uint, IReadOnlyList<SimConnectObjectLivery>>();
             var messages = new List<SimConnectMessage>();
@@ -209,6 +236,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             if (!ConfigureTelemetry(handle))
                                 return SimulatorConnectionIssue.SimulatorError;
 
+                            airportFacilityConfigured = ConfigureAirportFacilities(handle);
                             acknowledged = true;
                             everConnected = true;
                             failures = 0;
@@ -254,6 +282,27 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 return SimulatorConnectionIssue.InvalidResponse;
                             }
                             break;
+                        case SimConnectMessageKind.FacilityData
+                            when acknowledged
+                                && activeAirportFacilityRequest is not null
+                                && message.RequestId == activeAirportFacilityRequest.RequestId:
+                            if (!activeAirportFacilityRequest.Accept(message))
+                            {
+                                _logger.LogWarning(
+                                    "Ignored inconsistent SimConnect airport facility response for {Icao}.",
+                                    activeAirportFacilityRequest.Query.Icao);
+                                activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
+                                activeAirportFacilityRequest = null;
+                            }
+                            break;
+                        case SimConnectMessageKind.FacilityDataEnd
+                            when acknowledged
+                                && activeAirportFacilityRequest is not null
+                                && message.RequestId == activeAirportFacilityRequest.RequestId:
+                            activeAirportFacilityRequest.Query.Completion.TrySetResult(
+                                activeAirportFacilityRequest.Build());
+                            activeAirportFacilityRequest = null;
+                            break;
                         case SimConnectMessageKind.Exception:
                             _logger.LogWarning("SimConnect exception {Code}, send {SendId}, parameter {Index}.",
                                 message.ExceptionCode, message.SendId, message.ParameterIndex);
@@ -264,6 +313,33 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
                 if (!acknowledged && _clock.GetElapsedTime(openedAt) >= _options.HandshakeTimeout)
                     return SimulatorConnectionIssue.HandshakeTimeout;
+
+                if (activeAirportFacilityRequest is not null)
+                {
+                    if (activeAirportFacilityRequest.Query.CancellationToken.IsCancellationRequested)
+                    {
+                        activeAirportFacilityRequest.Query.Completion.TrySetCanceled(
+                            activeAirportFacilityRequest.Query.CancellationToken);
+                        activeAirportFacilityRequest = null;
+                    }
+                    else if (_clock.GetElapsedTime(activeAirportFacilityRequest.StartedAt)
+                        >= SimConnectAirportFacilityDefinition.ResponseTimeout)
+                    {
+                        _logger.LogWarning(
+                            "Timed out waiting for SimConnect airport facility data for {Icao}.",
+                            activeAirportFacilityRequest.Query.Icao);
+                        activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
+                        activeAirportFacilityRequest = null;
+                    }
+                }
+
+                if (acknowledged && activeAirportFacilityRequest is null)
+                {
+                    activeAirportFacilityRequest = StartNextAirportFacilityRequest(
+                        handle,
+                        airportFacilityConfigured,
+                        ref nextAirportFacilityRequestId);
+                }
 
                 if (acknowledged)
                 {
@@ -287,9 +363,90 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         }
         finally
         {
+            activeAirportFacilityRequest?.Query.Completion.TrySetResult(null);
+            CompleteQueuedAirportFacilityRequestsUnavailable();
+
             if (handle != nint.Zero)
                 Close(handle);
         }
+    }
+
+    private bool ConfigureAirportFacilities(nint handle)
+    {
+        foreach (string field in SimConnectAirportFacilityDefinition.Fields)
+        {
+            int result = _api.AddToFacilityDefinition(
+                handle,
+                SimConnectAirportFacilityDefinition.DefinitionId,
+                field);
+
+            if (result < 0)
+            {
+                _logger.LogWarning(
+                    "SimConnect rejected airport facility definition field {Field} with HRESULT {HResult:X8}.",
+                    field,
+                    result);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private ActiveSimConnectAirportFacilityRequest? StartNextAirportFacilityRequest(
+        nint handle,
+        bool facilityConfigured,
+        ref uint nextRequestId)
+    {
+        while (_airportFacilityQueries.TryDequeue(out SimConnectAirportFacilityQuery? query))
+        {
+            if (query.CancellationToken.IsCancellationRequested)
+            {
+                query.Completion.TrySetCanceled(query.CancellationToken);
+                continue;
+            }
+
+            if (!facilityConfigured)
+            {
+                query.Completion.TrySetResult(null);
+                continue;
+            }
+
+            uint requestId = nextRequestId;
+            nextRequestId = nextRequestId == uint.MaxValue
+                ? SimConnectAirportFacilityDefinition.FirstRequestId
+                : nextRequestId + 1;
+
+            int result = _api.RequestFacilityData(
+                handle,
+                SimConnectAirportFacilityDefinition.DefinitionId,
+                requestId,
+                query.Icao,
+                string.Empty);
+
+            if (result < 0)
+            {
+                _logger.LogWarning(
+                    "SimConnect rejected airport facility request for {Icao} with HRESULT {HResult:X8}.",
+                    query.Icao,
+                    result);
+                query.Completion.TrySetResult(null);
+                continue;
+            }
+
+            return new(
+                query,
+                requestId,
+                _clock.GetTimestamp());
+        }
+
+        return null;
+    }
+
+    private void CompleteQueuedAirportFacilityRequestsUnavailable()
+    {
+        while (_airportFacilityQueries.TryDequeue(out SimConnectAirportFacilityQuery? query))
+            query.Completion.TrySetResult(null);
     }
 
     private bool ConfigureTelemetry(nint handle)

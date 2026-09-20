@@ -29,5 +29,12 @@ internal interface ISimConnectApi
     int SubscribeToSystemEvent(nint handle, uint eventId, string eventName);
     int RequestSystemState(nint handle, uint requestId);
     int EnumerateSimObjectsAndLiveries(nint handle, uint requestId, SimConnectSimObjectType type);
+    int AddToFacilityDefinition(nint handle, uint definitionId, string fieldName);
+    int RequestFacilityData(
+        nint handle,
+        uint definitionId,
+        uint requestId,
+        string icao,
+        string region);
     int Close(nint handle);
 }

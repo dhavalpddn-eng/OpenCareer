@@ -79,6 +79,20 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         SimConnectSimObjectType type) =>
         SimConnect_EnumerateSimObjectsAndLiveries(handle, requestId, (uint)type);
 
+    public int AddToFacilityDefinition(
+        nint handle,
+        uint definitionId,
+        string fieldName) =>
+        SimConnect_AddToFacilityDefinition(handle, definitionId, fieldName);
+
+    public int RequestFacilityData(
+        nint handle,
+        uint definitionId,
+        uint requestId,
+        string icao,
+        string region) =>
+        SimConnect_RequestFacilityData(handle, definitionId, requestId, icao, region);
+
     public int Close(nint handle) => SimConnect_Close(handle);
 
     // Official native ABI; no dependency on the legacy .NET Framework managed wrapper.
@@ -135,6 +149,24 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         nint handle,
         uint requestId,
         uint type);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
+        CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_AddToFacilityDefinition(
+        nint handle,
+        uint definitionId,
+        string fieldName);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
+        CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_RequestFacilityData(
+        nint handle,
+        uint definitionId,
+        uint requestId,
+        string icao,
+        string region);
 
     [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
