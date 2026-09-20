@@ -45,7 +45,14 @@ public enum DispatchFeasibilityReason
     FuelExceedsAircraftMaximum,
     TakeoffWeightExceedsMaximum,
     PayloadRangeEnvelopeDoesNotCoverPayload,
-    PayloadRangeExceeded
+    PayloadRangeExceeded,
+    WeatherSourceUnavailable,
+    AirportWeatherUnavailable,
+    RunwayWindDataUnavailable,
+    CrosswindExceedsLimit,
+    TailwindExceedsLimit,
+    DensityAltitudeUnknown,
+    DensityAltitudeExceedsLimit
 }
 
 public sealed record DispatchFeasibilityIssue(
@@ -59,7 +66,11 @@ public sealed record DispatchFeasibilityIssue(
     double? RequiredPounds = null,
     double? AvailablePounds = null,
     double? RequiredNauticalMiles = null,
-    double? AvailableNauticalMiles = null);
+    double? AvailableNauticalMiles = null,
+    double? ObservedKnots = null,
+    double? LimitKnots = null,
+    double? ObservedDensityAltitudeFeet = null,
+    double? MaximumDensityAltitudeFeet = null);
 
 public sealed record DispatchFeasibilityResult
 {
@@ -101,6 +112,10 @@ public sealed record DispatchFeasibilityResult
             .ThenBy(static issue => issue.AvailablePounds)
             .ThenBy(static issue => issue.RequiredNauticalMiles)
             .ThenBy(static issue => issue.AvailableNauticalMiles)
+            .ThenBy(static issue => issue.ObservedKnots)
+            .ThenBy(static issue => issue.LimitKnots)
+            .ThenBy(static issue => issue.ObservedDensityAltitudeFeet)
+            .ThenBy(static issue => issue.MaximumDensityAltitudeFeet)
             .ToArray();
 
         if (status == DispatchFeasibilityStatus.Feasible && orderedIssues.Length != 0)
@@ -124,7 +139,10 @@ public static class RunwayCompatibilityEvaluator
         AircraftRegistryRecord aircraft,
         AirportRecord origin,
         AirportRecord destination,
-        double runwayLengthSafetyMarginPercent = 0)
+        double runwayLengthSafetyMarginPercent = 0,
+        AirportDispatchWeatherObservation? originWeather = null,
+        AirportDispatchWeatherObservation? destinationWeather = null,
+        DispatchWeatherLimits? weatherLimits = null)
     {
         ArgumentNullException.ThrowIfNull(aircraft);
         ArgumentNullException.ThrowIfNull(origin);
@@ -136,14 +154,20 @@ public static class RunwayCompatibilityEvaluator
             aircraft.RunwayPerformance,
             origin,
             destination,
-            runwayLengthSafetyMarginPercent);
+            runwayLengthSafetyMarginPercent,
+            originWeather,
+            destinationWeather,
+            weatherLimits);
     }
 
     public static DispatchFeasibilityResult Evaluate(
         AircraftRunwayPerformanceProfile? performance,
         AirportRecord origin,
         AirportRecord destination,
-        double runwayLengthSafetyMarginPercent = 0)
+        double runwayLengthSafetyMarginPercent = 0,
+        AirportDispatchWeatherObservation? originWeather = null,
+        AirportDispatchWeatherObservation? destinationWeather = null,
+        DispatchWeatherLimits? weatherLimits = null)
     {
         ArgumentNullException.ThrowIfNull(origin);
         ArgumentNullException.ThrowIfNull(destination);
@@ -151,6 +175,9 @@ public static class RunwayCompatibilityEvaluator
         origin.Validate();
         destination.Validate();
         ValidateSafetyMargin(runwayLengthSafetyMarginPercent);
+        weatherLimits?.Validate();
+        ValidateWeatherObservation(originWeather, origin);
+        ValidateWeatherObservation(destinationWeather, destination);
 
         if (performance is null)
         {
@@ -167,13 +194,17 @@ public static class RunwayCompatibilityEvaluator
             performance,
             origin,
             DispatchEndpoint.Origin,
-            runwayLengthSafetyMarginPercent);
+            runwayLengthSafetyMarginPercent,
+            originWeather,
+            weatherLimits);
 
         EndpointEvaluation destinationResult = EvaluateEndpoint(
             performance,
             destination,
             DispatchEndpoint.Destination,
-            runwayLengthSafetyMarginPercent);
+            runwayLengthSafetyMarginPercent,
+            destinationWeather,
+            weatherLimits);
 
         DispatchFeasibilityStatus status =
             originResult.Status == DispatchFeasibilityStatus.Infeasible
@@ -195,7 +226,9 @@ public static class RunwayCompatibilityEvaluator
         AircraftRunwayPerformanceProfile performance,
         AirportRecord airport,
         DispatchEndpoint endpoint,
-        double runwayLengthSafetyMarginPercent)
+        double runwayLengthSafetyMarginPercent,
+        AirportDispatchWeatherObservation? weather,
+        DispatchWeatherLimits? weatherLimits)
     {
         if (airport.Runways.Count == 0)
         {
@@ -208,6 +241,46 @@ public static class RunwayCompatibilityEvaluator
                     airport.Icao)]);
         }
 
+        var endpointIssues = new List<DispatchFeasibilityIssue>();
+
+        if (weatherLimits is not null)
+        {
+            if (weather is null)
+            {
+                return new(
+                    DispatchFeasibilityStatus.InsufficientData,
+                    null,
+                    [new(
+                        DispatchFeasibilityReason.AirportWeatherUnavailable,
+                        endpoint,
+                        airport.Icao)]);
+            }
+
+            if (weatherLimits.MaximumDensityAltitudeFeet is { } maximumDensityAltitude)
+            {
+                if (weather.DensityAltitudeFeet is null)
+                {
+                    endpointIssues.Add(new(
+                        DispatchFeasibilityReason.DensityAltitudeUnknown,
+                        endpoint,
+                        airport.Icao,
+                        MaximumDensityAltitudeFeet: maximumDensityAltitude));
+                }
+                else if (weather.DensityAltitudeFeet.Value > maximumDensityAltitude)
+                {
+                    return new(
+                        DispatchFeasibilityStatus.Infeasible,
+                        null,
+                        [new(
+                            DispatchFeasibilityReason.DensityAltitudeExceedsLimit,
+                            endpoint,
+                            airport.Icao,
+                            ObservedDensityAltitudeFeet: weather.DensityAltitudeFeet.Value,
+                            MaximumDensityAltitudeFeet: maximumDensityAltitude)]);
+                }
+            }
+        }
+
         CandidateEvaluation[] candidates = airport.Runways
             .OrderBy(static runway => runway.Identifier, StringComparer.OrdinalIgnoreCase)
             .Select(runway => EvaluateRunway(
@@ -215,7 +288,9 @@ public static class RunwayCompatibilityEvaluator
                 airport.Icao,
                 runway,
                 endpoint,
-                runwayLengthSafetyMarginPercent))
+                runwayLengthSafetyMarginPercent,
+                weather,
+                weatherLimits))
             .ToArray();
 
         CandidateEvaluation[] feasible = candidates
@@ -231,6 +306,14 @@ public static class RunwayCompatibilityEvaluator
                 .ThenBy(static runway => runway.Identifier, StringComparer.OrdinalIgnoreCase)
                 .First();
 
+            if (endpointIssues.Count > 0)
+            {
+                return new(
+                    DispatchFeasibilityStatus.InsufficientData,
+                    selected.Identifier,
+                    endpointIssues);
+            }
+
             return new(
                 DispatchFeasibilityStatus.Feasible,
                 selected.Identifier,
@@ -239,13 +322,16 @@ public static class RunwayCompatibilityEvaluator
 
         DispatchFeasibilityStatus status =
             candidates.Any(static candidate => candidate.Status == DispatchFeasibilityStatus.InsufficientData)
+            || endpointIssues.Count > 0
                 ? DispatchFeasibilityStatus.InsufficientData
                 : DispatchFeasibilityStatus.Infeasible;
 
         return new(
             status,
             null,
-            candidates.SelectMany(static candidate => candidate.Issues).ToArray());
+            endpointIssues
+                .Concat(candidates.SelectMany(static candidate => candidate.Issues))
+                .ToArray());
     }
 
     private static CandidateEvaluation EvaluateRunway(
@@ -253,7 +339,9 @@ public static class RunwayCompatibilityEvaluator
         string airportIcao,
         RunwayRecord runway,
         DispatchEndpoint endpoint,
-        double runwayLengthSafetyMarginPercent)
+        double runwayLengthSafetyMarginPercent,
+        AirportDispatchWeatherObservation? weather,
+        DispatchWeatherLimits? weatherLimits)
     {
         if (runway.IsClosed)
         {
@@ -357,6 +445,56 @@ public static class RunwayCompatibilityEvaluator
                 runway.Identifier));
         }
 
+        if (weatherLimits is not null && weather is not null)
+        {
+            RunwayWindObservation? wind = weather.FindRunway(runway.Identifier);
+
+            if (wind is null
+                || wind.SustainedHeadwindKnots is null
+                || wind.SustainedCrosswindKnots is null)
+            {
+                unknowns.Add(new(
+                    DispatchFeasibilityReason.RunwayWindDataUnavailable,
+                    endpoint,
+                    airportIcao,
+                    runway.Identifier));
+            }
+            else
+            {
+                double worstCrosswind = Math.Max(
+                    wind.SustainedCrosswindKnots.Value,
+                    wind.GustCrosswindKnots ?? wind.SustainedCrosswindKnots.Value);
+
+                double worstHeadwind = Math.Min(
+                    wind.SustainedHeadwindKnots.Value,
+                    wind.GustHeadwindKnots ?? wind.SustainedHeadwindKnots.Value);
+
+                double worstTailwind = Math.Max(0, -worstHeadwind);
+
+                if (worstCrosswind > weatherLimits.MaximumCrosswindKnots)
+                {
+                    definiteFailures.Add(new(
+                        DispatchFeasibilityReason.CrosswindExceedsLimit,
+                        endpoint,
+                        airportIcao,
+                        runway.Identifier,
+                        ObservedKnots: worstCrosswind,
+                        LimitKnots: weatherLimits.MaximumCrosswindKnots));
+                }
+
+                if (worstTailwind > weatherLimits.MaximumTailwindKnots)
+                {
+                    definiteFailures.Add(new(
+                        DispatchFeasibilityReason.TailwindExceedsLimit,
+                        endpoint,
+                        airportIcao,
+                        runway.Identifier,
+                        ObservedKnots: worstTailwind,
+                        LimitKnots: weatherLimits.MaximumTailwindKnots));
+                }
+            }
+        }
+
         if (definiteFailures.Count > 0)
             return new(DispatchFeasibilityStatus.Infeasible, runway, definiteFailures);
 
@@ -373,6 +511,23 @@ public static class RunwayCompatibilityEvaluator
     {
         if (!double.IsFinite(percentage) || percentage < 0 || percentage > 100)
             throw new ArgumentOutOfRangeException(nameof(percentage));
+    }
+
+    private static void ValidateWeatherObservation(
+        AirportDispatchWeatherObservation? weather,
+        AirportRecord airport)
+    {
+        if (weather is null)
+            return;
+
+        weather.Validate();
+
+        if (!string.Equals(weather.Icao, airport.Icao, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"Weather ICAO '{weather.Icao}' does not match airport '{airport.Icao}'.",
+                nameof(weather));
+        }
     }
 
     private static double ApplySafetyMargin(double value, double percentage) =>
