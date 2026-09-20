@@ -52,6 +52,7 @@ public static class FlightSessionEngine
                 nextTracking,
                 update.Evidence.Timestamp,
                 update.Evidence.InitialClimbConfirmed,
+                update.Evidence.MissionFlightProgressConfirmed,
                 update.ShutdownConfirmed);
 
         if (update.ShutdownConfirmed
@@ -151,6 +152,7 @@ public static class FlightSessionEngine
         FlightTrackingSnapshot next,
         DateTimeOffset timestamp,
         bool initialClimbConfirmed,
+        bool missionFlightProgressConfirmed,
         bool shutdownConfirmed)
     {
         FlightSessionMilestones milestones =
@@ -236,6 +238,18 @@ public static class FlightSessionEngine
                 milestones with
                 {
                     InitialClimbAt = timestamp
+                };
+        }
+
+        if (milestones.InitialClimbAt is not null
+            && milestones.MissionFlightProgressAt is null
+            && next.State == FlightTrackingState.Airborne
+            && missionFlightProgressConfirmed)
+        {
+            milestones =
+                milestones with
+                {
+                    MissionFlightProgressAt = timestamp
                 };
         }
 

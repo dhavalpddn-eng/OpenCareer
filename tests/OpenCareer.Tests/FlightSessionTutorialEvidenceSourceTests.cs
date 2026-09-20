@@ -247,23 +247,33 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
     }
 
     [Fact]
-    public void FlyStepDoesNotTreatInitialClimbAsMissionFlightCompletion()
+    public void FirstJobFlyRequiresMissionFlightProgressMilestone()
     {
         var sessions =
             new FlightSessionCoordinator();
-
-        sessions.Restore(
-            ToInitialClimb(
-                ToAirborne(
-                    ToTaxiOut(
-                        FlightSession.Start(Epoch)))));
 
         var source =
             new FlightSessionTutorialEvidenceSource(
                 sessions);
 
+        FlightSession climbed =
+            ToInitialClimb(
+                ToAirborne(
+                    ToTaxiOut(
+                        FlightSession.Start(Epoch))));
+
+        sessions.Restore(climbed);
+
         Assert.Equal(
-            TutorialStepEvidenceState.NotApplicable,
+            TutorialStepEvidenceState.Waiting,
+            source.GetState(
+                Step("job-fly")));
+
+        sessions.CommitPersisted(
+            ToMissionFlightProgress(climbed));
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Satisfied,
             source.GetState(
                 Step("job-fly")));
     }
@@ -482,13 +492,39 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
             TutorialStepEvidenceState.Waiting,
             coordinator.Current.EvidenceState);
 
+        FlightSession climbed =
+            ToInitialClimb(airborne);
+
         sessions.CommitPersisted(
-            ToInitialClimb(airborne));
+            climbed);
 
         coordinator.RefreshLiveEvidence();
 
         Assert.Equal(
             "job-initial-climb",
+            coordinator.Current.Step?.Id);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Satisfied,
+            coordinator.Current.EvidenceState);
+
+        await coordinator.NextAsync();
+
+        Assert.Equal(
+            "job-fly",
+            coordinator.Current.Step?.Id);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            coordinator.Current.EvidenceState);
+
+        sessions.CommitPersisted(
+            ToMissionFlightProgress(climbed));
+
+        coordinator.RefreshLiveEvidence();
+
+        Assert.Equal(
+            "job-fly",
             coordinator.Current.Step?.Id);
 
         Assert.Equal(
@@ -589,6 +625,17 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
                     Connected: true,
                     ContinuityPlausible: true,
                     InitialClimbConfirmed: true)));
+
+    private static FlightSession ToMissionFlightProgress(
+        FlightSession session) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(7),
+                    Connected: true,
+                    ContinuityPlausible: true,
+                    MissionFlightProgressConfirmed: true)));
 
     private sealed class MemoryProgressStore :
         ITutorialProgressStore

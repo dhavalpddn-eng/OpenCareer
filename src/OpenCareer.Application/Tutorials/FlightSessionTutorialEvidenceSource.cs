@@ -44,6 +44,10 @@ public sealed class FlightSessionTutorialEvidenceSource :
                     static session =>
                         session.Milestones.InitialClimbAt is not null,
 
+                "job-fly" =>
+                    static session =>
+                        session.Milestones.MissionFlightProgressAt is not null,
+
                 "job-arrive" =>
                     static session =>
                         session.Status

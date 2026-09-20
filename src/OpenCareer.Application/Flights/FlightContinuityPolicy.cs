@@ -187,7 +187,7 @@ public sealed class FlightContinuityPolicy
         && double.IsFinite(telemetry.AltitudeMslFeet)
         && double.IsFinite(telemetry.GroundSpeedKnots);
 
-    private static double GreatCircleNauticalMiles(
+    internal static double GreatCircleNauticalMiles(
         double latitude1,
         double longitude1,
         double latitude2,

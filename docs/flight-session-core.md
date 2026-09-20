@@ -240,3 +240,21 @@ The first-job tutorial now separates initial climb from liftoff and later missio
 Thresholds are configurable and remain provisional until broader real-aircraft MSFS calibration is available.
 
 This slice intentionally does not add route tracking, cruise, approach, landing, controller bindings, checklist automation, jobs or economy behavior.
+
+
+## MBL-03 Mission Flight Progress tutorial slice
+
+Branch: `feature/mbl03-route-progress`.
+
+The first-job tutorial now gives `job-fly` a real live-evidence definition without pretending that OpenCareer already knows a mission route:
+
+- mission-flight progress can begin only after `InitialClimbAt` has been established;
+- the telemetry processor requires repeated operational airborne samples and at least 0.5 NM of accumulated great-circle path distance;
+- paused, slewed or non-airborne samples cannot add path distance and reset the consecutive-sample streak;
+- disconnects clear the segment anchor so reconnect movement cannot create a false distance jump;
+- successful evidence is persisted as `MissionFlightProgressAt`;
+- `job-fly` is satisfied only by that persisted milestone;
+- this is evidence that the flight phase is genuinely underway, not proof of waypoint, airway or assigned-route compliance;
+- the first-job tutorial definition is version 6.
+
+Actual route geometry, waypoint sequencing and mission-objective compliance remain separate future mission-system work.

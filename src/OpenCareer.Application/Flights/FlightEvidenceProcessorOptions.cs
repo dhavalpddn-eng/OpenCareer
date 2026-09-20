@@ -14,7 +14,9 @@ public sealed record FlightEvidenceProcessorOptions(
     double InitialClimbMinimumVerticalSpeedFeetPerMinute = 100,
     double ApproachMaximumAglFeet = 2_000,
     double ApproachMaximumVerticalSpeedFeetPerMinute = -100,
-    double ParkingMaximumGroundSpeedKnots = 1)
+    double ParkingMaximumGroundSpeedKnots = 1,
+    int MissionFlightConfirmationSamples = 3,
+    double MissionFlightMinimumDistanceNauticalMiles = 0.5)
 {
     public void Validate()
     {
@@ -29,6 +31,9 @@ public sealed record FlightEvidenceProcessorOptions(
 
         if (GroundConfirmationSamples < 1)
             throw new ArgumentOutOfRangeException(nameof(GroundConfirmationSamples));
+
+        if (MissionFlightConfirmationSamples < 1)
+            throw new ArgumentOutOfRangeException(nameof(MissionFlightConfirmationSamples));
 
         ValidateNonNegativeFinite(
             TaxiGroundSpeedKnots,
@@ -73,6 +78,10 @@ public sealed record FlightEvidenceProcessorOptions(
             ParkingMaximumGroundSpeedKnots,
             nameof(ParkingMaximumGroundSpeedKnots));
 
+        ValidatePositiveFinite(
+            MissionFlightMinimumDistanceNauticalMiles,
+            nameof(MissionFlightMinimumDistanceNauticalMiles));
+
         if (RejectedTakeoffGroundSpeedKnots
             >= TakeoffCandidateGroundSpeedKnots)
         {
@@ -86,6 +95,14 @@ public sealed record FlightEvidenceProcessorOptions(
         string name)
     {
         if (!double.IsFinite(value) || value < 0)
+            throw new ArgumentOutOfRangeException(name);
+    }
+
+    private static void ValidatePositiveFinite(
+        double value,
+        string name)
+    {
+        if (!double.IsFinite(value) || value <= 0)
             throw new ArgumentOutOfRangeException(name);
     }
 }

@@ -195,6 +195,120 @@ public sealed class FlightTelemetryEvidenceProcessorTests
     }
 
     [Fact]
+    public void MissionFlightProgressRequiresDistanceAfterInitialClimbAndIgnoresPausedJump()
+    {
+        var processor =
+            new FlightTelemetryEvidenceProcessor(
+                new FlightEvidenceProcessorOptions(
+                    StableTelemetrySamples: 1,
+                    AirborneConfirmationSamples: 1,
+                    InitialClimbConfirmationSamples: 1,
+                    MissionFlightConfirmationSamples: 3,
+                    MissionFlightMinimumDistanceNauticalMiles: 0.5));
+
+        FlightStateEvidence takeoff =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        0,
+                        onGround: false,
+                        altitudeAgl: 50,
+                        groundSpeed: 90,
+                        indicatedAirspeed: 85,
+                        enginesRunning: 1,
+                        verticalSpeed: 700,
+                        latitude: 32.0)));
+
+        FlightStateEvidence climb =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        1,
+                        onGround: false,
+                        altitudeAgl: 250,
+                        groundSpeed: 95,
+                        indicatedAirspeed: 90,
+                        enginesRunning: 1,
+                        verticalSpeed: 600,
+                        latitude: 32.0)));
+
+        FlightStateEvidence pausedJump =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        2,
+                        onGround: false,
+                        altitudeAgl: 300,
+                        groundSpeed: 100,
+                        indicatedAirspeed: 95,
+                        enginesRunning: 1,
+                        paused: true,
+                        verticalSpeed: 400,
+                        latitude: 33.0)));
+
+        FlightStateEvidence resume =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        3,
+                        onGround: false,
+                        altitudeAgl: 320,
+                        groundSpeed: 100,
+                        indicatedAirspeed: 95,
+                        enginesRunning: 1,
+                        verticalSpeed: 300,
+                        latitude: 33.0)));
+
+        FlightStateEvidence progressOne =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        4,
+                        onGround: false,
+                        altitudeAgl: 330,
+                        groundSpeed: 100,
+                        indicatedAirspeed: 95,
+                        enginesRunning: 1,
+                        verticalSpeed: 250,
+                        latitude: 33.003)));
+
+        FlightStateEvidence progressTwo =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        5,
+                        onGround: false,
+                        altitudeAgl: 340,
+                        groundSpeed: 100,
+                        indicatedAirspeed: 95,
+                        enginesRunning: 1,
+                        verticalSpeed: 200,
+                        latitude: 33.006)));
+
+        FlightStateEvidence confirmed =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        6,
+                        onGround: false,
+                        altitudeAgl: 350,
+                        groundSpeed: 100,
+                        indicatedAirspeed: 95,
+                        enginesRunning: 1,
+                        verticalSpeed: 150,
+                        latitude: 33.009)));
+
+        Assert.True(takeoff.AirborneConfirmed);
+        Assert.True(climb.InitialClimbConfirmed);
+        Assert.False(climb.MissionFlightProgressConfirmed);
+        Assert.False(pausedJump.MissionFlightProgressConfirmed);
+        Assert.False(resume.MissionFlightProgressConfirmed);
+        Assert.False(progressOne.MissionFlightProgressConfirmed);
+        Assert.False(progressTwo.MissionFlightProgressConfirmed);
+        Assert.True(confirmed.MissionFlightProgressConfirmed);
+    }
+
+    [Fact]
     public void TouchdownRequiresGroundConfirmationAfterConfirmedAirborneFlight()
     {
         var processor =
@@ -452,11 +566,13 @@ public sealed class FlightTelemetryEvidenceProcessorTests
         bool parkingBrake = false,
         bool paused = false,
         bool slew = false,
-        double? verticalSpeed = null) =>
+        double? verticalSpeed = null,
+        double latitude = 32.0,
+        double longitude = -97.0) =>
         new(
             Epoch.AddSeconds(seconds),
-            LatitudeDegrees: 32.0,
-            LongitudeDegrees: -97.0,
+            LatitudeDegrees: latitude,
+            LongitudeDegrees: longitude,
             AltitudeMslFeet: 600 + altitudeAgl,
             AltitudeAglFeet: altitudeAgl,
             IndicatedAirspeedKnots: indicatedAirspeed,
