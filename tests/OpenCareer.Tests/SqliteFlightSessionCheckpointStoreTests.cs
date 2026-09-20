@@ -35,7 +35,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
             await reopened.LoadAsync();
 
         Assert.NotNull(actual);
-        Assert.Equal(expected, actual);
+        AssertSessionEquivalent(expected, actual);
     }
 
     [Fact]
@@ -185,6 +185,78 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
                 _directory,
                 recursive: true);
         }
+    }
+
+    private static void AssertSessionEquivalent(
+        FlightSession expected,
+        FlightSession actual)
+    {
+        Assert.Equal(expected.SessionId, actual.SessionId);
+        Assert.Equal(expected.ContractId, actual.ContractId);
+        Assert.Equal(expected.CreatedAt, actual.CreatedAt);
+        Assert.Equal(expected.UpdatedAt, actual.UpdatedAt);
+        Assert.Equal(expected.Status, actual.Status);
+        Assert.Equal(expected.OperationState, actual.OperationState);
+        Assert.Equal(expected.Tracking, actual.Tracking);
+        Assert.Equal(expected.TimeLedger, actual.TimeLedger);
+        Assert.Equal(expected.Milestones, actual.Milestones);
+        Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
+        Assert.Equal(expected.ContinuityAnchor, actual.ContinuityAnchor);
+        Assert.Equal(expected.Plan, actual.Plan);
+
+        FlightSessionStatistics expectedStatistics =
+            expected.EffectiveStatistics;
+
+        FlightSessionStatistics actualStatistics =
+            actual.EffectiveStatistics;
+
+        Assert.Equal(
+            expectedStatistics.DistanceNauticalMiles,
+            actualStatistics.DistanceNauticalMiles);
+
+        Assert.Equal(
+            expectedStatistics.MaximumAltitudeMslFeet,
+            actualStatistics.MaximumAltitudeMslFeet);
+
+        Assert.Equal(
+            expectedStatistics.MaximumIndicatedAirspeedKnots,
+            actualStatistics.MaximumIndicatedAirspeedKnots);
+
+        Assert.Equal(
+            expectedStatistics.MaximumGroundSpeedKnots,
+            actualStatistics.MaximumGroundSpeedKnots);
+
+        Assert.Equal(
+            expectedStatistics.StartFuelPounds,
+            actualStatistics.StartFuelPounds);
+
+        Assert.Equal(
+            expectedStatistics.LastFuelPounds,
+            actualStatistics.LastFuelPounds);
+
+        Assert.Equal(
+            expectedStatistics.FuelBurnedPounds,
+            actualStatistics.FuelBurnedPounds);
+
+        Assert.Equal(
+            expectedStatistics.FuelAddedPounds,
+            actualStatistics.FuelAddedPounds);
+
+        Assert.Equal(
+            expectedStatistics.StartPayloadPounds,
+            actualStatistics.StartPayloadPounds);
+
+        Assert.Equal(
+            expectedStatistics.LastPayloadPounds,
+            actualStatistics.LastPayloadPounds);
+
+        Assert.Equal(
+            expectedStatistics.RouteTrack,
+            actualStatistics.RouteTrack);
+
+        Assert.Equal(
+            expected.EffectiveLandingEpisodes,
+            actual.EffectiveLandingEpisodes);
     }
 
     private static FlightSession CreateAirborneSession()
