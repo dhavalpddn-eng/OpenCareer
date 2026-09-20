@@ -61,6 +61,78 @@ public sealed class MilitaryCampaignMissionService
         return new MilitaryMissionAcceptanceResult(saved, accepted);
     }
 
+    public Task<ConflictCampaignStoreRecord> SaveCombatProgressAsync(
+        ConflictCampaignStoreRecord current,
+        ConflictWorldState updatedWorld,
+        AirSupportMission mission,
+        DateTimeOffset savedAt,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureActiveMission(
+            current.Checkpoint.CombatSupportMissions,
+            mission.MissionId,
+            item => item.MissionId);
+
+        return SaveProgressAsync(
+            current,
+            updatedWorld,
+            mission.MissionId,
+            savedAt,
+            checkpoint => checkpoint with
+            {
+                CombatSupportMissions = new[] { mission }
+            },
+            cancellationToken);
+    }
+
+    public Task<ConflictCampaignStoreRecord> SaveAreaProgressAsync(
+        ConflictCampaignStoreRecord current,
+        ConflictWorldState updatedWorld,
+        AreaSupportMission mission,
+        DateTimeOffset savedAt,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureActiveMission(
+            current.Checkpoint.AreaSupportMissions,
+            mission.MissionId,
+            item => item.MissionId);
+
+        return SaveProgressAsync(
+            current,
+            updatedWorld,
+            mission.MissionId,
+            savedAt,
+            checkpoint => checkpoint with
+            {
+                AreaSupportMissions = new[] { mission }
+            },
+            cancellationToken);
+    }
+
+    public Task<ConflictCampaignStoreRecord> SaveAirOperationProgressAsync(
+        ConflictCampaignStoreRecord current,
+        ConflictWorldState updatedWorld,
+        AirOperationMission mission,
+        DateTimeOffset savedAt,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureActiveMission(
+            current.Checkpoint.AirOperationMissions,
+            mission.MissionId,
+            item => item.MissionId);
+
+        return SaveProgressAsync(
+            current,
+            updatedWorld,
+            mission.MissionId,
+            savedAt,
+            checkpoint => checkpoint with
+            {
+                AirOperationMissions = new[] { mission }
+            },
+            cancellationToken);
+    }
+
     public async Task<ConflictCampaignStoreRecord> CompleteAsync(
         ConflictCampaignStoreRecord current,
         Guid missionId,
@@ -194,6 +266,72 @@ public sealed class MilitaryCampaignMissionService
         return await _campaigns
             .SaveMutationAsync(current, checkpoint, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private async Task<ConflictCampaignStoreRecord> SaveProgressAsync(
+        ConflictCampaignStoreRecord current,
+        ConflictWorldState updatedWorld,
+        Guid missionId,
+        DateTimeOffset savedAt,
+        Func<ConflictCampaignCheckpoint, ConflictCampaignCheckpoint> missionUpdate,
+        CancellationToken cancellationToken)
+    {
+        current.Validate();
+        ConflictValidation.Validate(updatedWorld);
+
+        if (savedAt < current.Checkpoint.SavedAt)
+            throw new ArgumentOutOfRangeException(nameof(savedAt));
+
+        if (updatedWorld.UpdatedAt < current.Checkpoint.World.UpdatedAt)
+            throw new InvalidOperationException("Conflict world time cannot move backwards.");
+
+        if (!string.Equals(
+            updatedWorld.TheaterId,
+            current.Checkpoint.World.TheaterId,
+            StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Mission progress cannot move to another conflict theater.");
+        }
+
+        FindReservedRequest(updatedWorld, missionId);
+
+        ConflictCampaignState strategic =
+            updatedWorld.UpdatedAt == current.Checkpoint.CampaignState.UpdatedAt
+                ? current.Checkpoint.CampaignState
+                : ConflictCampaignDirector.Advance(
+                    current.Checkpoint.CampaignState,
+                    updatedWorld);
+
+        ConflictCampaignCheckpoint checkpoint = missionUpdate(
+            current.Checkpoint with
+            {
+                World = updatedWorld,
+                CampaignState = strategic,
+                SavedAt = savedAt
+            });
+
+        checkpoint.Validate();
+
+        return await _campaigns
+            .SaveMutationAsync(current, checkpoint, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static void EnsureActiveMission<T>(
+        IReadOnlyList<T> missions,
+        Guid missionId,
+        Func<T, Guid> getMissionId)
+    {
+        ArgumentNullException.ThrowIfNull(missions);
+        ArgumentNullException.ThrowIfNull(getMissionId);
+
+        if (missionId == Guid.Empty
+            || !missions.Any(item => getMissionId(item) == missionId))
+        {
+            throw new InvalidOperationException(
+                "Active military mission was not found.");
+        }
     }
 
     private static ConflictCampaignCheckpoint AddMission(
