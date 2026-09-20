@@ -204,6 +204,42 @@ public sealed class FlightSessionEngineTests
     }
 
     [Fact]
+    public void MissionFlightProgressMilestoneRequiresInitialClimb()
+    {
+        FlightSession session =
+            AirborneSession();
+
+        session =
+            Advance(
+                session,
+                6,
+                missionFlightProgress: true);
+
+        Assert.Null(
+            session.Milestones.MissionFlightProgressAt);
+
+        session =
+            Advance(
+                session,
+                7,
+                initialClimb: true);
+
+        Assert.Equal(
+            Epoch.AddSeconds(7),
+            session.Milestones.InitialClimbAt);
+
+        session =
+            Advance(
+                session,
+                8,
+                missionFlightProgress: true);
+
+        Assert.Equal(
+            Epoch.AddSeconds(8),
+            session.Milestones.MissionFlightProgressAt);
+    }
+
+    [Fact]
     public void DisconnectSuspendsWithoutLosingOperationalPhase()
     {
         FlightSession session =
@@ -499,6 +535,7 @@ public sealed class FlightSessionEngineTests
         bool rejectedTakeoff = false,
         bool airborne = false,
         bool initialClimb = false,
+        bool missionFlightProgress = false,
         bool approach = false,
         bool touchdown = false,
         bool touchAndGo = false,
@@ -526,6 +563,8 @@ public sealed class FlightSessionEngineTests
                     TouchAndGoConfirmed: touchAndGo,
                     LandingRolloutConfirmed: rollout,
                     ParkingConfirmed: parking,
-                    OperationCompleteConfirmed: complete),
+                    OperationCompleteConfirmed: complete,
+                    MissionFlightProgressConfirmed:
+                        missionFlightProgress),
                 ShutdownConfirmed: shutdown));
 }

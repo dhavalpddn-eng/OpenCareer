@@ -122,7 +122,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "Continue the departure until the aircraft is clearly established in a sustained climb. OpenCareer waits for repeated airborne altitude and positive vertical-speed evidence rather than treating liftoff alone as a completed climb.",
                 "current-flight", "current-flight"),
             Step("job-fly", "Fly the mission",
-                "Follow the route and mission-specific objectives. Go-arounds and legitimate diversions are evaluated by context rather than treated as automatic failures.",
+                "Continue the operation after the initial climb. OpenCareer confirms that sustained airborne flight is genuinely underway from trustworthy movement evidence; mission-specific route and objective compliance remain separate checks.",
                 "current-flight", "current-flight"),
             Step("job-arrive", "Finish the operation",
                 "A landing alone is normally not enough. Conventional jobs require the mission-defined arrival state, usually taxi, parking, unloading or servicing, and shutdown.",
@@ -132,7 +132,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 5, steps);
+        return new TutorialDefinition(FirstJobId, 6, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()

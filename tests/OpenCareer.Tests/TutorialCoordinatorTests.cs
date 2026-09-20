@@ -126,7 +126,7 @@ public sealed class TutorialCoordinatorTests
                 .Select(step => step.Id)
                 .ToArray();
 
-        Assert.Equal(5, firstJob.Version);
+        Assert.Equal(6, firstJob.Version);
         Assert.Equal(12, ids.Length);
         Assert.Equal(
             new[] { "job-prepare", "job-engine-start", "job-taxi-out", "job-takeoff", "job-initial-climb", "job-fly" },

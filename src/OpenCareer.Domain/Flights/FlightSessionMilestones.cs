@@ -14,7 +14,8 @@ public sealed record FlightSessionMilestones(
     DateTimeOffset? ParkedAt = null,
     DateTimeOffset? ShutdownAt = null,
     DateTimeOffset? CompletedAt = null,
-    DateTimeOffset? InterruptedAt = null)
+    DateTimeOffset? InterruptedAt = null,
+    DateTimeOffset? MissionFlightProgressAt = null)
 {
     public static FlightSessionMilestones Empty { get; } = new();
 }

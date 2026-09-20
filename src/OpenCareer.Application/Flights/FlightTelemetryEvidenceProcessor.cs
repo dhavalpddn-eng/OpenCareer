@@ -9,11 +9,15 @@ public sealed class FlightTelemetryEvidenceProcessor
     private readonly FlightEvidenceProcessorOptions _options;
 
     private AircraftTelemetrySnapshot? _previous;
+    private AircraftTelemetrySnapshot? _missionFlightPrevious;
     private int _stableSampleCount;
     private int _airborneSampleCount;
     private int _initialClimbSampleCount;
+    private int _missionFlightSampleCount;
     private int _groundSampleCount;
+    private double _missionFlightDistanceNauticalMiles;
     private bool _airborneConfirmedPreviously;
+    private bool _initialClimbConfirmedPreviously;
     private bool _takeoffCandidateActive;
 
     public FlightTelemetryEvidenceProcessor(
@@ -170,6 +174,50 @@ public sealed class FlightTelemetryEvidenceProcessor
             _initialClimbSampleCount
             >= _options.InitialClimbConfirmationSamples;
 
+        bool initialClimbEstablished =
+            _initialClimbConfirmedPreviously
+            || initialClimbConfirmed;
+
+        bool missionFlightSample =
+            operationalSample
+            && stableTelemetry
+            && initialClimbEstablished
+            && !telemetry.OnGround;
+
+        if (missionFlightSample)
+        {
+            _missionFlightSampleCount++;
+
+            if (_missionFlightPrevious is not null)
+            {
+                _missionFlightDistanceNauticalMiles +=
+                    FlightContinuityPolicy.GreatCircleNauticalMiles(
+                        _missionFlightPrevious.LatitudeDegrees,
+                        _missionFlightPrevious.LongitudeDegrees,
+                        telemetry.LatitudeDegrees,
+                        telemetry.LongitudeDegrees);
+            }
+
+            _missionFlightPrevious = telemetry;
+        }
+        else
+        {
+            _missionFlightSampleCount = 0;
+            _missionFlightPrevious = null;
+
+            if (!initialClimbEstablished)
+                _missionFlightDistanceNauticalMiles = 0;
+        }
+
+        bool missionFlightProgressConfirmed =
+            _missionFlightSampleCount
+                >= _options.MissionFlightConfirmationSamples
+            && _missionFlightDistanceNauticalMiles
+                >= _options.MissionFlightMinimumDistanceNauticalMiles;
+
+        if (initialClimbConfirmed)
+            _initialClimbConfirmedPreviously = true;
+
         bool touchdownConfirmed =
             operationalSample
             && _airborneConfirmedPreviously
@@ -233,7 +281,9 @@ public sealed class FlightTelemetryEvidenceProcessor
                 OperationCompleteConfirmed:
                     operationComplete,
                 CrashReported:
-                    observation.CrashReported);
+                    observation.CrashReported,
+                MissionFlightProgressConfirmed:
+                    missionFlightProgressConfirmed);
 
         _previous = telemetry;
 
@@ -260,6 +310,9 @@ public sealed class FlightTelemetryEvidenceProcessor
                     or FlightTrackingState.Approach
                     or FlightTrackingState.LandingEpisode;
 
+        _initialClimbConfirmedPreviously =
+            session.Milestones.InitialClimbAt is not null;
+
         _takeoffCandidateActive =
             state == FlightTrackingState.TakeoffRoll;
     }
@@ -267,11 +320,15 @@ public sealed class FlightTelemetryEvidenceProcessor
     public void Reset()
     {
         _previous = null;
+        _missionFlightPrevious = null;
         _stableSampleCount = 0;
         _airborneSampleCount = 0;
         _initialClimbSampleCount = 0;
+        _missionFlightSampleCount = 0;
         _groundSampleCount = 0;
+        _missionFlightDistanceNauticalMiles = 0;
         _airborneConfirmedPreviously = false;
+        _initialClimbConfirmedPreviously = false;
         _takeoffCandidateActive = false;
     }
 
@@ -280,6 +337,8 @@ public sealed class FlightTelemetryEvidenceProcessor
         _stableSampleCount = 0;
         _airborneSampleCount = 0;
         _initialClimbSampleCount = 0;
+        _missionFlightSampleCount = 0;
+        _missionFlightPrevious = null;
         _groundSampleCount = 0;
         _takeoffCandidateActive = false;
     }
