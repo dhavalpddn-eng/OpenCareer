@@ -61,6 +61,9 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SqliteLogbookStore>());
 
         services.AddSingleton<SqliteConflictCampaignStore>();
+        services.AddSingleton<SqliteMilitaryCareerProfileStore>();
+        services.AddSingleton<IMilitaryCareerProfileStore>(provider =>
+            provider.GetRequiredService<SqliteMilitaryCareerProfileStore>());
         services.AddSingleton<SqliteDatabaseSnapshotService>();
         services.AddSingleton<SqliteBackupArchiveRestoreService>();
         services.AddSingleton<AppDataRestoreService>();
