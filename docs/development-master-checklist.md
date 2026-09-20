@@ -472,7 +472,7 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: code head `360e93ea` is green on both platforms. Linux PR CI passed **240/240 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **240/240 xUnit**.
+Verification note: code head `0dee5cb1` is green on both platforms. Linux PR CI passed **245/245 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **245/245 xUnit**.
 
 ## Remaining
 
@@ -481,13 +481,14 @@ Verification note: code head `360e93ea` is green on both platforms. Linux PR CI 
 - [x] Add validated restore integration from an OpenCareer backup archive: stage and integrity-check the SQLite image first, then apply it on restart before SQLite-backed state is recovered, with rollback protection.
 - [ ] Expose backup selection/confirmation in Settings so the validated restore backend is user-accessible without manual/internal invocation.
 - [x] Add deterministic fictional operation identity and distinct friendly/hostile faction names/short codes while keeping the underlying simulation sides generic and reusable.
-- [ ] Extend long-term theater evolution beyond the first phase/momentum/objective director.
+- [x] Add the first bounded long-term campaign-cycle layer: nearby logistics recovery for ground units, theater-logistics air readiness recovery, momentum-based sector consolidation and linked-threat resynchronization.
+- [ ] Extend long-term theater evolution with reinforcement/replacement rules, operation termination/renewal and richer faction behavior.
 - [ ] Integrate military authorization with authoritative player-career persistence/onboarding.
 - [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
 - [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
 - [ ] Implement production Military/Government/Conflict UI against the conflict application service.
 - [ ] Add large deterministic campaign balance/stress batches.
-- [x] Record Linux + Windows validation for code head `360e93ea`: 240/240 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
+- [x] Record Linux + Windows validation for code head `0dee5cb1`: 245/245 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
 - [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
 - [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 

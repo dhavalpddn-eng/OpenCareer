@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `360e93ea` is green: Linux passed 240/240 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 240/240 xUnit.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `0dee5cb1` is green: Linux passed 245/245 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 245/245 xUnit.
 
 ## Boundary
 
@@ -50,6 +50,7 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - validated backup-archive restore staging plus restart-time database replacement before SQLite-backed application state is recovered; invalid/corrupt archives are rejected before the live database changes and a rollback snapshot protects replacement failures,
 - persistent `ConflictCampaignState` with campaign phase, friendly momentum and deterministic strategic objectives for control, intelligence, readiness and threat reduction,
 - deterministic fictional campaign identity with a persistent operation name plus distinct friendly/hostile faction names and short codes; legacy checkpoints without identity are accepted and backfilled deterministically on advance,
+- bounded long-term campaign cycles that recover nearby ground units through same-side logistics support, recover simulated air-unit readiness from theater logistics, consolidate sector control from persistent campaign momentum, and resynchronize linked threat severity after recovery,
 - `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
 - `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
 - `MilitaryCampaignMissionService` that persists acceptance, mission-stage progress, failure/completion lifecycle and simulated threat outcomes without allowing duplicate replay after recovery,
@@ -65,7 +66,7 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 ## Still open
 
 - user-facing Settings backup selection/confirmation for staging a restore archive; the validated restore backend and restart-time apply path are implemented,
-- richer long-term theater evolution beyond the first phase/momentum/objective director,
+- deeper long-term theater evolution beyond the first recovery/consolidation cycle layer, including reinforcement/replacement policy, operation termination/renewal and richer faction behavior,
 - player career onboarding/persistence for military affiliation and qualifications,
 - authoritative aircraft assignment issuance through the fleet/dispatch system,
 - authoritative job/economy settlement integration,
