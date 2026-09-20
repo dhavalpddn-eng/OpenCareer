@@ -11,6 +11,7 @@ public sealed record FlightEvidenceProcessorOptions(
     double AirborneMinimumAglFeet = 15,
     double ApproachMaximumAglFeet = 2_000,
     double ApproachMaximumVerticalSpeedFeetPerMinute = -100,
+    double LandingRolloutMaximumGroundSpeedKnots = 25,
     double ParkingMaximumGroundSpeedKnots = 1)
 {
     public void Validate()
@@ -56,8 +57,19 @@ public sealed record FlightEvidenceProcessorOptions(
         }
 
         ValidateNonNegativeFinite(
+            LandingRolloutMaximumGroundSpeedKnots,
+            nameof(LandingRolloutMaximumGroundSpeedKnots));
+
+        ValidateNonNegativeFinite(
             ParkingMaximumGroundSpeedKnots,
             nameof(ParkingMaximumGroundSpeedKnots));
+
+        if (ParkingMaximumGroundSpeedKnots
+            > LandingRolloutMaximumGroundSpeedKnots)
+        {
+            throw new ArgumentException(
+                "Parking speed must not exceed the landing-rollout speed.");
+        }
 
         if (RejectedTakeoffGroundSpeedKnots
             >= TakeoffCandidateGroundSpeedKnots)
