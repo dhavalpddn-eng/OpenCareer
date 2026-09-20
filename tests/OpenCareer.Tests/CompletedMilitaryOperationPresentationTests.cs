@@ -50,24 +50,31 @@ public sealed class CompletedMilitaryOperationPresentationTests
         ConflictFactionOperationalPosture? finalHostilePosture)
     {
         var identity = new ConflictCampaignIdentity(
+            "operation:test",
             "Operation Test",
             new ConflictFactionIdentity(
+                "faction:alpha",
                 "Alpha Coalition",
                 "ALP",
-                ConflictSide.Friendly,
-                ConflictFactionOperationalPosture.Defensive),
+                ConflictSide.Friendly)
+            {
+                Posture = ConflictFactionOperationalPosture.Defensive
+            },
             new ConflictFactionIdentity(
+                "faction:bravo",
                 "Bravo Directorate",
                 "BRV",
-                ConflictSide.Hostile,
-                ConflictFactionOperationalPosture.Aggressive));
+                ConflictSide.Hostile)
+            {
+                Posture = ConflictFactionOperationalPosture.Aggressive
+            });
 
         return new ConflictCampaignHistoryEntry(
             "campaign-test",
             "FICTIONAL-TEST",
             identity,
             ConflictCampaignOutcome.Victory,
-            ConflictCampaignPhase.Secured,
+            ConflictCampaignPhase.FriendlySecured,
             9,
             0.74,
             EndedAt,
