@@ -3,7 +3,8 @@ param(
     [string]$SimConnectNativePath = "",
     [string]$Output = "",
     [ValidateRange(0, 86400)]
-    [int]$DurationSeconds = 0
+    [int]$DurationSeconds = 0,
+    [switch]$FlightSession
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,6 +44,10 @@ if (-not [string]::IsNullOrWhiteSpace($Output)) {
 
 if ($DurationSeconds -gt 0) {
     $dotnetArgs += @("--duration-seconds", $DurationSeconds.ToString([System.Globalization.CultureInfo]::InvariantCulture))
+}
+
+if ($FlightSession) {
+    $dotnetArgs += "--flight-session"
 }
 
 & dotnet @dotnetArgs

@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.App.ViewModels;
@@ -11,6 +13,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly ISimulatorConnection _connection;
     private readonly ISimulatorTelemetrySource _telemetrySource;
     private readonly IAppSettingsService _settings;
+    private readonly FlightSessionCoordinator _flightSessions;
+    private readonly FlightSessionPersistenceService? _flightPersistence;
 
     private SimulatorConnectionSnapshot? _lastConnectionSnapshot;
     private AircraftTelemetrySnapshot? _lastTelemetry;
@@ -26,15 +30,59 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _aircraftStateSummary = "—";
     private string _configurationSummary = "—";
     private string _loadSummary = "—";
+    private Guid? _lastFlightSessionId;
+    private DateTimeOffset? _lastFlightSessionUpdatedAt;
+    private FlightSessionStatus? _lastFlightSessionStatus;
+    private FlightOperationState? _lastFlightOperationState;
+    private string _currentFlightTitle = "No active flight";
+    private string _currentFlightStatus = "NO ACTIVE FLIGHT";
+    private string _currentFlightDetail =
+        "Accept an operation before OpenCareer creates a career FlightSession.";
+    private string _currentFlightRecoveryText = "No saved active flight";
+    private string _currentFlightTimeSummary = "—";
+    private string _currentFlightEventSummary = "—";
+    private string _currentFlightMilestoneSummary = "—";
+    private string _currentFlightRouteSummary = "—";
+    private string _currentFlightPerformanceSummary = "—";
+    private string _currentFlightFuelSummary = "—";
 
     public ShellViewModel(
         ISimulatorConnection connection,
         ISimulatorTelemetrySource telemetrySource,
         IAppSettingsService settings)
+        : this(
+            connection,
+            telemetrySource,
+            settings,
+            new FlightSessionCoordinator(),
+            flightPersistence: null)
     {
-        _connection = connection;
-        _telemetrySource = telemetrySource;
-        _settings = settings;
+    }
+
+    public ShellViewModel(
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        IAppSettingsService settings,
+        FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService? flightPersistence)
+    {
+        _connection =
+            connection
+            ?? throw new ArgumentNullException(nameof(connection));
+
+        _telemetrySource =
+            telemetrySource
+            ?? throw new ArgumentNullException(nameof(telemetrySource));
+
+        _settings =
+            settings
+            ?? throw new ArgumentNullException(nameof(settings));
+
+        _flightSessions =
+            flightSessions
+            ?? throw new ArgumentNullException(nameof(flightSessions));
+
+        _flightPersistence = flightPersistence;
         _settings.Changed += OnSettingsChanged;
     }
 
@@ -52,6 +100,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string AircraftStateSummary => _aircraftStateSummary;
     public string ConfigurationSummary => _configurationSummary;
     public string LoadSummary => _loadSummary;
+    public string CurrentFlightTitle => _currentFlightTitle;
+    public string CurrentFlightStatus => _currentFlightStatus;
+    public string CurrentFlightDetail => _currentFlightDetail;
+    public string CurrentFlightRecoveryText => _currentFlightRecoveryText;
+    public string CurrentFlightTimeSummary => _currentFlightTimeSummary;
+    public string CurrentFlightEventSummary => _currentFlightEventSummary;
+    public string CurrentFlightMilestoneSummary => _currentFlightMilestoneSummary;
+    public string CurrentFlightRouteSummary => _currentFlightRouteSummary;
+    public string CurrentFlightPerformanceSummary => _currentFlightPerformanceSummary;
+    public string CurrentFlightFuelSummary => _currentFlightFuelSummary;
+    private bool _hasFlightSession;
+    private bool _hasRecoveredFlightSession;
+
+    public bool HasFlightSession => _hasFlightSession;
+    public bool HasRecoveredFlightSession => _hasRecoveredFlightSession;
     public bool IsSimulatorConnected { get; private set; }
     public bool HasTelemetry { get; private set; }
 
@@ -75,6 +138,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             _lastTelemetry = telemetry;
             RefreshTelemetry(telemetry);
         }
+
+        RefreshFlightSession();
     }
 
     private void RefreshConnection(SimulatorConnectionSnapshot snapshot)
@@ -232,10 +297,336 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             nameof(ConfigurationSummary));
     }
 
+    private void RefreshFlightSession()
+    {
+        FlightSession? session =
+            _flightSessions.Current;
+
+        if (session is null)
+        {
+            _lastFlightSessionId = null;
+            _lastFlightSessionUpdatedAt = null;
+            _lastFlightSessionStatus = null;
+            _lastFlightOperationState = null;
+
+            SetBoolean(
+                ref _hasFlightSession,
+                false,
+                nameof(HasFlightSession));
+
+            SetBoolean(
+                ref _hasRecoveredFlightSession,
+                false,
+                nameof(HasRecoveredFlightSession));
+
+            SetField(
+                ref _currentFlightTitle,
+                "No active flight",
+                nameof(CurrentFlightTitle));
+
+            SetField(
+                ref _currentFlightStatus,
+                "NO ACTIVE FLIGHT",
+                nameof(CurrentFlightStatus));
+
+            SetField(
+                ref _currentFlightDetail,
+                "Accept an operation before OpenCareer creates a career FlightSession.",
+                nameof(CurrentFlightDetail));
+
+            SetField(
+                ref _currentFlightRecoveryText,
+                "No saved active flight",
+                nameof(CurrentFlightRecoveryText));
+
+            SetField(
+                ref _currentFlightTimeSummary,
+                "—",
+                nameof(CurrentFlightTimeSummary));
+
+            SetField(
+                ref _currentFlightEventSummary,
+                "—",
+                nameof(CurrentFlightEventSummary));
+
+            SetField(
+                ref _currentFlightMilestoneSummary,
+                "—",
+                nameof(CurrentFlightMilestoneSummary));
+
+            SetField(
+                ref _currentFlightRouteSummary,
+                "—",
+                nameof(CurrentFlightRouteSummary));
+
+            SetField(
+                ref _currentFlightPerformanceSummary,
+                "—",
+                nameof(CurrentFlightPerformanceSummary));
+
+            SetField(
+                ref _currentFlightFuelSummary,
+                "—",
+                nameof(CurrentFlightFuelSummary));
+
+            return;
+        }
+
+        bool changed =
+            session.SessionId != _lastFlightSessionId
+            || session.UpdatedAt != _lastFlightSessionUpdatedAt
+            || session.Status != _lastFlightSessionStatus
+            || session.OperationState != _lastFlightOperationState;
+
+        bool recovered =
+            _flightPersistence?.LastRecoveredSessionId
+            == session.SessionId;
+
+        SetBoolean(
+            ref _hasFlightSession,
+            true,
+            nameof(HasFlightSession));
+
+        SetBoolean(
+            ref _hasRecoveredFlightSession,
+            recovered,
+            nameof(HasRecoveredFlightSession));
+
+        if (!changed)
+        {
+            string recoveryText =
+                recovered
+                    ? "RESTORED FROM LOCAL SAVE"
+                    : "LIVE SESSION";
+
+            SetField(
+                ref _currentFlightRecoveryText,
+                recoveryText,
+                nameof(CurrentFlightRecoveryText));
+
+            return;
+        }
+
+        _lastFlightSessionId = session.SessionId;
+        _lastFlightSessionUpdatedAt = session.UpdatedAt;
+        _lastFlightSessionStatus = session.Status;
+        _lastFlightOperationState = session.OperationState;
+
+        SetField(
+            ref _currentFlightTitle,
+            FlightTitle(session.Status),
+            nameof(CurrentFlightTitle));
+
+        SetField(
+            ref _currentFlightStatus,
+            $"{session.Status.ToString().ToUpperInvariant()} · {FormatOperationState(session.OperationState)}",
+            nameof(CurrentFlightStatus));
+
+        SetField(
+            ref _currentFlightDetail,
+            FlightDetail(session),
+            nameof(CurrentFlightDetail));
+
+        SetField(
+            ref _currentFlightRecoveryText,
+            recovered
+                ? "RESTORED FROM LOCAL SAVE"
+                : "LIVE SESSION",
+            nameof(CurrentFlightRecoveryText));
+
+        SetField(
+            ref _currentFlightTimeSummary,
+            $"Career {FormatDuration(session.TimeLedger.CareerCreditTime)} · Airborne {FormatDuration(session.TimeLedger.AirborneTime)} · Block {FormatDuration(session.TimeLedger.BlockTime)}",
+            nameof(CurrentFlightTimeSummary));
+
+        SetField(
+            ref _currentFlightEventSummary,
+            $"TO {session.Tracking.TakeoffCount} · Landing episodes {session.Tracking.LandingEpisodeCount} · Bounces {session.Tracking.BounceCount} · T&G {session.Tracking.TouchAndGoCount} · RTO {session.Tracking.RejectedTakeoffCount}",
+            nameof(CurrentFlightEventSummary));
+
+        SetField(
+            ref _currentFlightMilestoneSummary,
+            LatestMilestone(session.Milestones),
+            nameof(CurrentFlightMilestoneSummary));
+
+        SetField(
+            ref _currentFlightRouteSummary,
+            FormatRouteSummary(session),
+            nameof(CurrentFlightRouteSummary));
+
+        SetField(
+            ref _currentFlightPerformanceSummary,
+            FormatPerformanceSummary(session.EffectiveStatistics),
+            nameof(CurrentFlightPerformanceSummary));
+
+        SetField(
+            ref _currentFlightFuelSummary,
+            FormatFuelSummary(session.EffectiveStatistics),
+            nameof(CurrentFlightFuelSummary));
+    }
+
+    private string FormatRouteSummary(
+        FlightSession session)
+    {
+        string origin =
+            session.Plan?.PlannedOrigin
+            ?? "—";
+
+        string destination =
+            session.Plan?.PlannedDestination
+            ?? "—";
+
+        double distance =
+            session.EffectiveStatistics.DistanceNauticalMiles;
+
+        return $"{origin} → {destination} · {distance:0.0} nm tracked";
+    }
+
+    private string FormatPerformanceSummary(
+        FlightSessionStatistics statistics)
+    {
+        if (_settings.Current.MeasurementSystem
+            == MeasurementSystem.Metric)
+        {
+            return FormattableString.Invariant(
+                $"Max {FeetToMeters(statistics.MaximumAltitudeMslFeet):0} m · {KnotsToKilometersPerHour(statistics.MaximumIndicatedAirspeedKnots):0} km/h IAS · {KnotsToKilometersPerHour(statistics.MaximumGroundSpeedKnots):0} km/h GS");
+        }
+
+        return FormattableString.Invariant(
+            $"Max {statistics.MaximumAltitudeMslFeet:0} ft · {statistics.MaximumIndicatedAirspeedKnots:0} kt IAS · {statistics.MaximumGroundSpeedKnots:0} kt GS");
+    }
+
+    private string FormatFuelSummary(
+        FlightSessionStatistics statistics)
+    {
+        if (statistics.StartFuelPounds is null)
+            return "Fuel summary unavailable";
+
+        if (_settings.Current.MeasurementSystem
+            == MeasurementSystem.Metric)
+        {
+            return FormattableString.Invariant(
+                $"Burned {PoundsToKilograms(statistics.FuelBurnedPounds):0.0} kg · Added {PoundsToKilograms(statistics.FuelAddedPounds):0.0} kg · Remaining {PoundsToKilograms(statistics.LastFuelPounds ?? 0):0.0} kg");
+        }
+
+        return FormattableString.Invariant(
+            $"Burned {statistics.FuelBurnedPounds:0.0} lb · Added {statistics.FuelAddedPounds:0.0} lb · Remaining {statistics.LastFuelPounds ?? 0:0.0} lb");
+    }
+
+    private static string FlightTitle(
+        FlightSessionStatus status) =>
+        status switch
+        {
+            FlightSessionStatus.Active =>
+                "Active flight",
+
+            FlightSessionStatus.Suspended =>
+                "Flight suspended",
+
+            FlightSessionStatus.Interrupted =>
+                "Flight interrupted",
+
+            FlightSessionStatus.Completed =>
+                "Flight complete",
+
+            FlightSessionStatus.Cancelled =>
+                "Flight cancelled",
+
+            _ =>
+                "Flight session"
+        };
+
+    private static string FlightDetail(
+        FlightSession session) =>
+        session.Status switch
+        {
+            FlightSessionStatus.Suspended =>
+                "The simulator connection was interrupted. OpenCareer preserved the flight and is waiting for trustworthy continuity before normal tracking resumes.",
+
+            FlightSessionStatus.Interrupted =>
+                "OpenCareer preserved the partial flight because continuity could not be proven. The session will not be auto-completed.",
+
+            FlightSessionStatus.Completed =>
+                "The flight session reached its terminal state and is preserved for debrief, logbook and one-time settlement integration.",
+
+            FlightSessionStatus.Cancelled =>
+                "The operation was cancelled. Its saved session remains available until the terminal record is acknowledged.",
+
+            _ =>
+                $"OpenCareer is tracking the operation at {FormatOperationState(session.OperationState)}."
+        };
+
+    private static string FormatOperationState(
+        FlightOperationState state) =>
+        state switch
+        {
+            FlightOperationState.ReadyForStart => "Ready for start",
+            FlightOperationState.EngineStart => "Engine start",
+            FlightOperationState.TaxiOut => "Taxi out",
+            FlightOperationState.DepartureReady => "Departure ready",
+            FlightOperationState.Airborne => "Airborne",
+            FlightOperationState.Landed => "Landed",
+            FlightOperationState.TaxiIn => "Taxi in",
+            _ => state.ToString()
+        };
+
+    private static string LatestMilestone(
+        FlightSessionMilestones milestones)
+    {
+        (string Name, DateTimeOffset? Time)[] values =
+        [
+            ("Complete", milestones.CompletedAt),
+            ("Shutdown", milestones.ShutdownAt),
+            ("Parked", milestones.ParkedAt),
+            ("Taxi in", milestones.TaxiInAt),
+            ("Landing", milestones.LandingAt),
+            ("Touchdown", milestones.FirstTouchdownAt),
+            ("Approach", milestones.ApproachAt),
+            ("Takeoff", milestones.TakeoffAt),
+            ("Takeoff roll", milestones.TakeoffRollAt),
+            ("Taxi out", milestones.TaxiOutAt),
+            ("Engine start", milestones.EngineStartAt),
+            ("Aircraft ready", milestones.AircraftReadyAt),
+            ("Interrupted", milestones.InterruptedAt)
+        ];
+
+        (string Name, DateTimeOffset? Time)? latest =
+            values
+                .Where(value => value.Time is not null)
+                .OrderByDescending(value => value.Time)
+                .FirstOrDefault();
+
+        if (latest is null
+            || latest.Value.Time is null)
+        {
+            return "No flight milestones yet";
+        }
+
+        return $"{latest.Value.Name} · {latest.Value.Time.Value.ToLocalTime():t}";
+    }
+
+    private static string FormatDuration(
+        TimeSpan duration)
+    {
+        if (duration < TimeSpan.Zero)
+            duration = TimeSpan.Zero;
+
+        int totalHours =
+            (int)duration.TotalHours;
+
+        return $"{totalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}";
+    }
+
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
         if (_lastTelemetry is not null)
             RefreshTelemetry(_lastTelemetry);
+
+        if (_flightSessions.Current is not null)
+        {
+            _lastFlightSessionUpdatedAt = null;
+            RefreshFlightSession();
+        }
     }
 
     private static double FeetToMeters(double feet) => feet * 0.3048;
@@ -243,6 +634,18 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private static double FeetPerMinuteToMetersPerSecond(double feetPerMinute) =>
         feetPerMinute * 0.00508;
     private static double PoundsToKilograms(double pounds) => pounds * 0.45359237;
+
+    private void SetBoolean(
+        ref bool field,
+        bool value,
+        string propertyName)
+    {
+        if (field == value)
+            return;
+
+        field = value;
+        OnPropertyChanged(propertyName);
+    }
 
     private void SetField(ref string field, string value, string propertyName)
     {
