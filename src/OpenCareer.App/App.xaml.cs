@@ -4,12 +4,17 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Ai;
 using OpenCareer.Application.Dashboard;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Military;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
+using OpenCareer.Domain.Flights;
+using OpenCareer.Infrastructure.Ai;
+using OpenCareer.Infrastructure.Flights;
 using OpenCareer.Infrastructure.Persistence;
 using OpenCareer.SimConnect;
 
@@ -41,6 +46,10 @@ public partial class App : Microsoft.UI.Xaml.Application
         });
 
         services.AddSingleton<IAppSettingsService, JsonAppSettingsService>();
+        services.AddSingleton(OpenAiNarrativeOptions.FromEnvironment());
+        services.AddSingleton<IAiNarrativeProvider, OpenAiNarrativeProvider>();
+        services.AddSingleton<IAiNarrativeService, AiNarrativeService>();
+
         services.AddSingleton<IDashboardSnapshotSource, UnavailableDashboardSnapshotSource>();
         services.AddSingleton(provider =>
             new OpenCareerDatabaseOptions(
@@ -50,6 +59,7 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SqliteLogbookStore>());
         services.AddSingleton<ILogbookWriter>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
+
         services.AddSingleton<SqliteConflictCampaignStore>();
         services.AddSingleton<SqliteDatabaseSnapshotService>();
         services.AddSingleton<SqliteBackupArchiveRestoreService>();
@@ -66,11 +76,25 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<MilitaryDispatchService>();
         services.AddSingleton<MilitaryCampaignMissionService>();
         services.AddSingleton<MilitaryCampaignTransitionService>();
+
         services.AddSingleton<LogbookCommitCoordinator>();
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
         services.AddSingleton<DiagnosticBundleService>();
         services.AddSingleton<ShellOpenService>();
+
+        services.AddSingleton<FlightSessionCoordinator>();
+        services.AddSingleton(FlightSessionCheckpointPolicy.Default);
+        services.AddSingleton<IFlightSessionCheckpointStore>(provider =>
+            new SqliteFlightSessionCheckpointStore(
+                provider
+                    .GetRequiredService<OpenCareerDataPaths>()
+                    .DatabaseFile));
+        services.AddSingleton<FlightSessionPersistenceService>();
+        services.AddSingleton<FlightSessionCompletionService>();
+        services.AddSingleton<FlightTelemetryEvidenceProcessor>();
+        services.AddSingleton<FlightContinuityPolicy>();
+        services.AddSingleton<FlightSessionRuntime>();
 
         services.AddSingleton<SimConnectConnection>();
         services.AddSingleton<ISimulatorConnection>(provider =>
@@ -79,6 +103,9 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SimConnectConnection>());
 
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
+        services.AddSingleton<FlightSessionTutorialEvidenceSource>();
+        services.AddSingleton<ITutorialStepEvidenceSource>(provider =>
+            provider.GetRequiredService<FlightSessionTutorialEvidenceSource>());
         services.AddSingleton<ITutorialFeatureReadiness, CurrentTutorialFeatureReadiness>();
         services.AddSingleton<ITutorialProgressStore, JsonTutorialProgressStore>();
         services.AddSingleton<TutorialCoordinator>();
@@ -117,7 +144,10 @@ public partial class App : Microsoft.UI.Xaml.Application
                 .ApplyPendingDatabaseRestoreAsync();
 
             if (restored)
-                logger.LogInformation("Applied pending OpenCareer database restore before application data stores were opened.");
+            {
+                logger.LogInformation(
+                    "Applied pending OpenCareer database restore before application data stores were opened.");
+            }
         }
         catch (Exception ex)
         {
@@ -126,11 +156,28 @@ public partial class App : Microsoft.UI.Xaml.Application
                 "Pending OpenCareer database restore failed; existing local data was preserved.");
         }
 
-        _window = _services.GetRequiredService<MainWindow>();
-        _window.AppWindow.Closing += OnMainWindowClosing;
-        _window.Activate();
+        try
+        {
+            FlightSession? recovered =
+                await _services
+                    .GetRequiredService<FlightSessionPersistenceService>()
+                    .RecoverAsync();
 
-        _services.GetRequiredService<ISimulatorConnection>().Start();
+            if (recovered is not null)
+            {
+                logger.LogInformation(
+                    "Recovered flight session {SessionId} in {Status}/{OperationState}.",
+                    recovered.SessionId,
+                    recovered.Status,
+                    recovered.OperationState);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "FlightSession recovery failed. OpenCareer will continue without claiming a recovered active flight.");
+        }
 
         try
         {
@@ -153,6 +200,11 @@ public partial class App : Microsoft.UI.Xaml.Application
                 "Military conflict campaign recovery failed; the rest of OpenCareer will continue.");
         }
 
+        _window = _services.GetRequiredService<MainWindow>();
+        _window.AppWindow.Closing += OnMainWindowClosing;
+        _window.Activate();
+
+        _services.GetRequiredService<ISimulatorConnection>().Start();
         logger.LogInformation("OpenCareer application launched.");
     }
 
@@ -171,6 +223,20 @@ public partial class App : Microsoft.UI.Xaml.Application
         try
         {
             logger.LogInformation("OpenCareer application shutting down.");
+
+            try
+            {
+                await _services
+                    .GetRequiredService<FlightSessionPersistenceService>()
+                    .FlushAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Final FlightSession checkpoint failed during shutdown.");
+            }
+
             await _services.DisposeAsync();
         }
         catch (Exception ex)

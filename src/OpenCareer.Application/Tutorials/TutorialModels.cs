@@ -7,6 +7,13 @@ public enum TutorialFeatureState
     ComingLater
 }
 
+public enum TutorialStepEvidenceState
+{
+    NotApplicable,
+    Waiting,
+    Satisfied
+}
+
 public sealed record TutorialStep(
     string Id,
     int Version,
@@ -35,7 +42,8 @@ public sealed record TutorialSnapshot(
     int CurrentIndex,
     int StepCount,
     TutorialStep? Step,
-    TutorialFeatureState FeatureState)
+    TutorialFeatureState FeatureState,
+    TutorialStepEvidenceState EvidenceState = TutorialStepEvidenceState.NotApplicable)
 {
     public static TutorialSnapshot Inactive { get; } =
         new(null, 0, false, -1, 0, null, TutorialFeatureState.Unavailable);

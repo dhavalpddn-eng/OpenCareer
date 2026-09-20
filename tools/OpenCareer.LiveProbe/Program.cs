@@ -25,7 +25,16 @@ try
     await using var connection = new SimConnectConnection(
         loggerFactory.CreateLogger<SimConnectConnection>());
 
-    var session = new LiveProbeSession(connection, options);
+    LiveFlightSessionValidator? flightSessionValidator =
+        options.FlightSessionValidation
+            ? new LiveFlightSessionValidator(connection)
+            : null;
+
+    var session = new LiveProbeSession(
+        connection,
+        options,
+        flightSessionValidator);
+
     return await session.RunAsync().ConfigureAwait(false);
 }
 catch (ArgumentException ex)

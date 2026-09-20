@@ -1,6 +1,9 @@
 namespace OpenCareer.LiveProbe;
 
-internal sealed record LiveProbeOptions(string OutputPath, TimeSpan? Duration)
+internal sealed record LiveProbeOptions(
+    string OutputPath,
+    TimeSpan? Duration,
+    bool FlightSessionValidation)
 {
     internal const string Usage =
         """
@@ -12,6 +15,7 @@ internal sealed record LiveProbeOptions(string OutputPath, TimeSpan? Duration)
         Options:
           --output <path>             JSONL trace file. Defaults to LocalAppData\OpenCareer\Diagnostics.
           --duration-seconds <value>  Stop automatically after a positive number of seconds.
+          --flight-session            Feed live telemetry through the real FlightSession runtime and print state transitions.
           -h, --help                  Show this help.
 
         Run without --duration-seconds for an interactive session and press Ctrl+C to stop.
@@ -21,6 +25,7 @@ internal sealed record LiveProbeOptions(string OutputPath, TimeSpan? Duration)
     {
         string? output = null;
         TimeSpan? duration = null;
+        bool flightSessionValidation = false;
 
         for (int index = 0; index < args.Count; index++)
         {
@@ -39,13 +44,17 @@ internal sealed record LiveProbeOptions(string OutputPath, TimeSpan? Duration)
                     duration = TimeSpan.FromSeconds(seconds);
                     break;
 
+                case "--flight-session":
+                    flightSessionValidation = true;
+                    break;
+
                 default:
                     throw new ArgumentException($"Unknown live-probe option: {arg}");
             }
         }
 
         string outputPath = output is null ? CreateDefaultOutputPath() : Path.GetFullPath(output);
-        return new(outputPath, duration);
+        return new(outputPath, duration, flightSessionValidation);
     }
 
     private static string ReadValue(IReadOnlyList<string> args, ref int index, string option)

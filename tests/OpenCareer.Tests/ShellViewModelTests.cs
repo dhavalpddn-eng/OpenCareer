@@ -1,6 +1,8 @@
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.Tests;
@@ -101,6 +103,113 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task RecoveredFlightSessionIsPresentedAsSuspendedNotCompleted()
+    {
+        DateTimeOffset epoch =
+            new(
+                2026,
+                9,
+                19,
+                16,
+                30,
+                0,
+                TimeSpan.Zero);
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new TestFlightStore
+            {
+                Checkpoint =
+                    FlightSession.Start(
+                        epoch,
+                        sessionId:
+                            Guid.Parse(
+                                "55555555-5555-5555-5555-555555555555"))
+            };
+
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        await persistence.RecoverAsync();
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection
+                {
+                    Current =
+                        new SimulatorConnectionSnapshot(
+                            SimulatorConnectionState.WaitingForSimulator)
+                },
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                coordinator,
+                persistence);
+
+        viewModel.RefreshConnectionStatus();
+
+        Assert.True(viewModel.HasFlightSession);
+        Assert.True(viewModel.HasRecoveredFlightSession);
+        Assert.Equal(
+            "Flight suspended",
+            viewModel.CurrentFlightTitle);
+        Assert.Contains(
+            "SUSPENDED",
+            viewModel.CurrentFlightStatus);
+        Assert.Equal(
+            "RESTORED FROM LOCAL SAVE",
+            viewModel.CurrentFlightRecoveryText);
+        Assert.Contains(
+            "continuity",
+            viewModel.CurrentFlightDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "complete",
+            viewModel.CurrentFlightStatus,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LiveFlightSessionIsShownWithoutRecoveryClaim()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026,
+                    9,
+                    19,
+                    16,
+                    45,
+                    0,
+                    TimeSpan.Zero)));
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                coordinator,
+                flightPersistence: null);
+
+        viewModel.RefreshConnectionStatus();
+
+        Assert.True(viewModel.HasFlightSession);
+        Assert.False(viewModel.HasRecoveredFlightSession);
+        Assert.Equal(
+            "Active flight",
+            viewModel.CurrentFlightTitle);
+        Assert.Equal(
+            "LIVE SESSION",
+            viewModel.CurrentFlightRecoveryText);
+    }
+
+    [Fact]
     public void MissingRuntimeIsDistinguishedFromWaitingForSimulator()
     {
         var connection = new TestConnection
@@ -167,6 +276,31 @@ public sealed class ShellViewModelTests
     private sealed class TestTelemetrySource : ISimulatorTelemetrySource
     {
         public AircraftTelemetrySnapshot? Latest { get; set; }
+    }
+
+    private sealed class TestFlightStore :
+        IFlightSessionCheckpointStore
+    {
+        public FlightSession? Checkpoint { get; set; }
+
+        public Task SaveAsync(
+            FlightSession session,
+            CancellationToken cancellationToken = default)
+        {
+            Checkpoint = session;
+            return Task.CompletedTask;
+        }
+
+        public Task<FlightSession?> LoadAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Checkpoint);
+
+        public Task ClearAsync(
+            CancellationToken cancellationToken = default)
+        {
+            Checkpoint = null;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class TestSettingsService : IAppSettingsService
