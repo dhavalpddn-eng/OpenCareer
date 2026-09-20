@@ -190,14 +190,17 @@ public sealed class MsfsAircraftCfgObservationSource(
             MaximumLandingWeightPounds:
                 flightModel?.MaximumLandingWeightPounds,
             MaximumZeroFuelWeightPounds:
-                flightModel?.MaximumZeroFuelWeightPounds);
+                flightModel?.MaximumZeroFuelWeightPounds,
+            ConditionedPerformance:
+                flightPerformance?.ConditionedPerformance);
 
         bool hasAny =
             profile.MaximumTakeoffWeightPounds is not null
             || profile.MaximumFuelWeightPounds is not null
             || profile.ConfiguredEmptyWeightPounds is not null
             || profile.MaximumLandingWeightPounds is not null
-            || profile.MaximumZeroFuelWeightPounds is not null;
+            || profile.MaximumZeroFuelWeightPounds is not null
+            || profile.ConditionedPerformance is not null;
 
         if (!hasAny)
             return null;
