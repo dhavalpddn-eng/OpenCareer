@@ -6,7 +6,7 @@ namespace OpenCareer.Application.Planning;
 
 public interface IAircraftRegistrySource
 {
-    Task<AircraftRegistryRecord?> FindAircraftAsync(
+    Task<AircraftRegistryResolution?> FindAircraftAsync(
         string aircraftId,
         CancellationToken cancellationToken = default);
 }
@@ -38,7 +38,7 @@ public sealed class DispatchFeasibilityService(
         ArgumentException.ThrowIfNullOrWhiteSpace(originIcao);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationIcao);
 
-        AircraftRegistryRecord? aircraft = await aircraftRegistry
+        AircraftRegistryResolution? resolution = await aircraftRegistry
             .FindAircraftAsync(aircraftId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -57,8 +57,20 @@ public sealed class DispatchFeasibilityService(
 
         var missing = new List<DispatchFeasibilityIssue>();
 
-        if (aircraft is null)
+        AircraftRegistryRecord? aircraft = resolution?.TryCreateRegistryRecord();
+
+        if (resolution is null)
+        {
             missing.Add(new(DispatchFeasibilityReason.AircraftNotFound));
+        }
+        else if (aircraft is null)
+        {
+            missing.AddRange(
+                resolution.UnresolvedCapabilityFields.Select(
+                    static field => new DispatchFeasibilityIssue(
+                        DispatchFeasibilityReason.AircraftCapabilityDataIncomplete,
+                        AircraftField: field)));
+        }
 
         if (origin is null)
         {

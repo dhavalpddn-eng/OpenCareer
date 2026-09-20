@@ -19,6 +19,7 @@ public enum DispatchEndpoint
 public enum DispatchFeasibilityReason
 {
     AircraftNotFound = 0,
+    AircraftCapabilityDataIncomplete,
     AircraftRunwayPerformanceUnknown,
     AirportNotFound,
     NoRunwayData,
@@ -41,7 +42,8 @@ public sealed record DispatchFeasibilityIssue(
     string? AirportIcao = null,
     string? RunwayIdentifier = null,
     double? RequiredFeet = null,
-    double? AvailableFeet = null);
+    double? AvailableFeet = null,
+    AircraftRegistryField? AircraftField = null);
 
 public sealed record DispatchFeasibilityResult
 {
@@ -76,6 +78,7 @@ public sealed record DispatchFeasibilityResult
             .ThenBy(static issue => issue.AirportIcao, StringComparer.OrdinalIgnoreCase)
             .ThenBy(static issue => issue.RunwayIdentifier, StringComparer.OrdinalIgnoreCase)
             .ThenBy(static issue => issue.Reason)
+            .ThenBy(static issue => issue.AircraftField)
             .ThenBy(static issue => issue.RequiredFeet)
             .ThenBy(static issue => issue.AvailableFeet)
             .ToArray();

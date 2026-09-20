@@ -156,15 +156,15 @@ The shell starts the simulator service, refreshes immutable connection/telemetry
 
 ## Material limits
 
-Installed/known-aircraft discovery adapters, authoritative airport/runway source adapters, full operation-specific dispatch performance, and market-driven Jobs generation are not implemented yet. The new registry/runway Slice 1 foundation is provider-neutral and intentionally does not invent MSFS SDK discovery capabilities. External aviation APIs may enrich/reference records but are not gameplay authority. F-22/KRME remains a developer fixture only. The live F-22 showed nearly constant fuel quantity, so generic fuel burn must remain non-authoritative until aircraft-specific fuel telemetry is validated.
+Installed-aircraft discovery adapters, airport/runway source adapters, full operation-specific dispatch performance, and market-driven Jobs generation are not implemented yet. Registry/runway Slice 1 provides provider-neutral physical records and tri-state compatibility. Slice 2 provides deterministic multi-provider registry resolution using exact canonical IDs, field-level confidence/provenance, installed-vs-known status and explicit unresolved fields; it does not fuzzy-match aircraft names or fabricate missing performance. External aviation APIs may enrich/reference records but are not gameplay authority. F-22/KRME remains a developer fixture only. The live F-22 showed nearly constant fuel quantity, so generic fuel burn must remain non-authoritative until aircraft-specific fuel telemetry is validated.
 
 ## Next bounded work
 
-1. Implement provider-neutral aircraft registry records while preserving the existing `AircraftCapabilityProfile` contract/dealer consumers.
-2. Add physical airport/runway records separate from `AirportCareerProfile` economic/opportunity data.
-3. Add deterministic `Feasible / Infeasible / InsufficientData` runway compatibility with explicit blocking reasons and fail-closed unknown data.
-4. Add Application source interfaces for later installed-aircraft and airport-data adapters. Do not add SimConnect/API code to Domain and do not start market-driven Jobs yet.
-5. After this foundation, extend dispatch with payload/weight/range/weather/safety-margin planning and only then feed eligible combinations into Jobs.
+1. Implement the first installed-aircraft observation adapter only from verified supported/local MSFS data sources; keep provider records normalized behind `IAircraftRegistryObservationSource`.
+2. Add the first airport/runway adapter with source provenance and caching behind `IAirportDataSource`.
+3. Extend dispatch with operation-specific payload/weight/range/weather/safety-margin planning.
+4. Keep qualifications, licenses/ratings and government/military authorization as separate gates that cannot override aircraft or runway incompatibility.
+5. Start market-driven Jobs generation only after those dispatch inputs can fail closed.
 
 Do **not** expand finance complexity before the playable flight foundation unless explicitly requested.
 

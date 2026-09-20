@@ -244,11 +244,38 @@ public class AircraftRunwayFeasibilityTests
     private sealed class StubAircraftRegistrySource(AircraftRegistryRecord? aircraft)
         : IAircraftRegistrySource
     {
-        public Task<AircraftRegistryRecord?> FindAircraftAsync(
+        public Task<AircraftRegistryResolution?> FindAircraftAsync(
             string aircraftId,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(aircraft);
+            Task.FromResult(
+                aircraft is null
+                    ? null
+                    : CompleteResolution(aircraft));
     }
+
+    private static AircraftRegistryResolution CompleteResolution(
+        AircraftRegistryRecord aircraft) =>
+        AircraftRegistryResolver.Resolve(
+        [
+            new(
+                aircraft.AircraftId,
+                "test-source",
+                aircraft.AircraftId,
+                AircraftDataConfidence.Verified,
+                aircraft.IsInstalled,
+                aircraft.DisplayName,
+                aircraft.Capabilities.Capabilities,
+                aircraft.Capabilities.Access,
+                aircraft.Capabilities.MaximumPayloadPounds,
+                aircraft.Capabilities.MaximumRangeNauticalMiles,
+                aircraft.Capabilities.TypicalCruiseKnots,
+                aircraft.Capabilities.Seats,
+                aircraft.Capabilities.EngineCount,
+                aircraft.Capabilities.IfrCapable,
+                aircraft.Capabilities.Pressurized,
+                aircraft.Capabilities.RetractableGear,
+                aircraft.RunwayPerformance)
+        ]);
 
     private sealed class StubAirportDataSource(
         IReadOnlyDictionary<string, AirportRecord> airports)
