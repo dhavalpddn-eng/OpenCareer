@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `3b5f6f93` is green: Linux passed 266/266 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 266/266 xUnit.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `e41161bb` is green: Linux passed 278/278 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 278/278 xUnit.
 
 ## Boundary
 
@@ -50,6 +50,9 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - validated backup-archive restore staging plus restart-time database replacement before SQLite-backed application state is recovered; invalid/corrupt archives are rejected before the live database changes and a rollback snapshot protects replacement failures,
 - persistent `ConflictCampaignState` with campaign phase, friendly momentum and deterministic strategic objectives for control, intelligence, readiness and threat reduction,
 - deterministic fictional campaign identity with a persistent operation name plus distinct friendly/hostile faction names and short codes; legacy checkpoints without identity are accepted and backfilled deterministically on advance,
+- deterministic faction operational posture persisted with faction identity: Defensive, Aggressive, LogisticsFocused or AirFocused,
+- faction posture subtly changes campaign behavior without introducing nondeterministic AI authority: aggressive factions request battlefield support earlier and favor maneuver replacements, logistics-focused factions request resupply earlier and prioritize sustainment roles, air-focused factions widen intercept/escort coverage and favor air-defense support, while defensive posture preserves the baseline behavior,
+- both friendly and hostile posture influence replacement priority; the friendly faction posture also shapes the player-facing support-request mix and urgency,
 - bounded long-term campaign cycles that recover nearby ground units through same-side logistics support, recover simulated air-unit readiness from theater logistics, consolidate sector control from persistent campaign momentum, and resynchronize linked threat severity after recovery,
 - finite friendly/hostile replacement reserves that require operational logistics, reinforce the weakest eligible surviving ground units first, and are consumed rather than providing unlimited regeneration,
 - persisted campaign terminal outcomes: Ongoing, Victory, Defeat, Stalemate and Ceasefire; victory/defeat require sustained secured evaluations, ceasefire can result from mutual exhaustion, and prolonged balanced low-momentum campaigns can end in stalemate,
@@ -63,7 +66,7 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
 - `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
 - `MilitaryCampaignMissionService` that persists acceptance, mission-stage progress, failure/completion lifecycle and simulated threat outcomes without allowing duplicate replay after recovery,
-- `ConflictOperationsSnapshotBuilder` that projects operation/faction identity, campaign outcome, replacement reserves, campaign/front/unit/threat/support/strategic-objective/trust/damage/active-operation state for the future Military/Government UI,
+- `ConflictOperationsSnapshotBuilder` that projects operation/faction identity and posture, campaign outcome, replacement reserves, campaign/front/unit/threat/support/strategic-objective/trust/damage/active-operation state for the future Military/Government UI,
 - deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation, SQLite campaign recovery, strategic evolution, dispatch authorization and the operations snapshot.
 
 ## Deliberately abstract
@@ -76,7 +79,7 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 
 - user-facing Settings backup selection/confirmation for staging a restore archive; the validated restore backend and restart-time apply path are implemented,
 - user-facing Military/Government presentation for the already-implemented successor-operation offer/accept/decline application flow,
-- richer long-term faction behavior beyond current deterministic identity/logistics/strategic-state rules,
+- dynamic faction-posture evolution across campaign phases/outcomes; the current posture is deterministic and fixed for each operation,
 - player career onboarding/persistence for military affiliation and qualifications,
 - authoritative aircraft assignment issuance through the fleet/dispatch system,
 - authoritative job/economy settlement integration,

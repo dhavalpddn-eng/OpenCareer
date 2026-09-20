@@ -472,7 +472,7 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: code head `3b5f6f93` is green on both platforms. Linux PR CI passed **266/266 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **266/266 xUnit**. The first run exposed an implicitly typed catalog-array compile error; `3b5f6f93` fixes it and the exact-head rerun is green.
+Verification note: code head `e41161bb` is green on both platforms. Linux PR CI passed **278/278 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **278/278 xUnit**.
 
 ## Remaining
 
@@ -489,13 +489,14 @@ Verification note: code head `3b5f6f93` is green on both platforms. Linux PR CI 
 - [x] Add deterministic successor-operation offer planning across fictional theater candidates, avoiding an immediate theater repeat when alternatives exist and previewing the exact operation identity acceptance will create.
 - [x] Add an application-layer successor-operation flow with `IConflictTheaterCatalog`, offer projection, accept/decline/reconsider actions, stale-offer rejection and runtime-state replacement after acceptance.
 - [x] Persist completed-operation history through SQLite and expose it in the Military/Government operations snapshot.
-- [ ] Add the user-facing Military/Government successor-operation presentation and richer long-term faction behavior.
+- [x] Add deterministic faction operational posture (Defensive / Aggressive / LogisticsFocused / AirFocused) and use it to bias replacement priority plus support-request thresholds/urgency/range without making AI authoritative.
+- [ ] Add the user-facing Military/Government successor-operation presentation and any later dynamic posture changes across campaign phases/outcomes.
 - [ ] Integrate military authorization with authoritative player-career persistence/onboarding.
 - [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
 - [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
 - [ ] Implement production Military/Government/Conflict UI against the conflict application service.
 - [ ] Add large deterministic campaign balance/stress batches.
-- [x] Record Linux + Windows validation for code head `3b5f6f93`: 266/266 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
+- [x] Record Linux + Windows validation for code head `e41161bb`: 278/278 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
 - [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
 - [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 
