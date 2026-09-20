@@ -14,7 +14,8 @@ public sealed record OperationDispatchRequirements(
     double RequiredRangeNauticalMiles,
     double? PlannedFuelPounds = null,
     double RangeSafetyMarginPercent = 0,
-    double RunwayLengthSafetyMarginPercent = 0)
+    double RunwayLengthSafetyMarginPercent = 0,
+    DispatchWeatherLimits? WeatherLimits = null)
 {
     public void Validate()
     {
@@ -32,6 +33,7 @@ public sealed record OperationDispatchRequirements(
 
         ValidatePercentage(RangeSafetyMarginPercent, nameof(RangeSafetyMarginPercent));
         ValidatePercentage(RunwayLengthSafetyMarginPercent, nameof(RunwayLengthSafetyMarginPercent));
+        WeatherLimits?.Validate();
     }
 
     private static void ValidatePercentage(double value, string name)
@@ -53,7 +55,9 @@ public static class OperationDispatchPhysicalEvaluator
         AircraftRegistryResolution aircraft,
         OperationDispatchRequirements requirements,
         AirportRecord origin,
-        AirportRecord destination)
+        AirportRecord destination,
+        AirportDispatchWeatherObservation? originWeather = null,
+        AirportDispatchWeatherObservation? destinationWeather = null)
     {
         ArgumentNullException.ThrowIfNull(aircraft);
         ArgumentNullException.ThrowIfNull(requirements);
@@ -167,7 +171,10 @@ public static class OperationDispatchPhysicalEvaluator
             aircraft.RunwayPerformance,
             origin,
             destination,
-            requirements.RunwayLengthSafetyMarginPercent);
+            requirements.RunwayLengthSafetyMarginPercent,
+            originWeather,
+            destinationWeather,
+            requirements.WeatherLimits);
 
         DispatchFeasibilityStatus status =
             hasDefiniteCapabilityFailure
