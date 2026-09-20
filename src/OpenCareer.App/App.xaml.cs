@@ -51,6 +51,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ILogbookWriter>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
         services.AddSingleton<SqliteConflictCampaignStore>();
+        services.AddSingleton<SqliteDatabaseSnapshotService>();
         services.AddSingleton<IConflictCampaignStore>(provider =>
             provider.GetRequiredService<SqliteConflictCampaignStore>());
         services.AddSingleton<IConflictCampaignRecoverySource>(provider =>
