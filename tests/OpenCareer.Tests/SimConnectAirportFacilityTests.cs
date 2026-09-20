@@ -348,7 +348,10 @@ public sealed class SimConnectAirportFacilityTests
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            async () => await canceledLookup);
+            async () =>
+            {
+                await canceledLookup;
+            });
         Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
 
         Task<AirportDataObservation?> retry = source.FindAirportObservationAsync("KBBB");
