@@ -258,7 +258,10 @@ public sealed class SimConnectLocalAirportWeatherSource(
             * Math.Sin(deltaLon / 2)
             * Math.Sin(deltaLon / 2);
 
-        double centralAngle = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        double clamped = Math.Clamp(a, 0, 1);
+        double centralAngle = 2 * Math.Atan2(
+            Math.Sqrt(clamped),
+            Math.Sqrt(1 - clamped));
         return EarthRadiusNauticalMiles * centralAngle;
     }
 }
