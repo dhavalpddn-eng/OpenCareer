@@ -28,6 +28,7 @@ public sealed class MilitaryGovernmentViewModelTests
         Assert.Empty(viewModel.SupportRequests);
         Assert.Empty(viewModel.Objectives);
         Assert.Empty(viewModel.CompletedOperations);
+        Assert.Null(viewModel.SelectedCompletedOperation);
         Assert.Empty(viewModel.OperationalMapMarkers);
         Assert.Empty(viewModel.Communications);
         Assert.Equal("Schematic map • no plotted markers", viewModel.OperationalMapBoundsText);
@@ -235,6 +236,166 @@ public sealed class MilitaryGovernmentViewModelTests
         Assert.Same(record, runtime.Current);
         Assert.Equal(new[] { "older", "z-tied", "a-tied" }, history.Select(entry => entry.CampaignId));
         Assert.Equal(0, store.SaveAttempts);
+    }
+
+    [Fact]
+    public void CompletedOperationSelectionUsesCampaignIdAndSurvivesRefresh()
+    {
+        var runtime = CreateRuntime();
+        var archived = ConflictCampaignHistoryEntry.FromCheckpoint(
+            CompletedRecord().Checkpoint);
+        var older = archived with
+        {
+            CampaignId = "older-selection",
+            Identity = archived.Identity with
+            {
+                OperationId = "operation:older-selection"
+            },
+            EndedAt = Epoch.AddHours(-2)
+        };
+        var selected = archived with
+        {
+            CampaignId = "selected-operation",
+            Identity = archived.Identity with
+            {
+                OperationId = "operation:selected-operation"
+            },
+            EndedAt = Epoch.AddHours(-1)
+        };
+        runtime.Replace(
+            new ConflictCampaignStoreRecord(
+                1,
+                CreateCheckpoint("selection-current") with
+                {
+                    History = [older, selected]
+                }));
+        var viewModel = CreateViewModel(runtime);
+        var notifications = new List<string?>();
+        viewModel.PropertyChanged +=
+            (_, args) => notifications.Add(args.PropertyName);
+
+        viewModel.Refresh();
+
+        Assert.Null(viewModel.SelectedCompletedOperation);
+        Assert.True(
+            viewModel.SelectCompletedOperation(
+                selected.CampaignId));
+
+        MilitaryCompletedOperationItemViewModel initialSelection =
+            Assert.IsType<MilitaryCompletedOperationItemViewModel>(
+                viewModel.SelectedCompletedOperation);
+
+        Assert.Equal(selected.CampaignId, initialSelection.CampaignId);
+        Assert.Same(
+            viewModel.CompletedOperations.Single(
+                item => item.CampaignId == selected.CampaignId),
+            initialSelection);
+        Assert.Contains(
+            nameof(viewModel.SelectedCompletedOperation),
+            notifications);
+
+        notifications.Clear();
+        viewModel.Refresh();
+
+        MilitaryCompletedOperationItemViewModel refreshedSelection =
+            Assert.IsType<MilitaryCompletedOperationItemViewModel>(
+                viewModel.SelectedCompletedOperation);
+
+        Assert.Equal(selected.CampaignId, refreshedSelection.CampaignId);
+        Assert.NotSame(initialSelection, refreshedSelection);
+        Assert.Same(
+            viewModel.CompletedOperations.Single(
+                item => item.CampaignId == selected.CampaignId),
+            refreshedSelection);
+        Assert.Contains(
+            nameof(viewModel.SelectedCompletedOperation),
+            notifications);
+
+        viewModel.ClearCompletedOperationSelection();
+
+        Assert.Null(viewModel.SelectedCompletedOperation);
+    }
+
+    [Fact]
+    public void MissingCompletedOperationSelectionClearsCurrentSelection()
+    {
+        var runtime = CreateRuntime();
+        var archived = ConflictCampaignHistoryEntry.FromCheckpoint(
+            CompletedRecord().Checkpoint);
+        runtime.Replace(
+            new ConflictCampaignStoreRecord(
+                1,
+                CreateCheckpoint("missing-selection-current") with
+                {
+                    History = [archived]
+                }));
+        var viewModel = CreateViewModel(runtime);
+        viewModel.Refresh();
+
+        Assert.True(
+            viewModel.SelectCompletedOperation(
+                archived.CampaignId));
+        Assert.NotNull(viewModel.SelectedCompletedOperation);
+
+        Assert.False(
+            viewModel.SelectCompletedOperation(
+                "missing-campaign"));
+
+        Assert.Null(viewModel.SelectedCompletedOperation);
+    }
+
+    [Fact]
+    public void RefreshClearsSelectionWhenArchivedOperationDisappears()
+    {
+        var runtime = CreateRuntime();
+        var archived = ConflictCampaignHistoryEntry.FromCheckpoint(
+            CompletedRecord().Checkpoint);
+        var remaining = archived with
+        {
+            CampaignId = "remaining-operation",
+            Identity = archived.Identity with
+            {
+                OperationId = "operation:remaining-operation"
+            },
+            EndedAt = Epoch.AddHours(-2)
+        };
+        var selected = archived with
+        {
+            CampaignId = "removed-operation",
+            Identity = archived.Identity with
+            {
+                OperationId = "operation:removed-operation"
+            },
+            EndedAt = Epoch.AddHours(-1)
+        };
+        runtime.Replace(
+            new ConflictCampaignStoreRecord(
+                1,
+                CreateCheckpoint("selection-removal-current") with
+                {
+                    History = [remaining, selected]
+                }));
+        var viewModel = CreateViewModel(runtime);
+        viewModel.Refresh();
+        Assert.True(
+            viewModel.SelectCompletedOperation(
+                selected.CampaignId));
+
+        runtime.Replace(
+            new ConflictCampaignStoreRecord(
+                2,
+                CreateCheckpoint("selection-removal-current") with
+                {
+                    History = [remaining]
+                }));
+
+        viewModel.Refresh();
+
+        Assert.Null(viewModel.SelectedCompletedOperation);
+        Assert.Single(viewModel.CompletedOperations);
+        Assert.Equal(
+            remaining.CampaignId,
+            viewModel.CompletedOperations[0].CampaignId);
     }
 
     [Fact]
