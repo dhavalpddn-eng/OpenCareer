@@ -4,14 +4,23 @@ using OpenCareer.Domain.Planning;
 
 namespace OpenCareer.Application.Planning;
 
+public interface IAirportDispatchWeatherSource
+{
+    Task<AirportDispatchWeatherObservation?> FindWeatherAsync(
+        string icao,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
-/// Loads provider-neutral aircraft and airport data for one physical operation
-/// screening. Career qualifications, weather, authorization, economics and Jobs
+/// Loads provider-neutral aircraft, airport and optional normalized weather data for
+/// one physical operation screening. Weather is queried only when explicit weather
+/// limits are requested. Career qualifications, authorization, economics and Jobs
 /// generation remain separate gates.
 /// </summary>
 public sealed class OperationDispatchPlanningService(
     IAircraftRegistrySource aircraftRegistry,
-    IAirportDataSource airportData)
+    IAirportDataSource airportData,
+    IAirportDispatchWeatherSource? weatherSource = null)
 {
     public async Task<DispatchFeasibilityResult> EvaluateAsync(
         string aircraftId,
@@ -76,10 +85,31 @@ public sealed class OperationDispatchPlanningService(
                 missing);
         }
 
+        AirportDispatchWeatherObservation? originWeather = null;
+        AirportDispatchWeatherObservation? destinationWeather = null;
+
+        if (requirements.WeatherLimits is not null && weatherSource is not null)
+        {
+            originWeather = await weatherSource
+                .FindWeatherAsync(originIcao, cancellationToken)
+                .ConfigureAwait(false);
+
+            destinationWeather = string.Equals(
+                originIcao,
+                destinationIcao,
+                StringComparison.OrdinalIgnoreCase)
+                ? originWeather
+                : await weatherSource
+                    .FindWeatherAsync(destinationIcao, cancellationToken)
+                    .ConfigureAwait(false);
+        }
+
         return OperationDispatchPhysicalEvaluator.Evaluate(
             aircraft!,
             requirements,
             origin!,
-            destination!);
+            destination!,
+            originWeather,
+            destinationWeather);
     }
 }
