@@ -3,6 +3,7 @@ using OpenCareer.Application.Planning;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Planning;
 using OpenCareer.SimConnect;
+using OpenCareer.SimConnect.Native;
 
 namespace OpenCareer.Tests;
 
