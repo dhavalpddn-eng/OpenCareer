@@ -55,7 +55,9 @@ public enum DispatchFeasibilityReason
     AircraftTakeoffPerformanceConditionsMissing,
     AircraftLandingPerformanceConditionsMissing,
     AircraftTakeoffPerformanceOutsideEnvelope,
-    AircraftLandingPerformanceOutsideEnvelope
+    AircraftLandingPerformanceOutsideEnvelope,
+    AircraftTakeoffPerformanceValueInvalid,
+    AircraftLandingPerformanceValueInvalid
 }
 
 public sealed record DispatchFeasibilityIssue(
