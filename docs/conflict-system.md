@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `4700e3ed` is green: Linux passed 235/235 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 235/235 xUnit.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `90d816dd` is green: Linux passed 239/239 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 239/239 xUnit.
 
 ## Boundary
 
@@ -47,6 +47,7 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - WinUI dependency-injection registration for `IConflictCampaignStore`,
 - automatic app-start recovery of the most recently saved military conflict campaign into `ConflictCampaignRuntimeState`, with recovery failure isolated from the rest of app startup,
 - database-consistent SQLite backup snapshots using SQLite backup semantics so WAL-backed military campaign and logbook state are captured as one valid database image,
+- validated backup-archive restore staging plus restart-time database replacement before SQLite-backed application state is recovered; invalid/corrupt archives are rejected before the live database changes and a rollback snapshot protects replacement failures,
 - persistent `ConflictCampaignState` with campaign phase, friendly momentum and deterministic strategic objectives for control, intelligence, readiness and threat reduction,
 - `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
 - `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
@@ -62,7 +63,7 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 
 ## Still open
 
-- verified restore workflow from an OpenCareer backup archive back into the shared SQLite database; consistent snapshot creation is implemented,
+- user-facing Settings backup selection/confirmation for staging a restore archive; the validated restore backend and restart-time apply path are implemented,
 - richer named faction identity beyond Friendly/Hostile/Neutral,
 - richer long-term theater evolution beyond the first phase/momentum/objective director,
 - player career onboarding/persistence for military affiliation and qualifications,

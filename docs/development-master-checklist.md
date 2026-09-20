@@ -472,13 +472,14 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: code head `4700e3ed` is green on both platforms. Linux PR CI passed **235/235 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **235/235 xUnit**.
+Verification note: code head `90d816dd` is green on both platforms. Linux PR CI passed **239/239 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **239/239 xUnit**. The Windows run first exposed a pooled SQLite snapshot-handle bug; `90d816dd` fixes it in production and the rerun is green.
 
 ## Remaining
 
 - [x] Wire automatic production startup/resume so app startup recovers the most recently saved military conflict campaign without a manual orchestration call.
 - [x] Add database-consistent backup snapshot integration for conflict campaign checkpoints using SQLite backup semantics rather than copying the live WAL database files.
-- [ ] Add verified restore integration from an OpenCareer backup archive into the shared SQLite database.
+- [x] Add validated restore integration from an OpenCareer backup archive: stage and integrity-check the SQLite image first, then apply it on restart before SQLite-backed state is recovered, with rollback protection.
+- [ ] Expose backup selection/confirmation in Settings so the validated restore backend is user-accessible without manual/internal invocation.
 - [ ] Add richer fictional faction identity beyond Friendly/Hostile/Neutral sides.
 - [ ] Extend long-term theater evolution beyond the first phase/momentum/objective director.
 - [ ] Integrate military authorization with authoritative player-career persistence/onboarding.
@@ -486,7 +487,7 @@ Verification note: code head `4700e3ed` is green on both platforms. Linux PR CI 
 - [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
 - [ ] Implement production Military/Government/Conflict UI against the conflict application service.
 - [ ] Add large deterministic campaign balance/stress batches.
-- [x] Record Linux + Windows validation for code head `ddcf31b2`: 227/227 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
+- [x] Record Linux + Windows validation for code head `90d816dd`: 239/239 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
 - [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
 - [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 

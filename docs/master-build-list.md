@@ -202,7 +202,7 @@ Optional business ownership, contracts, routes, utilization, staff, margins and 
 
 Draft PR #10 now provides deterministic ground/air conflict state, sector/front representation, linked air-defense/interceptor threats, battlefield-driven CAS/suppression/recon/logistics/patrol/escort/intercept lifecycles, OpenCareer-only effects/damage, military qualification and assigned-aircraft authorization, seeded fictional theater generation, SQLite campaign/active-mission recovery, persisted threat idempotency, strategic phase/momentum/objectives, an authorization-enforcing dispatch boundary, and a UI-ready operations projection. MSFS remains flight/telemetry only.
 
-Remaining major work is automatic startup/resume wiring, database-consistent backup integration, richer fictional faction/campaign evolution, main-career onboarding/persistence integration, fleet assignment issuance/revocation, authoritative job/economy settlement integration, production Military/Government UI, large deterministic balance/playtesting, and live telemetry gameplay verification.
+Automatic startup/resume, SQLite-consistent backup snapshots, and validated staged restore with restart-time apply/rollback are now implemented. Remaining major work is a user-facing restore selection/confirmation flow, richer fictional faction/campaign evolution, main-career onboarding/persistence integration, fleet assignment issuance/revocation, authoritative job/economy settlement integration, production Military/Government UI, large deterministic balance/playtesting, and live telemetry gameplay verification.
 ### MBL-11 — Specialized mission framework
 **Estimated effort: ~20–40+ developer days for the full planned family set**
 

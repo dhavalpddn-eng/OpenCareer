@@ -15,7 +15,7 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 - Tutorial-engine CI at `f6b1cc7`: **118/118 xUnit + 29/29 SimLab passed**, and the Windows WinUI app/live-probe build passed. Automated UI compilation does not replace local interactive/visual acceptance or live MSFS verification.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
 - UI visual language: `docs/ui-design-language.md` is canonical for palette/material/aesthetic; implementation tokens/layout remain in `docs/ui-design-system.md`, and screen behavior in `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
-- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. Ground + air conflict, CAS/suppression/recon/logistics/patrol/escort/intercept, support reservation, military authorization, and seeded fictional theater generation are implemented. The branch is being synchronized with the latest integration head; post-sync CI verification is pending. See `docs/conflict-system.md`.
+- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. Ground/air conflict, all current military mission families, authorization, fictional theater generation, SQLite campaign recovery, automatic startup resume, strategic evolution, SQLite-consistent backup and validated staged restore are implemented. Code head `90d816dd` is green on Linux/Windows. See `docs/conflict-system.md`.
 - Verify remote branch head before edits because other chats may change it.
 
 ## Fixed direction
@@ -65,8 +65,10 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - `ConflictTheaterGenerator` creates repeatable fictional theater state from a seed/template; current wars never become authoritative gameplay state.
 - Military campaign persistence now auto-recovers the most recently saved campaign at app launch through `ConflictCampaignRuntimeState`; recovery failures are logged without blocking the rest of OpenCareer startup.
 - OpenCareer backup now creates a SQLite-consistent snapshot instead of copying the live database/WAL files directly, so persisted military campaign state and logbook state are captured coherently.
-- Code head `4700e3ed` is green: Linux 235/235 xUnit + 29/29 SimLab; Windows WinUI/live-probe builds at 0 errors + 235/235 xUnit.
-- Still open: verified restore from backup archive, richer faction/campaign evolution, authoritative career/dispatch/job settlement integration, production Military/Government UI, large balance/stress runs and live telemetry gameplay verification.
+- Backup restore now validates the manifest and SQLite image before staging, applies the staged database at the next app launch before military/logbook SQLite state is recovered, removes stale WAL/SHM artifacts, and keeps a rollback snapshot during replacement.
+- Windows CI exposed a pooled temporary SQLite handle that prevented immediate backup-file reads; production snapshot connections now disable pooling and the rerun passed.
+- Code head `90d816dd` is green: Linux 239/239 xUnit + 29/29 SimLab; Windows WinUI/live-probe builds at 0 errors + 239/239 xUnit.
+- Still open: user-facing Settings restore selection/confirmation, richer faction/campaign evolution, authoritative career/dispatch/job settlement integration, production Military/Government UI, large balance/stress runs and live telemetry gameplay verification.
 
 ## Tutorial engine implementation
 
@@ -95,8 +97,9 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Settings exposes live simulator connection state/issue, simulator and SimConnect versions when reported, telemetry freshness, last sample time and pause/slew/on-ground/airborne state.
 - OpenCareer now writes an application log under `Logs/opencareer.log` with bounded rotation.
 - Diagnostic export creates a ZIP with environment, connection state, non-coordinate telemetry diagnostics, preferences and local logs/settings. Exact aircraft latitude/longitude are intentionally excluded.
-- Current local-data backup creates a ZIP plus manifest while excluding backup/export recursion. It is suitable for currently implemented settings/tutorial/log data.
-- **Do not treat the current backup as SQLite career-save consistency.** MBL-07 owns authoritative FlightSession/SQLite checkpoint/recovery and must integrate its own safe backup semantics.
+- Current local-data backup creates a ZIP plus manifest while excluding backup/export recursion. The shared SQLite database is captured through SQLite backup semantics, so current Logbook and military-campaign data are internally consistent even with WAL enabled.
+- A validated SQLite restore backend stages a backup archive first and applies it on the next app startup with rollback protection; Settings still needs the user-facing archive picker/confirmation.
+- **This does not make FlightSession recovery complete.** MBL-07 still owns authoritative FlightSession/FlightLeg persistence, checkpoints and interrupted-flight recovery.
 - **Do not treat input-hint preference as binding discovery.** MBL-05 owns actual controller/keyboard profile resolution.
 - MBL-23 is code-complete but remains unremoved until Windows build and local interactive persistence/backup/export verification are available. GitHub Actions currently fails before runner steps are created, so those failures are not compiler/test evidence.
 
