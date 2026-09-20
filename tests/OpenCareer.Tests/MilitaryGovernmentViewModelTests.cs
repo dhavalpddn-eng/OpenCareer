@@ -51,6 +51,11 @@ public sealed class MilitaryGovernmentViewModelTests
             checkpoint.CampaignState.Identity!;
 
         Assert.True(viewModel.HasCampaign);
+        Assert.False(viewModel.HasSuccessorOffer);
+        Assert.Contains(
+            "Ongoing",
+            viewModel.CampaignStateText,
+            StringComparison.Ordinal);
         Assert.Equal(
             identity.OperationName,
             viewModel.OperationName);
