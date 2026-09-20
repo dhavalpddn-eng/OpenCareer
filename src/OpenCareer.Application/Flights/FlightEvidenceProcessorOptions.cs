@@ -17,7 +17,8 @@ public sealed record FlightEvidenceProcessorOptions(
     double ParkingMaximumGroundSpeedKnots = 1,
     int MissionFlightConfirmationSamples = 3,
     double MissionFlightMinimumDistanceNauticalMiles = 0.5,
-    int ApproachConfirmationSamples = 2)
+    int ApproachConfirmationSamples = 2,
+    double LandingRolloutMaximumGroundSpeedKnots = 20)
 {
     public void Validate()
     {
@@ -81,6 +82,10 @@ public sealed record FlightEvidenceProcessorOptions(
         ValidateNonNegativeFinite(
             ParkingMaximumGroundSpeedKnots,
             nameof(ParkingMaximumGroundSpeedKnots));
+
+        ValidateNonNegativeFinite(
+            LandingRolloutMaximumGroundSpeedKnots,
+            nameof(LandingRolloutMaximumGroundSpeedKnots));
 
         ValidatePositiveFinite(
             MissionFlightMinimumDistanceNauticalMiles,

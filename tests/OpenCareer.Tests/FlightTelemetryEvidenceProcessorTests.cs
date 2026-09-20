@@ -441,6 +441,58 @@ public sealed class FlightTelemetryEvidenceProcessorTests
     }
 
     [Fact]
+    public void LandingRolloutRequiresTouchdownAndContinuedSlowGroundContact()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor(
+            new FlightEvidenceProcessorOptions(
+                StableTelemetrySamples: 1,
+                AirborneConfirmationSamples: 1,
+                GroundConfirmationSamples: 2));
+
+        _ = processor.Process(Observation(Telemetry(
+            0, onGround: false, altitudeAgl: 500, groundSpeed: 90)));
+        FlightStateEvidence firstGround = processor.Process(Observation(Telemetry(
+            1, groundSpeed: 55)));
+        FlightStateEvidence touchdown = processor.Process(Observation(Telemetry(
+            2, groundSpeed: 45)));
+        FlightStateEvidence fastRollout = processor.Process(Observation(Telemetry(
+            3, groundSpeed: 30)));
+        FlightStateEvidence slowRollout = processor.Process(Observation(Telemetry(
+            4, groundSpeed: 18)));
+
+        Assert.False(firstGround.LandingRolloutConfirmed);
+        Assert.True(touchdown.TouchdownConfirmed);
+        Assert.False(touchdown.LandingRolloutConfirmed);
+        Assert.False(fastRollout.LandingRolloutConfirmed);
+        Assert.True(slowRollout.LandingRolloutConfirmed);
+    }
+
+    [Fact]
+    public void BounceAndPauseDoNotConfirmLandingRollout()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor(
+            new FlightEvidenceProcessorOptions(
+                StableTelemetrySamples: 1,
+                AirborneConfirmationSamples: 1,
+                GroundConfirmationSamples: 2));
+
+        _ = processor.Process(Observation(Telemetry(
+            0, onGround: false, altitudeAgl: 200, groundSpeed: 90)));
+        _ = processor.Process(Observation(Telemetry(1, groundSpeed: 50)));
+        _ = processor.Process(Observation(Telemetry(2, groundSpeed: 40)));
+        FlightStateEvidence bounce = processor.Process(Observation(Telemetry(
+            3, onGround: false, altitudeAgl: 25, groundSpeed: 35)));
+        FlightStateEvidence paused = processor.Process(Observation(Telemetry(
+            4, groundSpeed: 15, paused: true)));
+        FlightStateEvidence recontact = processor.Process(Observation(Telemetry(
+            5, groundSpeed: 18)));
+
+        Assert.False(bounce.LandingRolloutConfirmed);
+        Assert.False(paused.LandingRolloutConfirmed);
+        Assert.False(recontact.LandingRolloutConfirmed);
+    }
+
+    [Fact]
     public void RejectedTakeoffRequiresPriorTakeoffCandidate()
     {
         var processor =

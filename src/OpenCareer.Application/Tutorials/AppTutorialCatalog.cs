@@ -127,6 +127,9 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
             Step("job-approach", "Establish the approach",
                 "After the flight is underway, descend toward the arrival. OpenCareer confirms a sustained airborne descent below 2,000 ft above ground; this does not confirm arrival at the assigned airport or clearance to land.",
                 "current-flight", "current-flight"),
+            Step("job-land", "Land and slow down",
+                "Touch down and slow to taxi speed. OpenCareer confirms landing only after continued ground contact and a controlled rollout; first contact alone does not complete this step.",
+                "current-flight", "current-flight"),
             Step("job-arrive", "Finish the operation",
                 "A landing alone is normally not enough. Conventional jobs require the mission-defined arrival state, usually taxi, parking, unloading or servicing, and shutdown.",
                 "current-flight", "current-flight"),
@@ -135,7 +138,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 7, steps);
+        return new TutorialDefinition(FirstJobId, 8, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()

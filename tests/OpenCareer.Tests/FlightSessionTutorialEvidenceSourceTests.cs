@@ -595,17 +595,41 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
             TutorialStepEvidenceState.Waiting,
             coordinator.Current.EvidenceState);
 
-        sessions.CommitPersisted(FlightSessionEngine.Advance(
+        FlightSession approaching = FlightSessionEngine.Advance(
             inFlight,
             new FlightSessionAdvance(new FlightStateEvidence(
                 Epoch.AddSeconds(8), Connected: true,
-                ContinuityPlausible: true, ApproachConfirmed: true))));
+                ContinuityPlausible: true, ApproachConfirmed: true)));
+        sessions.CommitPersisted(approaching);
         coordinator.RefreshLiveEvidence();
 
         Assert.Equal("job-approach", coordinator.Current.Step?.Id);
         Assert.Equal(
             TutorialStepEvidenceState.Satisfied,
             coordinator.Current.EvidenceState);
+
+        await coordinator.NextAsync();
+        Assert.Equal("job-land", coordinator.Current.Step?.Id);
+        Assert.Equal(TutorialStepEvidenceState.Waiting, coordinator.Current.EvidenceState);
+
+        FlightSession touchdown = FlightSessionEngine.Advance(
+            approaching,
+            new FlightSessionAdvance(new FlightStateEvidence(
+                Epoch.AddSeconds(9), Connected: true,
+                ContinuityPlausible: true, TouchdownConfirmed: true)));
+        sessions.CommitPersisted(touchdown);
+        coordinator.RefreshLiveEvidence();
+        Assert.Equal(TutorialStepEvidenceState.Waiting, coordinator.Current.EvidenceState);
+
+        sessions.CommitPersisted(FlightSessionEngine.Advance(
+            touchdown,
+            new FlightSessionAdvance(new FlightStateEvidence(
+                Epoch.AddSeconds(10), Connected: true,
+                ContinuityPlausible: true, LandingRolloutConfirmed: true))));
+        coordinator.RefreshLiveEvidence();
+
+        Assert.Equal("job-land", coordinator.Current.Step?.Id);
+        Assert.Equal(TutorialStepEvidenceState.Satisfied, coordinator.Current.EvidenceState);
     }
 
     private static TutorialStep Step(string id) =>

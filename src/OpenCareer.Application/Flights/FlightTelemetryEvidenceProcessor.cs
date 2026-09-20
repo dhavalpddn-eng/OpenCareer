@@ -20,6 +20,7 @@ public sealed class FlightTelemetryEvidenceProcessor
     private bool _airborneConfirmedPreviously;
     private bool _initialClimbConfirmedPreviously;
     private bool _missionFlightConfirmedPreviously;
+    private bool _touchdownConfirmedPreviously;
     private bool _takeoffCandidateActive;
 
     public FlightTelemetryEvidenceProcessor(
@@ -227,6 +228,21 @@ public sealed class FlightTelemetryEvidenceProcessor
             && _groundSampleCount
                 == _options.GroundConfirmationSamples;
 
+        if (operationalSample && !telemetry.OnGround)
+            _touchdownConfirmedPreviously = false;
+
+        if (touchdownConfirmed)
+            _touchdownConfirmedPreviously = true;
+
+        bool landingRolloutConfirmed =
+            operationalSample
+            && stableTelemetry
+            && _touchdownConfirmedPreviously
+            && telemetry.OnGround
+            && _groundSampleCount > _options.GroundConfirmationSamples
+            && telemetry.GroundSpeedKnots
+                <= _options.LandingRolloutMaximumGroundSpeedKnots;
+
         bool approachSample =
             operationalSample
             && stableTelemetry
@@ -295,6 +311,8 @@ public sealed class FlightTelemetryEvidenceProcessor
                     approachConfirmed,
                 TouchdownConfirmed:
                     touchdownConfirmed,
+                LandingRolloutConfirmed:
+                    landingRolloutConfirmed,
                 ParkingConfirmed:
                     parkingConfirmed,
                 OperationCompleteConfirmed:
@@ -335,6 +353,9 @@ public sealed class FlightTelemetryEvidenceProcessor
         _missionFlightConfirmedPreviously =
             session.Milestones.MissionFlightProgressAt is not null;
 
+        _touchdownConfirmedPreviously =
+            state == FlightTrackingState.LandingEpisode;
+
         _takeoffCandidateActive =
             state == FlightTrackingState.TakeoffRoll;
     }
@@ -353,6 +374,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         _airborneConfirmedPreviously = false;
         _initialClimbConfirmedPreviously = false;
         _missionFlightConfirmedPreviously = false;
+        _touchdownConfirmedPreviously = false;
         _takeoffCandidateActive = false;
     }
 
@@ -363,6 +385,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         _initialClimbSampleCount = 0;
         _missionFlightSampleCount = 0;
         _approachSampleCount = 0;
+        _touchdownConfirmedPreviously = false;
         _missionFlightPrevious = null;
         _groundSampleCount = 0;
         _takeoffCandidateActive = false;
