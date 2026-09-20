@@ -16,3 +16,8 @@ public interface ITutorialProgressStore
 
     Task SaveAsync(TutorialProgress progress, CancellationToken cancellationToken = default);
 }
+
+public interface ITutorialStepEvidenceSource
+{
+    TutorialStepEvidenceState GetState(TutorialStep step);
+}

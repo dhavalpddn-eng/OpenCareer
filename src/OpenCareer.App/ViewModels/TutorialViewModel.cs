@@ -30,6 +30,13 @@ public sealed class TutorialViewModel : INotifyPropertyChanged
         ? $"{_coordinator.Current.CurrentIndex + 1} / {_coordinator.Current.StepCount}"
         : string.Empty;
     public string NextButtonText => _coordinator.Current.IsLastStep ? "Finish" : "Next";
+    public string EvidenceStateText => _coordinator.Current.EvidenceState switch
+    {
+        TutorialStepEvidenceState.Waiting => "WAITING FOR LIVE FLIGHT",
+        TutorialStepEvidenceState.Satisfied => "LIVE EVIDENCE CONFIRMED",
+        _ => "NOT REQUIRED"
+    };
+
     public string FeatureStateText => _coordinator.Current.FeatureState switch
     {
         TutorialFeatureState.Available => "AVAILABLE",
@@ -40,6 +47,9 @@ public sealed class TutorialViewModel : INotifyPropertyChanged
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
         _coordinator.InitializeAsync(cancellationToken);
+
+    public void RefreshLiveEvidence() =>
+        _coordinator.RefreshLiveEvidence();
 
     public Task StartFirstJobAsync(CancellationToken cancellationToken = default) =>
         _coordinator.StartAsync(AppTutorialCatalog.FirstJobId, cancellationToken: cancellationToken);
@@ -74,6 +84,7 @@ public sealed class TutorialViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StepPosition));
         OnPropertyChanged(nameof(NextButtonText));
         OnPropertyChanged(nameof(FeatureStateText));
+        OnPropertyChanged(nameof(EvidenceStateText));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
