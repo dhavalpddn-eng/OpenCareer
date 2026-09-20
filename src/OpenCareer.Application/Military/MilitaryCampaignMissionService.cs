@@ -221,6 +221,41 @@ public sealed class MilitaryCampaignMissionService
             .ConfigureAwait(false);
     }
 
+    public async Task<(ConflictCampaignStoreRecord Record, ThreatEngagementResult Result)> ResolveThreatAsync(
+        ConflictCampaignStoreRecord current,
+        ThreatEngagementRequest request,
+        DateTimeOffset savedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(request);
+        current.Validate();
+
+        if (savedAt < current.Checkpoint.SavedAt)
+            throw new ArgumentOutOfRangeException(nameof(savedAt));
+
+        ThreatResolution resolution = _operations.ResolveThreat(
+            current.Checkpoint.World,
+            request,
+            current.Checkpoint.PlayerCombatState);
+
+        if (resolution.Result.Outcome == ThreatEngagementOutcome.DuplicateIgnored)
+            return (current, resolution.Result);
+
+        var checkpoint = current.Checkpoint with
+        {
+            World = resolution.State,
+            PlayerCombatState = resolution.Result.PlayerState,
+            SavedAt = savedAt
+        };
+
+        ConflictCampaignStoreRecord saved = await _campaigns
+            .SaveMutationAsync(current, checkpoint, cancellationToken)
+            .ConfigureAwait(false);
+
+        return (saved, resolution.Result);
+    }
+
     public async Task<ConflictCampaignStoreRecord> FailAsync(
         ConflictCampaignStoreRecord current,
         Guid missionId,
