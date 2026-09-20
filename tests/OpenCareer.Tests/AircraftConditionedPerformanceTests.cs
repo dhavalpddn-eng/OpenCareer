@@ -12,18 +12,19 @@ public sealed class AircraftConditionedPerformanceTests : IDisposable
             Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public void ThreeDimensionalTablePreservesDocumentedAxisOrder()
+    public async Task ThreeDimensionalTablePreservesDocumentedAxisOrder()
     {
-        MsfsFlightPerformanceDispatchFacts facts =
-            MsfsFlightPerformanceCfgParser.Parse(
-                """
-                [TAKEOFF_PERFORMANCE]
-                takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 1000, 2000 : 0, 20 : 0, 5000 :: 100, 200 : 110, 210 : 120, 220 : 130, 230
-                """);
+        AircraftDispatchPerformanceProfile dispatch =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                await ParsePerformanceAsync(
+                    """
+                    [TAKEOFF_PERFORMANCE]
+                    takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 1000, 2000 : 0, 20 : 0, 5000 :: 100, 200 : 110, 210 : 120, 220 : 130, 230
+                    """));
 
         AircraftPerformanceGrid3D table =
             Assert.IsType<AircraftPerformanceGrid3D>(
-                facts.ConditionedPerformance!.TakeoffTotalDistanceFeet);
+                dispatch.ConditionedPerformance!.TakeoffTotalDistanceFeet);
 
         Assert.Equal(100, table.TryGetExact(1000, 0, 0));
         Assert.Equal(200, table.TryGetExact(1000, 0, 5000));
@@ -50,21 +51,22 @@ public sealed class AircraftConditionedPerformanceTests : IDisposable
     }
 
     [Fact]
-    public void MalformedTakeoffTableDoesNotDestroyIndependentLandingTable()
+    public async Task MalformedTakeoffTableDoesNotDestroyIndependentLandingTable()
     {
-        MsfsFlightPerformanceDispatchFacts facts =
-            MsfsFlightPerformanceCfgParser.Parse(
-                """
-                [TAKEOFF_PERFORMANCE]
-                takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 1000, 2000 : 0 : 0, 5000 :: 100, 200
+        AircraftDispatchPerformanceProfile dispatch =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                await ParsePerformanceAsync(
+                    """
+                    [TAKEOFF_PERFORMANCE]
+                    takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 1000, 2000 : 0 : 0, 5000 :: 100, 200
 
-                [LANDING_PERFORMANCE]
-                landing_total_distance_table_by_weight_and_OAT_and_altitude = 1000 : 0 : 0, 5000 :: 300, 400
-                """);
+                    [LANDING_PERFORMANCE]
+                    landing_total_distance_table_by_weight_and_OAT_and_altitude = 1000 : 0 : 0, 5000 :: 300, 400
+                    """));
 
         AircraftConditionedPerformanceProfile conditioned =
             Assert.IsType<AircraftConditionedPerformanceProfile>(
-                facts.ConditionedPerformance);
+                dispatch.ConditionedPerformance);
 
         Assert.Null(conditioned.TakeoffTotalDistanceFeet);
         Assert.NotNull(conditioned.LandingTotalDistanceFeet);
@@ -74,35 +76,36 @@ public sealed class AircraftConditionedPerformanceTests : IDisposable
     }
 
     [Fact]
-    public void NonMonotonicAxisAndNegativeOutputsFailClosed()
+    public async Task NonMonotonicAxisAndNegativeOutputsFailClosed()
     {
-        MsfsFlightPerformanceDispatchFacts facts =
-            MsfsFlightPerformanceCfgParser.Parse(
+        AircraftDispatchPerformanceProfile? dispatch =
+            await ParsePerformanceAsync(
                 """
                 [TAKEOFF_PERFORMANCE]
                 takeoff_ground_roll_distance_table_by_weight_and_OAT_and_altitude = 2000, 1000 : 0 : 0 :: 500 : 400
                 takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 1000 : 0 : 0 :: -1
                 """);
 
-        Assert.Null(facts.ConditionedPerformance);
+        Assert.Null(dispatch);
     }
 
     [Fact]
-    public void CruiseProfilesPreserveIsaDeviationAndProfileIdentity()
+    public async Task CruiseProfilesPreserveIsaDeviationAndProfileIdentity()
     {
-        MsfsFlightPerformanceDispatchFacts facts =
-            MsfsFlightPerformanceCfgParser.Parse(
-                """
-                [CRUISE_PERFORMANCE.0]
-                profile_name = "Maximum Cruise"
-                fuel_type_idx = 1
-                Mach = 0.62
-                cruise_TAS_table_by_weight_and_ISA_dev_and_altitude = 5000, 6000 : -20, 0 : 10000, 20000 :: 220, 230 : 215, 225 : 210, 220 : 205, 215
-                cruise_fuel_consumption_table_by_weight_and_ISA_dev_and_altitude = 5000, 6000 : -20, 0 : 10000, 20000 :: 40, 45 : 42, 47 : 44, 49 : 46, 51
-                """);
+        AircraftDispatchPerformanceProfile dispatch =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                await ParsePerformanceAsync(
+                    """
+                    [CRUISE_PERFORMANCE.0]
+                    profile_name = "Maximum Cruise"
+                    fuel_type_idx = 1
+                    Mach = 0.62
+                    cruise_TAS_table_by_weight_and_ISA_dev_and_altitude = 5000, 6000 : -20, 0 : 10000, 20000 :: 220, 230 : 215, 225 : 210, 220 : 205, 215
+                    cruise_fuel_consumption_table_by_weight_and_ISA_dev_and_altitude = 5000, 6000 : -20, 0 : 10000, 20000 :: 40, 45 : 42, 47 : 44, 49 : 46, 51
+                    """));
 
         AircraftCruisePerformanceProfile cruise = Assert.Single(
-            facts.ConditionedPerformance!.CruiseProfiles);
+            dispatch.ConditionedPerformance!.CruiseProfiles);
 
         Assert.Equal(0, cruise.Index);
         Assert.Equal("Maximum Cruise", cruise.ProfileName);
@@ -126,59 +129,62 @@ public sealed class AircraftConditionedPerformanceTests : IDisposable
     }
 
     [Fact]
-    public void MissingFuelTypeIndexUsesDocumentedZeroDefault()
+    public async Task MissingFuelTypeIndexUsesDocumentedZeroDefault()
     {
-        MsfsFlightPerformanceDispatchFacts facts =
-            MsfsFlightPerformanceCfgParser.Parse(
-                """
-                [CRUISE_PERFORMANCE.0]
-                cruise_TAS_table_by_weight_and_ISA_dev_and_altitude = 5000 : 0 : 10000 :: 200
-                """);
+        AircraftDispatchPerformanceProfile dispatch =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                await ParsePerformanceAsync(
+                    """
+                    [CRUISE_PERFORMANCE.0]
+                    cruise_TAS_table_by_weight_and_ISA_dev_and_altitude = 5000 : 0 : 10000 :: 200
+                    """));
 
         AircraftCruisePerformanceProfile cruise = Assert.Single(
-            facts.ConditionedPerformance!.CruiseProfiles);
+            dispatch.ConditionedPerformance!.CruiseProfiles);
 
         Assert.Equal(0, cruise.FuelTypeIndex);
     }
 
     [Fact]
-    public void InvalidFuelTypeIndexRejectsOnlyThatCruiseProfile()
+    public async Task InvalidFuelTypeIndexRejectsOnlyThatCruiseProfile()
     {
-        MsfsFlightPerformanceDispatchFacts facts =
-            MsfsFlightPerformanceCfgParser.Parse(
-                """
-                [TAKEOFF_PERFORMANCE]
-                takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 5000 : 15 : 0 :: 1800
+        AircraftDispatchPerformanceProfile dispatch =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                await ParsePerformanceAsync(
+                    """
+                    [TAKEOFF_PERFORMANCE]
+                    takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 5000 : 15 : 0 :: 1800
 
-                [CRUISE_PERFORMANCE.0]
-                fuel_type_idx = invalid
-                cruise_TAS_table_by_weight_and_ISA_dev_and_altitude = 5000 : 0 : 10000 :: 200
-                """);
+                    [CRUISE_PERFORMANCE.0]
+                    fuel_type_idx = invalid
+                    cruise_TAS_table_by_weight_and_ISA_dev_and_altitude = 5000 : 0 : 10000 :: 200
+                    """));
 
         AircraftConditionedPerformanceProfile conditioned =
             Assert.IsType<AircraftConditionedPerformanceProfile>(
-                facts.ConditionedPerformance);
+                dispatch.ConditionedPerformance);
 
         Assert.NotNull(conditioned.TakeoffTotalDistanceFeet);
         Assert.Empty(conditioned.CruiseProfiles);
     }
 
     [Fact]
-    public void NonConsecutiveCruiseProfilesFailClosedWithoutDiscardingTakeoff()
+    public async Task NonConsecutiveCruiseProfilesFailClosedWithoutDiscardingTakeoff()
     {
-        MsfsFlightPerformanceDispatchFacts facts =
-            MsfsFlightPerformanceCfgParser.Parse(
-                """
-                [TAKEOFF_PERFORMANCE]
-                takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 5000 : 15 : 0 :: 1800
+        AircraftDispatchPerformanceProfile dispatch =
+            Assert.IsType<AircraftDispatchPerformanceProfile>(
+                await ParsePerformanceAsync(
+                    """
+                    [TAKEOFF_PERFORMANCE]
+                    takeoff_total_distance_table_by_weight_and_OAT_and_altitude = 5000 : 15 : 0 :: 1800
 
-                [CRUISE_PERFORMANCE.1]
-                cruise_TAS_table_by_weight_and_ISA_dev_and_altitude = 5000 : 0 : 10000 :: 200
-                """);
+                    [CRUISE_PERFORMANCE.1]
+                    cruise_TAS_table_by_weight_and_ISA_dev_and_altitude = 5000 : 0 : 10000 :: 200
+                    """));
 
         AircraftConditionedPerformanceProfile conditioned =
             Assert.IsType<AircraftConditionedPerformanceProfile>(
-                facts.ConditionedPerformance);
+                dispatch.ConditionedPerformance);
 
         Assert.NotNull(conditioned.TakeoffTotalDistanceFeet);
         Assert.Empty(conditioned.CruiseProfiles);
@@ -245,7 +251,7 @@ public sealed class AircraftConditionedPerformanceTests : IDisposable
     }
 
     [Fact]
-    public void GridRejectsMutableOrMalformedDimensionsAtConstruction()
+    public void GridRejectsMalformedDimensions()
     {
         Assert.Throws<ArgumentException>(
             () => new AircraftPerformanceGrid3D(
@@ -279,6 +285,37 @@ public sealed class AircraftConditionedPerformanceTests : IDisposable
         catch (UnauthorizedAccessException)
         {
         }
+    }
+
+    private async Task<AircraftDispatchPerformanceProfile?> ParsePerformanceAsync(
+        string flightPerformanceContent)
+    {
+        string root = CreatePackageRoot("ParserCases");
+        string packageName = Guid.NewGuid().ToString("N");
+        string title = $"Performance Fixture {packageName}";
+
+        WriteAircraftFile(
+            root,
+            packageName,
+            "aircraft.cfg",
+            $"""
+            [FLTSIM.0]
+            title = "{title}"
+            """);
+
+        WriteAircraftFile(
+            root,
+            packageName,
+            "flight_performance.cfg",
+            flightPerformanceContent);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle(title)));
+
+        return observation.DispatchPerformance;
     }
 
     private string CreatePackageRoot(string name)
