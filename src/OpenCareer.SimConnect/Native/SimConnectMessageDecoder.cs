@@ -16,8 +16,8 @@ internal static class SimConnectMessageDecoder
     // The native C++ layout pads after the 1-byte IsListItem field so ItemIndex,
     // ListSize, and the flexible Data payload remain DWORD-aligned.
     private const int FacilityDataPayloadOffset = 40;
-    private const int AirportFacilityPayloadSize = 72;
-    private const int RunwayFacilityPayloadSize = 30;
+    private const int AirportFacilityPayloadSize = 88;
+    private const int RunwayFacilityPayloadSize = 50;
 
     internal static SimConnectMessage Decode(nint data, uint bufferSize)
     {
@@ -150,8 +150,10 @@ internal static class SimConnectMessageDecoder
         RequireSize(size, FacilityDataPayloadOffset + AirportFacilityPayloadSize);
 
         var payload = new SimConnectAirportFacilityData(
-            ReadFixedAnsi(data + FacilityDataPayloadOffset, 64).Trim(),
-            ReadFixedAnsi(data + FacilityDataPayloadOffset + 64, 8).Trim());
+            ReadDouble(data, FacilityDataPayloadOffset),
+            ReadDouble(data, FacilityDataPayloadOffset + 8),
+            ReadFixedAnsi(data + FacilityDataPayloadOffset + 16, 64).Trim(),
+            ReadFixedAnsi(data + FacilityDataPayloadOffset + 80, 8).Trim());
 
         return new(
             SimConnectMessageKind.FacilityData,
@@ -178,15 +180,18 @@ internal static class SimConnectMessageDecoder
         RequireSize(size, FacilityDataPayloadOffset + RunwayFacilityPayloadSize);
 
         var payload = new SimConnectRunwayFacilityData(
-            ReadSingle(data, FacilityDataPayloadOffset),
-            ReadSingle(data, FacilityDataPayloadOffset + 4),
-            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 8),
-            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 12),
-            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 16),
-            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 20),
-            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 24),
-            Marshal.ReadByte(data, FacilityDataPayloadOffset + 28) != 0,
-            Marshal.ReadByte(data, FacilityDataPayloadOffset + 29) != 0);
+            ReadDouble(data, FacilityDataPayloadOffset),
+            ReadDouble(data, FacilityDataPayloadOffset + 8),
+            ReadSingle(data, FacilityDataPayloadOffset + 16),
+            ReadSingle(data, FacilityDataPayloadOffset + 20),
+            ReadSingle(data, FacilityDataPayloadOffset + 24),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 28),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 32),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 36),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 40),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 44),
+            Marshal.ReadByte(data, FacilityDataPayloadOffset + 48) != 0,
+            Marshal.ReadByte(data, FacilityDataPayloadOffset + 49) != 0);
 
         return new(
             SimConnectMessageKind.FacilityData,
@@ -210,6 +215,9 @@ internal static class SimConnectMessageDecoder
 
     private static float ReadSingle(nint data, int offset) =>
         BitConverter.Int32BitsToSingle(Marshal.ReadInt32(data, offset));
+
+    private static double ReadDouble(nint data, int offset) =>
+        BitConverter.Int64BitsToDouble(Marshal.ReadInt64(data, offset));
 
     private static SimConnectMessage DecodeSimObjectAndLiveryList(nint data, uint size)
     {
