@@ -109,11 +109,22 @@ public sealed class MilitaryGovernmentViewModelTests
         var runtime = CreateRuntime();
         var store = new MemoryStore();
         var archived = ConflictCampaignHistoryEntry.FromCheckpoint(CompletedRecord().Checkpoint);
-        var older = archived with { CampaignId = "older", EndedAt = Epoch.AddHours(-2) };
-        var tiedZ = archived with { CampaignId = "z-tied", EndedAt = Epoch.AddHours(-1) };
+        var older = archived with
+        {
+            CampaignId = "older",
+            Identity = archived.Identity with { OperationId = "operation:older" },
+            EndedAt = Epoch.AddHours(-2)
+        };
+        var tiedZ = archived with
+        {
+            CampaignId = "z-tied",
+            Identity = archived.Identity with { OperationId = "operation:z-tied" },
+            EndedAt = Epoch.AddHours(-1)
+        };
         var tiedA = archived with
         {
             CampaignId = "a-tied",
+            Identity = archived.Identity with { OperationId = "operation:a-tied" },
             Outcome = ConflictCampaignOutcome.Ceasefire,
             FinalPhase = ConflictCampaignPhase.HostilePressure,
             FinalFriendlyControlAverage = 0.25,
