@@ -54,7 +54,39 @@ public sealed partial class MilitaryGovernmentPage : Page
     private void RefreshPresentation()
     {
         _viewModel?.Refresh();
+        UpdateCompletedOperationDetailVisibility();
         RenderOperationalMap();
+    }
+
+    private void CompletedOperationsList_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (_viewModel is null
+            || CompletedOperationsList.SelectedItem
+                is not MilitaryCompletedOperationItemViewModel selected)
+        {
+            return;
+        }
+
+        _viewModel.SelectCompletedOperation(selected.CampaignId);
+        UpdateCompletedOperationDetailVisibility();
+    }
+
+    private void UpdateCompletedOperationDetailVisibility()
+    {
+        bool hasDetail =
+            _viewModel?.SelectedCompletedOperationDetail is not null;
+
+        CompletedOperationEmptyState.Visibility =
+            hasDetail
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
+        CompletedOperationDetailPanel.Visibility =
+            hasDetail
+                ? Visibility.Visible
+                : Visibility.Collapsed;
     }
 
     private void RenderOperationalMap()
