@@ -42,6 +42,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _currentFlightTimeSummary = "—";
     private string _currentFlightEventSummary = "—";
     private string _currentFlightMilestoneSummary = "—";
+    private string _currentFlightRouteSummary = "—";
+    private string _currentFlightPerformanceSummary = "—";
+    private string _currentFlightFuelSummary = "—";
 
     public ShellViewModel(
         ISimulatorConnection connection,
@@ -104,6 +107,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string CurrentFlightTimeSummary => _currentFlightTimeSummary;
     public string CurrentFlightEventSummary => _currentFlightEventSummary;
     public string CurrentFlightMilestoneSummary => _currentFlightMilestoneSummary;
+    public string CurrentFlightRouteSummary => _currentFlightRouteSummary;
+    public string CurrentFlightPerformanceSummary => _currentFlightPerformanceSummary;
+    public string CurrentFlightFuelSummary => _currentFlightFuelSummary;
     private bool _hasFlightSession;
     private bool _hasRecoveredFlightSession;
 
@@ -348,6 +354,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 "—",
                 nameof(CurrentFlightMilestoneSummary));
 
+            SetField(
+                ref _currentFlightRouteSummary,
+                "—",
+                nameof(CurrentFlightRouteSummary));
+
+            SetField(
+                ref _currentFlightPerformanceSummary,
+                "—",
+                nameof(CurrentFlightPerformanceSummary));
+
+            SetField(
+                ref _currentFlightFuelSummary,
+                "—",
+                nameof(CurrentFlightFuelSummary));
+
             return;
         }
 
@@ -427,6 +448,69 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ref _currentFlightMilestoneSummary,
             LatestMilestone(session.Milestones),
             nameof(CurrentFlightMilestoneSummary));
+
+        SetField(
+            ref _currentFlightRouteSummary,
+            FormatRouteSummary(session),
+            nameof(CurrentFlightRouteSummary));
+
+        SetField(
+            ref _currentFlightPerformanceSummary,
+            FormatPerformanceSummary(session.EffectiveStatistics),
+            nameof(CurrentFlightPerformanceSummary));
+
+        SetField(
+            ref _currentFlightFuelSummary,
+            FormatFuelSummary(session.EffectiveStatistics),
+            nameof(CurrentFlightFuelSummary));
+    }
+
+    private string FormatRouteSummary(
+        FlightSession session)
+    {
+        string origin =
+            session.Plan?.PlannedOrigin
+            ?? "—";
+
+        string destination =
+            session.Plan?.PlannedDestination
+            ?? "—";
+
+        double distance =
+            session.EffectiveStatistics.DistanceNauticalMiles;
+
+        return $"{origin} → {destination} · {distance:0.0} nm tracked";
+    }
+
+    private string FormatPerformanceSummary(
+        FlightSessionStatistics statistics)
+    {
+        if (_settings.Current.MeasurementSystem
+            == MeasurementSystem.Metric)
+        {
+            return FormattableString.Invariant(
+                $"Max {FeetToMeters(statistics.MaximumAltitudeMslFeet):0} m · {KnotsToKilometersPerHour(statistics.MaximumIndicatedAirspeedKnots):0} km/h IAS · {KnotsToKilometersPerHour(statistics.MaximumGroundSpeedKnots):0} km/h GS");
+        }
+
+        return FormattableString.Invariant(
+            $"Max {statistics.MaximumAltitudeMslFeet:0} ft · {statistics.MaximumIndicatedAirspeedKnots:0} kt IAS · {statistics.MaximumGroundSpeedKnots:0} kt GS");
+    }
+
+    private string FormatFuelSummary(
+        FlightSessionStatistics statistics)
+    {
+        if (statistics.StartFuelPounds is null)
+            return "Fuel summary unavailable";
+
+        if (_settings.Current.MeasurementSystem
+            == MeasurementSystem.Metric)
+        {
+            return FormattableString.Invariant(
+                $"Burned {PoundsToKilograms(statistics.FuelBurnedPounds):0.0} kg · Added {PoundsToKilograms(statistics.FuelAddedPounds):0.0} kg · Remaining {PoundsToKilograms(statistics.LastFuelPounds ?? 0):0.0} kg");
+        }
+
+        return FormattableString.Invariant(
+            $"Burned {statistics.FuelBurnedPounds:0.0} lb · Added {statistics.FuelAddedPounds:0.0} lb · Remaining {statistics.LastFuelPounds ?? 0:0.0} lb");
     }
 
     private static string FlightTitle(
@@ -537,6 +621,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         if (_lastTelemetry is not null)
             RefreshTelemetry(_lastTelemetry);
+
+        if (_flightSessions.Current is not null)
+        {
+            _lastFlightSessionUpdatedAt = null;
+            RefreshFlightSession();
+        }
     }
 
     private static double FeetToMeters(double feet) => feet * 0.3048;
