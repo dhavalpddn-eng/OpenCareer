@@ -75,6 +75,11 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 .OpenAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            await ConfigureConnectionAsync(
+                    connection,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
             await using var command =
                 connection.CreateCommand();
 
@@ -151,6 +156,11 @@ public sealed class SqliteFlightSessionCheckpointStore :
 
         await connection
             .OpenAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await ConfigureConnectionAsync(
+                connection,
+                cancellationToken)
             .ConfigureAwait(false);
 
         await using var command =
@@ -242,6 +252,11 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 .OpenAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            await ConfigureConnectionAsync(
+                    connection,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
             await using var command =
                 connection.CreateCommand();
 
@@ -287,6 +302,11 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 .OpenAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            await ConfigureConnectionAsync(
+                    connection,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
             await OpenCareerDatabaseMigrator
                 .MigrateAsync(connection, cancellationToken)
                 .ConfigureAwait(false);
@@ -297,6 +317,38 @@ public sealed class SqliteFlightSessionCheckpointStore :
         {
             _initializationGate.Release();
         }
+    }
+
+    private static async Task ConfigureConnectionAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await ExecutePragmaAsync(
+                connection,
+                "PRAGMA busy_timeout = 5000;",
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await ExecutePragmaAsync(
+                connection,
+                "PRAGMA synchronous = NORMAL;",
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task ExecutePragmaAsync(
+        SqliteConnection connection,
+        string sql,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText = sql;
+
+        await command
+            .ExecuteNonQueryAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static void ValidateForPersistence(
