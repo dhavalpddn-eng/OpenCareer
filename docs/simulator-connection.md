@@ -1,13 +1,13 @@
 # Simulator connection and first telemetry boundary
 
-Scope: resilient SimConnect connection/reconnect, normalized user-aircraft telemetry, installed-aircraft enumeration, and read-only airport/runway facility lookup. No mission completion or save mutation occurs in the SimConnect boundary.
+Scope: resilient SimConnect connection/reconnect, normalized user-aircraft telemetry, installed-aircraft enumeration, read-only airport/runway facility lookup, and user-position local weather sampling for dispatch. No mission completion or save mutation occurs in the SimConnect boundary.
 
 ## Structure and behavior
 
 - `OpenCareer.Application/Simulator` owns `ISimulatorConnection`, `ISimulatorTelemetrySource` and immutable status/identity boundaries. It contains no WinUI, native SDK or database code.
 - `OpenCareer.SimConnect` owns the native ABI and a single dedicated worker. Open, telemetry/facility definition setup, subscriptions, dispatch, system-state requests, aircraft enumeration, facility requests and close all run on that worker. Start is nonblocking/idempotent; Stop/Dispose await cleanup. A stopped instance may restart until disposed.
 - Open success creates a handle; **only `SIMCONNECT_RECV_OPEN` plus successful telemetry setup confirms Connected**. Missing acknowledgement expires after 10 seconds. Duplicate acknowledgements do not create sessions.
-- Quit, transport failure, protocol errors and an unresponsive connection close the current handle before another opens. Identity and telemetry clear when the current simulator session ends.
+- Quit, transport failure, protocol errors and an unresponsive connection close the current handle before another opens. Identity, telemetry and local-weather samples clear when the current simulator session ends.
 - Automatic retries back off 1, 2, 4, 8, then 15 seconds maximum. Missing/wrong runtime and version mismatch wait 30 seconds. Cancellation interrupts the waits. Unexpected implementation errors stop the worker with a Faulted status.
 - A Windows event wakes dispatch early; a 250 ms fallback processes messages. An empty generic `E_FAIL` is treated conservatively, not as proof that the simulator exited. A `RequestSystemState("Sim")` every five seconds checks liveness; its matching request ID must respond within 30 seconds. State 0 (simulator menus) is a valid response. This is not a flight-state detector.
 - The native callback validates message lengths and copies the numeric `SIMCONNECT_RECV_SIMOBJECT_DATA` payload before returning. Managed exceptions never cross the unmanaged callback boundary. It never calls UI/domain code.
@@ -17,22 +17,44 @@ Scope: resilient SimConnect connection/reconnect, normalized user-aircraft telem
 
 After the OPEN acknowledgement the same SimConnect worker:
 
-1. adds a single numeric data definition,
+1. adds the mandatory aircraft-telemetry numeric data definition,
 2. subscribes to the `Pause_EX1` system event,
-3. requests the user aircraft once per second with `SimConnect_RequestDataOnSimObject`, and
-4. maps SDK values into the existing `AircraftTelemetrySnapshot` domain record.
+3. requests the user aircraft once per second with `SimConnect_RequestDataOnSimObject`,
+4. maps those SDK values into the existing `AircraftTelemetrySnapshot` domain record, and
+5. separately attempts an optional local-weather numeric definition/request. Failure of the optional weather definition leaves the normal telemetry connection healthy.
 
 All fields use `SIMCONNECT_DATATYPE_FLOAT64` so the callback payload has one fixed numeric layout. Booleans are normalized as false only for zero; nonzero values, including `-1`, are true.
 
 ## Airport / runway facility lookup
 
-On each SimConnect session the worker installs one documented nested facility definition: `OPEN AIRPORT` -> `NAME64`, `ICAO` -> `OPEN RUNWAY` -> `LENGTH`, `WIDTH`, `SURFACE`, primary/secondary runway number/designator and closed flags -> close markers. Application requests are queued and only one `SimConnect_RequestFacilityData` request is active at a time.
+On each SimConnect session the worker installs one documented nested facility definition: `OPEN AIRPORT` -> airport `LATITUDE`, `LONGITUDE`, `NAME64`, `ICAO` -> `OPEN RUNWAY` -> runway `LATITUDE`, `LONGITUDE`, `HEADING`, `LENGTH`, `WIDTH`, `SURFACE`, primary/secondary runway number/designator and closed flags -> close markers. Application requests are queued and only one `SimConnect_RequestFacilityData` request is active at a time.
 
 `SIMCONNECT_RECV_FACILITY_DATA` AIRPORT/RUNWAY messages are correlated by request/parent IDs and completed only at `SIMCONNECT_RECV_FACILITY_DATA_END`. Incomplete or inconsistent child lists fail closed. Runway meters are converted to feet; invalid/nonpositive dimensions and unknown/undefined surface codes remain unknown. The adapter publishes `AirportDataAuthority.LocalSimulator` observations, which outrank lower-authority reference providers and are never cross-filled from them.
 
 Facility definition/request failure is nonfatal to telemetry. Immediate HRESULT failures, timeout/cancellation, disconnect and request-specific asynchronous `SIMCONNECT_RECV_EXCEPTION` responses return no local airport observation. Asynchronous failures are isolated using `SimConnect_GetLastSentPacketID` / exception send-ID correlation.
 
-Hosted tests use synthetic native buffers and verify decoder layouts, one-worker ownership, mapping and failure isolation. They do not execute the native DLL. A focused real-MSFS airport lookup remains required before calling the facility path live-validated; it does not require another full FlightSession flight.
+Hosted tests use synthetic native buffers and verify decoder layouts, one-worker ownership, mapping and failure isolation. They do not execute the native DLL. A focused real-MSFS airport/local-weather lookup remains required before calling these paths live-validated; it does not require another full FlightSession flight.
+
+## Local simulator weather boundary
+
+MSFS 2024's legacy SimConnect weather-station request functions are deprecated. OpenCareer therefore does not use them for arbitrary-airport weather. The optional local-weather definition requests the current user-aircraft position plus:
+
+- `AMBIENT WIND DIRECTION` in degrees,
+- `AMBIENT WIND VELOCITY` in knots, and
+- `DENSITY ALTITUDE` in feet.
+
+The SDK documents ambient wind direction/velocity as values at the user-aircraft position, with wind direction relative to true north. The adapter consequently refuses to reuse that sample for a remote airport. It first obtains the requested airport/runway geometry through the facility path and accepts a weather sample only when it is fresh (currently <=5 seconds) and geographically local to that airport/runway footprint.
+
+Runway-relative headwind/crosswind is calculated against the facility runway `HEADING` using true-heading semantics. Primary/secondary closed flags are honored; for a physical two-ended runway, the best currently open end is represented in the normalized weather observation. Gust values remain unknown because Slice 10 does not claim a supported current SimConnect gust-observation source. Remote-airport weather remains unavailable until a separate supported source/bridge is verified.
+
+| Local weather field | MSFS 2024 source | Requested units / mapping |
+| --- | --- | --- |
+| Sample position | `PLANE LATITUDE`, `PLANE LONGITUDE` | degrees; used only to prove locality to requested facility geometry |
+| Wind direction | `AMBIENT WIND DIRECTION` | degrees true; normalized to `[0,360)` |
+| Wind velocity | `AMBIENT WIND VELOCITY` | knots; negative/invalid values rejected |
+| Density altitude | `DENSITY ALTITUDE` | feet |
+| Runway reference | facility `RUNWAY LATITUDE`, `LONGITUDE`, `HEADING` | facility geometry; heading treated as true-north runway heading |
+| Gust | none claimed | remains unknown; never fabricated |
 
 | Normalized field | MSFS 2024 source | Requested units / mapping |
 | --- | --- | --- |
@@ -58,7 +80,7 @@ The first pass intentionally does not request aircraft title/type, autopilot det
 
 ## Native runtime and Windows build
 
-The adapter currently uses seven documented native exports through P/Invoke: Open, CallDispatch, AddToDataDefinition, RequestDataOnSimObject, SubscribeToSystemEvent, RequestSystemState and Close. This avoids binding .NET 10 to the SDK's legacy .NET Framework managed wrapper. Official ABI signatures/layouts are recorded in source and decoder tests.
+The adapter currently uses eleven documented native exports through P/Invoke: Open, CallDispatch, AddToDataDefinition, RequestDataOnSimObject, SubscribeToSystemEvent, RequestSystemState, EnumerateSimObjectsAndLiveries, AddToFacilityDefinition, RequestFacilityData, GetLastSentPacketID and Close. Slice 10 adds no second worker and no deprecated weather-station API. This avoids binding .NET 10 to the SDK's legacy .NET Framework managed wrapper. Official ABI signatures/layouts are recorded in source and decoder tests.
 
 Supply the **x64 native `SimConnect.dll` from the installed MSFS 2024 SDK**. This is a runtime dependency, not a repository binary or a third-party NuGet wrapper. Search is restricted to the application directory. No SDK binaries are committed or downloaded by CI.
 
