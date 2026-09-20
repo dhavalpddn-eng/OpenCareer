@@ -30,6 +30,10 @@ internal static class PlanningServiceRegistration
         services.AddSingleton<IAircraftRegistrySource>(provider =>
             provider.GetRequiredService<AircraftRegistryCatalogService>());
 
+        services.AddSingleton<CruisePerformancePlanningService>(provider =>
+            new CruisePerformancePlanningService(
+                provider.GetRequiredService<IAircraftRegistrySource>()));
+
         services.AddSingleton<SimConnectAirportDataObservationSource>();
         services.AddSingleton<IAirportDataObservationSource>(provider =>
             provider.GetRequiredService<SimConnectAirportDataObservationSource>());
