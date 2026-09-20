@@ -132,7 +132,7 @@ public sealed class FuelDensityWeightBridgeTests : IDisposable
         Assert.Equal(50, plan.RequiredFuelGallons);
         Assert.Equal(335, plan.RequiredFuelPounds, 6);
         Assert.Equal(100, plan.MaximumFuelGallons);
-        Assert.Equal(670, plan.MaximumFuelPounds, 6);
+        Assert.Equal(670, plan.MaximumFuelPounds!.Value, 6);
     }
 
     [Fact]
