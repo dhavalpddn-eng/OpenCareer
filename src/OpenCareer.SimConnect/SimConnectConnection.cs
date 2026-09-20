@@ -303,6 +303,18 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 activeAirportFacilityRequest.Build());
                             activeAirportFacilityRequest = null;
                             break;
+                        case SimConnectMessageKind.Exception
+                            when activeAirportFacilityRequest is not null
+                                && message.SendId == activeAirportFacilityRequest.SendId:
+                            _logger.LogWarning(
+                                "SimConnect airport facility request for {Icao} failed with exception {Code}, send {SendId}, parameter {Index}.",
+                                activeAirportFacilityRequest.Query.Icao,
+                                message.ExceptionCode,
+                                message.SendId,
+                                message.ParameterIndex);
+                            activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
+                            activeAirportFacilityRequest = null;
+                            break;
                         case SimConnectMessageKind.Exception:
                             _logger.LogWarning("SimConnect exception {Code}, send {SendId}, parameter {Index}.",
                                 message.ExceptionCode, message.SendId, message.ParameterIndex);
@@ -434,9 +446,20 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                 continue;
             }
 
+            int sendIdResult = _api.GetLastSentPacketId(handle, out uint sendId);
+            if (sendIdResult < 0 || sendId == 0)
+            {
+                _logger.LogWarning(
+                    "Could not correlate SimConnect airport facility request for {Icao}; treating local airport data as unavailable.",
+                    query.Icao);
+                query.Completion.TrySetResult(null);
+                continue;
+            }
+
             return new(
                 query,
                 requestId,
+                sendId,
                 _clock.GetTimestamp());
         }
 
