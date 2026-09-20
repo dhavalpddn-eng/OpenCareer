@@ -49,7 +49,8 @@ public sealed class SqliteDatabaseSnapshotService
                 {
                     DataSource = sourcePath,
                     Mode = SqliteOpenMode.ReadOnly,
-                    Cache = SqliteCacheMode.Shared
+                    Cache = SqliteCacheMode.Shared,
+                    Pooling = false
                 }.ToString());
 
             await using var destination = new SqliteConnection(
@@ -57,7 +58,8 @@ public sealed class SqliteDatabaseSnapshotService
                 {
                     DataSource = targetPath,
                     Mode = SqliteOpenMode.ReadWriteCreate,
-                    Cache = SqliteCacheMode.Private
+                    Cache = SqliteCacheMode.Private,
+                    Pooling = false
                 }.ToString());
 
             await source.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -94,7 +96,8 @@ public sealed class SqliteDatabaseSnapshotService
             {
                 DataSource = fullPath,
                 Mode = SqliteOpenMode.ReadOnly,
-                Cache = SqliteCacheMode.Private
+                Cache = SqliteCacheMode.Private,
+                Pooling = false
             }.ToString());
 
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
