@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using OpenCareer.SimConnect.Native;
 
 namespace OpenCareer.SimConnect;
 
@@ -46,6 +46,7 @@ internal sealed class SimConnectAirportFacilityQuery(
 internal sealed class ActiveSimConnectAirportFacilityRequest(
     SimConnectAirportFacilityQuery query,
     uint requestId,
+    uint sendId,
     long startedAt)
 {
     private SimConnectAirportFacilityData? _airport;
@@ -55,6 +56,7 @@ internal sealed class ActiveSimConnectAirportFacilityRequest(
 
     internal SimConnectAirportFacilityQuery Query { get; } = query;
     internal uint RequestId { get; } = requestId;
+    internal uint SendId { get; } = sendId;
     internal long StartedAt { get; } = startedAt;
 
     internal bool Accept(SimConnectMessage message)
