@@ -15,7 +15,7 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 - Tutorial-engine CI at `f6b1cc7`: **118/118 xUnit + 29/29 SimLab passed**, and the Windows WinUI app/live-probe build passed. Automated UI compilation does not replace local interactive/visual acceptance or live MSFS verification.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
 - UI visual language: `docs/ui-design-language.md` is canonical for palette/material/aesthetic; implementation tokens/layout remain in `docs/ui-design-system.md`, and screen behavior in `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
-- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. First conflict foundation commit `2d0b58d1`, synced with the current integration branch at merge commit `c98f5178`. See `docs/conflict-system.md`. Current Actions attempts fail before runner steps, so code/test execution remains unverified rather than failed.
+- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. Current head `040695f2`. Ground + air conflict, CAS/suppression, recon/logistics/patrol, escort/intercept, military authorization, and seeded fictional theater generation are implemented. GitHub Actions currently fails before runner steps begin, so execution verification remains pending rather than failed. See `docs/conflict-system.md`.
 - Verify remote branch head before edits because other chats may change it.
 
 ## Fixed direction
@@ -53,14 +53,18 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 
 ## Military/conflict implementation (parallel PR #10)
 
-- `OpenCareer.Domain/Conflict` now contains a versioned deterministic conflict state with ground units, sector control/intelligence, linked air-defense threats, battlefield pressure and support-request generation.
-- Ground pressure can create separate CAS and suppression needs instead of treating every request as the same mission.
-- `AirSupportMissionEngine` consumes normalized `AircraftTelemetrySnapshot` only; pause, slew and on-ground state cannot advance an attack objective.
-- `ConflictActionResolver` applies abstract precision/suppression/recon effects with idempotency and feeds consequences back into unit strength/readiness, sector control/intelligence and threat severity.
-- `ThreatExposureEvaluator` and `ThreatEngagementResolver` simulate player threat exposure/damage deterministically in OpenCareer state; they do not rely on or mutate MSFS combat/damage systems.
-- `OpenCareer.Application/Military/ConflictOperationsService` provides the application boundary for world advance, support acceptance, telemetry updates, authorized actions and threat resolution.
-- `ConflictSystemTests` covers deterministic support generation, duplicate protection, CAS lifecycle, suppression, recon, threat exposure/damage and sector movement. Current GitHub runner failures occur before any job step starts, so these tests are added but not yet execution-verified.
-- Still open: conflict persistence, active-request reservation/reload, simulated air units, dedicated recon/logistics/patrol/intercept/escort/SEAD mission families, military qualifications, campaign generation/balance and production UI wiring.
+- `OpenCareer.Domain/Conflict` contains versioned deterministic conflict state with ground units, simulated air units, sectors, derived front snapshots, linked threats and support requests.
+- The world engine advances ground pressure/control and simulated air movement deterministically.
+- Battlefield state can generate CAS, suppression, reconnaissance, logistics, patrol, escort and intercept requests.
+- Support requests have Open/Reserved/Completed/Failed/Cancelled/Expired lifecycle state so an active need cannot be accepted twice.
+- `AirSupportMissionEngine` handles CAS/suppression; `AreaSupportMissionEngine` handles recon/logistics/patrol; `AirOperationMissionEngine` handles escort/intercept.
+- All player flight evidence comes from normalized `AircraftTelemetrySnapshot`; pause/slew and invalid ground/air states cannot advance objectives.
+- Precision, suppression, reconnaissance and intercept effects are abstract deterministic OpenCareer effects; no native MSFS weapons/hits/damage are assumed.
+- `ThreatExposureEvaluator` and `ThreatEngagementResolver` model simulated air-defense/interceptor threats and OpenCareer-only player damage.
+- `MilitaryAuthorizationPolicy` separates affiliation, qualifications, aircraft assignment, aircraft capability/access and damage state. Installing/owning a military-capable aircraft never grants mission access by itself.
+- `ConflictTheaterGenerator` creates repeatable fictional theater state from a seed and template; it does not ingest current wars as authoritative gameplay.
+- Deterministic tests cover conflict state, request lifecycle, mission families, effects, threat resolution, authorization and theater generation. Current GitHub runner failures occur before any job step starts, so the newly added tests are not yet execution-verified.
+- Still open: persistence/recovery, richer faction/campaign evolution, integration with authoritative player career/dispatch/job settlement, production Military/Government UI and large balance/stress runs.
 
 ## Tutorial engine implementation
 

@@ -183,13 +183,12 @@ MSFS SDK/version-sensitive behavior is the largest uncertainty.
 
 Optional business ownership, contracts, routes, utilization, staff, margins and expansion while preserving employee-only play.
 
-### MBL-19 — Military / Government career system — CONFLICT FOUNDATION IN PROGRESS
-**Estimated remaining effort: ~12–25 developer days**
+### MBL-19 — Military / Government career system — MULTI-MISSION CONFLICT FOUNDATION IN PROGRESS
+**Estimated remaining effort: ~8–18 developer days**
 
-Draft PR #10 now provides the first deterministic conflict foundation: ground units/pressure, sector control/intelligence, linked air-defense threats, CAS + suppression support requests, CAS telemetry lifecycle, virtual precision/suppression/recon effects, simulated player threat/damage state and deterministic tests. MSFS remains flight/telemetry only.
+Draft PR #10 now provides deterministic ground and air conflict state, sector/front representation, linked air-defense/interceptor threats, battlefield-driven support requests, request reservation/closure, CAS/suppression/recon/logistics/patrol/escort/intercept mission lifecycles, abstract mission effects, OpenCareer-only threat/damage state, military qualification/assignment authorization, and seeded fictional theater generation. MSFS remains flight/telemetry only.
 
-Remaining major work includes persistence/recovery, campaign/theater generation, simulated air units, dedicated recon/logistics/patrol/intercept/escort/SEAD mission families, qualifications/assigned-aircraft career progression, authoritative job/economy integration, production Military/Government UI and large-scale balance/playtesting.
-
+Remaining major work is persistent campaign/mission recovery, richer faction/campaign evolution, career onboarding/persistence integration, fleet assignment integration, authoritative job/economy settlement integration, production Military/Government UI, and large deterministic balance/playtesting plus Windows/runtime verification.
 ### MBL-11 — Specialized mission framework
 **Estimated effort: ~20–40+ developer days for the full planned family set**
 

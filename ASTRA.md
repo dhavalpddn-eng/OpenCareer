@@ -7,7 +7,7 @@
 **PR:** #2 draft; keep `main` stable.  
 **Master build list:** `docs/master-build-list.md` — active unfinished major systems sorted low-to-high by estimated remaining engineering effort; stable `MBL-xx` IDs remain unchanged; remove items only when fully implemented, integrated, tested and accepted.  
 **Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
-**Parallel military branch:** `feature/military-conflict-system`, draft PR #10 -> `feature/m1-simulation-core`; deterministic conflict/CAS/threat foundation is implemented there, with CI execution pending because Actions currently fails before runner steps.  
+**Parallel military branch:** `feature/military-conflict-system`, draft PR #10 -> `feature/m1-simulation-core`; current head `040695f2`. Ground + air conflict, CAS/suppression, recon/logistics/patrol, escort/intercept, military authorization, and seeded fictional theater generation are implemented. CI execution remains pending because Actions is failing before runner steps.  
 **Last implementation commit:** `c4a52c955b080aceb73e0b1d762d90c8dbc54506` (MBL-23 settings/diagnostics; UI-thread-safe preference notifications).
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
@@ -20,7 +20,7 @@
 **Tutorial engine:** MBL-03 is in progress. The versioned coordinator, persistent progress/resume/skip, first-run WinUI overlay/navigation, Settings replay, first-job walkthrough, and banner/carrier tutorial previews are implemented and CI-green. Current automated baseline is **118/118 xUnit + 29/29 SimLab**, with Windows WinUI/probe build green. MBL-03 remains until local interactive/visual acceptance and automatic future job/mission trigger integration are verified.
 
 ## Built
-**Parallel conflict foundation (PR #10):** deterministic conflict world/ground pressure/sector control, CAS + suppression support requests, CAS telemetry lifecycle, virtual precision/suppression/recon effects, threat exposure/resolution, OpenCareer-only simulated damage and deterministic tests are implemented on `feature/military-conflict-system`. Persistence, other mission families, qualifications, campaign generation and production UI remain.
+**Parallel conflict foundation (PR #10):** deterministic ground/air conflict world, sectors/front snapshot, CAS/suppression/recon/logistics/patrol/escort/intercept mission lifecycles, abstract effects/threat damage, support reservation, military qualification/assignment authorization, and seeded fictional theater generation are implemented on `feature/military-conflict-system`. Persistence, richer campaign evolution, authoritative career/job integration, production UI and full CI/runtime verification remain.
 WinUI shell; resilient serialized SimConnect connect/reconnect; ~1 Hz normalized telemetry; Windows live probe; pure `FlightTrackingStateMachine`; `FlightTimeLedger`; conventional park/shutdown/servicing terminal policy; offline JSONL trace analyzer. CI at `540029c`: **104/104 xUnit + 29/29 SimLab; Windows WinUI/probe green**. Analyzer fixtures are synthetic; live validation remains open.
 
 ## Career start

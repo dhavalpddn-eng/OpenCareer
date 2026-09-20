@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-09-18 against branch head `155d5efe2103f24f5ce47317016a9546e1151adf`.
+Last reconciled: 2026-09-19 on military branch `feature/military-conflict-system` through `040695f2`.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -35,7 +35,7 @@ flowchart LR
     C6 --> C7["7. Persistent Economy<br/>ACTIVE FOUNDATION"]
     C7 --> C8["8. Dealers + Ownership<br/>ACTIVE FOUNDATION"]
     C8 --> C9["9. Maintenance + Company<br/>PLANNED"]
-    C9 --> C10["10. Military + Events<br/>ACTIVE DESIGN"]
+    C9 --> C10["10. Military + Events<br/>ACTIVE IMPLEMENTATION"]
     C10 --> C11["11. Balance + Release<br/>PLANNED"]
 
     classDef complete fill:#173b2a,stroke:#52D273,color:#ffffff,stroke-width:2px;
@@ -417,7 +417,7 @@ Exit gate: maintenance, staffing, facilities and geography affect availability/p
 
 # Chapter 10 — Military/government careers, simulated conflict and special events
 
-Chapter status: **ACTIVE IMPLEMENTATION — FIRST CONFLICT FOUNDATION ON PR #10; CI EXECUTION PENDING**
+Chapter status: **ACTIVE IMPLEMENTATION — MULTI-MISSION CONFLICT FOUNDATION ON PR #10; CI EXECUTION PENDING**
 
 ## Completed design/foundation
 
@@ -432,38 +432,47 @@ Chapter status: **ACTIVE IMPLEMENTATION — FIRST CONFLICT FOUNDATION ON PR #10;
 - [x] Implement versioned deterministic conflict-world state.
 - [x] Implement friendly/hostile/neutral ground-unit state with strength, readiness and pressure.
 - [x] Implement geographic sector control and intelligence-confidence state.
-- [x] Implement air-defense/threat envelopes linked to simulated ground units.
+- [x] Implement derived front-line snapshot from contested sector state.
+- [x] Implement friendly/hostile simulated air units with deterministic movement.
+- [x] Implement air-defense and interceptor threat envelopes linked to simulated source units.
 - [x] Generate CAS and suppression support requests from simulated battlefield pressure.
-- [x] Implement CAS accept/ingress/on-station/action/egress/objective-complete lifecycle.
-- [x] Validate conflict action windows from normalized player telemetry while rejecting pause/slew/on-ground advancement.
-- [x] Implement virtual precision/suppression/recon effects entirely inside OpenCareer.
+- [x] Generate reconnaissance, logistics and patrol requests from intelligence/readiness/control state.
+- [x] Generate escort/intercept requests from simulated air activity.
+- [x] Reserve/close support requests so one active request cannot be accepted twice.
+- [x] Implement CAS/suppression accept -> ingress -> on-station -> authorized action -> egress -> objective-complete lifecycle.
+- [x] Implement reconnaissance, logistics and patrol telemetry-driven objective lifecycles.
+- [x] Implement escort and intercept telemetry-driven objective lifecycles.
+- [x] Validate mission windows from normalized player telemetry while rejecting pause/slew and invalid on-ground/airborne conditions.
+- [x] Implement abstract precision/suppression/recon effects entirely inside OpenCareer.
+- [x] Implement abstract intercept effects entirely inside OpenCareer.
 - [x] Implement player threat exposure from normalized telemetry.
 - [x] Implement deterministic simulated threat resolution and OpenCareer-only aircraft-damage state.
-- [x] Feed player effects back into ground strength/readiness, sector control/intelligence and linked threat severity.
-- [x] Add deterministic xUnit coverage for support generation, action idempotency, CAS lifecycle, recon, suppression, threat exposure/damage and sector movement.
+- [x] Feed mission effects back into unit strength/readiness, sector control/intelligence and linked threat severity.
+- [x] Implement military affiliation, qualification and assigned-aircraft authorization policy.
+- [x] Ensure installed/owned military-capable aircraft alone never grants military mission access.
+- [x] Implement bounded military trust/progression result updates.
+- [x] Implement seeded fictional theater generation with repeatable ground/air units, sectors and threats.
+- [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy and theater generation.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: PR #10 is mergeable and contains the tests, but current GitHub Actions jobs are failing before runner steps begin. Do not claim this branch compiled/passed CI until runner execution resumes.
+Verification note: PR #10 contains the implementation and tests, but current GitHub Actions attempts fail before runner steps begin. Do not claim this branch compiled/passed CI until runner execution resumes.
 
 ## Remaining
 
-- [ ] Add explicit front-line geometry/derived front representation beyond sector-control percentages.
-- [ ] Define simulated friendly/enemy air-unit activity.
-- [ ] Persist conflict checkpoints and active missions.
-- [ ] Implement surveillance/recon mission lifecycle beyond the generic recon effect.
-- [ ] Implement logistics/transport support lifecycle.
-- [ ] Implement patrol/intercept/escort objectives where authorized.
-- [ ] Implement dedicated suppression/SEAD mission lifecycle and assignment rules.
-- [ ] Reserve/close support requests safely across active missions and reloads.
+- [ ] Persist conflict checkpoints, air/ground units, requests and active missions.
+- [ ] Restore reserved support requests and active mission state safely after app restart.
+- [ ] Add richer faction/campaign state beyond Friendly/Hostile/Neutral sides.
+- [ ] Add longer-term campaign objectives and theater evolution across multiple operations.
+- [ ] Integrate military authorization with the future player-career persistence/onboarding flow.
 - [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
-- [ ] Add military/reserve onboarding/qualification progression.
+- [ ] Add aircraft assignment issuance/revocation to the future fleet/dispatch system.
 - [ ] Implement production Military/Government/Conflict UI against the conflict application service.
-- [ ] Add campaign/theater generation, persistence and large deterministic balance/stress scenarios.
+- [ ] Add large deterministic campaign balance/stress batches.
 - [ ] Run xUnit/SimLab/Windows builds once GitHub runner execution is available.
 - [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
+- [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 
 Exit gate: distinct military/government mission families have deterministic validation, authorization filters, persistent simulated consequences, verified tests and no dependency on nonexistent MSFS combat APIs.
-
 ---
 
 # Chapter 11 — Balance, performance, packaging and release readiness
