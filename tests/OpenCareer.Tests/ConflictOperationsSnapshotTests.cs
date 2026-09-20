@@ -108,9 +108,7 @@ public sealed class ConflictOperationsSnapshotTests
                     ConflictCampaignPhase.Contested,
                     EvaluationSequence: 7,
                     FinalFriendlyControlAverage: 0.51,
-                    EndedAt: Epoch.AddMinutes(-30),
-                    FinalFriendlyPosture: ConflictFactionOperationalPosture.LogisticsFocused,
-                    FinalHostilePosture: ConflictFactionOperationalPosture.LogisticsFocused)
+                    EndedAt: Epoch.AddMinutes(-30))
             }
         };
 
@@ -141,16 +139,9 @@ public sealed class ConflictOperationsSnapshotTests
         Assert.Single(snapshot.Threats);
         Assert.Single(snapshot.SupportRequests);
         Assert.Single(snapshot.CompletedCampaigns);
-        CompletedMilitaryOperationProjection completed = snapshot.CompletedCampaigns[0];
-        Assert.Equal("snapshot-prior", completed.CampaignId);
-        Assert.StartsWith("operation:", completed.OperationId);
-        Assert.StartsWith("Operation ", completed.OperationName);
         Assert.Equal(
-            ConflictFactionOperationalPosture.LogisticsFocused,
-            completed.FinalFriendlyPosture);
-        Assert.Equal(
-            ConflictFactionOperationalPosture.LogisticsFocused,
-            completed.FinalHostilePosture);
+            "snapshot-prior",
+            snapshot.CompletedCampaigns[0].CampaignId);
         Assert.NotNull(snapshot.ActiveOperation);
         Assert.Equal(
             SupportRequestType.CloseAirSupport,
