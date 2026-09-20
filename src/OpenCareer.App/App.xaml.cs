@@ -66,6 +66,7 @@ public partial class App : Microsoft.UI.Xaml.Application
                     .GetRequiredService<OpenCareerDataPaths>()
                     .DatabaseFile));
         services.AddSingleton<FlightSessionPersistenceService>();
+        services.AddSingleton<FlightSessionCompletionService>();
         services.AddSingleton<FlightTelemetryEvidenceProcessor>();
         services.AddSingleton<FlightContinuityPolicy>();
         services.AddSingleton<FlightSessionRuntime>();
