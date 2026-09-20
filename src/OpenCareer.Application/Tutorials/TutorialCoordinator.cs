@@ -3,7 +3,8 @@ namespace OpenCareer.Application.Tutorials;
 public sealed class TutorialCoordinator(
     ITutorialCatalog catalog,
     ITutorialFeatureReadiness featureReadiness,
-    ITutorialProgressStore progressStore)
+    ITutorialProgressStore progressStore,
+    ITutorialStepEvidenceSource? liveEvidence = null)
 {
     public event EventHandler? StateChanged;
     public event EventHandler<TutorialNavigationRequestedEventArgs>? NavigationRequested;
@@ -82,6 +83,21 @@ public sealed class TutorialCoordinator(
             cancellationToken).ConfigureAwait(true);
     }
 
+    public void RefreshLiveEvidence()
+    {
+        if (!Current.IsActive || _activeDefinition is null)
+            return;
+
+        TutorialSnapshot refreshed =
+            CreateSnapshot(_activeDefinition, Current.CurrentIndex);
+
+        if (refreshed.EvidenceState == Current.EvidenceState)
+            return;
+
+        Current = refreshed;
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public async Task SkipAsync(CancellationToken cancellationToken = default)
     {
         if (!TryGetActive(out TutorialDefinition definition, out TutorialProgress progress))
@@ -147,7 +163,9 @@ public sealed class TutorialCoordinator(
             index,
             definition.Steps.Count,
             step,
-            featureReadiness.GetState(step.FeatureKey));
+            featureReadiness.GetState(step.FeatureKey),
+            liveEvidence?.GetState(step)
+                ?? TutorialStepEvidenceState.NotApplicable);
     }
 
     private void SetInactive(TutorialDefinition definition)
