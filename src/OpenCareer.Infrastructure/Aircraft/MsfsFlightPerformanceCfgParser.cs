@@ -221,6 +221,8 @@ internal static class MsfsFlightPerformanceCfgParser
         if (weights is null || temperatures is null || altitudes is null)
             return null;
 
+        // In the documented modern nD CFG layout, the final axis varies
+        // inside each value group; preceding axes advance across ':' groups.
         string[] valueGroups = halves[1].Split(
             ':',
             StringSplitOptions.TrimEntries);
