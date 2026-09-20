@@ -20,10 +20,6 @@ public enum DispatchFeasibilityReason
 {
     AircraftNotFound = 0,
     AircraftCapabilityDataIncomplete,
-    AircraftPayloadCapacityUnknown,
-    AircraftRangeUnknown,
-    PayloadExceedsAircraftMaximum,
-    RangeExceedsAircraftMaximum,
     AircraftRunwayPerformanceUnknown,
     AirportNotFound,
     NoRunwayData,
@@ -37,7 +33,11 @@ public enum DispatchFeasibilityReason
     RunwaySurfaceUnknown,
     RunwayTooShort,
     RunwayTooNarrow,
-    RunwaySurfaceUnsupported
+    RunwaySurfaceUnsupported,
+    AircraftPayloadCapacityUnknown,
+    AircraftRangeUnknown,
+    PayloadExceedsAircraftMaximum,
+    RangeExceedsAircraftMaximum
 }
 
 public sealed record DispatchFeasibilityIssue(
