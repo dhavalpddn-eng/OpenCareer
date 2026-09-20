@@ -146,7 +146,7 @@ public sealed class OperationDispatchPlanningTests
     public async Task MissingRunwayPerformanceRemainsInsufficientData()
     {
         var service = Service(
-            Resolution(runwayPerformance: null),
+            Resolution(includeRunwayPerformance: false),
             Airport("KAAA", Runway("18")),
             Airport("KBBB", Runway("36")));
 
@@ -166,7 +166,7 @@ public sealed class OperationDispatchPlanningTests
     public async Task DefinitePayloadFailureBeatsUnknownRunwayData()
     {
         var service = Service(
-            Resolution(maximumPayloadPounds: 1000, runwayPerformance: null),
+            Resolution(maximumPayloadPounds: 1000, includeRunwayPerformance: false),
             Airport("KAAA", Runway("18")),
             Airport("KBBB", Runway("36")));
 
@@ -245,18 +245,19 @@ public sealed class OperationDispatchPlanningTests
     private static AircraftRegistryResolution Resolution(
         double? maximumPayloadPounds = 2000,
         double? maximumRangeNauticalMiles = 800,
-        AircraftRunwayPerformanceProfile? runwayPerformance = default)
+        AircraftRunwayPerformanceProfile? runwayPerformance = null,
+        bool includeRunwayPerformance = true)
     {
         AircraftRunwayPerformanceProfile? resolvedRunwayPerformance =
-            runwayPerformance == default
-                ? new(
+            includeRunwayPerformance
+                ? runwayPerformance ?? new(
                     MinimumTakeoffRunwayFeet: 1800,
                     MinimumLandingRunwayFeet: 1600,
                     MinimumRunwayWidthFeet: 50,
                     SupportedSurfaces: RunwaySurfaceSupport.Asphalt | RunwaySurfaceSupport.Concrete,
                     Confidence: AircraftDataConfidence.Verified,
                     Source: "test")
-                : runwayPerformance;
+                : null;
 
         return AircraftRegistryResolver.Resolve(
         [
