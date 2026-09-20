@@ -121,7 +121,7 @@ public sealed class SimConnectAirportDataObservationSource(
             : primary ?? secondary;
     }
 
-    private static string? FormatRunwayEnd(int number, int designator)
+    internal static string? FormatRunwayEnd(int number, int designator)
     {
         string? numberText = number switch
         {
