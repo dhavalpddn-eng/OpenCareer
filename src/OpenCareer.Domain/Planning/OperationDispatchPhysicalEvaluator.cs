@@ -272,6 +272,7 @@ public static class OperationDispatchPhysicalEvaluator
                 origin.Icao,
                 DispatchFeasibilityReason.AircraftTakeoffPerformanceConditionsMissing,
                 DispatchFeasibilityReason.AircraftTakeoffPerformanceOutsideEnvelope,
+                DispatchFeasibilityReason.AircraftTakeoffPerformanceValueInvalid,
                 issues);
         }
 
@@ -284,6 +285,7 @@ public static class OperationDispatchPhysicalEvaluator
                 destination.Icao,
                 DispatchFeasibilityReason.AircraftLandingPerformanceConditionsMissing,
                 DispatchFeasibilityReason.AircraftLandingPerformanceOutsideEnvelope,
+                DispatchFeasibilityReason.AircraftLandingPerformanceValueInvalid,
                 issues);
         }
 
@@ -318,6 +320,7 @@ public static class OperationDispatchPhysicalEvaluator
         string airportIcao,
         DispatchFeasibilityReason missingReason,
         DispatchFeasibilityReason outsideEnvelopeReason,
+        DispatchFeasibilityReason invalidValueReason,
         ICollection<DispatchFeasibilityIssue> issues)
     {
         table.Validate();
@@ -340,8 +343,23 @@ public static class OperationDispatchPhysicalEvaluator
             conditions.OutsideAirTemperatureCelsius,
             conditions.PressureAltitudeFeet);
 
-        if (distance is not null)
-            return distance.Value;
+        if (distance is { } knownDistance)
+        {
+            if (knownDistance > 0)
+                return knownDistance;
+
+            issues.Add(new(
+                invalidValueReason,
+                endpoint,
+                airportIcao,
+                RequiredFeet: knownDistance,
+                AircraftField: AircraftRegistryField.DispatchPerformance,
+                RequiredPounds: conditions.WeightPounds,
+                OutsideAirTemperatureCelsius: conditions.OutsideAirTemperatureCelsius,
+                PressureAltitudeFeet: conditions.PressureAltitudeFeet));
+
+            return null;
+        }
 
         issues.Add(new(
             outsideEnvelopeReason,
