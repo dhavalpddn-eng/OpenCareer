@@ -20,6 +20,10 @@ public enum DispatchFeasibilityReason
 {
     AircraftNotFound = 0,
     AircraftCapabilityDataIncomplete,
+    AircraftPayloadCapacityUnknown,
+    AircraftRangeUnknown,
+    PayloadExceedsAircraftMaximum,
+    RangeExceedsAircraftMaximum,
     AircraftRunwayPerformanceUnknown,
     AirportNotFound,
     NoRunwayData,
@@ -43,7 +47,11 @@ public sealed record DispatchFeasibilityIssue(
     string? RunwayIdentifier = null,
     double? RequiredFeet = null,
     double? AvailableFeet = null,
-    AircraftRegistryField? AircraftField = null);
+    AircraftRegistryField? AircraftField = null,
+    double? RequiredPounds = null,
+    double? AvailablePounds = null,
+    double? RequiredNauticalMiles = null,
+    double? AvailableNauticalMiles = null);
 
 public sealed record DispatchFeasibilityResult
 {
@@ -81,6 +89,10 @@ public sealed record DispatchFeasibilityResult
             .ThenBy(static issue => issue.AircraftField)
             .ThenBy(static issue => issue.RequiredFeet)
             .ThenBy(static issue => issue.AvailableFeet)
+            .ThenBy(static issue => issue.RequiredPounds)
+            .ThenBy(static issue => issue.AvailablePounds)
+            .ThenBy(static issue => issue.RequiredNauticalMiles)
+            .ThenBy(static issue => issue.AvailableNauticalMiles)
             .ToArray();
 
         if (status == DispatchFeasibilityStatus.Feasible && orderedIssues.Length != 0)
@@ -110,10 +122,25 @@ public static class RunwayCompatibilityEvaluator
         ArgumentNullException.ThrowIfNull(destination);
 
         aircraft.Validate();
+
+        return Evaluate(
+            aircraft.RunwayPerformance,
+            origin,
+            destination);
+    }
+
+    public static DispatchFeasibilityResult Evaluate(
+        AircraftRunwayPerformanceProfile? performance,
+        AirportRecord origin,
+        AirportRecord destination)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        ArgumentNullException.ThrowIfNull(destination);
+
         origin.Validate();
         destination.Validate();
 
-        if (aircraft.RunwayPerformance is null)
+        if (performance is null)
         {
             return DispatchFeasibilityResult.Create(
                 DispatchFeasibilityStatus.InsufficientData,
@@ -122,13 +149,15 @@ public static class RunwayCompatibilityEvaluator
                 [new(DispatchFeasibilityReason.AircraftRunwayPerformanceUnknown)]);
         }
 
+        performance.Validate();
+
         EndpointEvaluation originResult = EvaluateEndpoint(
-            aircraft.RunwayPerformance,
+            performance,
             origin,
             DispatchEndpoint.Origin);
 
         EndpointEvaluation destinationResult = EvaluateEndpoint(
-            aircraft.RunwayPerformance,
+            performance,
             destination,
             DispatchEndpoint.Destination);
 
