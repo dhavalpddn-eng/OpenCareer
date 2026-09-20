@@ -136,11 +136,14 @@ public sealed class CachedAirportDataSource : IAirportDataSource
     {
         var key = new CacheKey(icao, source.SourceId);
 
-        if (_cache.TryGetValue(key, out CacheEntry? entry)
-            && _clock.GetUtcNow() - entry.CachedAt < _policy.ReferenceFreshness)
+        if (_cache.TryGetValue(key, out CacheEntry? entry))
         {
-            observation = entry.Observation;
-            return true;
+            TimeSpan age = _clock.GetUtcNow() - entry.CachedAt;
+            if (age >= TimeSpan.Zero && age < _policy.ReferenceFreshness)
+            {
+                observation = entry.Observation;
+                return true;
+            }
         }
 
         _cache.TryRemove(key, out _);
