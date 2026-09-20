@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. The branch is being kept synchronized with `feature/m1-simulation-core`. The latest military application slice is at `d97f0276`; it has not yet received a fresh CI run because the repository workflows currently target `main` PR/push events rather than this feature-to-feature PR.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. PR #10 now validates directly against `feature/m1-simulation-core`. Code head `ddcf31b2` is green: Linux passed 227/227 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 227/227 xUnit.
 
 ## Boundary
 
@@ -48,7 +48,9 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - persistent `ConflictCampaignState` with campaign phase, friendly momentum and deterministic strategic objectives for control, intelligence, readiness and threat reduction,
 - `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
 - `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
-- deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation, SQLite campaign recovery, strategic evolution and dispatch authorization.
+- `MilitaryCampaignMissionService` that persists acceptance, mission-stage progress, failure/completion lifecycle and simulated threat outcomes without allowing duplicate replay after recovery,
+- `ConflictOperationsSnapshotBuilder` that projects campaign/front/unit/threat/support/strategic-objective/trust/damage/active-operation state for the future Military/Government UI,
+- deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation, SQLite campaign recovery, strategic evolution, dispatch authorization and the operations snapshot.
 
 ## Deliberately abstract
 
@@ -67,7 +69,6 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 - authoritative job/economy settlement integration,
 - production Military/Government/Conflict UI,
 - large deterministic balance/stress scenarios,
-- post-sync Linux/Windows verification,
 - live telemetry gameplay verification after the flight-runtime evidence pipeline is ready.
 
 ## Invariants
