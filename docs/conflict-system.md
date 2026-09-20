@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `b95e8f2e` is green: Linux passed 260/260 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 260/260 xUnit.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `3b5f6f93` is green: Linux passed 266/266 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 266/266 xUnit.
 
 ## Boundary
 
@@ -58,6 +58,8 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - terminal campaigns can transition into a fresh successor campaign while preserving military career state and simulated player damage rather than silently repairing the player,
 - completed operation summaries persist in checkpoint history with operation/faction identity, theater, terminal outcome, final phase/control, evaluation count and end time; history round-trips through SQLite and is exposed to the future Military/Government UI,
 - deterministic successor-offer planning selects from eligible fictional theaters, avoids immediately repeating the current theater when alternatives exist, derives a stable successor seed/campaign ID and previews the same operation identity that acceptance will create,
+- application-layer `MilitaryCampaignTransitionService` exposes the current successor offer, accept/decline/reconsider decisions, stale-offer protection and atomic runtime replacement after acceptance; ViewModels do not need theater seeds or campaign-generation logic,
+- default successor theaters are abstract fictional operation regions and are supplied through an `IConflictTheaterCatalog` boundary so future world/career sources can replace the built-in catalog without changing transition rules,
 - `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
 - `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
 - `MilitaryCampaignMissionService` that persists acceptance, mission-stage progress, failure/completion lifecycle and simulated threat outcomes without allowing duplicate replay after recovery,
@@ -73,7 +75,7 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 ## Still open
 
 - user-facing Settings backup selection/confirmation for staging a restore archive; the validated restore backend and restart-time apply path are implemented,
-- user-facing presentation/acceptance flow for deterministic successor-operation offers; the transition/history backend is implemented,
+- user-facing Military/Government presentation for the already-implemented successor-operation offer/accept/decline application flow,
 - richer long-term faction behavior beyond current deterministic identity/logistics/strategic-state rules,
 - player career onboarding/persistence for military affiliation and qualifications,
 - authoritative aircraft assignment issuance through the fleet/dispatch system,
