@@ -28,10 +28,15 @@ internal sealed record SimConnectObjectLivery(
     string LiveryName);
 
 internal sealed record SimConnectAirportFacilityData(
+    double LatitudeDegrees,
+    double LongitudeDegrees,
     string Name,
     string Icao);
 
 internal sealed record SimConnectRunwayFacilityData(
+    double CenterLatitudeDegrees,
+    double CenterLongitudeDegrees,
+    float HeadingTrueDegrees,
     float LengthMeters,
     float WidthMeters,
     int Surface,
