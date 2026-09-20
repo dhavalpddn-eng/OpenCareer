@@ -35,7 +35,8 @@ public sealed record OperationDispatchRequirements(
     double RunwayLengthSafetyMarginPercent = 0,
     DispatchWeatherLimits? WeatherLimits = null,
     DispatchRunwayPerformanceConditions? TakeoffPerformanceConditions = null,
-    DispatchRunwayPerformanceConditions? LandingPerformanceConditions = null)
+    DispatchRunwayPerformanceConditions? LandingPerformanceConditions = null,
+    int? PlannedFuelTypeIndex = null)
 {
     public void Validate()
     {
@@ -50,6 +51,9 @@ public sealed record OperationDispatchRequirements(
         {
             throw new ArgumentOutOfRangeException(nameof(PlannedFuelPounds));
         }
+
+        if (PlannedFuelTypeIndex is { } fuelTypeIndex && fuelTypeIndex < 0)
+            throw new ArgumentOutOfRangeException(nameof(PlannedFuelTypeIndex));
 
         ValidatePercentage(RangeSafetyMarginPercent, nameof(RangeSafetyMarginPercent));
         ValidatePercentage(RunwayLengthSafetyMarginPercent, nameof(RunwayLengthSafetyMarginPercent));
@@ -184,6 +188,7 @@ public static class OperationDispatchPhysicalEvaluator
                     dispatchPerformance,
                     requirements.PayloadPounds,
                     plannedFuel,
+                    requirements.PlannedFuelTypeIndex,
                     capabilityIssues,
                     ref hasDefiniteCapabilityFailure);
             }
@@ -391,12 +396,14 @@ public static class OperationDispatchPhysicalEvaluator
         AircraftDispatchPerformanceProfile performance,
         double payloadPounds,
         double plannedFuelPounds,
+        int? plannedFuelTypeIndex,
         ICollection<DispatchFeasibilityIssue> issues,
         ref bool hasDefiniteFailure)
     {
         double? emptyWeight = performance.OperatingEmptyWeightPounds;
         double? maximumTakeoffWeight = performance.MaximumTakeoffWeightPounds;
-        double? maximumFuelWeight = performance.MaximumFuelWeightPounds;
+        double? maximumFuelWeight =
+            performance.ResolveMaximumFuelWeightPounds(plannedFuelTypeIndex);
 
         if (emptyWeight is null)
         {
