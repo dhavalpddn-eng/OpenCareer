@@ -20,9 +20,9 @@ public interface IAirportDataSource
 
 /// <summary>
 /// Provider-neutral orchestration boundary for baseline physical feasibility.
-/// Later MSFS-installed-aircraft and airport-data adapters implement the source
-/// interfaces; external aviation APIs remain reference/enrichment inputs rather
-/// than gameplay authority.
+/// Aircraft and airport providers stay behind Application contracts. Local
+/// simulator airport/runway observations outrank reference data, and external
+/// aviation sources remain fallback/reference inputs rather than gameplay authority.
 /// </summary>
 public sealed class DispatchFeasibilityService(
     IAircraftRegistrySource aircraftRegistry,
