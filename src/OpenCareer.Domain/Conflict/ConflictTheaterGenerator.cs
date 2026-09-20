@@ -358,7 +358,7 @@ public static class ConflictTheaterGenerator
                 : AirUnitRole.Fighter;
         }
 
-        return index % 4 switch
+        return (index % 4) switch
         {
             0 => AirUnitRole.Fighter,
             1 => AirUnitRole.Transport,
