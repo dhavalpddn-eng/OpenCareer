@@ -543,6 +543,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     private bool ConfigureLocalWeather(nint handle)
     {
+        // MSFS 2024 ambient wind SimVars report weather at the user-aircraft
+        // position, so this optional stream is never treated as remote-airport weather.
         foreach (var datum in SimConnectLocalWeatherDefinition.Data)
         {
             int result = _api.AddToDataDefinition(
