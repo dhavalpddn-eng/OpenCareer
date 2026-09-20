@@ -13,6 +13,8 @@ internal static class SimConnectMessageDecoder
     private const int SimObjectDataHeaderSize = HeaderSize + 7 * sizeof(uint);
     private const int ListHeaderSize = HeaderSize + 4 * sizeof(uint);
     private const int SimObjectLiverySize = 512;
+    // The native C++ layout pads after the 1-byte IsListItem field so ItemIndex,
+    // ListSize, and the flexible Data payload remain DWORD-aligned.
     private const int FacilityDataPayloadOffset = 40;
     private const int AirportFacilityPayloadSize = 72;
     private const int RunwayFacilityPayloadSize = 30;
