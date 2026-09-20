@@ -472,7 +472,7 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: Linux PR CI is green through `ddcf31b2` with **227/227 xUnit + 29/29 SimLab**. Windows PR CI is green through `f9aac31b` with the WinUI app and live probe building at 0 errors and **226/226 xUnit**. The latest snapshot-only Windows run is still pending; do not claim that final head Windows-green until it completes.
+Verification note: code head `ddcf31b2` is green on both platforms. Linux PR CI passed **227/227 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **227/227 xUnit**.
 
 ## Remaining
 
@@ -485,7 +485,7 @@ Verification note: Linux PR CI is green through `ddcf31b2` with **227/227 xUnit 
 - [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
 - [ ] Implement production Military/Government/Conflict UI against the conflict application service.
 - [ ] Add large deterministic campaign balance/stress batches.
-- [ ] Record the final-head Windows validation after the newest Military/Government snapshot slice completes.
+- [x] Record Linux + Windows validation for code head `ddcf31b2`: 227/227 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
 - [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
 - [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 
