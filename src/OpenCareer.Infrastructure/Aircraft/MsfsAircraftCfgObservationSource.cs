@@ -62,6 +62,9 @@ public sealed class MsfsAircraftCfgObservationSource(
             || metadata.EngineType is not null
             || metadata.PassengerCapacity is not null;
 
+        AircraftDispatchPerformanceProfile? dispatchPerformance =
+            TryReadDispatchPerformance(match.AircraftCfgPath);
+
         var observation = new AircraftRegistryObservation(
             canonicalAircraftId,
             ProviderId,
@@ -70,7 +73,8 @@ public sealed class MsfsAircraftCfgObservationSource(
             IsInstalled: false,
             MaximumRangeNauticalMiles: variation.MaximumRangeNauticalMiles,
             EngineCount: document.EngineCount,
-            ReferenceMetadata: hasMetadata ? metadata : null);
+            ReferenceMetadata: hasMetadata ? metadata : null,
+            DispatchPerformance: dispatchPerformance);
 
         return Task.FromResult<IReadOnlyList<AircraftRegistryObservation>>([observation]);
     }
@@ -130,6 +134,7 @@ public sealed class MsfsAircraftCfgObservationSource(
 
                         yield return new(
                             $"root-{rootIndex}:{relativePath}#{variation.SectionName}",
+                            path,
                             document,
                             variation);
                     }
@@ -154,8 +159,135 @@ public sealed class MsfsAircraftCfgObservationSource(
         }
     }
 
+    private static AircraftDispatchPerformanceProfile? TryReadDispatchPerformance(
+        string aircraftCfgPath)
+    {
+        string? directory = Path.GetDirectoryName(aircraftCfgPath);
+        if (string.IsNullOrWhiteSpace(directory))
+            return null;
+
+        MsfsFlightModelDispatchFacts? flightModel =
+            TryReadFlightModel(FindUniqueSibling(directory, "flight_model.cfg"));
+
+        MsfsFlightPerformanceDispatchFacts? flightPerformance =
+            TryReadFlightPerformance(
+                FindUniqueSibling(directory, "flight_performance.cfg"));
+
+        if (flightModel is null && flightPerformance is null)
+            return null;
+
+        var profile = new AircraftDispatchPerformanceProfile(
+            OperatingEmptyWeightPounds: null,
+            MaximumTakeoffWeightPounds:
+                flightModel?.MaximumTakeoffWeightPounds,
+            MaximumFuelWeightPounds:
+                flightPerformance?.MaximumFuelWeightPounds,
+            PayloadRangeEnvelope: null,
+            Confidence: AircraftDataConfidence.Reference,
+            Source: "MSFS 2024 local aircraft configuration",
+            ConfiguredEmptyWeightPounds:
+                flightModel?.ConfiguredEmptyWeightPounds,
+            MaximumLandingWeightPounds:
+                flightModel?.MaximumLandingWeightPounds,
+            MaximumZeroFuelWeightPounds:
+                flightModel?.MaximumZeroFuelWeightPounds);
+
+        bool hasAny =
+            profile.MaximumTakeoffWeightPounds is not null
+            || profile.MaximumFuelWeightPounds is not null
+            || profile.ConfiguredEmptyWeightPounds is not null
+            || profile.MaximumLandingWeightPounds is not null
+            || profile.MaximumZeroFuelWeightPounds is not null;
+
+        if (!hasAny)
+            return null;
+
+        try
+        {
+            profile.Validate();
+            return profile;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static MsfsFlightModelDispatchFacts? TryReadFlightModel(string? path)
+    {
+        if (path is null)
+            return null;
+
+        try
+        {
+            MsfsFlightModelDispatchFacts facts =
+                MsfsFlightModelCfgParser.Parse(File.ReadAllText(path));
+
+            return facts.HasAny ? facts : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static MsfsFlightPerformanceDispatchFacts? TryReadFlightPerformance(
+        string? path)
+    {
+        if (path is null)
+            return null;
+
+        try
+        {
+            MsfsFlightPerformanceDispatchFacts facts =
+                MsfsFlightPerformanceCfgParser.Parse(File.ReadAllText(path));
+
+            return facts.HasAny ? facts : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static string? FindUniqueSibling(
+        string directory,
+        string fileName)
+    {
+        try
+        {
+            string[] matches = Directory
+                .EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly)
+                .Where(path => string.Equals(
+                    Path.GetFileName(path),
+                    fileName,
+                    StringComparison.OrdinalIgnoreCase))
+                .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return matches.Length == 1 ? matches[0] : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     private sealed record MatchingVariation(
         string ProviderRecordId,
+        string AircraftCfgPath,
         AircraftCfgDocument Document,
         AircraftCfgVariation Variation);
 }
