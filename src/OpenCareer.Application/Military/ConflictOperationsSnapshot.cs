@@ -39,6 +39,18 @@ public sealed record ActiveMilitaryOperationProjection(
     SupportRequestType Type,
     string Stage);
 
+public sealed record CompletedMilitaryOperationProjection(
+    string CampaignId,
+    string TheaterId,
+    string OperationId,
+    string OperationName,
+    ConflictCampaignOutcome Outcome,
+    ConflictCampaignPhase FinalPhase,
+    double FinalFriendlyControlAverage,
+    DateTimeOffset EndedAt,
+    ConflictFactionOperationalPosture? FinalFriendlyPosture,
+    ConflictFactionOperationalPosture? FinalHostilePosture);
+
 public sealed record ConflictOperationsSnapshot(
     string CampaignId,
     string TheaterId,
@@ -59,7 +71,7 @@ public sealed record ConflictOperationsSnapshot(
     ConflictMapUnitProjection[] Units,
     ConflictThreatProjection[] Threats,
     ConflictSupportProjection[] SupportRequests,
-    ConflictCampaignHistoryEntry[] CompletedCampaigns,
+    CompletedMilitaryOperationProjection[] CompletedCampaigns,
     ActiveMilitaryOperationProjection? ActiveOperation,
     DateTimeOffset AsOf);
 
@@ -134,6 +146,11 @@ public static class ConflictOperationsSnapshotBuilder
                     request.ExpiresAt))
                 .ToArray();
 
+        CompletedMilitaryOperationProjection[] completed =
+            checkpoint.History
+                .Select(ProjectCompletedOperation)
+                .ToArray();
+
         return new ConflictOperationsSnapshot(
             checkpoint.CampaignId,
             checkpoint.World.TheaterId,
@@ -154,7 +171,7 @@ public static class ConflictOperationsSnapshotBuilder
             ground.Concat(air).ToArray(),
             threats,
             requests,
-            checkpoint.History.ToArray(),
+            completed,
             BuildActiveOperation(checkpoint),
             checkpoint.SavedAt);
     }
@@ -167,6 +184,20 @@ public static class ConflictOperationsSnapshotBuilder
             faction.ShortCode,
             faction.Side,
             faction.Posture);
+
+    private static CompletedMilitaryOperationProjection ProjectCompletedOperation(
+        ConflictCampaignHistoryEntry entry) =>
+        new(
+            entry.CampaignId,
+            entry.TheaterId,
+            entry.Identity.OperationId,
+            entry.Identity.OperationName,
+            entry.Outcome,
+            entry.FinalPhase,
+            entry.FinalFriendlyControlAverage,
+            entry.EndedAt,
+            entry.FinalFriendlyPosture,
+            entry.FinalHostilePosture);
 
     private static ActiveMilitaryOperationProjection? BuildActiveOperation(
         ConflictCampaignCheckpoint checkpoint)
