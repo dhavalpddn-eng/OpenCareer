@@ -39,10 +39,10 @@ Windows app stays authoritative. See `docs/efb-integration.md`.
 The FlightSession/live SimConnect gate for the tested F-22/KRME developer fixture is accepted. Do not rerun the full live flight unless a new code change affects that area. This acceptance does not imply every aircraft exposes every telemetry field consistently; the F-22 fuel-quantity behavior remains an explicit follow-up.
 
 ## Aircraft registry / runway feasibility
-Slice 1 adds provider-neutral aircraft/runway records, Application source boundaries and deterministic `Feasible / Infeasible / InsufficientData` runway compatibility with explicit reasons. Slice 2 adds deterministic multi-provider aircraft resolution: exact canonical identity grouping only, field-level confidence precedence/provenance, installed-vs-known status, and explicit unresolved capability fields. Unknown values are never converted to zero/false performance. No MSFS discovery adapter or Jobs generator exists yet.
+Slice 1 adds provider-neutral aircraft/runway records, Application source boundaries and deterministic `Feasible / Infeasible / InsufficientData` runway compatibility with explicit reasons. Slice 2 adds deterministic multi-provider aircraft resolution: exact canonical identity grouping only, field-level confidence precedence/provenance, installed-vs-known status, and explicit unresolved capability fields. Slice 3 uses the official MSFS 2024 `SimConnect_EnumerateSimObjectsAndLiveries` API to enumerate spawnable user-selectable aircraft on the existing serialized SimConnect worker. Livery variants collapse to one installed-aircraft identity and discovery becomes unavailable again on disconnect. Enumeration supplies verified installed identity/display title only; it does not fabricate payload/range/runway performance. No Jobs generator exists yet.
 
 ## Next
-1. Add the first real installed-aircraft discovery adapter only from verified MSFS-supported/local package data sources; do not invent SDK discovery APIs.
+1. Add aircraft capability enrichment from verified aircraft configuration/reference data while preserving explicit unknown fields.
 2. Add an airport/runway adapter with provenance and cache semantics so physical records can be populated without making an external API authoritative.
 3. Extend dispatch with operation-specific payload/weight/range/weather/safety-margin checks.
 4. Only then feed eligible aircraft/airport combinations into market-driven Jobs generation.

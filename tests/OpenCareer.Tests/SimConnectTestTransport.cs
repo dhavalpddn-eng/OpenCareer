@@ -33,6 +33,8 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
     internal int TelemetryRequestResult { get; set; }
     internal ConcurrentQueue<(uint EventId, string EventName)> SystemEvents { get; } = new();
     internal int SubscribeResult { get; set; }
+    internal ConcurrentQueue<(uint RequestId, SimConnectSimObjectType Type)> AircraftEnumerations { get; } = new();
+    internal int AircraftEnumerationResult { get; set; }
 
     internal void Enqueue(byte[]? packet = null, int result = 0, Action? action = null) =>
         _dispatch.Enqueue((packet, result, action));
@@ -109,6 +111,20 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         {
             SystemEvents.Enqueue((eventId, eventName));
             return SubscribeResult;
+        }
+        finally { Exit(); }
+    }
+
+    public int EnumerateSimObjectsAndLiveries(
+        nint handle,
+        uint requestId,
+        SimConnectSimObjectType type)
+    {
+        Enter();
+        try
+        {
+            AircraftEnumerations.Enqueue((requestId, type));
+            return AircraftEnumerationResult;
         }
         finally { Exit(); }
     }
@@ -194,12 +210,44 @@ internal static class SimConnectPackets
         return bytes;
     }
 
+    internal static byte[] EnumeratedSimObjects(
+        uint requestId,
+        uint entryNumber,
+        uint outOf,
+        params (string AircraftTitle, string LiveryName)[] entries)
+    {
+        const int headerSize = 28;
+        const int entrySize = 512;
+        byte[] bytes = Header(39, headerSize + entries.Length * entrySize);
+        BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
+        BitConverter.GetBytes((uint)entries.Length).CopyTo(bytes, 16);
+        BitConverter.GetBytes(entryNumber).CopyTo(bytes, 20);
+        BitConverter.GetBytes(outOf).CopyTo(bytes, 24);
+
+        for (int index = 0; index < entries.Length; index++)
+        {
+            WriteFixedString(bytes, headerSize + index * entrySize, entries[index].AircraftTitle);
+            WriteFixedString(bytes, headerSize + index * entrySize + 256, entries[index].LiveryName);
+        }
+
+        return bytes;
+    }
+
     internal static byte[] SystemState(uint requestId, uint inFlight = 0)
     {
         byte[] bytes = Header(15, 284);
         BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
         BitConverter.GetBytes(inFlight).CopyTo(bytes, 16);
         return bytes;
+    }
+
+    private static void WriteFixedString(byte[] bytes, int offset, string value)
+    {
+        byte[] encoded = Encoding.ASCII.GetBytes(value);
+        if (encoded.Length > 255)
+            throw new ArgumentOutOfRangeException(nameof(value));
+
+        encoded.CopyTo(bytes, offset);
     }
 
     internal static void WithPointer(byte[] bytes, Action<nint, uint> action)
