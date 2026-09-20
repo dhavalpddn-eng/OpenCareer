@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1500" viewBox="0 0 1800 1500">
+<defs>
+  <style>
+    .bg{fill:#0B1520}.surface{fill:#111E2B;stroke:#294156;stroke-width:2}.alt{fill:#172737}.accent{fill:#4EA8DE}.ok{fill:#52D273}.warn{fill:#F4B942}.danger{fill:#FF4D4D}
+    .t{fill:#EAF2F8;font-family:Segoe UI,Arial,sans-serif}.m{fill:#9FB1C2;font-family:Segoe UI,Arial,sans-serif}
+    .title{font-size:22px;font-weight:600}.label{font-size:15px;font-weight:600}.small{font-size:12px}.tiny{font-size:10px}
+  </style>
+</defs>
+<rect class="bg" width="1800" height="1500"/>
+<text class="t title" x="36" y="42">OpenCareer — UI Screen Atlas</text>
+<text class="m small" x="36" y="66">Canonical 15-tab NavigationView target. Miniatures show information hierarchy, not final pixel-perfect content.</text>
+
+<g transform="translate(30,90)">
+<g transform="translate(0,0)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Dashboard</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Status / current assignment</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Home base</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Career / finance / aircraft</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Alerts / recent activity</text>
+ </g><g transform="translate(580,0)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Dispatch</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Route + map workspace</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Aircraft / payload / fuel</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Runway feasibility</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Validation + dispatch</text>
+ </g><g transform="translate(1160,0)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Jobs</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Filters</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Job list</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Selected job / eligibility</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Accept -> Dispatch</text>
+ </g><g transform="translate(0,270)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Current Flight</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Flight state</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Map / route</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Core telemetry</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Objectives / events</text>
+ </g><g transform="translate(580,270)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Map / World</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Large layered map</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Airports / bases</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Markets / events</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Selected location</text>
+ </g><g transform="translate(1160,270)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Aircraft</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Registry</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Access type</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Capabilities / confidence</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">History / maintenance</text>
+ </g><g transform="translate(0,540)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Hangar / Bases</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Base map</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Hangar/storage</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Aircraft locations</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Relationships / expansion</text>
+ </g><g transform="translate(580,540)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Maintenance</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Aircraft condition</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Components / damage</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Due work</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Cost / downtime / history</text>
+ </g><g transform="translate(1160,540)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Company</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Company footprint</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Contracts</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Automation / staff</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Relationships / utilization</text>
+ </g><g transform="translate(0,810)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Finances</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Liquidity</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Income / expenses</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Loans / insurance</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Ledger / credit</text>
+ </g><g transform="translate(580,810)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Markets</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Region selector</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Demand / supply</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Commodities / trends</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Events / route opportunity</text>
+ </g><g transform="translate(1160,810)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="danger" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Military / Government</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Authorization</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Government work</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Theaters / assignments</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Conflict Operations</text>
+ </g><g transform="translate(0,1080)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Logbook</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Session list</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Leg hierarchy</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Route + metrics</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Settlement / assistance flags</text>
+ </g><g transform="translate(580,1080)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Career</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Licenses / ratings</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">Experience</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Reputation / relationships</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Qualifications / milestones</text>
+ </g><g transform="translate(1160,1080)">
+ <rect class="surface" x="0" y="0" rx="14" width="550" height="240"/>
+ <rect class="accent" x="0" y="0" rx="14" width="8" height="240"/>
+ <text class="t label" x="24" y="30">Settings</text>
+ <rect class="alt" x="24" y="48" rx="8" width="502" height="40"/>
+ <text class="m tiny" x="38" y="72">Simulator</text>
+ <rect class="alt" x="24" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="38" y="130">UI / gameplay</text>
+ <rect class="alt" x="284" y="100" rx="8" width="242" height="54"/>
+ <text class="m tiny" x="298" y="130">Persistence</text>
+ <rect class="alt" x="24" y="166" rx="8" width="502" height="50"/>
+ <text class="m tiny" x="38" y="194">Diagnostics / optional services</text>
+ </g>
+</g>
+</svg>
