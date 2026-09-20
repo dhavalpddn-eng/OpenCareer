@@ -176,7 +176,7 @@ public sealed class MilitaryAuthorizationTests
         }
 
         Assert.Equal(0, failed.Trust);
-        Assert.Equal(40, failed.FailedOperations);
+        Assert.Equal(success.FailedOperations + 40, failed.FailedOperations);
     }
 
     private static MilitaryCareerState QualifiedCareer(

@@ -22,7 +22,17 @@ public sealed class ConflictTheaterGeneratorTests
             theaterSeed: 123456789UL,
             Epoch);
 
-        Assert.Equal(first, second);
+        Assert.Equal(first.SchemaVersion, second.SchemaVersion);
+        Assert.Equal(first.TheaterId, second.TheaterId);
+        Assert.Equal(first.TheaterSeed, second.TheaterSeed);
+        Assert.Equal(first.Tick, second.Tick);
+        Assert.Equal(first.UpdatedAt, second.UpdatedAt);
+        Assert.Equal(first.Units, second.Units);
+        Assert.Equal(first.AirUnits, second.AirUnits);
+        Assert.Equal(first.Sectors, second.Sectors);
+        Assert.Equal(first.Threats, second.Threats);
+        Assert.Equal(first.SupportRequests, second.SupportRequests);
+        Assert.Equal(first.ProcessedEventIds, second.ProcessedEventIds);
         Assert.Equal(9, first.Sectors.Length);
         Assert.Equal(template.FriendlyGroundUnits + template.HostileGroundUnits, first.Units.Length);
         Assert.Equal(template.FriendlyAirUnits + template.HostileAirUnits, first.AirUnits.Length);
@@ -43,8 +53,8 @@ public sealed class ConflictTheaterGeneratorTests
             theaterSeed: 200UL,
             Epoch);
 
-        Assert.NotEqual(first.Units, second.Units);
-        Assert.NotEqual(first.AirUnits, second.AirUnits);
+        Assert.False(first.Units.SequenceEqual(second.Units));
+        Assert.False(first.AirUnits.SequenceEqual(second.AirUnits));
     }
 
     [Fact]

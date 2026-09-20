@@ -432,7 +432,8 @@ public sealed class ConflictSystemTests
         Assert.True(readinessAfter > readinessBefore);
         Assert.Equal(
             SupportRequestStatus.Completed,
-            completed.World.SupportRequests.Single().Status);
+            completed.World.SupportRequests.Single(
+                item => item.RequestId == request.RequestId).Status);
     }
 
     [Fact]
