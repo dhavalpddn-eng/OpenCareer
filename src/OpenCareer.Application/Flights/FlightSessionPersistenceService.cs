@@ -37,6 +37,7 @@ public sealed class FlightSessionPersistenceService
         DateTimeOffset timestamp,
         Guid? contractId = null,
         Guid? sessionId = null,
+        FlightSessionPlan? plan = null,
         CancellationToken cancellationToken = default)
     {
         if (_coordinator.Current is { IsTerminal: false })
@@ -49,7 +50,8 @@ public sealed class FlightSessionPersistenceService
             FlightSession.Start(
                 timestamp,
                 contractId,
-                sessionId);
+                sessionId,
+                plan);
 
         await _store
             .SaveAsync(session, cancellationToken)
