@@ -6,6 +6,7 @@ using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Application.Military;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
@@ -49,6 +50,9 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SqliteLogbookStore>());
         services.AddSingleton<ILogbookWriter>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
+        services.AddSingleton<SqliteConflictCampaignStore>();
+        services.AddSingleton<IConflictCampaignStore>(provider =>
+            provider.GetRequiredService<SqliteConflictCampaignStore>());
         services.AddSingleton<LogbookCommitCoordinator>();
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
