@@ -539,7 +539,13 @@ public sealed class MilitaryGovernmentViewModelTests
         var previous = ConflictCampaignHistoryEntry.FromCheckpoint(
             CompletedRecord().Checkpoint) with
         {
-            CampaignId = "previous-archive"
+            CampaignId = "previous-archive",
+            Identity = ConflictCampaignHistoryEntry.FromCheckpoint(
+                CompletedRecord().Checkpoint).Identity with
+            {
+                OperationId = "operation:previous-archive",
+                OperationName = "Operation Previous Archive"
+            }
         };
         ConflictCampaignStoreRecord completed = CompletedRecord();
         completed = new ConflictCampaignStoreRecord(
