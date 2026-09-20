@@ -10,7 +10,9 @@ public sealed record ConflictCampaignHistoryEntry(
     ConflictCampaignPhase FinalPhase,
     long EvaluationSequence,
     double FinalFriendlyControlAverage,
-    DateTimeOffset EndedAt)
+    DateTimeOffset EndedAt,
+    ConflictFactionOperationalPosture? FinalFriendlyPosture = null,
+    ConflictFactionOperationalPosture? FinalHostilePosture = null)
 {
     public static ConflictCampaignHistoryEntry FromCheckpoint(
         ConflictCampaignCheckpoint checkpoint)
@@ -31,6 +33,11 @@ public sealed record ConflictCampaignHistoryEntry(
                 checkpoint.CampaignId,
                 checkpoint.World);
 
+        ConflictCampaignIdentity terminalIdentity =
+            ConflictFactionOutcomePosturePolicy.Apply(
+                identity,
+                campaign.Outcome);
+
         var entry = new ConflictCampaignHistoryEntry(
             checkpoint.CampaignId,
             checkpoint.World.TheaterId,
@@ -39,7 +46,9 @@ public sealed record ConflictCampaignHistoryEntry(
             campaign.Phase,
             campaign.EvaluationSequence,
             campaign.FriendlyControlAverage,
-            campaign.UpdatedAt);
+            campaign.UpdatedAt,
+            terminalIdentity.FriendlyFaction.Posture,
+            terminalIdentity.HostileFaction.Posture);
 
         entry.Validate();
         return entry;
@@ -68,5 +77,10 @@ public sealed record ConflictCampaignHistoryEntry(
             throw new ArgumentOutOfRangeException(
                 nameof(FinalFriendlyControlAverage));
         }
+
+        if (FinalFriendlyPosture is { } friendly && !Enum.IsDefined(friendly))
+            throw new ArgumentOutOfRangeException(nameof(FinalFriendlyPosture));
+        if (FinalHostilePosture is { } hostile && !Enum.IsDefined(hostile))
+            throw new ArgumentOutOfRangeException(nameof(FinalHostilePosture));
     }
 }
