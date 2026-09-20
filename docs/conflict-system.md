@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. The branch is being kept synchronized with `feature/m1-simulation-core`. The latest persistence/recovery slice is at `aec8fdfe`; it has not yet received a fresh CI run because the repository workflows currently target `main` PR/push events rather than this feature-to-feature PR.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. The branch is being kept synchronized with `feature/m1-simulation-core`. The latest military application slice is at `d97f0276`; it has not yet received a fresh CI run because the repository workflows currently target `main` PR/push events rather than this feature-to-feature PR.
 
 ## Boundary
 
@@ -45,7 +45,10 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - checkpoint validation that rejects orphaned reserved requests, duplicate active mission IDs and request/mission type mismatches,
 - SQLite conflict-campaign persistence in the shared `opencareer.db`, including schema migration v2, WAL-compatible storage and optimistic revision checks against stale writers,
 - WinUI dependency-injection registration for `IConflictCampaignStore`,
-- deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation and SQLite campaign recovery.
+- persistent `ConflictCampaignState` with campaign phase, friendly momentum and deterministic strategic objectives for control, intelligence, readiness and threat reduction,
+- `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
+- `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
+- deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation, SQLite campaign recovery, strategic evolution and dispatch authorization.
 
 ## Deliberately abstract
 
@@ -57,8 +60,8 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 
 - automatic runtime bootstrap that loads the active campaign checkpoint when the Military/Government feature becomes a production application flow,
 - database-consistent backup/restore coverage for conflict checkpoints,
-- richer named faction/campaign state beyond Friendly/Hostile/Neutral,
-- long-term theater objectives and campaign evolution,
+- richer named faction identity beyond Friendly/Hostile/Neutral,
+- richer long-term theater evolution beyond the first phase/momentum/objective director,
 - player career onboarding/persistence for military affiliation and qualifications,
 - authoritative aircraft assignment issuance through the fleet/dispatch system,
 - authoritative job/economy settlement integration,
