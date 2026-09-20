@@ -78,6 +78,18 @@ The Current Flight page may display these values but still says **No active flig
 
 The first pass intentionally does not request aircraft title/type, autopilot detail, per-tank fuel or arbitrary payload-station arrays. Add fields only when the flight detector/session tracker has a concrete need and official SDK semantics are verified.
 
+## Production planning composition
+
+Slice 11 registers the existing planning sources and orchestrator in the WinUI production service graph without moving simulator logic into UI code:
+
+- `SimConnectInstalledAircraftObservationSource` and read-only `MsfsAircraftCfgObservationSource` feed `AircraftRegistryCatalogService`.
+- `SimConnectAirportDataObservationSource` feeds `CachedAirportDataSource`; local simulator observations retain authority and no lower-authority runway facts are merged into them.
+- `SimConnectLocalAirportWeatherSource` is the current `IAirportDispatchWeatherSource`.
+- `OperationDispatchPlanningService` consumes only the Application interfaces.
+- `MsfsUserConfigLocator` locates existing Steam/Store `UserCfg.opt` files and supports the optional `OPENCAREER_MSFS2024_USERCFG` override. It reads `InstalledPackagesPath` only; OpenCareer does not edit `UserCfg.opt`.
+
+No external airport/weather source, qualification gate, authorization gate or Jobs generator is introduced by this composition.
+
 ## Native runtime and Windows build
 
 The adapter currently uses eleven documented native exports through P/Invoke: Open, CallDispatch, AddToDataDefinition, RequestDataOnSimObject, SubscribeToSystemEvent, RequestSystemState, EnumerateSimObjectsAndLiveries, AddToFacilityDefinition, RequestFacilityData, GetLastSentPacketID and Close. Slice 10 adds no second worker and no deprecated weather-station API. This avoids binding .NET 10 to the SDK's legacy .NET Framework managed wrapper. Official ABI signatures/layouts are recorded in source and decoder tests.
@@ -110,18 +122,26 @@ When `MSFS2024_SDK` is not configured, provide the installed SDK DLL explicitly:
 
 The probe prints connection transitions and compact telemetry lines, and writes a JSONL trace under `%LOCALAPPDATA%\OpenCareer\Diagnostics` by default. Use `-Output` to choose a path or `-DurationSeconds` for a bounded run. The trace records session metadata, simulator identity/version, connection issues, every normalized telemetry sample, telemetry clearing and the final clean-stop summary.
 
+Slice 11 adds a focused facility/local-weather acceptance path. Start MSFS with the user aircraft physically at the airport being checked, then run for example:
+
+```powershell
+.\tools\run-live-probe.ps1 -Airport KRME -DurationSeconds 30
+```
+
+`KRME` remains a developer fixture only; any suitable test airport identifier may be supplied. The probe waits until live telemetry is flowing, requests the real facility data through the production SimConnect connection, then requests the Slice 10 local-weather observation. The JSONL trace receives an `airportValidation` record containing facility provenance, runway dimensions/surfaces/closure state, density altitude and runway-relative wind components. The probe returns exit code 2 when `-Airport` was requested but both facility and local-weather evidence were not established. This path does not start or validate a FlightSession.
+
 The probe must be run on the user's Windows machine with the real SDK runtime and MSFS 2024. A successful CI build only proves the tool compiles.
 
 Analyze a saved capture with [OpenCareer.TraceAnalysis](../tools/OpenCareer.TraceAnalysis/README.md). It runs without MSFS on Windows/Linux and reports observed snapshot cadence, field ranges, connection/pause/clearing evidence and malformed or incomplete records. A structurally clean report does not replace instrument comparison or the manual acceptance checklist below.
 
 ## CI verification
 
-Tested implementation/tooling head: `540029c378a507f729dfe451db642eca4065ae65`. Production telemetry implementation: `7fddbe1cc5d30fbe17411eef341f8f22dbbba92f`.
+Slice 11 code validation head: `768cb42ebf28c234ed166a0fad4766155441d6c8`.
 
-- Windows x64 Release: [run 35299270135](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270135) — WinUI and `OpenCareer.LiveProbe` builds both succeeded with **0 warnings, 0 errors**; **104/104 xUnit tests passed**, including trace-analyzer compilation and tests.
-- Linux: [run 35299270186](https://github.com/dhavalpddn-eng/OpenCareer/actions/runs/35299270186) — **104/104 xUnit tests** and **29/29 SimLab scenarios** passed.
+- Windows x64 Release: run `35535655890` — WinUI and `OpenCareer.LiveProbe` builds succeeded with **0 warnings, 0 errors**; **362/362 xUnit tests passed**.
+- Linux: run `35535655870` — build succeeded with **0 warnings, 0 errors**; **362/362 xUnit tests** and **29/29 SimLab scenarios** passed.
 
-The tests inject native-call results and raw SDK-shaped callback buffers. Coverage includes simulator absence, acknowledgement, serialized ownership, quit/loss/retry, heartbeat failures, malformed messages, EVENT/SIMOBJECT_DATA decoding, telemetry setup failure, normalization, pause updates, stale-data clearing, restart/disposal and ViewModel display refresh.
+The tests inject native-call results and raw SDK-shaped callback buffers. They prove deterministic mapping, source composition behavior and tool compilation, but they do not execute the native simulator facility/weather path. The new `-Airport` probe path remains the focused real-MSFS acceptance step.
 
 The suite also covers pure flight reducers and offline trace analysis. Analyzer fixtures are synthetic, covering cadence boundaries, missing/invalid data, truncated captures and cleanup/count consistency. Local CLI checks verify JSON output, exit codes and preservation of the input file.
 
