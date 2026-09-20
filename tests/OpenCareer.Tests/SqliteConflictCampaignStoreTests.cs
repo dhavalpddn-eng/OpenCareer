@@ -24,7 +24,16 @@ public sealed class SqliteConflictCampaignStoreTests
 
             Assert.NotNull(loaded);
             Assert.Equal(1, saved.Revision);
-            Assert.Equal(checkpoint, loaded!.Checkpoint);
+            Assert.Equal(checkpoint.CampaignId, loaded!.Checkpoint.CampaignId);
+            Assert.Equal(checkpoint.MilitaryCareer, loaded.Checkpoint.MilitaryCareer);
+            Assert.Equal(checkpoint.PlayerCombatState, loaded.Checkpoint.PlayerCombatState);
+            Assert.Equal(checkpoint.World.TheaterId, loaded.Checkpoint.World.TheaterId);
+            Assert.Equal(checkpoint.World.TheaterSeed, loaded.Checkpoint.World.TheaterSeed);
+            Assert.Equal(checkpoint.World.Units, loaded.Checkpoint.World.Units);
+            Assert.Equal(checkpoint.World.Sectors, loaded.Checkpoint.World.Sectors);
+            Assert.Equal(
+                checkpoint.CombatSupportMissions,
+                loaded.Checkpoint.CombatSupportMissions);
             Assert.Equal(
                 loaded.Checkpoint.CombatSupportMissions.Single().MissionId,
                 loaded.Checkpoint.World.SupportRequests.Single().ReservedMissionId);
