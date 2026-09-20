@@ -162,6 +162,74 @@ public sealed class FlightTelemetryEvidenceProcessorTests
     }
 
     [Fact]
+    public void LandingRolloutRequiresConfirmedTouchdownAndLowGroundSpeed()
+    {
+        var processor =
+            new FlightTelemetryEvidenceProcessor(
+                new FlightEvidenceProcessorOptions(
+                    StableTelemetrySamples: 1,
+                    AirborneConfirmationSamples: 1,
+                    GroundConfirmationSamples: 2,
+                    LandingRolloutMaximumGroundSpeedKnots: 25));
+
+        _ =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        0,
+                        onGround: false,
+                        altitudeAgl: 500,
+                        groundSpeed: 90,
+                        indicatedAirspeed: 85,
+                        enginesRunning: 1)));
+
+        _ =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        1,
+                        onGround: true,
+                        groundSpeed: 50,
+                        indicatedAirspeed: 45,
+                        enginesRunning: 1)));
+
+        FlightStateEvidence touchdown =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        2,
+                        onGround: true,
+                        groundSpeed: 40,
+                        indicatedAirspeed: 35,
+                        enginesRunning: 1)));
+
+        FlightStateEvidence fastRollout =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        3,
+                        onGround: true,
+                        groundSpeed: 30,
+                        indicatedAirspeed: 25,
+                        enginesRunning: 1)));
+
+        FlightStateEvidence rollout =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        4,
+                        onGround: true,
+                        groundSpeed: 20,
+                        indicatedAirspeed: 15,
+                        enginesRunning: 1)));
+
+        Assert.True(touchdown.TouchdownConfirmed);
+        Assert.False(touchdown.LandingRolloutConfirmed);
+        Assert.False(fastRollout.LandingRolloutConfirmed);
+        Assert.True(rollout.LandingRolloutConfirmed);
+    }
+
+    [Fact]
     public void RejectedTakeoffRequiresPriorTakeoffCandidate()
     {
         var processor =
