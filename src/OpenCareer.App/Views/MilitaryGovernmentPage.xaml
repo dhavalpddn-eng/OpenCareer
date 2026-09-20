@@ -308,6 +308,49 @@
                 </StackPanel>
             </Border>
 
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="22">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="COMPLETED OPERATIONS"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="{Binding CompletedOperationStatusText}"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}"
+                               TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{Binding CompletedOperations}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource OpenCareerTableRowStyle}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="{Binding OperationName}"
+                                                   Style="{StaticResource OpenCareerPaperTitleStyle}"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding OutcomeText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                        <TextBlock Text="{Binding TheaterText}"
+                                                   Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                        <TextBlock Text="{Binding EndedText}"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding FinalStateText}"
+                                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Text="FRIENDLY COMMAND"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding FriendlyFactionText}"
+                                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Text="OPPOSING FORCE"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding HostileFactionText}"
+                                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
             <Border Style="{StaticResource OpenCareerMetalInsetStyle}"
                     Padding="18">
                 <TextBlock Text="Conflict state is simulated by OpenCareer. MSFS supplies aircraft flight telemetry only; it does not provide combat, weapon, target or battle-outcome authority."

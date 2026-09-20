@@ -27,6 +27,8 @@ public sealed class MilitaryGovernmentViewModelTests
         Assert.Equal("No active operation", viewModel.OperationName);
         Assert.Empty(viewModel.SupportRequests);
         Assert.Empty(viewModel.Objectives);
+        Assert.Empty(viewModel.CompletedOperations);
+        Assert.Contains("No archived operations", viewModel.CompletedOperationStatusText);
         Assert.Contains(
             "No military campaign is active",
             viewModel.StatusMessage,
@@ -99,6 +101,73 @@ public sealed class MilitaryGovernmentViewModelTests
             "Close Air Support",
             MilitaryGovernmentViewModel.FormatWords(
                 "CloseAirSupport"));
+    }
+
+    [Fact]
+    public void HistoryUsesArchivedValuesAndStableNewestFirstOrderWithoutMutatingCampaign()
+    {
+        var runtime = CreateRuntime();
+        var store = new MemoryStore();
+        var archived = ConflictCampaignHistoryEntry.FromCheckpoint(CompletedRecord().Checkpoint);
+        var older = archived with { CampaignId = "older", EndedAt = Epoch.AddHours(-2) };
+        var tiedZ = archived with { CampaignId = "z-tied", EndedAt = Epoch.AddHours(-1) };
+        var tiedA = archived with
+        {
+            CampaignId = "a-tied",
+            Outcome = ConflictCampaignOutcome.Ceasefire,
+            FinalPhase = ConflictCampaignPhase.HostilePressure,
+            FinalFriendlyControlAverage = 0.25,
+            EndedAt = Epoch.AddHours(-1)
+        };
+        ConflictCampaignHistoryEntry[] history = [older, tiedZ, tiedA];
+        var checkpoint = CreateCheckpoint("current-campaign") with { History = history };
+        var record = new ConflictCampaignStoreRecord(1, checkpoint);
+        runtime.Replace(record);
+        var viewModel = CreateViewModel(runtime, store);
+        var notifications = new List<string?>();
+        viewModel.PropertyChanged += (_, args) => notifications.Add(args.PropertyName);
+
+        viewModel.Refresh();
+        viewModel.Refresh();
+
+        Assert.Equal(new[] { "a-tied", "z-tied", "older" },
+            viewModel.CompletedOperations.Select(item => item.CampaignId));
+        var first = viewModel.CompletedOperations[0];
+        Assert.Equal(tiedA.Identity.OperationName, first.OperationName);
+        Assert.Equal($"Theater {tiedA.TheaterId}", first.TheaterText);
+        Assert.Equal("Ceasefire", first.OutcomeText);
+        Assert.Equal($"Final phase: Hostile Pressure • {0.25:P0} friendly control", first.FinalStateText);
+        Assert.Equal($"Ended {tiedA.EndedAt.LocalDateTime:g}", first.EndedText);
+        Assert.Contains(tiedA.Identity.FriendlyFaction.DisplayName, first.FriendlyFactionText);
+        Assert.Contains(tiedA.Identity.HostileFaction.DisplayName, first.HostileFactionText);
+        Assert.Contains(MilitaryGovernmentViewModel.FormatWords(tiedA.Identity.FriendlyFaction.Posture.ToString()), first.FriendlyFactionText);
+        Assert.Contains(MilitaryGovernmentViewModel.FormatWords(tiedA.Identity.HostileFaction.Posture.ToString()), first.HostileFactionText);
+        Assert.Contains("3 archived operation(s)", viewModel.CompletedOperationStatusText);
+        Assert.Contains(nameof(viewModel.CompletedOperations), notifications);
+        Assert.Contains(nameof(viewModel.CompletedOperationStatusText), notifications);
+        Assert.Same(record, runtime.Current);
+        Assert.Equal(new[] { "older", "z-tied", "a-tied" }, history.Select(entry => entry.CampaignId));
+        Assert.Equal(0, store.SaveAttempts);
+    }
+
+    [Fact]
+    public void SwitchingToCampaignWithoutHistoryClearsArchivedRows()
+    {
+        var runtime = CreateRuntime();
+        var archive = ConflictCampaignHistoryEntry.FromCheckpoint(CompletedRecord().Checkpoint);
+        runtime.Replace(new ConflictCampaignStoreRecord(1,
+            CreateCheckpoint("successor") with { History = [archive] }));
+        var viewModel = CreateViewModel(runtime);
+        viewModel.Refresh();
+        Assert.Single(viewModel.CompletedOperations);
+
+        runtime.Replace(CompletedRecord());
+        viewModel.Refresh();
+
+        // A terminal current campaign is not an archived predecessor yet.
+        Assert.Empty(viewModel.CompletedOperations);
+        Assert.Contains("No archived operations", viewModel.CompletedOperationStatusText);
+        Assert.True(viewModel.HasSuccessorOffer);
     }
 
     [Theory]
@@ -274,6 +343,9 @@ public sealed class MilitaryGovernmentViewModelTests
             string offeredName = viewModel.SuccessorOperationName;
             await viewModel.AcceptSuccessorAsync();
 
+            var displayedArchive = Assert.Single(viewModel.CompletedOperations);
+            Assert.Equal(completed.Checkpoint.CampaignId, displayedArchive.CampaignId);
+
             var recoveredStore = new SqliteConflictCampaignStore(options, NullLogger<SqliteConflictCampaignStore>.Instance);
             var recoveredRuntime = new ConflictCampaignRuntimeState(recoveredStore);
             await recoveredRuntime.InitializeAsync();
@@ -288,6 +360,14 @@ public sealed class MilitaryGovernmentViewModelTests
             Assert.Single(recoveredRuntime.Current.Checkpoint.History);
             Assert.Equal(completed.Checkpoint.MilitaryCareer, recoveredRuntime.Current.Checkpoint.MilitaryCareer);
             Assert.Equal(completed.Checkpoint.PlayerCombatState, recoveredRuntime.Current.Checkpoint.PlayerCombatState);
+            var recoveredArchive = Assert.Single(recoveredViewModel.CompletedOperations);
+            Assert.Equal(displayedArchive.CampaignId, recoveredArchive.CampaignId);
+            Assert.Equal(displayedArchive.OperationName, recoveredArchive.OperationName);
+            Assert.Equal(displayedArchive.FriendlyFactionText, recoveredArchive.FriendlyFactionText);
+            Assert.Equal(displayedArchive.HostileFactionText, recoveredArchive.HostileFactionText);
+            Assert.Equal(displayedArchive.OutcomeText, recoveredArchive.OutcomeText);
+            Assert.Equal(displayedArchive.FinalStateText, recoveredArchive.FinalStateText);
+            Assert.Equal(displayedArchive.EndedText, recoveredArchive.EndedText);
         }
         finally
         {

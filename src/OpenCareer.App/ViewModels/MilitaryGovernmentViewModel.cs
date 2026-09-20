@@ -21,6 +21,8 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         Array.Empty<MilitarySupportRequestItemViewModel>();
     private IReadOnlyList<MilitaryStrategicObjectiveItemViewModel> _objectives =
         Array.Empty<MilitaryStrategicObjectiveItemViewModel>();
+    private IReadOnlyList<MilitaryCompletedOperationItemViewModel> _completedOperations =
+        Array.Empty<MilitaryCompletedOperationItemViewModel>();
     private string _statusMessage =
         "No military campaign is active. Military/Government operations will appear here when a campaign is available.";
     private bool _successorDeclined;
@@ -138,6 +140,14 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
     public IReadOnlyList<MilitaryStrategicObjectiveItemViewModel> Objectives =>
         _objectives;
 
+    public IReadOnlyList<MilitaryCompletedOperationItemViewModel> CompletedOperations =>
+        _completedOperations;
+
+    public string CompletedOperationStatusText =>
+        _completedOperations.Count == 0
+            ? "No archived operations. Completed campaigns appear here after a successor operation is accepted."
+            : $"{_completedOperations.Count} archived operation(s), newest first.";
+
     public string SupportRequestStatusText =>
         _supportRequests.Count == 0
             ? "No active support requests."
@@ -207,6 +217,13 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
                 new MilitaryStrategicObjectiveItemViewModel(objective))
             .ToArray()
             ?? Array.Empty<MilitaryStrategicObjectiveItemViewModel>();
+
+        _completedOperations = _snapshot?.CompletedCampaigns
+            .OrderByDescending(static entry => entry.EndedAt)
+            .ThenBy(static entry => entry.CampaignId, StringComparer.Ordinal)
+            .Select(static entry => new MilitaryCompletedOperationItemViewModel(entry))
+            .ToArray()
+            ?? Array.Empty<MilitaryCompletedOperationItemViewModel>();
 
         _successorOffer = _transitions.GetCurrentOffer();
         _successorPresentation = _successorOffer is null
@@ -354,6 +371,8 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             nameof(AsOfText),
             nameof(SupportRequests),
             nameof(Objectives),
+            nameof(CompletedOperations),
+            nameof(CompletedOperationStatusText),
             nameof(SupportRequestStatusText),
             nameof(ObjectiveStatusText),
             nameof(SuccessorOperationName),
@@ -396,6 +415,37 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(
             this,
             new PropertyChangedEventArgs(propertyName));
+}
+
+public sealed class MilitaryCompletedOperationItemViewModel
+{
+    public MilitaryCompletedOperationItemViewModel(ConflictCampaignHistoryEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        CampaignId = entry.CampaignId;
+        OperationName = entry.Identity.OperationName;
+        TheaterText = $"Theater {entry.TheaterId}";
+        OutcomeText = MilitaryGovernmentViewModel.FormatWords(entry.Outcome.ToString());
+        FinalStateText = $"Final phase: {MilitaryGovernmentViewModel.FormatWords(entry.FinalPhase.ToString())} • " +
+            $"{entry.FinalFriendlyControlAverage:P0} friendly control";
+        EndedText = $"Ended {entry.EndedAt.LocalDateTime:g}";
+        FriendlyFactionText = FormatFaction(entry.Identity.FriendlyFaction);
+        HostileFactionText = FormatFaction(entry.Identity.HostileFaction);
+    }
+
+    public string CampaignId { get; }
+    public string OperationName { get; }
+    public string TheaterText { get; }
+    public string OutcomeText { get; }
+    public string FinalStateText { get; }
+    public string EndedText { get; }
+    public string FriendlyFactionText { get; }
+    public string HostileFactionText { get; }
+
+    private static string FormatFaction(ConflictFactionIdentity faction) =>
+        $"{faction.ShortCode} • {faction.DisplayName} • " +
+        $"{MilitaryGovernmentViewModel.FormatWords(faction.Posture.ToString())} posture";
 }
 
 public sealed class MilitarySupportRequestItemViewModel
