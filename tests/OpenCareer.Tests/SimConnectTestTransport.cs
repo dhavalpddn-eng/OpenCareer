@@ -287,10 +287,12 @@ internal static class SimConnectPackets
         uint requestId,
         uint uniqueRequestId,
         string name,
-        string icao)
+        string icao,
+        double latitudeDegrees = 0,
+        double longitudeDegrees = 0)
     {
         const int payloadOffset = 40;
-        byte[] bytes = Header(29, payloadOffset + 72);
+        byte[] bytes = Header(29, payloadOffset + 88);
         BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
         BitConverter.GetBytes(uniqueRequestId).CopyTo(bytes, 16);
         BitConverter.GetBytes(0u).CopyTo(bytes, 20);
@@ -298,8 +300,10 @@ internal static class SimConnectPackets
         bytes[28] = 0;
         BitConverter.GetBytes(0u).CopyTo(bytes, 32);
         BitConverter.GetBytes(0u).CopyTo(bytes, 36);
-        WriteFixedString(bytes, payloadOffset, name, 64);
-        WriteFixedString(bytes, payloadOffset + 64, icao, 8);
+        BitConverter.GetBytes(latitudeDegrees).CopyTo(bytes, payloadOffset);
+        BitConverter.GetBytes(longitudeDegrees).CopyTo(bytes, payloadOffset + 8);
+        WriteFixedString(bytes, payloadOffset + 16, name, 64);
+        WriteFixedString(bytes, payloadOffset + 80, icao, 8);
         return bytes;
     }
 
@@ -317,10 +321,13 @@ internal static class SimConnectPackets
         int secondaryNumber,
         int secondaryDesignator,
         bool primaryClosed = false,
-        bool secondaryClosed = false)
+        bool secondaryClosed = false,
+        double centerLatitudeDegrees = 0,
+        double centerLongitudeDegrees = 0,
+        float headingTrueDegrees = 0)
     {
         const int payloadOffset = 40;
-        byte[] bytes = Header(29, payloadOffset + 32);
+        byte[] bytes = Header(29, payloadOffset + 52);
         BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
         BitConverter.GetBytes(uniqueRequestId).CopyTo(bytes, 16);
         BitConverter.GetBytes(parentUniqueRequestId).CopyTo(bytes, 20);
@@ -328,15 +335,18 @@ internal static class SimConnectPackets
         bytes[28] = 1;
         BitConverter.GetBytes(itemIndex).CopyTo(bytes, 32);
         BitConverter.GetBytes(listSize).CopyTo(bytes, 36);
-        BitConverter.GetBytes(lengthMeters).CopyTo(bytes, payloadOffset);
-        BitConverter.GetBytes(widthMeters).CopyTo(bytes, payloadOffset + 4);
-        BitConverter.GetBytes(surface).CopyTo(bytes, payloadOffset + 8);
-        BitConverter.GetBytes(primaryNumber).CopyTo(bytes, payloadOffset + 12);
-        BitConverter.GetBytes(primaryDesignator).CopyTo(bytes, payloadOffset + 16);
-        BitConverter.GetBytes(secondaryNumber).CopyTo(bytes, payloadOffset + 20);
-        BitConverter.GetBytes(secondaryDesignator).CopyTo(bytes, payloadOffset + 24);
-        bytes[payloadOffset + 28] = primaryClosed ? (byte)1 : (byte)0;
-        bytes[payloadOffset + 29] = secondaryClosed ? (byte)1 : (byte)0;
+        BitConverter.GetBytes(centerLatitudeDegrees).CopyTo(bytes, payloadOffset);
+        BitConverter.GetBytes(centerLongitudeDegrees).CopyTo(bytes, payloadOffset + 8);
+        BitConverter.GetBytes(headingTrueDegrees).CopyTo(bytes, payloadOffset + 16);
+        BitConverter.GetBytes(lengthMeters).CopyTo(bytes, payloadOffset + 20);
+        BitConverter.GetBytes(widthMeters).CopyTo(bytes, payloadOffset + 24);
+        BitConverter.GetBytes(surface).CopyTo(bytes, payloadOffset + 28);
+        BitConverter.GetBytes(primaryNumber).CopyTo(bytes, payloadOffset + 32);
+        BitConverter.GetBytes(primaryDesignator).CopyTo(bytes, payloadOffset + 36);
+        BitConverter.GetBytes(secondaryNumber).CopyTo(bytes, payloadOffset + 40);
+        BitConverter.GetBytes(secondaryDesignator).CopyTo(bytes, payloadOffset + 44);
+        bytes[payloadOffset + 48] = primaryClosed ? (byte)1 : (byte)0;
+        bytes[payloadOffset + 49] = secondaryClosed ? (byte)1 : (byte)0;
         return bytes;
     }
 
