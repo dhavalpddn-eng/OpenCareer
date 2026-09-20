@@ -23,6 +23,7 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         Array.Empty<MilitaryStrategicObjectiveItemViewModel>();
     private IReadOnlyList<MilitaryCompletedOperationItemViewModel> _completedOperations =
         Array.Empty<MilitaryCompletedOperationItemViewModel>();
+    private MilitaryCompletedOperationItemViewModel? _selectedCompletedOperation;
     private IReadOnlyList<MilitaryOperationalMapMarkerViewModel> _operationalMapMarkers =
         Array.Empty<MilitaryOperationalMapMarkerViewModel>();
     private IReadOnlyList<MilitaryCommunicationItemViewModel> _communications =
@@ -147,6 +148,9 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
     public IReadOnlyList<MilitaryCompletedOperationItemViewModel> CompletedOperations =>
         _completedOperations;
 
+    public MilitaryCompletedOperationItemViewModel? SelectedCompletedOperation =>
+        _selectedCompletedOperation;
+
     public IReadOnlyList<MilitaryOperationalMapMarkerViewModel> OperationalMapMarkers =>
         _operationalMapMarkers;
 
@@ -242,12 +246,24 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             .ToArray()
             ?? Array.Empty<MilitaryStrategicObjectiveItemViewModel>();
 
+        string? selectedCompletedOperationCampaignId =
+            _selectedCompletedOperation?.CampaignId;
+
         _completedOperations = _snapshot?.CompletedCampaigns
             .OrderByDescending(static entry => entry.EndedAt)
             .ThenBy(static entry => entry.CampaignId, StringComparer.Ordinal)
             .Select(static entry => new MilitaryCompletedOperationItemViewModel(entry))
             .ToArray()
             ?? Array.Empty<MilitaryCompletedOperationItemViewModel>();
+
+        _selectedCompletedOperation =
+            selectedCompletedOperationCampaignId is null
+                ? null
+                : _completedOperations.FirstOrDefault(
+                    item => string.Equals(
+                        item.CampaignId,
+                        selectedCompletedOperationCampaignId,
+                        StringComparison.Ordinal));
 
         _operationalMapMarkers = _snapshot is null
             ? Array.Empty<MilitaryOperationalMapMarkerViewModel>()
@@ -284,6 +300,34 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
         });
 
         RaiseAll();
+    }
+
+    public bool SelectCompletedOperation(string campaignId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(campaignId);
+
+        MilitaryCompletedOperationItemViewModel? selected =
+            _completedOperations.FirstOrDefault(
+                item => string.Equals(
+                    item.CampaignId,
+                    campaignId,
+                    StringComparison.Ordinal));
+
+        if (ReferenceEquals(_selectedCompletedOperation, selected))
+            return selected is not null;
+
+        _selectedCompletedOperation = selected;
+        OnPropertyChanged(nameof(SelectedCompletedOperation));
+        return selected is not null;
+    }
+
+    public void ClearCompletedOperationSelection()
+    {
+        if (_selectedCompletedOperation is null)
+            return;
+
+        _selectedCompletedOperation = null;
+        OnPropertyChanged(nameof(SelectedCompletedOperation));
     }
 
     public async Task AcceptSuccessorAsync(
@@ -407,6 +451,7 @@ public sealed class MilitaryGovernmentViewModel : INotifyPropertyChanged
             nameof(SupportRequests),
             nameof(Objectives),
             nameof(CompletedOperations),
+            nameof(SelectedCompletedOperation),
             nameof(OperationalMapMarkers),
             nameof(OperationalMapStatusText),
             nameof(OperationalMapBoundsText),
