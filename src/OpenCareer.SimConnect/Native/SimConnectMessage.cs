@@ -11,8 +11,13 @@ internal enum SimConnectMessageKind : uint
     Quit = 3,
     Event = 4,
     SimObjectData = 8,
-    SystemState = 15
+    SystemState = 15,
+    EnumerateSimObjectAndLiveryList = 39
 }
+
+internal sealed record SimConnectObjectLivery(
+    string AircraftTitle,
+    string LiveryName);
 
 internal sealed record SimConnectMessage(
     SimConnectMessageKind Kind,
@@ -24,4 +29,7 @@ internal sealed record SimConnectMessage(
     uint EventId = 0,
     uint EventData = 0,
     uint DefinitionId = 0,
-    double[]? Data = null);
+    double[]? Data = null,
+    uint ListEntryNumber = 0,
+    uint ListOutOf = 0,
+    IReadOnlyList<SimConnectObjectLivery>? ObjectLiveries = null);

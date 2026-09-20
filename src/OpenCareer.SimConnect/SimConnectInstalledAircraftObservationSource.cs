@@ -1,0 +1,67 @@
+using OpenCareer.Application.Planning;
+using OpenCareer.Domain.Aircraft;
+
+namespace OpenCareer.SimConnect;
+
+public sealed class SimConnectInstalledAircraftObservationSource(
+    SimConnectConnection connection)
+    : IAircraftRegistryObservationSource, IInstalledAircraftDiscoverySource
+{
+    public const string ProviderId = "msfs-simconnect";
+    public const string CanonicalIdPrefix = "msfs-title:";
+
+    public InstalledAircraftDiscoverySnapshot Current
+    {
+        get
+        {
+            SimConnectAircraftCatalogSnapshot snapshot = connection.AircraftCatalog;
+
+            if (!snapshot.IsAvailable)
+                return InstalledAircraftDiscoverySnapshot.Unavailable;
+
+            AircraftRegistryObservation[] observations = snapshot.AircraftTitles
+                .Select(CreateObservation)
+                .ToArray();
+
+            return new(
+                InstalledAircraftDiscoveryAvailability.Available,
+                observations);
+        }
+    }
+
+    public Task<IReadOnlyList<AircraftRegistryObservation>> FindAircraftObservationsAsync(
+        string canonicalAircraftId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(canonicalAircraftId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        InstalledAircraftDiscoverySnapshot current = Current;
+        IReadOnlyList<AircraftRegistryObservation> result =
+            current.Availability == InstalledAircraftDiscoveryAvailability.Available
+                ? current.Observations
+                    .Where(observation => string.Equals(
+                        observation.CanonicalAircraftId,
+                        canonicalAircraftId,
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToArray()
+                : Array.Empty<AircraftRegistryObservation>();
+
+        return Task.FromResult(result);
+    }
+
+    public static string CreateCanonicalAircraftId(string aircraftTitle)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(aircraftTitle);
+        return CanonicalIdPrefix + aircraftTitle.Trim();
+    }
+
+    private static AircraftRegistryObservation CreateObservation(string aircraftTitle) =>
+        new(
+            CreateCanonicalAircraftId(aircraftTitle),
+            ProviderId,
+            aircraftTitle,
+            AircraftDataConfidence.Verified,
+            IsInstalled: true,
+            DisplayName: aircraftTitle);
+}

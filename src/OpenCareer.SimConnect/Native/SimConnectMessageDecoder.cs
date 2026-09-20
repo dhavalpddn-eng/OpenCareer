@@ -11,6 +11,8 @@ internal static class SimConnectMessageDecoder
     private const int ExceptionSize = HeaderSize + 3 * sizeof(uint);
     private const int EventSize = HeaderSize + 3 * sizeof(uint);
     private const int SimObjectDataHeaderSize = HeaderSize + 7 * sizeof(uint);
+    private const int ListHeaderSize = HeaderSize + 4 * sizeof(uint);
+    private const int SimObjectLiverySize = 512;
 
     internal static SimConnectMessage Decode(nint data, uint bufferSize)
     {
@@ -30,6 +32,8 @@ internal static class SimConnectMessageDecoder
             SimConnectMessageKind.Event => DecodeEvent(data, declaredSize),
             SimConnectMessageKind.SimObjectData => DecodeSimObjectData(data, declaredSize),
             SimConnectMessageKind.SystemState => DecodeSystemState(data, declaredSize),
+            SimConnectMessageKind.EnumerateSimObjectAndLiveryList =>
+                DecodeSimObjectAndLiveryList(data, declaredSize),
             _ => new(SimConnectMessageKind.None)
         };
     }
@@ -88,6 +92,52 @@ internal static class SimConnectMessageDecoder
             RequestId: requestId,
             DefinitionId: definitionId,
             Data: values);
+    }
+
+    private static SimConnectMessage DecodeSimObjectAndLiveryList(nint data, uint size)
+    {
+        RequireSize(size, ListHeaderSize);
+
+        uint requestId = unchecked((uint)Marshal.ReadInt32(data, 12));
+        uint arraySize = unchecked((uint)Marshal.ReadInt32(data, 16));
+        uint entryNumber = unchecked((uint)Marshal.ReadInt32(data, 20));
+        uint outOf = unchecked((uint)Marshal.ReadInt32(data, 24));
+
+        if (outOf == 0 || entryNumber >= outOf || arraySize > int.MaxValue)
+            throw new InvalidDataException("Invalid SimConnect aircraft enumeration page metadata.");
+
+        long requiredSize = ListHeaderSize + (long)arraySize * SimObjectLiverySize;
+        if (requiredSize > size)
+            throw new InvalidDataException("Truncated SimConnect aircraft enumeration page.");
+
+        var entries = new SimConnectObjectLivery[checked((int)arraySize)];
+        for (int index = 0; index < entries.Length; index++)
+        {
+            int offset = ListHeaderSize + index * SimObjectLiverySize;
+            string title = ReadFixedAnsi(data + offset, 256);
+            string livery = ReadFixedAnsi(data + offset + 256, 256);
+
+            if (string.IsNullOrWhiteSpace(title))
+                throw new InvalidDataException("SimConnect returned an aircraft entry without a title.");
+
+            entries[index] = new(title.Trim(), livery.Trim());
+        }
+
+        return new(
+            SimConnectMessageKind.EnumerateSimObjectAndLiveryList,
+            RequestId: requestId,
+            ListEntryNumber: entryNumber,
+            ListOutOf: outOf,
+            ObjectLiveries: entries);
+    }
+
+    private static string ReadFixedAnsi(nint data, int capacity)
+    {
+        byte[] buffer = new byte[capacity];
+        Marshal.Copy(data, buffer, 0, capacity);
+        int terminator = Array.IndexOf(buffer, (byte)0);
+        int length = terminator >= 0 ? terminator : capacity;
+        return Marshal.PtrToStringAnsi(data, length) ?? string.Empty;
     }
 
     private static Version ReadVersion(ReadOnlySpan<byte> data)

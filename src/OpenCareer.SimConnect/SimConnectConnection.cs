@@ -14,6 +14,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     private readonly TimeProvider _clock;
     private SimulatorConnectionSnapshot _current = new(SimulatorConnectionState.Disconnected);
     private AircraftTelemetrySnapshot? _latestTelemetry;
+    private SimConnectAircraftCatalogSnapshot _aircraftCatalog = SimConnectAircraftCatalogSnapshot.Unavailable;
     private CancellationTokenSource? _stop;
     private Task _worker = Task.CompletedTask;
     private bool _disposed;
@@ -37,6 +38,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     public SimulatorConnectionSnapshot Current => Volatile.Read(ref _current);
     public AircraftTelemetrySnapshot? Latest => Volatile.Read(ref _latestTelemetry);
+    internal SimConnectAircraftCatalogSnapshot AircraftCatalog => Volatile.Read(ref _aircraftCatalog);
 
     public void Start()
     {
@@ -87,6 +89,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         bool everConnected = false;
         int failures = 0;
         PublishTelemetry(null);
+        PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
         Publish(new(SimulatorConnectionState.WaitingForSimulator));
         try
         {
@@ -97,6 +100,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                 {
                     var issue = RunSession(token, ref everConnected, ref failures);
                     PublishTelemetry(null);
+                    PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
                     if (token.IsCancellationRequested)
                         break;
 
@@ -110,6 +114,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                     or EntryPointNotFoundException or PlatformNotSupportedException)
                 {
                     PublishTelemetry(null);
+                    PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
                     var issue = ex switch
                     {
                         DllNotFoundException => SimulatorConnectionIssue.RuntimeMissing,
@@ -129,12 +134,14 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         catch (Exception ex)
         {
             PublishTelemetry(null);
+            PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
             _logger.LogError(ex, "SimConnect connection worker stopped unexpectedly.");
             Publish(new(SimulatorConnectionState.Faulted, SimulatorConnectionIssue.UnexpectedError));
         }
         finally
         {
             PublishTelemetry(null);
+            PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
             if (token.IsCancellationRequested)
                 Publish(new(SimulatorConnectionState.Disconnected));
         }
@@ -164,6 +171,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             uint? pendingHeartbeat = null;
             bool acknowledged = false;
             bool paused = false;
+            uint? aircraftCatalogPageCount = null;
+            var aircraftCatalogPages = new Dictionary<uint, IReadOnlyList<SimConnectObjectLivery>>();
             var messages = new List<SimConnectMessage>();
             Exception? callbackError = null;
             DispatchCallback callback = (data, size, _) =>
@@ -205,6 +214,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             failures = 0;
                             lastHeartbeatAt = _clock.GetTimestamp();
                             Publish(new(SimulatorConnectionState.Connected, Simulator: message.Simulator));
+                            RequestAircraftCatalog(handle);
                             break;
                         case SimConnectMessageKind.Quit:
                             return SimulatorConnectionIssue.ConnectionLost;
@@ -233,6 +243,16 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             break;
                         case SimConnectMessageKind.SystemState when pendingHeartbeat == message.RequestId:
                             pendingHeartbeat = null;
+                            break;
+                        case SimConnectMessageKind.EnumerateSimObjectAndLiveryList
+                            when acknowledged && message.RequestId == SimConnectAircraftCatalog.RequestId:
+                            if (!AcceptAircraftCatalogPage(
+                                    message,
+                                    ref aircraftCatalogPageCount,
+                                    aircraftCatalogPages))
+                            {
+                                return SimulatorConnectionIssue.InvalidResponse;
+                            }
                             break;
                         case SimConnectMessageKind.Exception:
                             _logger.LogWarning("SimConnect exception {Code}, send {SendId}, parameter {Index}.",
@@ -319,6 +339,53 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         return true;
     }
 
+    private void RequestAircraftCatalog(nint handle)
+    {
+        int result = _api.EnumerateSimObjectsAndLiveries(
+            handle,
+            SimConnectAircraftCatalog.RequestId,
+            SimConnectSimObjectType.User);
+
+        if (result < 0)
+        {
+            _logger.LogWarning(
+                "SimConnect rejected installed-aircraft enumeration with HRESULT {HResult:X8}.",
+                result);
+        }
+    }
+
+    private bool AcceptAircraftCatalogPage(
+        SimConnectMessage message,
+        ref uint? expectedPageCount,
+        IDictionary<uint, IReadOnlyList<SimConnectObjectLivery>> pages)
+    {
+        if (message.ObjectLiveries is null
+            || (expectedPageCount.HasValue && expectedPageCount.Value != message.ListOutOf)
+            || pages.ContainsKey(message.ListEntryNumber))
+        {
+            _logger.LogWarning("Ignored inconsistent installed-aircraft enumeration page.");
+            return false;
+        }
+
+        expectedPageCount ??= message.ListOutOf;
+        pages.Add(message.ListEntryNumber, message.ObjectLiveries);
+
+        if (pages.Count != expectedPageCount.Value)
+            return true;
+
+        string[] titles = pages
+            .OrderBy(static pair => pair.Key)
+            .SelectMany(static pair => pair.Value)
+            .Select(static item => item.AircraftTitle)
+            .Where(static title => !string.IsNullOrWhiteSpace(title))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static title => title, StringComparer.Ordinal)
+            .ToArray();
+
+        PublishAircraftCatalog(new(true, titles));
+        return true;
+    }
+
     private void Close(nint handle)
     {
         try
@@ -344,4 +411,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     private void PublishTelemetry(AircraftTelemetrySnapshot? snapshot) =>
         Volatile.Write(ref _latestTelemetry, snapshot);
+
+    private void PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot snapshot) =>
+        Volatile.Write(ref _aircraftCatalog, snapshot);
 }

@@ -14,6 +14,11 @@ internal enum SimConnectPeriod : uint
     Second = 4
 }
 
+internal enum SimConnectSimObjectType : uint
+{
+    User = 0
+}
+
 // Every call, including subscriptions and Close, belongs to the connection's single worker thread.
 internal interface ISimConnectApi
 {
@@ -23,5 +28,6 @@ internal interface ISimConnectApi
     int RequestDataOnUserAircraft(nint handle, uint requestId, uint definitionId, SimConnectPeriod period);
     int SubscribeToSystemEvent(nint handle, uint eventId, string eventName);
     int RequestSystemState(nint handle, uint requestId);
+    int EnumerateSimObjectsAndLiveries(nint handle, uint requestId, SimConnectSimObjectType type);
     int Close(nint handle);
 }

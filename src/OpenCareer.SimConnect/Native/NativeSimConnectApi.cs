@@ -73,6 +73,12 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
     public int RequestSystemState(nint handle, uint requestId) =>
         SimConnect_RequestSystemState(handle, requestId, "Sim");
 
+    public int EnumerateSimObjectsAndLiveries(
+        nint handle,
+        uint requestId,
+        SimConnectSimObjectType type) =>
+        SimConnect_EnumerateSimObjectsAndLiveries(handle, requestId, (uint)type);
+
     public int Close(nint handle) => SimConnect_Close(handle);
 
     // Official native ABI; no dependency on the legacy .NET Framework managed wrapper.
@@ -122,6 +128,13 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
     private static extern int SimConnect_RequestSystemState(nint handle, uint requestId, string state);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_EnumerateSimObjectsAndLiveries(
+        nint handle,
+        uint requestId,
+        uint type);
 
     [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
