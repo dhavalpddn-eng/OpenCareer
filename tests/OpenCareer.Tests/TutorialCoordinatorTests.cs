@@ -113,6 +113,27 @@ public sealed class TutorialCoordinatorTests
     }
 
     [Fact]
+    public void BuiltInFirstJobTutorialPlacesEngineStartBetweenPrepareAndFly()
+    {
+        var catalog = new AppTutorialCatalog();
+
+        TutorialDefinition firstJob =
+            Assert.IsType<TutorialDefinition>(
+                catalog.Get(AppTutorialCatalog.FirstJobId));
+
+        string[] ids =
+            firstJob.Steps
+                .Select(step => step.Id)
+                .ToArray();
+
+        Assert.Equal(2, firstJob.Version);
+        Assert.Equal(9, ids.Length);
+        Assert.Equal(
+            new[] { "job-prepare", "job-engine-start", "job-fly" },
+            ids[4..7]);
+    }
+
+    [Fact]
     public void BuiltInCatalogContainsSpecializedTutorialPreviews()
     {
         var catalog = new AppTutorialCatalog();

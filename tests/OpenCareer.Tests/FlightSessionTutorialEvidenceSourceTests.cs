@@ -10,7 +10,7 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
         new(2026, 9, 19, 16, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void FirstJobPreparationWaitsUntilTaxiOut()
+    public void FirstJobPreparationRequiresAircraftReadyMilestone()
     {
         var sessions =
             new FlightSessionCoordinator();
@@ -26,13 +26,116 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
             TutorialStepEvidenceState.Waiting,
             source.GetState(step));
 
-        sessions.Restore(
-            ToTaxiOut(
-                FlightSession.Start(Epoch)));
+        FlightSession started =
+            FlightSession.Start(Epoch);
+
+        sessions.Restore(started);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            source.GetState(step));
+
+        sessions.CommitPersisted(
+            ToAircraftReady(started));
 
         Assert.Equal(
             TutorialStepEvidenceState.Satisfied,
             source.GetState(step));
+    }
+
+    [Fact]
+    public void FirstJobEngineStartRequiresEngineStartMilestone()
+    {
+        var sessions =
+            new FlightSessionCoordinator();
+
+        var source =
+            new FlightSessionTutorialEvidenceSource(
+                sessions);
+
+        FlightSession ready =
+            ToAircraftReady(
+                FlightSession.Start(Epoch));
+
+        sessions.Restore(ready);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            source.GetState(
+                Step("job-engine-start")));
+
+        sessions.CommitPersisted(
+            ToEngineStart(ready));
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Satisfied,
+            source.GetState(
+                Step("job-engine-start")));
+    }
+
+    [Fact]
+    public void InterruptedOrCancelledSessionDoesNotSatisfyEngineStart()
+    {
+        FlightSession engineStarted =
+            ToEngineStart(
+                ToAircraftReady(
+                    FlightSession.Start(Epoch)));
+
+        FlightSession suspended =
+            FlightSessionEngine.Advance(
+                engineStarted,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(3),
+                        Connected: false)));
+
+        FlightSession interrupted =
+            FlightSessionEngine.Advance(
+                suspended,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(4),
+                        Connected: true,
+                        StableTelemetry: true,
+                        ContinuityPlausible: false)));
+
+        FlightSession cancelled =
+            FlightSessionEngine.Advance(
+                engineStarted,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(3),
+                        Connected: true,
+                        ContinuityPlausible: true),
+                    CancelRequested: true));
+
+        var interruptedSessions =
+            new FlightSessionCoordinator();
+
+        interruptedSessions.Restore(interrupted);
+
+        var interruptedSource =
+            new FlightSessionTutorialEvidenceSource(
+                interruptedSessions);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            interruptedSource.GetState(
+                Step("job-engine-start")));
+
+        var cancelledSessions =
+            new FlightSessionCoordinator();
+
+        cancelledSessions.Restore(cancelled);
+
+        var cancelledSource =
+            new FlightSessionTutorialEvidenceSource(
+                cancelledSessions);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            cancelledSource.GetState(
+                Step("job-engine-start")));
     }
 
     [Fact]
@@ -157,14 +260,39 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
             TutorialStepEvidenceState.Waiting,
             coordinator.Current.EvidenceState);
 
-        sessions.Restore(
-            ToTaxiOut(
-                FlightSession.Start(Epoch)));
+        FlightSession ready =
+            ToAircraftReady(
+                FlightSession.Start(Epoch));
+
+        sessions.Restore(ready);
 
         coordinator.RefreshLiveEvidence();
 
         Assert.Equal(
             "job-prepare",
+            coordinator.Current.Step?.Id);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Satisfied,
+            coordinator.Current.EvidenceState);
+
+        await coordinator.NextAsync();
+
+        Assert.Equal(
+            "job-engine-start",
+            coordinator.Current.Step?.Id);
+
+        Assert.Equal(
+            TutorialStepEvidenceState.Waiting,
+            coordinator.Current.EvidenceState);
+
+        sessions.CommitPersisted(
+            ToEngineStart(ready));
+
+        coordinator.RefreshLiveEvidence();
+
+        Assert.Equal(
+            "job-engine-start",
             coordinator.Current.Step?.Id);
 
         Assert.Equal(
@@ -182,29 +310,37 @@ public sealed class FlightSessionTutorialEvidenceSourceTests
             null,
             "current-flight");
 
+    private static FlightSession ToAircraftReady(
+        FlightSession session) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(1),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true)));
+
+    private static FlightSession ToEngineStart(
+        FlightSession session) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(2),
+                    Connected: true,
+                    ContinuityPlausible: true,
+                    EngineStartObserved: true)));
+
     private static FlightSession ToTaxiOut(
         FlightSession session)
     {
         session =
-            FlightSessionEngine.Advance(
-                session,
-                new FlightSessionAdvance(
-                    new FlightStateEvidence(
-                        Epoch.AddSeconds(1),
-                        Connected: true,
-                        StableTelemetry: true,
-                        ValidLoadedAircraft: true,
-                        ContinuityPlausible: true)));
+            ToAircraftReady(session);
 
         session =
-            FlightSessionEngine.Advance(
-                session,
-                new FlightSessionAdvance(
-                    new FlightStateEvidence(
-                        Epoch.AddSeconds(2),
-                        Connected: true,
-                        ContinuityPlausible: true,
-                        EngineStartObserved: true)));
+            ToEngineStart(session);
 
         return FlightSessionEngine.Advance(
             session,

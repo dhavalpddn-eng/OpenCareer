@@ -107,7 +107,10 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "Acceptance creates the career commitment. Loading an aircraft in MSFS by itself never creates a paid job.",
                 "jobs", "jobs"),
             Step("job-prepare", "Prepare the aircraft",
-                "Use the live checklist for servicing, loading, startup and taxi requirements. Steps auto-complete only when trustworthy evidence proves them.",
+                "Complete the required servicing, loading and cockpit setup. This step confirms the aircraft is ready for startup; engine start is verified separately.",
+                "current-flight", "current-flight"),
+            Step("job-engine-start", "Start the engine",
+                "Start the aircraft using its normal aircraft-specific procedure. OpenCareer waits for trustworthy live engine-start evidence; it does not assume one universal cockpit switch or key binding.",
                 "current-flight", "current-flight"),
             Step("job-fly", "Fly the mission",
                 "Follow the route and mission-specific objectives. Go-arounds and legitimate diversions are evaluated by context rather than treated as automatic failures.",
@@ -120,7 +123,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 1, steps);
+        return new TutorialDefinition(FirstJobId, 2, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()
