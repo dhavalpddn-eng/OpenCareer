@@ -100,6 +100,14 @@ public sealed class FlightContinuityPolicy
                 telemetry.AltitudeMslFeet
                 - anchor.AltitudeMslFeet);
 
+        if (IsTakeoffTransition(session))
+        {
+            return distance
+                    <= _options.GroundMaximumDistanceNauticalMiles
+                && altitudeDelta
+                    <= _options.GroundMaximumAltitudeDeltaFeet;
+        }
+
         if (anchor.OnGround)
         {
             if (!telemetry.OnGround)
@@ -149,6 +157,13 @@ public sealed class FlightContinuityPolicy
         anchor.Validate();
         return anchor;
     }
+
+    private static bool IsTakeoffTransition(
+        FlightSession session) =>
+        session.Tracking.State
+            == FlightTrackingState.TakeoffRoll
+        || session.Tracking.SuspendedFrom
+            == FlightTrackingState.TakeoffRoll;
 
     private static bool IsGroundPhase(
         FlightSession session) =>
