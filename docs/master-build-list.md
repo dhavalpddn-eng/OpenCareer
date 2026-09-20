@@ -28,7 +28,7 @@ The `MBL-xx` identifier is stable and does not change when this file is reordere
 
 The reusable code layer is implemented: centralized Jet Age tokens plus shared typography, paper/metal panels, buttons, form controls, toggles, tabs, lists, ledger/table rows and semantic status styles. Dashboard, Current Flight, Settings, placeholders, shell surfaces and the tutorial overlay use the shared resources. Automated design-contract tests lock the vivid-ivory palette, contrast and required component keys.
 
-Remaining before removal: successful Windows XAML build verification and local interactive/visual/accessibility acceptance. Current GitHub Actions attempts are failing before runner steps begin, so they are not reporting a code failure.
+Remaining before removal: local interactive/visual/accessibility acceptance. Public-repository Windows CI now builds the WinUI surface successfully, so the remaining gate is local product acceptance rather than compilation.
 
 ### MBL-23 — Settings / diagnostics system — CODE COMPLETE / VERIFICATION PENDING
 **Estimated remaining effort: ~0.25–0.5 developer day**
@@ -52,7 +52,7 @@ Implemented:
 
 Dependency boundaries remain explicit: MBL-05 owns real controller/keyboard binding discovery, and MBL-07 owns authoritative SQLite FlightSession/save recovery. The Settings surface already reports those capabilities as unavailable rather than pretending they exist.
 
-Remaining before removal: Windows build verification and local interactive verification of persistence, folders, backup/export and accessibility behavior. Current GitHub Actions attempts are failing before runner steps begin, so they are not reporting a code failure.
+Remaining before removal: local interactive verification of persistence, folders, backup/export and accessibility behavior. Public-repository Windows CI now builds the Settings surface successfully.
 
 ### MBL-03 — Full tutorial engine — IN PROGRESS
 **Estimated remaining direct effort: ~0.5–1.5 developer days**
@@ -69,7 +69,9 @@ Remaining before removal:
 ### MBL-01 — Production Home / Dashboard — IN PROGRESS
 **Estimated remaining direct effort: ~0.5–1.5 developer days plus downstream integrations**
 
-The production dynamic Home surface and contracts are implemented: split flight/career hero, daily P/L header, deterministic next-action routing, four-tier Top Opportunities foundation, career/company/finance/aircraft/readiness modules, world summary, recent activity, and searchable OpenCareer Network feed.
+The production dynamic Home surface and contracts are implemented: split flight/career hero, daily P/L header, deterministic next-action routing, four-tier Top Opportunities foundation, career/company/finance/aircraft/readiness modules, world summary, recent activity, searchable OpenCareer Network feed, and an Active Operation panel for accepted work/checklist/blocker/next-action state.
+
+Dashboard snapshot guidance is centralized and domain-tested for active operations, maintenance blockers, probation/suspension/termination and job recommendations. Home refreshes its non-telemetry snapshot every 10 seconds while visible with overlap protection and cancellation on navigation. Windows WinUI, live-probe, Linux, SimLab and unit-test CI all passed after the first converter namespace defect was fixed.
 
 The UI intentionally shows honest empty/unavailable states until authoritative systems provide data. Final completion depends on Jobs, Career/XP, Company employment, Aircraft Registry/location, Economy/Finances and Map / World sources wiring into `IDashboardSnapshotSource`, plus local visual/runtime acceptance.
 
@@ -80,12 +82,24 @@ Optional narrative/dialogue layer that never owns authoritative game state.
 
 This estimate covers the first safe production integration, not an unlimited library of personalities/content.
 
-### MBL-12 — Debrief + Logbook
-**Estimated effort: ~3–6 developer days**
+### MBL-12 — Debrief + Logbook — IN PROGRESS
+**Estimated remaining direct effort: ~1–3 developer days plus MBL-07 / settlement integration**
 
-Trustworthy flight/mission history, evidence, incidents, metrics and one-time settlement record.
+The production Logbook/Debrief foundation is implemented: immutable historical debrief snapshots, FlightSession -> FlightLeg hierarchy, decimated multi-leg route tracks, independent time/experience dimensions, fuel/payload/assistance facts, landing episode metrics with evidence quality, incidents/events, mission/safety outcome separation, frozen settlement references, committed-logbook statistics, search/type/outcome filters, and a real Jet Age WinUI Logbook screen.
 
-Depends heavily on authoritative FlightSession data.
+An application-level idempotent commit coordinator prevents retry-created duplicate logbook entries and derives career-log idempotency from the authoritative settlement key. Free/practice flights use a separate manual-log path. Unknown evidence remains unknown rather than being inferred.
+
+SQLite persistence is now implemented in `OpenCareer.Infrastructure`: a versioned `opencareer.db` schema, persistent `ILogbookSource` / `ILogbookWriter`, indexed history/search fields, frozen JSON debrief payloads, WAL mode, startup migration, and idempotent duplicate protection. The WinUI app is wired to the SQLite store instead of the unavailable placeholder.
+
+Remaining before removal:
+- map real completed FlightSession evidence into `FlightDebrief`,
+- wire career settlement -> exactly-once Logbook commit,
+- wire free/practice **Log Flight / Discard from pilot logbook** postflight flow,
+- feed persisted route/landing/fuel/payload evidence from live sessions,
+- add database-consistent backup/recovery with MBL-07,
+- complete local interactive/visual acceptance.
+
+MBL-12 does not own mission success or economy settlement; it records their authoritative final results.
 
 ### MBL-04 — Live per-flight checklist
 **Estimated effort: ~3–6 developer days**

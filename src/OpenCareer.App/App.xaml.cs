@@ -6,11 +6,13 @@ using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Infrastructure.Flights;
+using OpenCareer.Infrastructure.Persistence;
 using OpenCareer.SimConnect;
 
 namespace OpenCareer.App;
@@ -42,6 +44,15 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<IAppSettingsService, JsonAppSettingsService>();
         services.AddSingleton<IDashboardSnapshotSource, UnavailableDashboardSnapshotSource>();
+        services.AddSingleton(provider =>
+            new OpenCareerDatabaseOptions(
+                provider.GetRequiredService<OpenCareerDataPaths>().DatabaseFile));
+        services.AddSingleton<SqliteLogbookStore>();
+        services.AddSingleton<ILogbookSource>(provider =>
+            provider.GetRequiredService<SqliteLogbookStore>());
+        services.AddSingleton<ILogbookWriter>(provider =>
+            provider.GetRequiredService<SqliteLogbookStore>());
+        services.AddSingleton<LogbookCommitCoordinator>();
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
         services.AddSingleton<DiagnosticBundleService>();
@@ -53,7 +64,7 @@ public partial class App : Microsoft.UI.Xaml.Application
             new SqliteFlightSessionCheckpointStore(
                 provider
                     .GetRequiredService<OpenCareerDataPaths>()
-                    .CareerDatabaseFile));
+                    .DatabaseFile));
         services.AddSingleton<FlightSessionPersistenceService>();
         services.AddSingleton<FlightTelemetryEvidenceProcessor>();
         services.AddSingleton<FlightContinuityPolicy>();
@@ -75,6 +86,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<DashboardViewModel>();
+        services.AddSingleton<LogbookViewModel>();
         services.AddSingleton<TutorialViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MainWindow>();

@@ -6,6 +6,7 @@
 
     <Page.Resources>
         <converters:OpportunityTierBrushConverter x:Key="OpportunityTierBrushConverter" />
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </Page.Resources>
 
     <ScrollViewer>
@@ -190,7 +191,8 @@
                         </StackPanel>
                     </Border>
 
-                    <Border Style="{StaticResource OpenCareerPaperCardStyle}">
+                    <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                            Visibility="{Binding HasEmployer, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="COMPANY"
                                        Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
@@ -251,7 +253,9 @@
             </Border>
 
             <!-- Active accepted job / operation -->
-            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="22"
+                    Visibility="{Binding HasActiveOperation, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid ColumnSpacing="18">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

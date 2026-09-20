@@ -29,10 +29,59 @@ on:
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.changed.outputs.code }}
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Detect relevant changes in this update
+        id: changed
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "push" ]]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$ACTION" == "synchronize" ]]; then
+            if [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "null" ]]; then
+              RANGE="$BEFORE_SHA..$HEAD_SHA"
+            else
+              RANGE="$HEAD_SHA^..$HEAD_SHA"
+            fi
+          else
+            RANGE="$BASE_SHA..$HEAD_SHA"
+          fi
+
+          FILES="$(git diff --name-only "$RANGE")"
+          printf '%s\n' "$FILES"
+
+          if printf '%s\n' "$FILES" | grep -Eq '^(src/|tests/|tools/|Directory\.Build\.props$|Directory\.Packages\.props$|[^/]+\.slnx?$|\.github/workflows/build\.yml$)'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

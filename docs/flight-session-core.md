@@ -60,7 +60,7 @@ Preflight servicing/loading phases remain mission/workflow-driven rather than gu
 
 The repository's current workflows automatically validate pull requests targeting `main`; this nested draft PR targets `feature/m1-simulation-core`, so it does not automatically receive the normal Linux/Windows validation runs.
 
-PR #11 is currently reported mergeable against the active m1 branch. Do not claim this branch is CI-green until it is exercised by a manual/workflow validation path or folded into the parent m1 PR validation.
+PR #11 is maintained against the active m1 branch. It must be revalidated after each m1 synchronization rather than assuming the base is static.
 
 ## Next bounded work
 
@@ -119,7 +119,7 @@ Added tests cover SQLite reopen, newer-checkpoint replacement, clear, unsupporte
 
 The original draft PR #9 was based on an older m1 head and was closed without merge. This work was forward-ported onto the then-current `feature/m1-simulation-core` and continues in draft PR #11.
 
-The m1 branch remains active in other project chats, so PR CI/merge testing is the integration guard rather than assuming the base is static.
+The m1 branch remains active. This branch was reconciled against m1 head `d01e1dc2d2358764895197bbbbb2316da98a415e`; PR CI/merge testing remains the integration guard rather than assuming the base is static.
 
 ## Remaining no-PC work for item #1
 
@@ -134,7 +134,7 @@ The m1 branch remains active in other project chats, so PR CI/merge testing is t
 - App startup restores the SQLite checkpoint before the WinUI shell is activated.
 - A recovered non-terminal Active checkpoint is immediately converted to `Suspended`; app restart therefore never implies continuity has already been proven.
 - App shutdown flushes the current in-memory session even when the normal steady-state checkpoint interval has not elapsed.
-- `OpenCareerDataPaths.CareerDatabaseFile` is now the canonical local `career.db` path.
+- `OpenCareerDataPaths.DatabaseFile` is the canonical shared local `opencareer.db` path. FlightSession checkpoints use their own table in the same SQLite database as current Logbook persistence.
 - Current Flight presents the authoritative FlightSession separately from raw/live telemetry: lifecycle status, recovery origin, career/airborne/block summaries, event counts and latest milestone.
 - Recovered sessions are visibly labeled **RESTORED FROM LOCAL SAVE**.
 - Interrupted sessions explicitly say that the partial flight was preserved and will not auto-complete.

@@ -121,6 +121,10 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
         _snapshot.Employment?.StatusMessage ??
         "Company rank, standing, probation and termination status will appear here.";
 
+    public bool HasEmployer =>
+        _snapshot.Employment is { } employment &&
+        employment.Status != EmploymentStatus.NotEmployed;
+
     public string CashText =>
         _snapshot.Finances?.Cash is decimal cash ? $"{cash:C0}" : "Cash —";
 
@@ -399,6 +403,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
             nameof(CompanyStandingText),
             nameof(EmploymentStatusText),
             nameof(EmploymentMessageText),
+            nameof(HasEmployer),
             nameof(CashText),
             nameof(TodayNetText),
             nameof(UpcomingObligationsText),

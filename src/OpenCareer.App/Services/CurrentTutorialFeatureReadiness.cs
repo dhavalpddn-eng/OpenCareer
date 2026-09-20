@@ -23,7 +23,7 @@ public sealed class CurrentTutorialFeatureReadiness : ITutorialFeatureReadiness
             ["finances"] = TutorialFeatureState.ComingLater,
             ["markets"] = TutorialFeatureState.ComingLater,
             ["military"] = TutorialFeatureState.ComingLater,
-            ["logbook"] = TutorialFeatureState.ComingLater,
+            ["logbook"] = TutorialFeatureState.Available,
             ["career"] = TutorialFeatureState.ComingLater,
             ["first-job"] = TutorialFeatureState.ComingLater,
             ["mission-banner-tow"] = TutorialFeatureState.ComingLater,
