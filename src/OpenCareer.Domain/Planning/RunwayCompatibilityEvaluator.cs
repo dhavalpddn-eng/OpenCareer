@@ -322,7 +322,6 @@ public static class RunwayCompatibilityEvaluator
 
         DispatchFeasibilityStatus status =
             candidates.Any(static candidate => candidate.Status == DispatchFeasibilityStatus.InsufficientData)
-            || endpointIssues.Count > 0
                 ? DispatchFeasibilityStatus.InsufficientData
                 : DispatchFeasibilityStatus.Infeasible;
 
