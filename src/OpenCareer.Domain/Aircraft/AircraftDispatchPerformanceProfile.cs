@@ -1,5 +1,19 @@
 namespace OpenCareer.Domain.Aircraft;
 
+public sealed record AircraftFuelDensity(
+    int FuelTypeIndex,
+    double PoundsPerGallon)
+{
+    public void Validate()
+    {
+        if (FuelTypeIndex < 0)
+            throw new ArgumentOutOfRangeException(nameof(FuelTypeIndex));
+
+        if (!double.IsFinite(PoundsPerGallon) || PoundsPerGallon <= 0)
+            throw new ArgumentOutOfRangeException(nameof(PoundsPerGallon));
+    }
+}
+
 /// <summary>
 /// One authoritative point on an aircraft payload-range envelope.
 /// Payload is mission payload. Range is the maximum supported range at that payload.
@@ -33,7 +47,9 @@ public sealed record AircraftDispatchPerformanceProfile(
     double? ConfiguredEmptyWeightPounds = null,
     double? MaximumLandingWeightPounds = null,
     double? MaximumZeroFuelWeightPounds = null,
-    AircraftConditionedPerformanceProfile? ConditionedPerformance = null)
+    AircraftConditionedPerformanceProfile? ConditionedPerformance = null,
+    double? FuelCapacityGallons = null,
+    IReadOnlyList<AircraftFuelDensity>? FuelDensities = null)
 {
     public void Validate()
     {
@@ -43,6 +59,7 @@ public sealed record AircraftDispatchPerformanceProfile(
         ValidateOptionalPositive(ConfiguredEmptyWeightPounds, nameof(ConfiguredEmptyWeightPounds));
         ValidateOptionalPositive(MaximumLandingWeightPounds, nameof(MaximumLandingWeightPounds));
         ValidateOptionalPositive(MaximumZeroFuelWeightPounds, nameof(MaximumZeroFuelWeightPounds));
+        ValidateOptionalNonNegative(FuelCapacityGallons, nameof(FuelCapacityGallons));
 
         if (OperatingEmptyWeightPounds is { } empty
             && MaximumTakeoffWeightPounds is { } mtow
@@ -61,6 +78,24 @@ public sealed record AircraftDispatchPerformanceProfile(
         }
 
         ConditionedPerformance?.Validate();
+
+        if (FuelDensities is not null)
+        {
+            if (FuelDensities.Any(static density => density is null))
+                throw new ArgumentException("Fuel densities cannot contain null entries.", nameof(FuelDensities));
+
+            foreach (AircraftFuelDensity density in FuelDensities)
+                density.Validate();
+
+            if (FuelDensities
+                .GroupBy(static density => density.FuelTypeIndex)
+                .Any(static group => group.Count() > 1))
+            {
+                throw new ArgumentException(
+                    "Fuel density indices must be unique.",
+                    nameof(FuelDensities));
+            }
+        }
 
         if (!Enum.IsDefined(Confidence))
             throw new ArgumentOutOfRangeException(nameof(Confidence));
@@ -111,6 +146,39 @@ public sealed record AircraftDispatchPerformanceProfile(
                     nameof(PayloadRangeEnvelope));
             }
         }
+    }
+
+    public double? ResolveFuelDensityPoundsPerGallon(int fuelTypeIndex)
+    {
+        if (fuelTypeIndex < 0)
+            throw new ArgumentOutOfRangeException(nameof(fuelTypeIndex));
+
+        Validate();
+
+        return FuelDensities?
+            .SingleOrDefault(density => density.FuelTypeIndex == fuelTypeIndex)?
+            .PoundsPerGallon;
+    }
+
+    public double? ResolveMaximumFuelWeightPounds(int? fuelTypeIndex = null)
+    {
+        Validate();
+
+        if (MaximumFuelWeightPounds is { } knownMaximum)
+            return knownMaximum;
+
+        if (fuelTypeIndex is null
+            || FuelCapacityGallons is null)
+        {
+            return null;
+        }
+
+        double? density = ResolveFuelDensityPoundsPerGallon(fuelTypeIndex.Value);
+        if (density is null)
+            return null;
+
+        double maximum = FuelCapacityGallons.Value * density.Value;
+        return double.IsFinite(maximum) ? maximum : null;
     }
 
     private static void ValidateOptionalPositive(double? value, string name)
