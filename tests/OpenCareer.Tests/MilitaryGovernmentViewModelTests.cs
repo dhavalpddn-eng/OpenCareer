@@ -813,69 +813,138 @@ public sealed class MilitaryGovernmentViewModelTests
     }
 
     [Fact]
-    public async Task AcceptedSuccessorRecoversFromSqliteWithoutReplayingTransition()
+    public async Task CompletedOperationDrilldownRecoversExactlyAndViewingDoesNotWrite()
     {
-        string directory = Path.Combine(Path.GetTempPath(), $"military-ui-{Guid.NewGuid():N}");
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            $"military-ui-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
-        var options = new OpenCareerDatabaseOptions(Path.Combine(directory, "campaign.db"));
+        var options =
+            new OpenCareerDatabaseOptions(
+                Path.Combine(directory, "campaign.db"));
+
         try
         {
-            var store = new SqliteConflictCampaignStore(options, NullLogger<SqliteConflictCampaignStore>.Instance);
-            var completed = await store.SaveAsync(CompletedRecord().Checkpoint, null);
+            var store =
+                new SqliteConflictCampaignStore(
+                    options,
+                    NullLogger<SqliteConflictCampaignStore>.Instance);
+            ConflictCampaignStoreRecord completed =
+                await store.SaveAsync(
+                    CompletedRecord().Checkpoint,
+                    expectedRevision: null);
+
             var runtime = CreateRuntime();
             runtime.Replace(completed);
             var viewModel = CreateViewModel(runtime, store);
             viewModel.Refresh();
+
             string offeredName = viewModel.SuccessorOperationName;
             await viewModel.AcceptSuccessorAsync();
 
-            var displayedArchive = Assert.Single(viewModel.CompletedOperations);
-            Assert.Equal(completed.Checkpoint.CampaignId, displayedArchive.CampaignId);
+            MilitaryCompletedOperationItemViewModel displayedArchive =
+                Assert.Single(viewModel.CompletedOperations);
+            Assert.Equal(
+                completed.Checkpoint.CampaignId,
+                displayedArchive.CampaignId);
+            Assert.True(
+                viewModel.SelectCompletedOperation(
+                    displayedArchive.CampaignId));
 
-            var recoveredStore = new SqliteConflictCampaignStore(options, NullLogger<SqliteConflictCampaignStore>.Instance);
-            var recoveredRuntime = new ConflictCampaignRuntimeState(recoveredStore);
+            MilitaryCompletedOperationDetailViewModel beforeRestartDetail =
+                Assert.IsType<MilitaryCompletedOperationDetailViewModel>(
+                    viewModel.SelectedCompletedOperationDetail);
+
+            var recoveredStore =
+                new SqliteConflictCampaignStore(
+                    options,
+                    NullLogger<SqliteConflictCampaignStore>.Instance);
+            var recoveredRuntime =
+                new ConflictCampaignRuntimeState(recoveredStore);
             await recoveredRuntime.InitializeAsync();
-            var recoveredViewModel = CreateViewModel(recoveredRuntime, recoveredStore);
+
+            var recoveredViewModel =
+                CreateViewModel(recoveredRuntime, recoveredStore);
             recoveredViewModel.Refresh();
-            await recoveredViewModel.AcceptSuccessorAsync();
 
             Assert.Equal(offeredName, recoveredViewModel.OperationName);
             Assert.False(recoveredViewModel.HasSuccessorOffer);
-            Assert.Equal(runtime.Current!.Checkpoint.CampaignId, recoveredRuntime.Current!.Checkpoint.CampaignId);
+            Assert.Equal(
+                runtime.Current!.Checkpoint.CampaignId,
+                recoveredRuntime.Current!.Checkpoint.CampaignId);
             Assert.Equal(1, recoveredRuntime.Current.Revision);
             Assert.Single(recoveredRuntime.Current.Checkpoint.History);
-            Assert.Equal(completed.Checkpoint.MilitaryCareer, recoveredRuntime.Current.Checkpoint.MilitaryCareer);
-            Assert.Equal(completed.Checkpoint.PlayerCombatState, recoveredRuntime.Current.Checkpoint.PlayerCombatState);
-            var recoveredArchive = Assert.Single(recoveredViewModel.CompletedOperations);
-            Assert.Equal(displayedArchive.CampaignId, recoveredArchive.CampaignId);
-            Assert.Equal(displayedArchive.OperationName, recoveredArchive.OperationName);
-            Assert.Equal(displayedArchive.FriendlyFactionText, recoveredArchive.FriendlyFactionText);
-            Assert.Equal(displayedArchive.HostileFactionText, recoveredArchive.HostileFactionText);
-            Assert.Equal(displayedArchive.OutcomeText, recoveredArchive.OutcomeText);
-            Assert.Equal(displayedArchive.FinalStateText, recoveredArchive.FinalStateText);
-            Assert.Equal(displayedArchive.EndedText, recoveredArchive.EndedText);
+            Assert.Equal(
+                completed.Checkpoint.MilitaryCareer,
+                recoveredRuntime.Current.Checkpoint.MilitaryCareer);
+            Assert.Equal(
+                completed.Checkpoint.PlayerCombatState,
+                recoveredRuntime.Current.Checkpoint.PlayerCombatState);
+
+            MilitaryCompletedOperationItemViewModel recoveredArchive =
+                Assert.Single(recoveredViewModel.CompletedOperations);
+            Assert.Equal(
+                displayedArchive.CampaignId,
+                recoveredArchive.CampaignId);
+            Assert.Equal(
+                displayedArchive.OperationName,
+                recoveredArchive.OperationName);
+            Assert.Equal(
+                displayedArchive.FriendlyFactionText,
+                recoveredArchive.FriendlyFactionText);
+            Assert.Equal(
+                displayedArchive.HostileFactionText,
+                recoveredArchive.HostileFactionText);
+            Assert.Equal(
+                displayedArchive.OutcomeText,
+                recoveredArchive.OutcomeText);
+            Assert.Equal(
+                displayedArchive.FinalStateText,
+                recoveredArchive.FinalStateText);
+            Assert.Equal(
+                displayedArchive.EndedText,
+                recoveredArchive.EndedText);
+
+            ConflictCampaignPersistenceFingerprint[] beforeViewing =
+                await ReadConflictCampaignPersistenceFingerprintAsync(
+                    options.DatabasePath);
+            Assert.Equal(2, beforeViewing.Length);
 
             Assert.True(
                 recoveredViewModel.SelectCompletedOperation(
                     recoveredArchive.CampaignId));
+
             MilitaryCompletedOperationDetailViewModel recoveredDetail =
                 Assert.IsType<MilitaryCompletedOperationDetailViewModel>(
                     recoveredViewModel.SelectedCompletedOperationDetail);
 
+            AssertCompletedOperationDetailsEqual(
+                beforeRestartDetail,
+                recoveredDetail);
+
+            recoveredViewModel.Refresh();
+            recoveredViewModel.Refresh();
+            recoveredViewModel.ClearCompletedOperationSelection();
+            Assert.True(
+                recoveredViewModel.SelectCompletedOperation(
+                    recoveredArchive.CampaignId));
             recoveredViewModel.Refresh();
 
+            MilitaryCompletedOperationDetailViewModel refreshedDetail =
+                Assert.IsType<MilitaryCompletedOperationDetailViewModel>(
+                    recoveredViewModel.SelectedCompletedOperationDetail);
+            AssertCompletedOperationDetailsEqual(
+                beforeRestartDetail,
+                refreshedDetail);
+
+            ConflictCampaignPersistenceFingerprint[] afterViewing =
+                await ReadConflictCampaignPersistenceFingerprintAsync(
+                    options.DatabasePath);
+
+            Assert.Equal(beforeViewing, afterViewing);
             Assert.Equal(
                 recoveredArchive.CampaignId,
                 recoveredViewModel.SelectedCompletedOperation?.CampaignId);
-            Assert.Equal(
-                recoveredDetail.CampaignId,
-                recoveredViewModel.SelectedCompletedOperationDetail?.CampaignId);
-            Assert.Equal(
-                recoveredDetail.FriendlyPosture,
-                recoveredViewModel.SelectedCompletedOperationDetail?.FriendlyPosture);
-            Assert.Equal(
-                recoveredDetail.HostilePosture,
-                recoveredViewModel.SelectedCompletedOperationDetail?.HostilePosture);
         }
         finally
         {
@@ -883,6 +952,93 @@ public sealed class MilitaryGovernmentViewModelTests
             Directory.Delete(directory, recursive: true);
         }
     }
+
+    private static void AssertCompletedOperationDetailsEqual(
+        MilitaryCompletedOperationDetailViewModel expected,
+        MilitaryCompletedOperationDetailViewModel actual)
+    {
+        Assert.Equal(expected.CampaignId, actual.CampaignId);
+        Assert.Equal(expected.CampaignText, actual.CampaignText);
+        Assert.Equal(expected.OperationName, actual.OperationName);
+        Assert.Equal(expected.TheaterId, actual.TheaterId);
+        Assert.Equal(expected.TheaterText, actual.TheaterText);
+        Assert.Equal(expected.Outcome, actual.Outcome);
+        Assert.Equal(expected.OutcomeText, actual.OutcomeText);
+        Assert.Equal(expected.FinalPhase, actual.FinalPhase);
+        Assert.Equal(expected.FinalPhaseText, actual.FinalPhaseText);
+        Assert.Equal(
+            expected.FinalFriendlyControlAverage,
+            actual.FinalFriendlyControlAverage);
+        Assert.Equal(expected.FinalControlText, actual.FinalControlText);
+        Assert.Equal(expected.EndedAt, actual.EndedAt);
+        Assert.Equal(expected.EndedText, actual.EndedText);
+        Assert.Equal(
+            expected.FriendlyFactionCode,
+            actual.FriendlyFactionCode);
+        Assert.Equal(
+            expected.FriendlyFactionName,
+            actual.FriendlyFactionName);
+        Assert.Equal(expected.FriendlyPosture, actual.FriendlyPosture);
+        Assert.Equal(
+            expected.FriendlyFactionText,
+            actual.FriendlyFactionText);
+        Assert.Equal(
+            expected.HostileFactionCode,
+            actual.HostileFactionCode);
+        Assert.Equal(
+            expected.HostileFactionName,
+            actual.HostileFactionName);
+        Assert.Equal(expected.HostilePosture, actual.HostilePosture);
+        Assert.Equal(
+            expected.HostileFactionText,
+            actual.HostileFactionText);
+    }
+
+    private static async Task<ConflictCampaignPersistenceFingerprint[]>
+        ReadConflictCampaignPersistenceFingerprintAsync(
+            string databasePath)
+    {
+        var connectionString =
+            new SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                Mode = SqliteOpenMode.ReadOnly
+            }.ToString();
+
+        await using var connection =
+            new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT campaign_id, revision, saved_at_ms, payload_json
+            FROM conflict_campaigns
+            ORDER BY campaign_id ASC;
+            """;
+
+        var rows = new List<ConflictCampaignPersistenceFingerprint>();
+        await using SqliteDataReader reader =
+            await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            rows.Add(
+                new ConflictCampaignPersistenceFingerprint(
+                    reader.GetString(0),
+                    reader.GetInt64(1),
+                    reader.GetInt64(2),
+                    reader.GetString(3)));
+        }
+
+        return rows.ToArray();
+    }
+
+    private sealed record ConflictCampaignPersistenceFingerprint(
+        string CampaignId,
+        long Revision,
+        long SavedAtMilliseconds,
+        string PayloadJson);
 
     private static ConflictCampaignStoreRecord CompletedRecord()
     {
