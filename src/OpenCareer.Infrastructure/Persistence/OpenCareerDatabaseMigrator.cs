@@ -4,7 +4,7 @@ namespace OpenCareer.Infrastructure.Persistence;
 
 internal static class OpenCareerDatabaseMigrator
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -90,6 +90,28 @@ internal static class OpenCareerDatabaseMigrator
 
             transaction.Commit();
             version = 3;
+        }
+
+        if (version < 4)
+        {
+            using SqliteTransaction transaction =
+                connection.BeginTransaction();
+
+            await EnsureMilitaryCareerProfileSchemaAsync(
+                    connection,
+                    transaction,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            await ExecuteAsync(
+                    connection,
+                    transaction,
+                    "PRAGMA user_version = 4;",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            transaction.Commit();
+            version = 4;
         }
 
         if (version != CurrentSchemaVersion)
@@ -213,6 +235,28 @@ internal static class OpenCareerDatabaseMigrator
                 """
                 CREATE INDEX IF NOT EXISTS ix_conflict_campaigns_world_updated
                     ON conflict_campaigns (world_updated_at_ms DESC, campaign_id ASC);
+                """,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task EnsureMilitaryCareerProfileSchemaAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE TABLE IF NOT EXISTS military_career_profile (
+                    slot_id INTEGER NOT NULL PRIMARY KEY,
+                    revision INTEGER NOT NULL CHECK (revision >= 1),
+                    payload_schema_version INTEGER NOT NULL,
+                    saved_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    CHECK (slot_id = 1)
+                );
                 """,
                 cancellationToken)
             .ConfigureAwait(false);
