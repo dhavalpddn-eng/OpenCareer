@@ -257,6 +257,122 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task TakeoffTransitionRemainsActiveAcrossGroundToAirContinuity()
+    {
+        FlightSession active =
+            PreflightSession(
+                anchor:
+                    new FlightContinuityAnchor(
+                        Epoch.AddSeconds(1),
+                        32,
+                        -97,
+                        650,
+                        OnGround: true));
+
+        active =
+            FlightSessionEngine.Advance(
+                active,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(2),
+                        Connected: true,
+                        ContinuityPlausible: true,
+                        SelfPoweredMovementForFlight: true)));
+
+        active =
+            FlightSessionEngine.Advance(
+                active,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(3),
+                        Connected: true,
+                        ContinuityPlausible: true,
+                        TakeoffCandidate: true)));
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(active);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = active
+            };
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        Epoch.AddSeconds(4),
+                        32.0005,
+                        -97.0005,
+                        onGround: false,
+                        altitudeMsl: 675,
+                        groundSpeed: 140)
+            };
+
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                persistence,
+                new FlightTelemetryEvidenceProcessor(
+                    new FlightEvidenceProcessorOptions(
+                        StableTelemetrySamples: 1,
+                        AirborneConfirmationSamples: 2,
+                        GroundConfirmationSamples: 1)),
+                new FlightContinuityPolicy(),
+                Connected(),
+                telemetry,
+                new FixedTimeProvider(
+                    Epoch.AddHours(1)));
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current?.Status);
+
+        Assert.Equal(
+            FlightTrackingState.TakeoffRoll,
+            coordinator.Current?.Tracking.State);
+
+        Assert.False(
+            coordinator.Current?.ContinuityAnchor?.OnGround);
+
+        telemetry.Latest =
+            Telemetry(
+                Epoch.AddSeconds(5),
+                32.001,
+                -97.001,
+                onGround: false,
+                altitudeMsl: 725,
+                groundSpeed: 155);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current?.Status);
+
+        Assert.Equal(
+            FlightTrackingState.Airborne,
+            coordinator.Current?.Tracking.State);
+
+        Assert.Equal(
+            1,
+            coordinator.Current?.Tracking.TakeoffCount);
+    }
+
+    [Fact]
     public async Task DuplicateTelemetryTimestampDoesNotAdvanceTwice()
     {
         FlightSession active =
