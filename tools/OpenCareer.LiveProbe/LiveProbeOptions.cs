@@ -3,7 +3,8 @@ namespace OpenCareer.LiveProbe;
 internal sealed record LiveProbeOptions(
     string OutputPath,
     TimeSpan? Duration,
-    bool FlightSessionValidation)
+    bool FlightSessionValidation,
+    string? AirportValidationIcao)
 {
     internal const string Usage =
         """
@@ -16,6 +17,7 @@ internal sealed record LiveProbeOptions(
           --output <path>             JSONL trace file. Defaults to LocalAppData\OpenCareer\Diagnostics.
           --duration-seconds <value>  Stop automatically after a positive number of seconds.
           --flight-session            Feed live telemetry through the real FlightSession runtime and print state transitions.
+          --airport <ICAO>             Validate MSFS facility data and local weather for one airport.
           -h, --help                  Show this help.
 
         Run without --duration-seconds for an interactive session and press Ctrl+C to stop.
@@ -26,6 +28,7 @@ internal sealed record LiveProbeOptions(
         string? output = null;
         TimeSpan? duration = null;
         bool flightSessionValidation = false;
+        string? airportValidationIcao = null;
 
         for (int index = 0; index < args.Count; index++)
         {
@@ -48,13 +51,35 @@ internal sealed record LiveProbeOptions(
                     flightSessionValidation = true;
                     break;
 
+                case "--airport":
+                    airportValidationIcao = NormalizeIcao(ReadValue(args, ref index, arg));
+                    break;
+
                 default:
                     throw new ArgumentException($"Unknown live-probe option: {arg}");
             }
         }
 
         string outputPath = output is null ? CreateDefaultOutputPath() : Path.GetFullPath(output);
-        return new(outputPath, duration, flightSessionValidation);
+        return new(
+            outputPath,
+            duration,
+            flightSessionValidation,
+            airportValidationIcao);
+    }
+
+    private static string NormalizeIcao(string value)
+    {
+        string normalized = value.Trim().ToUpperInvariant();
+
+        if (normalized.Length is < 1 or > 8
+            || normalized.Any(static character => !char.IsAsciiLetterOrDigit(character)))
+        {
+            throw new ArgumentException(
+                "--airport must be a 1-8 character ASCII letter/digit facility identifier.");
+        }
+
+        return normalized;
     }
 
     private static string ReadValue(IReadOnlyList<string> args, ref int index, string option)
