@@ -15,7 +15,7 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 - Tutorial-engine CI at `f6b1cc7`: **118/118 xUnit + 29/29 SimLab passed**, and the Windows WinUI app/live-probe build passed. Automated UI compilation does not replace local interactive/visual acceptance or live MSFS verification.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
 - UI visual language: `docs/ui-design-language.md` is canonical for palette/material/aesthetic; implementation tokens/layout remain in `docs/ui-design-system.md`, and screen behavior in `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
-- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. Ground/air conflict, all current military mission families, authorization, fictional theater generation, SQLite campaign recovery, automatic startup resume, strategic evolution, SQLite-consistent backup and validated staged restore are implemented. Code head `90d816dd` is green on Linux/Windows. See `docs/conflict-system.md`.
+- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. Ground/air conflict, all current military mission families, authorization, fictional theater generation, deterministic fictional operation/faction identity, SQLite campaign recovery, automatic startup resume, strategic evolution, SQLite-consistent backup and validated staged restore are implemented. Code head `360e93ea` is green on Linux/Windows. See `docs/conflict-system.md`.
 - Verify remote branch head before edits because other chats may change it.
 
 ## Fixed direction
@@ -67,7 +67,9 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - OpenCareer backup now creates a SQLite-consistent snapshot instead of copying the live database/WAL files directly, so persisted military campaign state and logbook state are captured coherently.
 - Backup restore now validates the manifest and SQLite image before staging, applies the staged database at the next app launch before military/logbook SQLite state is recovered, removes stale WAL/SHM artifacts, and keeps a rollback snapshot during replacement.
 - Windows CI exposed a pooled temporary SQLite handle that prevented immediate backup-file reads; production snapshot connections now disable pooling and the rerun passed.
-- Code head `90d816dd` is green: Linux 239/239 xUnit + 29/29 SimLab; Windows WinUI/live-probe builds at 0 errors + 239/239 xUnit.
+- Campaigns now persist a deterministic fictional operation identity plus distinct friendly/hostile faction names and short codes; old checkpoints without identity remain valid and gain the same deterministic identity when advanced.
+- The Military/Government application snapshot now exposes operation/faction identity for future UI use without changing the generic Friendly/Hostile simulation model.
+- Code head `360e93ea` is green: Linux 240/240 xUnit + 29/29 SimLab; Windows WinUI/live-probe builds at 0 errors + 240/240 xUnit.
 - Still open: user-facing Settings restore selection/confirmation, richer faction/campaign evolution, authoritative career/dispatch/job settlement integration, production Military/Government UI, large balance/stress runs and live telemetry gameplay verification.
 
 ## Tutorial engine implementation
