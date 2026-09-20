@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `e41161bb` is green: Linux passed 278/278 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 278/278 xUnit.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Code head `4b0472b4` is green: Linux passed 352/352 xUnit + 29/29 SimLab; Windows built WinUI and the live probe at 0 errors and passed 352/352 xUnit.
 
 ## Boundary
 
@@ -66,7 +66,11 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
 - `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
 - `MilitaryCampaignMissionService` that persists acceptance, mission-stage progress, failure/completion lifecycle and simulated threat outcomes without allowing duplicate replay after recovery,
-- `ConflictOperationsSnapshotBuilder` that projects operation/faction identity and posture, campaign outcome, replacement reserves, campaign/front/unit/threat/support/strategic-objective/trust/damage/active-operation state for the future Military/Government UI,
+- `ConflictOperationsSnapshotBuilder` that projects operation/faction identity and posture, campaign outcome, replacement reserves, campaign/front/unit/threat/support/strategic-objective/trust/damage/active-operation state for the Military/Government UI,
+- first production WinUI Military/Government screen replacing the placeholder: active operation, faction names/postures, phase/outcome, control/momentum, replacement reserves, trust, OpenCareer damage, front/threat summary, support requests and strategic objectives are projected through `MilitaryGovernmentViewModel` without moving campaign logic into the UI,
+- successor-operation offer presentation with Accept / Decline for now / Reconsider actions routed through `MilitaryCampaignTransitionService`, including stale-offer protection already enforced by the application layer,
+- page-scoped refresh while the Military/Government screen is visible, with the view reading immutable application snapshots instead of simulator/database objects directly,
+- shared SQLite schema v3 reconciliation after synchronizing FlightSession and military persistence: databases previously stamped v2 by either parallel branch idempotently gain the missing flight-session or conflict-campaign table before advancing to v3,
 - deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation, SQLite campaign recovery, strategic evolution, dispatch authorization and the operations snapshot.
 
 ## Deliberately abstract
@@ -78,12 +82,11 @@ Mission effects use normalized game-quality inputs and authored mission windows 
 ## Still open
 
 - user-facing Settings backup selection/confirmation for staging a restore archive; the validated restore backend and restart-time apply path are implemented,
-- user-facing Military/Government presentation for the already-implemented successor-operation offer/accept/decline application flow,
 - dynamic faction-posture evolution across campaign phases/outcomes; the current posture is deterministic and fixed for each operation,
 - player career onboarding/persistence for military affiliation and qualifications,
 - authoritative aircraft assignment issuance through the fleet/dispatch system,
 - authoritative job/economy settlement integration,
-- production Military/Government/Conflict UI,
+- local visual/accessibility acceptance and richer Conflict Operations UI detail beyond the first production screen (operational map/comms/history drill-down),
 - large deterministic balance/stress scenarios,
 - live telemetry gameplay verification after the flight-runtime evidence pipeline is ready.
 

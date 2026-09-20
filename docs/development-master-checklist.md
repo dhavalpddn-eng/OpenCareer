@@ -472,7 +472,7 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: code head `e41161bb` is green on both platforms. Linux PR CI passed **278/278 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **278/278 xUnit**.
+Verification note: code head `4b0472b4` is green on both platforms after synchronizing current FlightSession/OpenAI integration. Linux PR CI passed **352/352 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **352/352 xUnit**.
 
 ## Remaining
 
@@ -490,13 +490,15 @@ Verification note: code head `e41161bb` is green on both platforms. Linux PR CI 
 - [x] Add an application-layer successor-operation flow with `IConflictTheaterCatalog`, offer projection, accept/decline/reconsider actions, stale-offer rejection and runtime-state replacement after acceptance.
 - [x] Persist completed-operation history through SQLite and expose it in the Military/Government operations snapshot.
 - [x] Add deterministic faction operational posture (Defensive / Aggressive / LogisticsFocused / AirFocused) and use it to bias replacement priority plus support-request thresholds/urgency/range without making AI authoritative.
-- [ ] Add the user-facing Military/Government successor-operation presentation and any later dynamic posture changes across campaign phases/outcomes.
+- [x] Add the user-facing Military/Government successor-operation presentation with Accept / Decline / Reconsider routed through the application transition service.
+- [ ] Add any later dynamic posture changes across campaign phases/outcomes.
 - [ ] Integrate military authorization with authoritative player-career persistence/onboarding.
 - [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
 - [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
-- [ ] Implement production Military/Government/Conflict UI against the conflict application service.
+- [x] Implement the first production Military/Government WinUI screen against conflict application snapshots/services; it shows campaign/faction/posture/outcome/reserve/front/support/objective state without UI-owned game logic.
+- [ ] Expand Conflict Operations UI with the operational map/comms/history drill-down and complete local visual/accessibility acceptance.
 - [ ] Add large deterministic campaign balance/stress batches.
-- [x] Record Linux + Windows validation for code head `e41161bb`: 278/278 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
+- [x] Record Linux + Windows validation for code head `4b0472b4`: 352/352 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
 - [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
 - [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 
@@ -601,7 +603,8 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement employer rank/standing lifecycle with deterministic probation, demotion, suspension and firing/termination plus recovery/rehire rules.
 - [ ] Implement Finances screen.
 - [ ] Implement Markets screen.
-- [ ] Implement Military / Government screen.
+- [x] Implement first Military / Government screen using the production design system and application-layer conflict projections/actions.
+- [ ] Complete local visual/accessibility acceptance and later operational-map/comms detail.
 - [x] Implement production Logbook / Debrief screen with committed-flight list, aggregate totals, filters, multi-leg detail, route-track rendering, landing evidence, incidents and settlement summary.
 - [ ] Implement Career screen.
 - [x] Implement production Settings screen.
