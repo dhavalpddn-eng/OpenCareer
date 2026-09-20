@@ -472,12 +472,13 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: code head `ddcf31b2` is green on both platforms. Linux PR CI passed **227/227 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **227/227 xUnit**.
+Verification note: code head `4700e3ed` is green on both platforms. Linux PR CI passed **235/235 xUnit + 29/29 SimLab**. Windows PR CI built the WinUI app and live probe with **0 errors** and passed **235/235 xUnit**.
 
 ## Remaining
 
-- [ ] Wire automatic production startup/resume so the Military/Government application flow loads the active persisted campaign without a manual orchestration call.
-- [ ] Add database-consistent backup/restore integration for conflict campaign checkpoints.
+- [x] Wire automatic production startup/resume so app startup recovers the most recently saved military conflict campaign without a manual orchestration call.
+- [x] Add database-consistent backup snapshot integration for conflict campaign checkpoints using SQLite backup semantics rather than copying the live WAL database files.
+- [ ] Add verified restore integration from an OpenCareer backup archive into the shared SQLite database.
 - [ ] Add richer fictional faction identity beyond Friendly/Hostile/Neutral sides.
 - [ ] Extend long-term theater evolution beyond the first phase/momentum/objective director.
 - [ ] Integrate military authorization with authoritative player-career persistence/onboarding.

@@ -63,8 +63,10 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - `ThreatExposureEvaluator` and `ThreatEngagementResolver` model simulated air-defense/interceptor threats and OpenCareer-only player damage.
 - `MilitaryAuthorizationPolicy` separates affiliation, qualifications, aircraft assignment, aircraft capability/access and damage state. Installing/owning a military-capable aircraft never grants mission access by itself.
 - `ConflictTheaterGenerator` creates repeatable fictional theater state from a seed/template; current wars never become authoritative gameplay state.
-- Deterministic tests cover conflict state, request lifecycle, mission families, effects, threat resolution, authorization and theater generation. Initial compile/test defects found by CI were corrected; post-sync verification remains pending.
-- Still open: persistence/recovery, richer faction/campaign evolution, authoritative career/dispatch/job settlement integration, production Military/Government UI, large balance/stress runs and live telemetry gameplay verification.
+- Military campaign persistence now auto-recovers the most recently saved campaign at app launch through `ConflictCampaignRuntimeState`; recovery failures are logged without blocking the rest of OpenCareer startup.
+- OpenCareer backup now creates a SQLite-consistent snapshot instead of copying the live database/WAL files directly, so persisted military campaign state and logbook state are captured coherently.
+- Code head `4700e3ed` is green: Linux 235/235 xUnit + 29/29 SimLab; Windows WinUI/live-probe builds at 0 errors + 235/235 xUnit.
+- Still open: verified restore from backup archive, richer faction/campaign evolution, authoritative career/dispatch/job settlement integration, production Military/Government UI, large balance/stress runs and live telemetry gameplay verification.
 
 ## Tutorial engine implementation
 
