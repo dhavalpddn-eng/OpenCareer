@@ -413,41 +413,120 @@
                     <TextBlock Text="{Binding CompletedOperationStatusText}"
                                Style="{StaticResource OpenCareerPaperBodyStyle}"
                                TextWrapping="Wrap" />
-                    <ItemsControl ItemsSource="{Binding CompletedOperations}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Style="{StaticResource OpenCareerTableRowStyle}">
-                                    <StackPanel Spacing="8">
-                                        <TextBlock Text="{Binding OperationName}"
-                                                   Style="{StaticResource OpenCareerPaperTitleStyle}"
-                                                   TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding OutcomeText}"
-                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}" />
-                                        <TextBlock Text="{Binding TheaterText}"
-                                                   Style="{StaticResource OpenCareerPaperBodyStyle}" />
-                                        <TextBlock Text="{Binding CampaignText}"
-                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
-                                                   TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding EndedText}"
-                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
-                                        <TextBlock Text="{Binding FinalStateText}"
-                                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
-                                                   TextWrapping="Wrap" />
-                                        <TextBlock Text="FRIENDLY COMMAND"
-                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
-                                        <TextBlock Text="{Binding FriendlyFactionText}"
-                                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
-                                                   TextWrapping="Wrap" />
-                                        <TextBlock Text="OPPOSING FORCE"
-                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
-                                        <TextBlock Text="{Binding HostileFactionText}"
-                                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
-                                                   TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+
+                    <Grid ColumnSpacing="18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.05*" />
+                            <ColumnDefinition Width="1.25*" />
+                        </Grid.ColumnDefinitions>
+
+                        <ListView x:Name="CompletedOperationsList"
+                                  ItemsSource="{Binding CompletedOperations}"
+                                  SelectionMode="Single"
+                                  IsItemClickEnabled="False"
+                                  SelectionChanged="CompletedOperationsList_SelectionChanged">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource OpenCareerTableRowStyle}">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="{Binding OperationName}"
+                                                       Style="{StaticResource OpenCareerPaperTitleStyle}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding OutcomeText}"
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                            <TextBlock Text="{Binding TheaterText}"
+                                                       Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                            <TextBlock Text="{Binding CampaignText}"
+                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding EndedText}"
+                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+
+                        <Border Grid.Column="1"
+                                Style="{StaticResource OpenCareerPaperInsetStyle}"
+                                Padding="18">
+                            <Grid>
+                                <StackPanel x:Name="CompletedOperationEmptyState"
+                                            Spacing="6">
+                                    <TextBlock Text="OPERATION DETAILS"
+                                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                                    <TextBlock Text="Select an archived operation to review its persisted final state."
+                                               Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="CompletedOperationDetailPanel"
+                                            Spacing="10"
+                                            Visibility="Collapsed"
+                                            DataContext="{Binding SelectedCompletedOperationDetail}">
+                                    <TextBlock Text="OPERATION DETAILS"
+                                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                                    <TextBlock Text="{Binding OperationName}"
+                                               Style="{StaticResource OpenCareerPaperTitleStyle}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding CampaignText}"
+                                               Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding TheaterText}"
+                                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                                    <Grid ColumnSpacing="18"
+                                          RowSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <StackPanel>
+                                            <TextBlock Text="RESULT"
+                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                            <TextBlock Text="{Binding OutcomeText}"
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="FINAL PHASE"
+                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                            <TextBlock Text="{Binding FinalPhaseText}"
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1">
+                                            <TextBlock Text="FINAL CONTROL"
+                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                            <TextBlock Text="{Binding FinalControlText}"
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1"
+                                                    Grid.Column="1">
+                                            <TextBlock Text="COMPLETED"
+                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                            <TextBlock Text="{Binding EndedText}"
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="FRIENDLY COMMAND"
+                                               Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                    <TextBlock Text="{Binding FriendlyFactionText}"
+                                               Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="OPPOSING FORCE"
+                                               Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                    <TextBlock Text="{Binding HostileFactionText}"
+                                               Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </StackPanel>
             </Border>
 
