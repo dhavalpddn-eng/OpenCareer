@@ -426,7 +426,7 @@ Exit gate: maintenance, staffing, facilities and geography affect availability/p
 
 # Chapter 10 — Military/government careers, simulated conflict and special events
 
-Chapter status: **ACTIVE IMPLEMENTATION — MULTI-MISSION CONFLICT FOUNDATION ON PR #10; VERIFICATION PENDING AFTER SYNC**
+Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON PR #10; CORE LINUX/WINDOWS GREEN**
 
 ## Completed design/foundation
 
@@ -461,23 +461,31 @@ Chapter status: **ACTIVE IMPLEMENTATION — MULTI-MISSION CONFLICT FOUNDATION ON
 - [x] Ensure installed/owned military-capable aircraft alone never grants military mission access.
 - [x] Implement bounded military trust/progression result updates.
 - [x] Implement seeded fictional theater generation with repeatable ground/air units, sectors and threats.
-- [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy and theater generation.
+- [x] Implement versioned campaign checkpoints for world, military career, simulated player damage and active mission state.
+- [x] Persist conflict campaigns in the shared SQLite database with schema migration and optimistic revision protection.
+- [x] Restore reserved support requests and active mission state from a persisted checkpoint without duplicating mission ownership.
+- [x] Persist mission-stage progress and simulated threat outcomes so restart recovery does not replay damage/effects.
+- [x] Implement strategic campaign phase, momentum and deterministic objectives for control, intelligence, readiness and threat reduction.
+- [x] Coordinate world advancement and strategic-state persistence through `ConflictCampaignCoordinator`.
+- [x] Enforce military authorization at the dispatch/acceptance boundary so lower-level mission services cannot bypass qualification/assignment rules.
+- [x] Project campaign/front/threat/support/active-operation data through an application snapshot for the future Military/Government UI.
+- [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: the military branch now compiles past the initial theater-generator defect. Three test assertion issues were corrected in the latest military commit. Re-run/branch-sync CI is still pending; do not claim final green verification until the post-sync workflow completes.
+Verification note: Linux PR CI is green through `ddcf31b2` with **227/227 xUnit + 29/29 SimLab**. Windows PR CI is green through `f9aac31b` with the WinUI app and live probe building at 0 errors and **226/226 xUnit**. The latest snapshot-only Windows run is still pending; do not claim that final head Windows-green until it completes.
 
 ## Remaining
 
-- [ ] Persist conflict checkpoints, air/ground units, requests and active missions.
-- [ ] Restore reserved support requests and active mission state safely after app restart.
-- [ ] Add richer faction/campaign state beyond Friendly/Hostile/Neutral sides.
-- [ ] Add longer-term campaign objectives and theater evolution across multiple operations.
+- [ ] Wire automatic production startup/resume so the Military/Government application flow loads the active persisted campaign without a manual orchestration call.
+- [ ] Add database-consistent backup/restore integration for conflict campaign checkpoints.
+- [ ] Add richer fictional faction identity beyond Friendly/Hostile/Neutral sides.
+- [ ] Extend long-term theater evolution beyond the first phase/momentum/objective director.
 - [ ] Integrate military authorization with authoritative player-career persistence/onboarding.
 - [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
 - [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
 - [ ] Implement production Military/Government/Conflict UI against the conflict application service.
 - [ ] Add large deterministic campaign balance/stress batches.
-- [ ] Run/record post-sync Linux + Windows validation.
+- [ ] Record the final-head Windows validation after the newest Military/Government snapshot slice completes.
 - [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
 - [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 
