@@ -480,6 +480,96 @@ public sealed class MilitaryGovernmentViewModelTests
     }
 
     [Fact]
+    public void SelectionSurvivesCurrentCampaignReplacementWhenArchiveRemains()
+    {
+        var runtime = CreateRuntime();
+        var archived = ConflictCampaignHistoryEntry.FromCheckpoint(
+            CompletedRecord().Checkpoint) with
+        {
+            CampaignId = "stable-archive"
+        };
+        runtime.Replace(
+            new ConflictCampaignStoreRecord(
+                1,
+                CreateCheckpoint("current-alpha") with
+                {
+                    History = [archived]
+                }));
+        var viewModel = CreateViewModel(runtime);
+        viewModel.Refresh();
+        Assert.True(
+            viewModel.SelectCompletedOperation(
+                archived.CampaignId));
+
+        MilitaryCompletedOperationDetailViewModel originalDetail =
+            Assert.IsType<MilitaryCompletedOperationDetailViewModel>(
+                viewModel.SelectedCompletedOperationDetail);
+
+        runtime.Replace(
+            new ConflictCampaignStoreRecord(
+                2,
+                CreateCheckpoint("current-bravo") with
+                {
+                    History = [archived]
+                }));
+
+        viewModel.Refresh();
+
+        Assert.Equal(
+            archived.CampaignId,
+            viewModel.SelectedCompletedOperation?.CampaignId);
+        MilitaryCompletedOperationDetailViewModel refreshedDetail =
+            Assert.IsType<MilitaryCompletedOperationDetailViewModel>(
+                viewModel.SelectedCompletedOperationDetail);
+        Assert.NotSame(originalDetail, refreshedDetail);
+        Assert.Equal(originalDetail.CampaignId, refreshedDetail.CampaignId);
+        Assert.Equal(originalDetail.Outcome, refreshedDetail.Outcome);
+        Assert.Equal(
+            originalDetail.FriendlyPosture,
+            refreshedDetail.FriendlyPosture);
+        Assert.Equal(
+            originalDetail.HostilePosture,
+            refreshedDetail.HostilePosture);
+    }
+
+    [Fact]
+    public async Task SuccessorActivationPreservesSelectedArchivedPredecessor()
+    {
+        var runtime = CreateRuntime();
+        var previous = ConflictCampaignHistoryEntry.FromCheckpoint(
+            CompletedRecord().Checkpoint) with
+        {
+            CampaignId = "previous-archive"
+        };
+        ConflictCampaignStoreRecord completed = CompletedRecord();
+        completed = new ConflictCampaignStoreRecord(
+            completed.Revision,
+            completed.Checkpoint with
+            {
+                History = [previous]
+            });
+        runtime.Replace(completed);
+        var store = new MemoryStore();
+        var viewModel = CreateViewModel(runtime, store);
+        viewModel.Refresh();
+        Assert.True(
+            viewModel.SelectCompletedOperation(
+                previous.CampaignId));
+
+        await viewModel.AcceptSuccessorAsync();
+
+        Assert.Equal(
+            previous.CampaignId,
+            viewModel.SelectedCompletedOperation?.CampaignId);
+        MilitaryCompletedOperationDetailViewModel detail =
+            Assert.IsType<MilitaryCompletedOperationDetailViewModel>(
+                viewModel.SelectedCompletedOperationDetail);
+        Assert.Equal(previous.CampaignId, detail.CampaignId);
+        Assert.Equal(2, viewModel.CompletedOperations.Count);
+        Assert.Single(store.Saved);
+    }
+
+    [Fact]
     public void RefreshClearsSelectionWhenArchivedOperationDisappears()
     {
         var runtime = CreateRuntime();
@@ -543,13 +633,19 @@ public sealed class MilitaryGovernmentViewModelTests
             CreateCheckpoint("successor") with { History = [archive] }));
         var viewModel = CreateViewModel(runtime);
         viewModel.Refresh();
-        Assert.Single(viewModel.CompletedOperations);
+        var displayedArchive = Assert.Single(viewModel.CompletedOperations);
+        Assert.True(
+            viewModel.SelectCompletedOperation(
+                displayedArchive.CampaignId));
+        Assert.NotNull(viewModel.SelectedCompletedOperationDetail);
 
         runtime.Replace(CompletedRecord());
         viewModel.Refresh();
 
         // A terminal current campaign is not an archived predecessor yet.
         Assert.Empty(viewModel.CompletedOperations);
+        Assert.Null(viewModel.SelectedCompletedOperation);
+        Assert.Null(viewModel.SelectedCompletedOperationDetail);
         Assert.Contains("No archived operations", viewModel.CompletedOperationStatusText);
         Assert.True(viewModel.HasSuccessorOffer);
     }
@@ -752,6 +848,28 @@ public sealed class MilitaryGovernmentViewModelTests
             Assert.Equal(displayedArchive.OutcomeText, recoveredArchive.OutcomeText);
             Assert.Equal(displayedArchive.FinalStateText, recoveredArchive.FinalStateText);
             Assert.Equal(displayedArchive.EndedText, recoveredArchive.EndedText);
+
+            Assert.True(
+                recoveredViewModel.SelectCompletedOperation(
+                    recoveredArchive.CampaignId));
+            MilitaryCompletedOperationDetailViewModel recoveredDetail =
+                Assert.IsType<MilitaryCompletedOperationDetailViewModel>(
+                    recoveredViewModel.SelectedCompletedOperationDetail);
+
+            recoveredViewModel.Refresh();
+
+            Assert.Equal(
+                recoveredArchive.CampaignId,
+                recoveredViewModel.SelectedCompletedOperation?.CampaignId);
+            Assert.Equal(
+                recoveredDetail.CampaignId,
+                recoveredViewModel.SelectedCompletedOperationDetail?.CampaignId);
+            Assert.Equal(
+                recoveredDetail.FriendlyPosture,
+                recoveredViewModel.SelectedCompletedOperationDetail?.FriendlyPosture);
+            Assert.Equal(
+                recoveredDetail.HostilePosture,
+                recoveredViewModel.SelectedCompletedOperationDetail?.HostilePosture);
         }
         finally
         {
