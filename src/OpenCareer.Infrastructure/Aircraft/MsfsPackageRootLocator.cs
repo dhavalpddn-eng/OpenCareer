@@ -18,14 +18,26 @@ public static class MsfsPackageRootLocator
         if (!File.Exists(userConfigPath))
             return Array.Empty<string>();
 
-        string? installedPackagesPath = File
-            .ReadLines(userConfigPath)
-            .Select(static line => line.Trim())
-            .Where(static line => line.StartsWith(
-                "InstalledPackagesPath",
-                StringComparison.OrdinalIgnoreCase))
-            .Select(ParseInstalledPackagesPath)
-            .FirstOrDefault(static path => path is not null);
+        string? installedPackagesPath;
+        try
+        {
+            installedPackagesPath = File
+                .ReadLines(userConfigPath)
+                .Select(static line => line.Trim())
+                .Where(static line => line.StartsWith(
+                    "InstalledPackagesPath",
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(ParseInstalledPackagesPath)
+                .FirstOrDefault(static path => path is not null);
+        }
+        catch (IOException)
+        {
+            return Array.Empty<string>();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Array.Empty<string>();
+        }
 
         if (installedPackagesPath is null || !Directory.Exists(installedPackagesPath))
             return Array.Empty<string>();
@@ -40,11 +52,16 @@ public static class MsfsPackageRootLocator
 
     private static string? ParseInstalledPackagesPath(string line)
     {
-        int separator = line.IndexOfAny([' ', '=']);
-        if (separator < 0 || separator == line.Length - 1)
+        const string key = "InstalledPackagesPath";
+
+        if (!line.StartsWith(key, StringComparison.OrdinalIgnoreCase))
             return null;
 
-        string value = line[(separator + 1)..].Trim().Trim('"');
+        string value = line[key.Length..].TrimStart();
+        if (value.StartsWith('='))
+            value = value[1..].TrimStart();
+
+        value = value.Trim().Trim('"');
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }
