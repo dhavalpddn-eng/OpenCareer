@@ -46,7 +46,6 @@ public enum DispatchFeasibilityReason
     TakeoffWeightExceedsMaximum,
     PayloadRangeEnvelopeDoesNotCoverPayload,
     PayloadRangeExceeded,
-    WeatherSourceUnavailable,
     AirportWeatherUnavailable,
     RunwayWindDataUnavailable,
     CrosswindExceedsLimit,
@@ -247,16 +246,12 @@ public static class RunwayCompatibilityEvaluator
         {
             if (weather is null)
             {
-                return new(
-                    DispatchFeasibilityStatus.InsufficientData,
-                    null,
-                    [new(
-                        DispatchFeasibilityReason.AirportWeatherUnavailable,
-                        endpoint,
-                        airport.Icao)]);
+                endpointIssues.Add(new(
+                    DispatchFeasibilityReason.AirportWeatherUnavailable,
+                    endpoint,
+                    airport.Icao));
             }
-
-            if (weatherLimits.MaximumDensityAltitudeFeet is { } maximumDensityAltitude)
+            else if (weatherLimits.MaximumDensityAltitudeFeet is { } maximumDensityAltitude)
             {
                 if (weather.DensityAltitudeFeet is null)
                 {
