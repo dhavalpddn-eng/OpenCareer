@@ -5,13 +5,13 @@ namespace OpenCareer.Infrastructure.Aircraft;
 
 internal sealed record MsfsFlightPerformanceDispatchFacts(
     double? FuelCapacityGallons,
-    double? SingleFuelDensityPoundsPerGallon,
+    IReadOnlyList<AircraftFuelDensity>? FuelDensities,
     double? MaximumFuelWeightPounds,
     AircraftConditionedPerformanceProfile? ConditionedPerformance)
 {
     internal bool HasAny =>
         FuelCapacityGallons is not null
-        || SingleFuelDensityPoundsPerGallon is not null
+        || FuelDensities is not null
         || MaximumFuelWeightPounds is not null
         || ConditionedPerformance is not null;
 }
@@ -36,15 +36,15 @@ internal static class MsfsFlightPerformanceCfgParser
         double? fuelCapacity =
             ReadNonNegative(loading, "fuel_capacity");
 
-        double? singleFuelDensity =
-            ReadSinglePositiveDensity(
+        IReadOnlyList<AircraftFuelDensity>? fuelDensities =
+            ReadFuelDensities(
                 enginePerformance,
                 "fuel_density_table");
 
         double? maximumFuelWeight =
             fuelCapacity is { } capacity
-            && singleFuelDensity is { } density
-                ? capacity * density
+            && fuelDensities is { Count: 1 }
+                ? capacity * fuelDensities[0].PoundsPerGallon
                 : null;
 
         if (maximumFuelWeight is { } weight && !double.IsFinite(weight))
@@ -55,7 +55,7 @@ internal static class MsfsFlightPerformanceCfgParser
 
         return new(
             fuelCapacity,
-            singleFuelDensity,
+            fuelDensities,
             maximumFuelWeight,
             conditioned);
     }
@@ -345,7 +345,7 @@ internal static class MsfsFlightPerformanceCfgParser
         return value;
     }
 
-    private static double? ReadSinglePositiveDensity(
+    private static IReadOnlyList<AircraftFuelDensity>? ReadFuelDensities(
         IReadOnlyDictionary<string, string>? section,
         string key)
     {
@@ -358,21 +358,28 @@ internal static class MsfsFlightPerformanceCfgParser
                 StringSplitOptions.TrimEntries
                 | StringSplitOptions.RemoveEmptyEntries);
 
-        if (values.Length != 1)
+        if (values.Length == 0)
             return null;
 
-        if (!double.TryParse(
-                values[0],
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out double density)
-            || !double.IsFinite(density)
-            || density <= 0)
+        var densities = new AircraftFuelDensity[values.Length];
+
+        for (int index = 0; index < values.Length; index++)
         {
-            return null;
+            if (!double.TryParse(
+                    values[index],
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out double density)
+                || !double.IsFinite(density)
+                || density <= 0)
+            {
+                return null;
+            }
+
+            densities[index] = new(index, density);
         }
 
-        return density;
+        return densities;
     }
 
     private static Dictionary<string, Dictionary<string, string>> ParseSections(
