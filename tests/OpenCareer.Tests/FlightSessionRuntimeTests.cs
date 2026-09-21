@@ -1093,6 +1093,112 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task FailedContinuitySuspensionCanRetryAndPublishOnce()
+    {
+        FlightSession active =
+            PreflightSession(
+                anchor:
+                    new FlightContinuityAnchor(
+                        Epoch.AddSeconds(1),
+                        32,
+                        -97,
+                        650,
+                        OnGround: true));
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(active);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = active
+            };
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        Epoch.AddMinutes(1),
+                        32.001,
+                        -97.001,
+                        onGround: true)
+            };
+
+        var runtime =
+            CreateRuntime(
+                coordinator,
+                store,
+                Connected(),
+                telemetry);
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        runtime.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightStateEvidence acceptedEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
+
+        store.FailWrites = true;
+
+        telemetry.Latest =
+            Telemetry(
+                Epoch.AddMinutes(2),
+                34,
+                -95,
+                onGround: true);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => runtime.RefreshAsync());
+
+        Assert.Single(published);
+        Assert.Same(
+            acceptedEvidence,
+            runtime.Current);
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current!.Status);
+
+        store.FailWrites = false;
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            2,
+            published.Count);
+
+        FlightStateEvidence continuityEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                published[1]);
+
+        Assert.False(continuityEvidence.Connected);
+        Assert.False(
+            continuityEvidence.ContinuityPlausible);
+        Assert.Equal(
+            telemetry.Latest.Timestamp,
+            continuityEvidence.Timestamp);
+        Assert.Same(
+            continuityEvidence,
+            runtime.Current);
+        Assert.Equal(
+            FlightSessionStatus.Suspended,
+            coordinator.Current!.Status);
+        Assert.Equal(
+            FlightSessionStatus.Suspended,
+            store.Checkpoint!.Status);
+    }
+
+    [Fact]
     public async Task FailedPersistenceDoesNotPublishOrReplaceAcceptedEvidence()
     {
         FlightSession active =
