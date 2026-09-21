@@ -1,0 +1,89 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        OpenCareer Jet Age palette.
+        Canonical direction: cool dark aircraft/operations framing + vivid ivory briefing paper.
+        These tokens intentionally avoid the earlier olive/yellow/sepia drift.
+    -->
+
+    <Color x:Key="OpenCareerShellBackgroundColor">#111C26</Color>
+    <Color x:Key="OpenCareerShellRaisedColor">#192A37</Color>
+    <Color x:Key="OpenCareerShellInsetColor">#223846</Color>
+    <Color x:Key="OpenCareerSteelBorderColor">#405867</Color>
+    <Color x:Key="OpenCareerSteelHighlightColor">#6E818D</Color>
+
+    <Color x:Key="OpenCareerShellTextColor">#FFFDF8</Color>
+    <Color x:Key="OpenCareerShellMutedTextColor">#B7C3C9</Color>
+
+    <Color x:Key="OpenCareerPaperColor">#FFFDF8</Color>
+    <Color x:Key="OpenCareerPaperAltColor">#F5F2E9</Color>
+    <Color x:Key="OpenCareerPaperMutedColor">#E9E5DA</Color>
+    <Color x:Key="OpenCareerInkColor">#18252D</Color>
+    <Color x:Key="OpenCareerInkMutedColor">#5C6870</Color>
+    <Color x:Key="OpenCareerPaperRuleColor">#C8C1B4</Color>
+
+    <Color x:Key="OpenCareerNavyColor">#29475C</Color>
+    <Color x:Key="OpenCareerNavyRaisedColor">#365E77</Color>
+    <Color x:Key="OpenCareerSelectionColor">#9FB7C7</Color>
+    <Color x:Key="OpenCareerBrassColor">#B58A48</Color>
+
+    <Color x:Key="OpenCareerSuccessColor">#3E7E57</Color>
+    <Color x:Key="OpenCareerWarningColor">#C58327</Color>
+    <Color x:Key="OpenCareerDangerColor">#B8453E</Color>
+    <Color x:Key="OpenCareerDisabledColor">#7B878E</Color>
+    <Color x:Key="OpenCareerTutorialScrimColor">#B30A1118</Color>
+
+    <Color x:Key="OpenCareerOpportunityStandardColor">#3E7E57</Color>
+    <Color x:Key="OpenCareerOpportunitySpecialistColor">#4D78A8</Color>
+    <Color x:Key="OpenCareerOpportunityEliteColor">#7456A8</Color>
+    <Color x:Key="OpenCareerOpportunityLegendaryColor">#C47A2C</Color>
+
+    <SolidColorBrush x:Key="OpenCareerShellBackgroundBrush" Color="{StaticResource OpenCareerShellBackgroundColor}" />
+    <SolidColorBrush x:Key="OpenCareerShellRaisedBrush" Color="{StaticResource OpenCareerShellRaisedColor}" />
+    <SolidColorBrush x:Key="OpenCareerShellInsetBrush" Color="{StaticResource OpenCareerShellInsetColor}" />
+    <SolidColorBrush x:Key="OpenCareerSteelBorderBrush" Color="{StaticResource OpenCareerSteelBorderColor}" />
+    <SolidColorBrush x:Key="OpenCareerSteelHighlightBrush" Color="{StaticResource OpenCareerSteelHighlightColor}" />
+
+    <SolidColorBrush x:Key="OpenCareerShellTextBrush" Color="{StaticResource OpenCareerShellTextColor}" />
+    <SolidColorBrush x:Key="OpenCareerShellMutedTextBrush" Color="{StaticResource OpenCareerShellMutedTextColor}" />
+
+    <SolidColorBrush x:Key="OpenCareerPaperBrush" Color="{StaticResource OpenCareerPaperColor}" />
+    <SolidColorBrush x:Key="OpenCareerPaperAltBrush" Color="{StaticResource OpenCareerPaperAltColor}" />
+    <SolidColorBrush x:Key="OpenCareerPaperMutedBrush" Color="{StaticResource OpenCareerPaperMutedColor}" />
+    <SolidColorBrush x:Key="OpenCareerInkBrush" Color="{StaticResource OpenCareerInkColor}" />
+    <SolidColorBrush x:Key="OpenCareerInkMutedBrush" Color="{StaticResource OpenCareerInkMutedColor}" />
+    <SolidColorBrush x:Key="OpenCareerPaperRuleBrush" Color="{StaticResource OpenCareerPaperRuleColor}" />
+
+    <SolidColorBrush x:Key="OpenCareerNavyBrush" Color="{StaticResource OpenCareerNavyColor}" />
+    <SolidColorBrush x:Key="OpenCareerNavyRaisedBrush" Color="{StaticResource OpenCareerNavyRaisedColor}" />
+    <SolidColorBrush x:Key="OpenCareerSelectionBrush" Color="{StaticResource OpenCareerSelectionColor}" />
+    <SolidColorBrush x:Key="OpenCareerBrassBrush" Color="{StaticResource OpenCareerBrassColor}" />
+
+    <SolidColorBrush x:Key="OpenCareerSuccessBrush" Color="{StaticResource OpenCareerSuccessColor}" />
+    <SolidColorBrush x:Key="OpenCareerWarningBrush" Color="{StaticResource OpenCareerWarningColor}" />
+    <SolidColorBrush x:Key="OpenCareerDangerBrush" Color="{StaticResource OpenCareerDangerColor}" />
+    <SolidColorBrush x:Key="OpenCareerDisabledBrush" Color="{StaticResource OpenCareerDisabledColor}" />
+    <SolidColorBrush x:Key="OpenCareerTutorialScrimBrush" Color="{StaticResource OpenCareerTutorialScrimColor}" />
+
+    <SolidColorBrush x:Key="OpenCareerOpportunityStandardBrush" Color="{StaticResource OpenCareerOpportunityStandardColor}" />
+    <SolidColorBrush x:Key="OpenCareerOpportunitySpecialistBrush" Color="{StaticResource OpenCareerOpportunitySpecialistColor}" />
+    <SolidColorBrush x:Key="OpenCareerOpportunityEliteBrush" Color="{StaticResource OpenCareerOpportunityEliteColor}" />
+    <SolidColorBrush x:Key="OpenCareerOpportunityLegendaryBrush" Color="{StaticResource OpenCareerOpportunityLegendaryColor}" />
+
+    <!-- Compatibility aliases for existing pages while the app is migrated onto canonical names. -->
+    <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource OpenCareerShellBackgroundColor}" />
+    <SolidColorBrush x:Key="AppSurfaceBrush" Color="{StaticResource OpenCareerShellRaisedColor}" />
+    <SolidColorBrush x:Key="AppSurfaceAltBrush" Color="{StaticResource OpenCareerShellInsetColor}" />
+    <SolidColorBrush x:Key="AppBorderBrush" Color="{StaticResource OpenCareerSteelBorderColor}" />
+    <SolidColorBrush x:Key="AppAccentBrush" Color="{StaticResource OpenCareerSelectionColor}" />
+    <SolidColorBrush x:Key="AppSuccessBrush" Color="{StaticResource OpenCareerSuccessColor}" />
+    <SolidColorBrush x:Key="AppWarningBrush" Color="{StaticResource OpenCareerWarningColor}" />
+    <SolidColorBrush x:Key="AppDangerBrush" Color="{StaticResource OpenCareerDangerColor}" />
+    <SolidColorBrush x:Key="AppMutedTextBrush" Color="{StaticResource OpenCareerShellMutedTextColor}" />
+    <SolidColorBrush x:Key="AppPaperBrush" Color="{StaticResource OpenCareerPaperColor}" />
+    <SolidColorBrush x:Key="AppPaperAltBrush" Color="{StaticResource OpenCareerPaperAltColor}" />
+    <SolidColorBrush x:Key="AppPaperTextBrush" Color="{StaticResource OpenCareerInkColor}" />
+    <SolidColorBrush x:Key="AppNavyBrush" Color="{StaticResource OpenCareerNavyColor}" />
+</ResourceDictionary>
