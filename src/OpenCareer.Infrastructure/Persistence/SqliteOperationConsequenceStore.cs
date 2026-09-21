@@ -115,6 +115,8 @@ public sealed class SqliteOperationConsequenceStore
         {
             await using SqliteConnection connection =
                 await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+            using SqliteTransaction transaction =
+                connection.BeginTransaction();
 
             string payload =
                 JsonSerializer.Serialize(
@@ -122,6 +124,7 @@ public sealed class SqliteOperationConsequenceStore
                     _jsonOptions);
 
             await using SqliteCommand insert = connection.CreateCommand();
+            insert.Transaction = transaction;
             insert.CommandText =
                 """
                 INSERT INTO military_operation_consequences (
@@ -193,6 +196,8 @@ public sealed class SqliteOperationConsequenceStore
                 result,
                 savedAt);
             record.Validate();
+
+            transaction.Commit();
 
             _logger.LogInformation(
                 "Persisted military operation consequence {ResolutionKey}.",
