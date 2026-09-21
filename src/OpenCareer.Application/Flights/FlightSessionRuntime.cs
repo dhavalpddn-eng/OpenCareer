@@ -4,7 +4,7 @@ using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.Application.Flights;
 
-public sealed class FlightSessionRuntime
+public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
 {
     private readonly FlightSessionCoordinator _coordinator;
     private readonly FlightSessionPersistenceService _persistence;
@@ -18,6 +18,12 @@ public sealed class FlightSessionRuntime
     private Guid? _processorSessionId;
     private bool _processorWasSuspended;
     private DateTimeOffset? _lastTelemetryTimestamp;
+    private FlightStateEvidence? _currentEvidence;
+
+    public FlightStateEvidence? Current =>
+        Volatile.Read(ref _currentEvidence);
+
+    public event Action<FlightStateEvidence>? EvidenceChanged;
 
     public FlightSessionRuntime(
         FlightSessionCoordinator coordinator,
@@ -100,16 +106,19 @@ public sealed class FlightSessionRuntime
                         _timeProvider.GetUtcNow(),
                         current.UpdatedAt);
 
+                var disconnectEvidence =
+                    new FlightStateEvidence(
+                        timestamp,
+                        Connected: false,
+                        ContinuityPlausible: false);
+
                 await _persistence
                     .AdvanceAsync(
-                        new FlightSessionAdvance(
-                            new FlightStateEvidence(
-                                timestamp,
-                                Connected: false,
-                                ContinuityPlausible: false)),
+                        new FlightSessionAdvance(disconnectEvidence),
                         cancellationToken)
                     .ConfigureAwait(false);
 
+                Publish(disconnectEvidence);
                 return true;
             }
 
@@ -138,16 +147,19 @@ public sealed class FlightSessionRuntime
                 && current.ContinuityAnchor is not null
                 && !continuityPlausible)
             {
+                var continuityFailureEvidence =
+                    new FlightStateEvidence(
+                        telemetry.Timestamp,
+                        Connected: false,
+                        ContinuityPlausible: false);
+
                 await _persistence
                     .AdvanceAsync(
-                        new FlightSessionAdvance(
-                            new FlightStateEvidence(
-                                telemetry.Timestamp,
-                                Connected: false,
-                                ContinuityPlausible: false)),
+                        new FlightSessionAdvance(continuityFailureEvidence),
                         cancellationToken)
                     .ConfigureAwait(false);
 
+                Publish(continuityFailureEvidence);
                 return true;
             }
 
@@ -215,6 +227,7 @@ public sealed class FlightSessionRuntime
             _lastTelemetryTimestamp =
                 telemetry.Timestamp;
 
+            Publish(evidence);
             return true;
         }
         finally
@@ -351,6 +364,12 @@ public sealed class FlightSessionRuntime
         _processorWasSuspended = false;
         _lastTelemetryTimestamp = null;
         _evidenceProcessor.Reset();
+    }
+
+    private void Publish(FlightStateEvidence evidence)
+    {
+        Volatile.Write(ref _currentEvidence, evidence);
+        EvidenceChanged?.Invoke(evidence);
     }
 
     private static DateTimeOffset Max(

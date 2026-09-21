@@ -76,6 +76,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<FlightTelemetryEvidenceProcessor>();
         services.AddSingleton<FlightContinuityPolicy>();
         services.AddSingleton<FlightSessionRuntime>();
+        services.AddSingleton<IFlightStateEvidenceSource>(provider =>
+            provider.GetRequiredService<FlightSessionRuntime>());
 
         services.AddSingleton<SimConnectConnection>();
         services.AddSingleton<ISimulatorConnection>(provider =>
