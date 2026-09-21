@@ -1,0 +1,156 @@
+<Page
+    x:Class="OpenCareer.App.Views.CurrentFlightPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel MaxWidth="980"
+                    Margin="32"
+                    Spacing="18"
+                    HorizontalAlignment="Center">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{Binding CurrentFlightTitle}"
+                           Style="{StaticResource OpenCareerPageTitleStyle}" />
+                <TextBlock Text="{Binding CurrentFlightStatus}"
+                           Foreground="{StaticResource OpenCareerSelectionBrush}"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{Binding CurrentFlightDetail}"
+                           Style="{StaticResource OpenCareerPageSubtitleStyle}" />
+            </StackPanel>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="24">
+                <StackPanel Spacing="18">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="FLIGHT SESSION"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="{Binding CurrentFlightRecoveryText}"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    </StackPanel>
+
+                    <Grid ColumnSpacing="24" RowSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                            <TextBlock Text="TIME" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightTimeSummary}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                            <TextBlock Text="FLIGHT EVENTS" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightEventSummary}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="3">
+                            <TextBlock Text="LATEST MILESTONE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightMilestoneSummary}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Spacing="3">
+                            <TextBlock Text="ROUTE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightRouteSummary}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Grid.Column="0" Spacing="3">
+                            <TextBlock Text="PEAKS" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightPerformanceSummary}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="3">
+                            <TextBlock Text="FUEL" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightFuelSummary}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="24">
+                <StackPanel Spacing="18">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="AIRCRAFT TELEMETRY"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="{Binding AircraftStatus}"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    </StackPanel>
+
+                    <Grid ColumnSpacing="24" RowSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                            <TextBlock Text="POSITION" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding PositionSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                            <TextBlock Text="ALTITUDE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding AltitudeSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                            <TextBlock Text="SPEED" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding SpeedSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                            <TextBlock Text="VERTICAL SPEED" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding VerticalSpeedSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                            <TextBlock Text="HEADING" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding HeadingSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
+                            <TextBlock Text="AIRCRAFT STATE" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding AircraftStateSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Spacing="3">
+                            <TextBlock Text="ATTITUDE / LOAD FACTOR" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding AttitudeSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="4" Grid.Column="0" Spacing="3">
+                            <TextBlock Text="CONFIGURATION" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding ConfigurationSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="4" Grid.Column="1" Spacing="3">
+                            <TextBlock Text="LOAD" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding LoadSummary}" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

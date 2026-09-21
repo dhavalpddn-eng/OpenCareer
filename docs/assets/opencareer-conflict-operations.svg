@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<defs>
+ <style>
+  .bg{fill:#0B1520}.surface{fill:#111E2B;stroke:#294156;stroke-width:1.5}.alt{fill:#172737}.blue{fill:#4EA8DE}.green{fill:#52D273}.red{fill:#FF4D4D}.amber{fill:#F4B942}
+  .txt{fill:#EAF2F8;font-family:Segoe UI,Arial,sans-serif}.muted{fill:#9FB1C2;font-family:Segoe UI,Arial,sans-serif}.h{font-size:22px;font-weight:600}.sh{font-size:16px;font-weight:600}.b{font-size:13px}.s{font-size:11px}
+ </style>
+ <linearGradient id="map" x1="0" x2="1"><stop offset="0" stop-color="#11324A"/><stop offset=".52" stop-color="#173A37"/><stop offset=".53" stop-color="#4A2427"/><stop offset="1" stop-color="#5A1F24"/></linearGradient>
+</defs>
+<rect class="bg" width="1600" height="900"/>
+<rect fill="#0E1A27" width="1600" height="68"/>
+<text class="txt h" x="24" y="36">OpenCareer</text><text class="muted s" x="24" y="54">MSFS 2024 Companion</text>
+<circle class="green" cx="1240" cy="28" r="6"/><text class="txt b" x="1255" y="33">Connected to MSFS</text>
+<text class="txt b" x="1410" y="33">A-10C II</text>
+
+<rect fill="#0D1824" x="0" y="68" width="205" height="832"/>
+<rect x="8" y="92" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="116">Dashboard</text><rect x="8" y="140" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="164">Dispatch</text><rect x="8" y="188" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="212">Jobs</text><rect x="8" y="236" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="260">Current Flight</text><rect x="8" y="284" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="308">Map / World</text><rect x="8" y="332" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="356">Aircraft</text><rect x="8" y="380" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="404">Hangar / Bases</text><rect x="8" y="428" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="452">Maintenance</text><rect x="8" y="476" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="500">Company</text><rect x="8" y="524" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="548">Finances</text><rect x="8" y="572" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="596">Markets</text><rect x="8" y="620" width="189" height="38" rx="7" fill="#173A56"/><text class="txt b" x="26" y="644">Military / Government</text><rect class="red" x="186" y="629" width="5" height="20" rx="2"/><rect x="8" y="668" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="692">Logbook</text><rect x="8" y="716" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="740">Career</text><rect x="8" y="764" width="189" height="38" rx="7" fill="transparent"/><text class="muted b" x="26" y="788">Settings</text>
+
+<g transform="translate(225,88)">
+ <text class="txt h" x="0" y="0">Conflict Operations</text>
+ <text class="muted b" x="0" y="22">Simulated conflict state. MSFS supplies flight telemetry only.</text>
+
+ <rect class="surface" x="0" y="46" rx="12" width="300" height="728"/>
+ <text class="red sh" x="18" y="78">ACTIVE CONFLICT</text>
+ <text class="txt h" x="18" y="110">Eastern Front</text><text class="muted b" x="18" y="133">Operation Liberty Shield</text>
+ <rect class="alt" x="18" y="154" rx="8" width="264" height="86"/>
+ <text class="muted s" x="32" y="178">Threat Level</text><text class="red sh" x="210" y="179">HIGH</text>
+ <text class="muted s" x="32" y="209">Airspace</text><text class="red sh" x="190" y="210">CONTESTED</text>
+ <text class="txt sh" x="18" y="274">Control</text>
+ <text class="muted b" x="18" y="302">Friendly</text><rect class="alt" x="95" y="292" width="150" height="10" rx="5"/><rect class="blue" x="95" y="292" width="93" height="10" rx="5"/><text class="txt b" x="252" y="302">62%</text>
+ <text class="muted b" x="18" y="330">Hostile</text><rect class="alt" x="95" y="320" width="150" height="10" rx="5"/><rect class="red" x="95" y="320" width="57" height="10" rx="5"/><text class="txt b" x="252" y="330">38%</text>
+ <text class="txt sh" x="18" y="372">Active threats</text>
+ <text class="muted b" x="28" y="404">SAM sites</text><text class="red b" x="255" y="404">5</text>
+ <text class="muted b" x="28" y="434">Enemy aircraft</text><text class="red b" x="255" y="434">8</text>
+ <text class="muted b" x="28" y="464">Combat zones</text><text class="red b" x="255" y="464">4</text>
+ <rect x="18" y="520" width="264" height="126" rx="10" fill="#24171A" stroke="#7D2D33"/>
+ <text class="red sh" x="32" y="550">Recommended action</text>
+ <text class="muted b" x="32" y="578">Avoid known SAM zones.</text><text class="muted b" x="32" y="600">Proceed via planned route.</text><text class="muted b" x="32" y="622">Threats are OpenCareer-simulated.</text>
+
+ <rect class="surface" x="318" y="46" rx="12" width="650" height="470"/>
+ <text class="txt sh" x="336" y="76">Operational Map</text>
+ <rect x="336" y="94" width="614" height="400" rx="10" fill="url(#map)"/>
+ <path d="M650 95 C610 160 700 220 670 290 C650 350 730 400 710 494" stroke="#FF6B6B" stroke-width="4" fill="none"/>
+ <circle cx="480" cy="410" r="18" fill="#0B5E9A" stroke="#6EC7FF" stroke-width="3"/><text class="txt b" x="450" y="445">LZBR</text>
+ <path d="M495 400 L570 350 L635 320 L750 280 L810 230" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="8 8" fill="none"/>
+ <polygon points="635,304 648,330 620,325" fill="#FFFFFF"/>
+ <circle cx="810" cy="230" r="18" fill="none" stroke="#FF4D4D" stroke-width="4"/><circle cx="810" cy="230" r="5" class="red"/>
+ <text class="txt sh" x="836" y="235">Target Convoy</text>
+ <circle cx="850" cy="150" r="44" fill="none" stroke="#FF4D4D" stroke-dasharray="8 6"/><text class="red sh" x="835" y="156">SAM</text>
+ <circle cx="760" cy="360" r="48" fill="none" stroke="#FF4D4D" stroke-dasharray="8 6"/><text class="red sh" x="744" y="366">SAM</text>
+ <rect class="alt" x="350" y="110" rx="8" width="160" height="132"/>
+ <text class="muted s" x="365" y="135">Blue — Friendly</text><text class="muted s" x="365" y="158">Red — Hostile</text><text class="muted s" x="365" y="181">Dashed — Route</text><text class="muted s" x="365" y="204">Circles — Threats</text>
+
+ <rect class="surface" x="318" y="532" rx="12" width="310" height="242"/>
+ <text class="txt sh" x="336" y="562">Flight Status</text>
+ <text class="muted b" x="336" y="596">Altitude</text><text class="txt b" x="520" y="596">12,500 ft</text>
+ <text class="muted b" x="336" y="626">Ground speed</text><text class="txt b" x="520" y="626">320 kt</text>
+ <text class="muted b" x="336" y="656">Heading</text><text class="txt b" x="520" y="656">087°</text>
+ <text class="muted b" x="336" y="686">Fuel</text><text class="green b" x="520" y="686">68%</text>
+ <text class="muted b" x="336" y="716">Simulated damage</text><text class="green b" x="520" y="716">Nominal</text>
+
+ <rect class="surface" x="646" y="532" rx="12" width="322" height="242"/>
+ <text class="txt sh" x="664" y="562">Communications</text>
+ <text class="blue b" x="664" y="594">AWACS</text><text class="muted b" x="720" y="594">Bandits detected north.</text>
+ <text class="blue b" x="664" y="624">Command</text><text class="muted b" x="730" y="624">Proceed to holding point.</text>
+ <text class="blue b" x="664" y="654">AWACS</text><text class="muted b" x="720" y="654">SAM activity near target.</text>
+ <text class="blue b" x="664" y="684">Mission</text><text class="muted b" x="720" y="684">Target convoy moving.</text>
+
+ <rect class="surface" x="986" y="46" rx="12" width="365" height="728"/>
+ <text class="txt sh" x="1006" y="78">Active Mission</text>
+ <rect class="alt" x="1006" y="96" rx="8" width="325" height="96"/>
+ <text class="txt h" x="1024" y="130">Close Air Support</text><text class="red b" x="1024" y="158">HIGH RISK</text>
+ <text class="muted b" x="1006" y="226">Departure</text><text class="txt b" x="1190" y="226">LZBR</text>
+ <text class="muted b" x="1006" y="256">Aircraft</text><text class="txt b" x="1190" y="256">A-10C II</text>
+ <text class="muted b" x="1006" y="286">Target</text><text class="txt b" x="1190" y="286">Convoy area</text>
+ <text class="muted b" x="1006" y="316">ETA</text><text class="txt b" x="1190" y="316">00:42</text>
+ <text class="txt sh" x="1006" y="362">Mission Progress</text>
+ <circle cx="1020" cy="396" r="8" fill="none" stroke="#4EA8DE" stroke-width="2"/><text class="muted b" x="1040" y="401">Reach holding point</text><circle cx="1020" cy="434" r="8" fill="none" stroke="#4EA8DE" stroke-width="2"/><text class="muted b" x="1040" y="439">Identify target area</text><circle cx="1020" cy="472" r="8" fill="none" stroke="#4EA8DE" stroke-width="2"/><text class="muted b" x="1040" y="477">Begin attack run</text><circle cx="1020" cy="510" r="8" fill="none" stroke="#4EA8DE" stroke-width="2"/><text class="muted b" x="1040" y="515">Resolve support action</text><circle cx="1020" cy="548" r="8" fill="none" stroke="#4EA8DE" stroke-width="2"/><text class="muted b" x="1040" y="553">Return to base</text>
+ <rect class="alt" x="1006" y="608" rx="8" width="325" height="132"/>
+ <text class="txt sh" x="1022" y="638">Simulation boundary</text>
+ <text class="muted b" x="1022" y="666">MSFS: aircraft flight + telemetry</text>
+ <text class="muted b" x="1022" y="690">OpenCareer: threats, effects, outcomes</text>
+ <text class="muted b" x="1022" y="714">No native MSFS combat assumed</text>
+</g>
+</svg>
