@@ -196,6 +196,134 @@ public sealed class FlightChecklistProgressionTests
     }
 
     [Fact]
+    public void ManualOnlyStepDoesNotAcceptAutomaticEvidence()
+    {
+        var checklist =
+            new FlightChecklistProgression(
+                new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>
+                {
+                    [FlightChecklistStepId.EngineStarted] =
+                        FlightChecklistVerificationCapability.ManualOnly
+                });
+
+        _ =
+            checklist.Process(
+                Evidence(
+                    0,
+                    stableTelemetry: true,
+                    validLoadedAircraft: true));
+
+        FlightChecklistSnapshot automatic =
+            checklist.Process(
+                Evidence(
+                    1,
+                    engineStartObserved: true));
+
+        FlightChecklistStepSnapshot engine =
+            Step(
+                automatic,
+                FlightChecklistStepId.EngineStarted);
+
+        Assert.Equal(
+            FlightChecklistVerificationCapability.ManualOnly,
+            engine.VerificationCapability);
+        Assert.Equal(
+            FlightChecklistStepState.Pending,
+            engine.State);
+        Assert.Equal(
+            FlightChecklistPhase.EngineStart,
+            automatic.CurrentPhase);
+
+        FlightChecklistSnapshot manual =
+            checklist.ConfirmManual(
+                FlightChecklistStepId.EngineStarted,
+                Epoch.AddSeconds(2));
+
+        Assert.Equal(
+            FlightChecklistStepState.Verified,
+            Step(
+                manual,
+                FlightChecklistStepId.EngineStarted)
+                .State);
+        Assert.Equal(
+            FlightChecklistPhase.TaxiOut,
+            manual.CurrentPhase);
+    }
+
+    [Fact]
+    public void UnavailableStepCannotBeVerifiedAutomaticallyOrManually()
+    {
+        var checklist =
+            new FlightChecklistProgression(
+                new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>
+                {
+                    [FlightChecklistStepId.EngineStarted] =
+                        FlightChecklistVerificationCapability.Unavailable
+                });
+
+        _ =
+            checklist.Process(
+                Evidence(
+                    0,
+                    stableTelemetry: true,
+                    validLoadedAircraft: true));
+
+        FlightChecklistSnapshot automatic =
+            checklist.Process(
+                Evidence(
+                    1,
+                    engineStartObserved: true));
+
+        FlightChecklistStepSnapshot engine =
+            Step(
+                automatic,
+                FlightChecklistStepId.EngineStarted);
+
+        Assert.Equal(
+            FlightChecklistVerificationCapability.Unavailable,
+            engine.VerificationCapability);
+        Assert.Equal(
+            FlightChecklistStepState.Pending,
+            engine.State);
+
+        Assert.Throws<InvalidOperationException>(
+            () =>
+                checklist.ConfirmManual(
+                    FlightChecklistStepId.EngineStarted,
+                    Epoch.AddSeconds(2)));
+    }
+
+    [Fact]
+    public void AutomaticStepRejectsManualSubstitution()
+    {
+        var checklist = new FlightChecklistProgression();
+
+        Assert.Throws<InvalidOperationException>(
+            () =>
+                checklist.ConfirmManual(
+                    FlightChecklistStepId.AircraftReady,
+                    Epoch));
+    }
+
+    [Fact]
+    public void ManualConfirmationCannotSkipPrerequisites()
+    {
+        var checklist =
+            new FlightChecklistProgression(
+                new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>
+                {
+                    [FlightChecklistStepId.EngineStarted] =
+                        FlightChecklistVerificationCapability.ManualOnly
+                });
+
+        Assert.Throws<InvalidOperationException>(
+            () =>
+                checklist.ConfirmManual(
+                    FlightChecklistStepId.EngineStarted,
+                    Epoch));
+    }
+
+    [Fact]
     public void BackwardEvidenceTimestampIsRejected()
     {
         var checklist = new FlightChecklistProgression();

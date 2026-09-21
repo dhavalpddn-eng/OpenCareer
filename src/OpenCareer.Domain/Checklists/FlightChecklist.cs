@@ -34,9 +34,17 @@ public enum FlightChecklistStepState
     Verified = 1
 }
 
+public enum FlightChecklistVerificationCapability
+{
+    AutoEvidence = 0,
+    ManualOnly = 1,
+    Unavailable = 2
+}
+
 public sealed record FlightChecklistStepSnapshot(
     FlightChecklistStepId Id,
     FlightChecklistPhase Phase,
+    FlightChecklistVerificationCapability VerificationCapability,
     FlightChecklistStepState State,
     DateTimeOffset? VerifiedAt);
 

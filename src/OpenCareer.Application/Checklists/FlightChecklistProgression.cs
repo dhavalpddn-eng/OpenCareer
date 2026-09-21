@@ -61,7 +61,31 @@ public sealed class FlightChecklistProgression
     ];
 
     private readonly Dictionary<FlightChecklistStepId, DateTimeOffset> _verifiedAt = [];
+    private readonly IReadOnlyDictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>
+        _verificationCapabilities;
     private DateTimeOffset? _lastEvidenceTimestamp;
+
+    public FlightChecklistProgression(
+        IReadOnlyDictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>?
+            verificationCapabilities = null)
+    {
+        var configured = verificationCapabilities is null
+            ? new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>()
+            : new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>(
+                verificationCapabilities);
+
+        foreach ((FlightChecklistStepId id, FlightChecklistVerificationCapability capability)
+                 in configured)
+        {
+            if (!Enum.IsDefined(id))
+                throw new ArgumentOutOfRangeException(nameof(verificationCapabilities));
+
+            if (!Enum.IsDefined(capability))
+                throw new ArgumentOutOfRangeException(nameof(verificationCapabilities));
+        }
+
+        _verificationCapabilities = configured;
+    }
 
     public FlightChecklistSnapshot Current =>
         CreateSnapshot();
@@ -94,6 +118,12 @@ public sealed class FlightChecklistProgression
             if (!PreviousStepsVerified(index))
                 break;
 
+            if (CapabilityFor(definition.Id)
+                != FlightChecklistVerificationCapability.AutoEvidence)
+            {
+                break;
+            }
+
             if (!definition.IsSatisfied(evidence))
                 break;
 
@@ -101,6 +131,49 @@ public sealed class FlightChecklistProgression
                 definition.Id,
                 evidence.Timestamp);
         }
+
+        return CreateSnapshot();
+    }
+
+    public FlightChecklistSnapshot ConfirmManual(
+        FlightChecklistStepId stepId,
+        DateTimeOffset timestamp)
+    {
+        if (!Enum.IsDefined(stepId))
+            throw new ArgumentOutOfRangeException(nameof(stepId));
+
+        int index = Array.FindIndex(
+            Definitions,
+            definition => definition.Id == stepId);
+
+        if (index < 0)
+            throw new ArgumentOutOfRangeException(nameof(stepId));
+
+        if (CapabilityFor(stepId)
+            != FlightChecklistVerificationCapability.ManualOnly)
+        {
+            throw new InvalidOperationException(
+                "Only manual-only checklist steps can be confirmed manually.");
+        }
+
+        if (!PreviousStepsVerified(index))
+        {
+            throw new InvalidOperationException(
+                "Checklist steps cannot be manually confirmed before their prerequisites.");
+        }
+
+        if (_lastEvidenceTimestamp is { } previous
+            && timestamp < previous)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(timestamp),
+                "Checklist confirmation cannot move backward in time.");
+        }
+
+        _lastEvidenceTimestamp = timestamp;
+
+        if (!_verifiedAt.ContainsKey(stepId))
+            _verifiedAt.Add(stepId, timestamp);
 
         return CreateSnapshot();
     }
@@ -135,6 +208,7 @@ public sealed class FlightChecklistProgression
                 return new FlightChecklistStepSnapshot(
                     definition.Id,
                     definition.Phase,
+                    CapabilityFor(definition.Id),
                     verified
                         ? FlightChecklistStepState.Verified
                         : FlightChecklistStepState.Pending,
@@ -155,6 +229,14 @@ public sealed class FlightChecklistProgression
             phase,
             steps);
     }
+
+    private FlightChecklistVerificationCapability CapabilityFor(
+        FlightChecklistStepId stepId) =>
+        _verificationCapabilities.TryGetValue(
+            stepId,
+            out FlightChecklistVerificationCapability capability)
+            ? capability
+            : FlightChecklistVerificationCapability.AutoEvidence;
 
     private sealed record StepDefinition(
         FlightChecklistStepId Id,
