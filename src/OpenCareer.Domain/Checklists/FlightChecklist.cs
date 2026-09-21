@@ -98,6 +98,19 @@ public static class FlightChecklistProfiles
                 Auto(FlightChecklistStepId.ShutdownConfirmed)
             ]);
 
+    public static FlightChecklistProfile Helicopter { get; } =
+        new(
+            "helicopter",
+            [
+                Auto(FlightChecklistStepId.AircraftReady),
+                Auto(FlightChecklistStepId.EngineStarted),
+                Auto(FlightChecklistStepId.AirborneEstablished),
+                Auto(FlightChecklistStepId.ApproachEstablished),
+                Auto(FlightChecklistStepId.TouchdownConfirmed),
+                Auto(FlightChecklistStepId.AircraftParked),
+                Auto(FlightChecklistStepId.ShutdownConfirmed)
+            ]);
+
     private static FlightChecklistProfileStep Auto(
         FlightChecklistStepId id) =>
         new(
