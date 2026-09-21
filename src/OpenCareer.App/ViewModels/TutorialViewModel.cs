@@ -25,6 +25,8 @@ public sealed class TutorialViewModel : INotifyPropertyChanged
     public bool IsActive => _coordinator.Current.IsActive;
     public string CurrentTitle => _coordinator.Current.Step?.Title ?? string.Empty;
     public string CurrentBody => _coordinator.Current.Step?.Body ?? string.Empty;
+    public string? CurrentFocusElementKey =>
+        _coordinator.Current.Step?.FocusElementKey;
     public bool CanGoBack => _coordinator.Current.CanGoBack;
     public string StepPosition => _coordinator.Current.IsActive
         ? $"{_coordinator.Current.CurrentIndex + 1} / {_coordinator.Current.StepCount}"
@@ -92,6 +94,7 @@ public sealed class TutorialViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsActive));
         OnPropertyChanged(nameof(CurrentTitle));
         OnPropertyChanged(nameof(CurrentBody));
+        OnPropertyChanged(nameof(CurrentFocusElementKey));
         OnPropertyChanged(nameof(CanGoBack));
         OnPropertyChanged(nameof(StepPosition));
         OnPropertyChanged(nameof(NextButtonText));
