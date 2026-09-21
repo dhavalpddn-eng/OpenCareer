@@ -60,6 +60,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
         services.AddSingleton<JobBoardGenerationService>();
         services.AddSingleton<IJobContractStore, SqliteJobContractStore>();
+        services.AddSingleton<JobContractLifecycleService>();
         services.AddSingleton<IEconomyLedgerStore, SqliteEconomyLedgerStore>();
         services.AddSingleton<EconomySettlementService>();
         services.AddSingleton<SqliteLogbookStore>();
