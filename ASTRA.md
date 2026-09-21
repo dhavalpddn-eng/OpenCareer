@@ -44,7 +44,7 @@ First live validation fixture: **F-22 at KRME** (test only; not a career startin
 ## Next
 1. Rerun the live probe briefly and verify `gearDown` changes correctly on the ground and in flight; end the probe cleanly so `sessionEnd` is recorded.
 2. Analyze the rerun and fix only additional concrete SimVar/unit/runtime issues.
-3. Build configurable `FlightEvidenceProcessor` -> tested reducer evidence.
+3. MBL-06 evidence publication is complete and parked: `FlightSessionRuntime` is the production `IFlightStateEvidenceSource`; downstream consumers must use that read-only source and never independently recompute simulator evidence.
 4. Add versioned SQLite `FlightSession`/`FlightLeg` checkpoint/recovery.
 5. Then registry/runway feasibility -> jobs -> mission validation + atomic settlement.
 

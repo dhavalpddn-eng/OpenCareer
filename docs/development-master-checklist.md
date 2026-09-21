@@ -206,7 +206,8 @@ Chapter status: **ACTIVE FOUNDATION / GATED FOR CALIBRATION**
 
 ## Remaining
 
-- [ ] Implement configurable `FlightEvidenceProcessor` from normalized telemetry/events.
+- [x] Implement configurable `FlightEvidenceProcessor` from normalized telemetry/events.
+- [x] Publish the exact accepted runtime `FlightStateEvidence` through shared read-only `IFlightStateEvidenceSource`; duplicate telemetry is suppressed, disconnect/reconnect is deterministic, and terminal/no-session reset clears stale evidence exactly once.
 - [ ] Calibrate speed/AGL/timing/hysteresis thresholds from real MSFS traces.
 - [ ] Detect stable load/observation start.
 - [ ] Detect self-powered movement / flight-time start.
@@ -692,7 +693,7 @@ Do not skip this order without an explicit reason:
 1. Run the real Windows/MSFS live probe.
 2. Analyze the JSONL trace.
 3. Correct only concrete simulator-variable/unit/runtime discrepancies.
-4. Implement configurable `FlightEvidenceProcessor`.
+4. MBL-06 evidence publication is complete and parked; downstream checklist/tutorial/jobs consumers must use `IFlightStateEvidenceSource` rather than recomputing simulator evidence.
 5. Add versioned SQLite FlightSession/FlightLeg checkpoint/recovery.
 6. Build installed-aircraft registry and runway/dispatch feasibility.
 7. Build the first market-driven playable job and atomic settlement.
