@@ -272,6 +272,31 @@ public sealed class FlightTelemetryEvidenceProcessor
         _landingEpisodeActive = false;
     }
 
+    internal FlightTelemetryEvidenceProcessorState CaptureState() =>
+        new(
+            _previous,
+            _stableSampleCount,
+            _airborneSampleCount,
+            _groundSampleCount,
+            _airborneConfirmedPreviously,
+            _takeoffCandidateActive,
+            _landingEpisodeActive);
+
+    internal void RestoreState(
+        FlightTelemetryEvidenceProcessorState state)
+    {
+        _previous = state.Previous;
+        _stableSampleCount = state.StableSampleCount;
+        _airborneSampleCount = state.AirborneSampleCount;
+        _groundSampleCount = state.GroundSampleCount;
+        _airborneConfirmedPreviously =
+            state.AirborneConfirmedPreviously;
+        _takeoffCandidateActive =
+            state.TakeoffCandidateActive;
+        _landingEpisodeActive =
+            state.LandingEpisodeActive;
+    }
+
     private void ResetTransientEvidence()
     {
         _stableSampleCount = 0;
@@ -310,3 +335,13 @@ public sealed class FlightTelemetryEvidenceProcessor
         && double.IsFinite(telemetry.PayloadPounds)
         && double.IsFinite(telemetry.FlapsPositionPercent);
 }
+
+
+internal readonly record struct FlightTelemetryEvidenceProcessorState(
+    AircraftTelemetrySnapshot? Previous,
+    int StableSampleCount,
+    int AirborneSampleCount,
+    int GroundSampleCount,
+    bool AirborneConfirmedPreviously,
+    bool TakeoffCandidateActive,
+    bool LandingEpisodeActive);

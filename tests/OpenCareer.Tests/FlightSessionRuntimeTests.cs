@@ -630,6 +630,109 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task FailedPersistenceRetryDoesNotAdvanceEvidenceTwice()
+    {
+        FlightSession active =
+            PreflightSession();
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(active);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = active
+            };
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        Epoch.AddMinutes(1),
+                        32,
+                        -97,
+                        onGround: true)
+            };
+
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                persistence,
+                new FlightTelemetryEvidenceProcessor(
+                    new FlightEvidenceProcessorOptions(
+                        StableTelemetrySamples: 3,
+                        AirborneConfirmationSamples: 1,
+                        GroundConfirmationSamples: 1)),
+                new FlightContinuityPolicy(),
+                Connected(),
+                telemetry,
+                new FixedTimeProvider(
+                    Epoch.AddHours(1)));
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        runtime.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightStateEvidence firstEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
+
+        Assert.False(firstEvidence.StableTelemetry);
+
+        store.FailWrites = true;
+
+        telemetry.Latest =
+            Telemetry(
+                Epoch.AddMinutes(1).AddSeconds(31),
+                32,
+                -97,
+                onGround: true);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => runtime.RefreshAsync());
+
+        Assert.Single(published);
+        Assert.Same(
+            firstEvidence,
+            runtime.Current);
+
+        store.FailWrites = false;
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            2,
+            published.Count);
+
+        FlightStateEvidence retryEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                published[1]);
+
+        Assert.False(retryEvidence.StableTelemetry);
+        Assert.Equal(
+            telemetry.Latest.Timestamp,
+            retryEvidence.Timestamp);
+        Assert.Same(
+            retryEvidence,
+            runtime.Current);
+    }
+
+    [Fact]
     public async Task RuntimeResetClearsPublishedEvidenceExactlyOnce()
     {
         FlightSession active =
