@@ -39,11 +39,25 @@ public sealed class FlightSessionRuntimeTests
                             onGround: true)
                 });
 
+        IFlightStateEvidenceSource source =
+            runtime;
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        source.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        Assert.Null(source.Current);
+
         Assert.False(
             await runtime.RefreshAsync());
 
         Assert.Null(coordinator.Current);
         Assert.Null(store.Checkpoint);
+        Assert.Null(source.Current);
+        Assert.Empty(published);
     }
 
     [Fact]
