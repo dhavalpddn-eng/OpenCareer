@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenCareer.Application.Planning;
 using OpenCareer.Infrastructure.Aircraft;
+using OpenCareer.Infrastructure.Weather;
 using OpenCareer.SimConnect;
 
 namespace OpenCareer.App.Services;
@@ -54,8 +55,15 @@ internal static class PlanningServiceRegistration
             provider.GetRequiredService<CachedAirportDataSource>());
 
         services.AddSingleton<SimConnectLocalAirportWeatherSource>();
+        services.AddSingleton<AviationWeatherMetarSource>(provider =>
+            new AviationWeatherMetarSource(
+                provider.GetRequiredService<IAirportDataSource>()));
+        services.AddSingleton<LocalThenReferenceAirportWeatherSource>(provider =>
+            new LocalThenReferenceAirportWeatherSource(
+                provider.GetRequiredService<SimConnectLocalAirportWeatherSource>(),
+                provider.GetRequiredService<AviationWeatherMetarSource>()));
         services.AddSingleton<IAirportDispatchWeatherSource>(provider =>
-            provider.GetRequiredService<SimConnectLocalAirportWeatherSource>());
+            provider.GetRequiredService<LocalThenReferenceAirportWeatherSource>());
 
         services.AddSingleton<OperationDispatchPlanningService>(provider =>
             new OperationDispatchPlanningService(
