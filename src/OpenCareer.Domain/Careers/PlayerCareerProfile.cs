@@ -5,6 +5,9 @@ public sealed record PlayerCareerProfile(
     DateTimeOffset CreatedAt,
     CareerLocation Location)
 {
+    public PilotQualificationState Qualifications { get; init; } =
+        PilotQualificationState.Entry;
+
     public static PlayerCareerProfile Start(
         Guid careerId,
         string homeAirportIcao,
@@ -41,5 +44,8 @@ public sealed record PlayerCareerProfile(
             throw new InvalidOperationException(
                 "Career location cannot predate career creation.");
         }
+
+        ArgumentNullException.ThrowIfNull(Qualifications);
+        Qualifications.Validate();
     }
 }

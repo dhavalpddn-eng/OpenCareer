@@ -28,7 +28,17 @@ public sealed class SqlitePlayerCareerProfileStoreTests
                 PlayerCareerProfile.Start(
                     CareerId,
                     "krme",
-                    Epoch);
+                    Epoch) with
+                {
+                    Qualifications =
+                        new PilotQualificationState(
+                            PilotLicenseLevel.Commercial,
+                            ImmutableHashSet.Create(
+                                PilotRating.AirplaneSingleEngineLand,
+                                PilotRating.AirplaneMultiEngineLand,
+                                PilotRating.InstrumentAirplane))
+                };
+            profile.Validate();
 
             PlayerCareerProfileStoreRecord saved =
                 await store.SaveAsync(
@@ -214,6 +224,12 @@ public sealed class SqlitePlayerCareerProfileStoreTests
         Assert.Equal(expected.SavedAt, actual.SavedAt);
         Assert.Equal(expected.Profile.CareerId, actual.Profile.CareerId);
         Assert.Equal(expected.Profile.CreatedAt, actual.Profile.CreatedAt);
+        Assert.Equal(
+            expected.Profile.Qualifications.License,
+            actual.Profile.Qualifications.License);
+        Assert.True(
+            expected.Profile.Qualifications.Ratings.SetEquals(
+                actual.Profile.Qualifications.Ratings));
         Assert.Equal(
             expected.Profile.Location.HomeAirportIcao,
             actual.Profile.Location.HomeAirportIcao);
