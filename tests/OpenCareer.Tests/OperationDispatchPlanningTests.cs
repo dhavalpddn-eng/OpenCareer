@@ -265,6 +265,36 @@ public sealed class OperationDispatchPlanningTests
     }
 
     [Fact]
+    public async Task ReservedAircraftBlocksCallerWithoutReservation()
+    {
+        AircraftRegistryResolution aircraft = Resolution();
+        var service = new OperationDispatchPlanningService(
+            new StubAircraftRegistrySource(aircraft),
+            new StubAirportDataSource(
+                new Dictionary<string, AirportRecord>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["KAAA"] = Airport("KAAA", Runway("18")),
+                    ["KBBB"] = Airport("KBBB", Runway("36"))
+                }),
+            weatherSource: null,
+            new StubAircraftAvailabilityStore(
+                new AircraftAvailabilityState(
+                    aircraft.CanonicalAircraftId,
+                    AircraftAvailabilityStatus.Unavailable,
+                    "dispatch:alpha")));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "provider-alias",
+            "KAAA",
+            "KBBB",
+            new(1000, 500));
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(result.Issues);
+        Assert.Equal(DispatchFeasibilityReason.AircraftUnavailable, issue.Reason);
+    }
+
+    [Fact]
     public async Task DifferentReservationCannotDispatchReservedAircraft()
     {
         AircraftRegistryResolution aircraft = Resolution();
