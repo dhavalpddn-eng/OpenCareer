@@ -66,7 +66,14 @@ public sealed class DuplicateOperationResolutionException
     public OperationResolutionKey ResolutionKey { get; }
 }
 
-public sealed class IdempotentOperationResolver : IOperationResolver
+public interface IOperationResolutionReservationReleaser
+{
+    void Release(OperationResolutionKey key);
+}
+
+public sealed class IdempotentOperationResolver :
+    IOperationResolver,
+    IOperationResolutionReservationReleaser
 {
     private readonly IOperationResolver _inner;
     private readonly IOperationResolutionRegistry _registry;
@@ -78,6 +85,9 @@ public sealed class IdempotentOperationResolver : IOperationResolver
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
     }
+
+    public void Release(OperationResolutionKey key) =>
+        _registry.Remove(key);
 
     public OperationOutcome Resolve(OperationResolutionInput input)
     {
