@@ -96,6 +96,91 @@ public sealed class WorldSimulationPersistenceServiceTests
         Assert.Same(store.Checkpoint, states[0]);
     }
 
+    [Fact]
+    public async Task AdvanceRequiresLoadedWorldState()
+    {
+        var service =
+            new WorldSimulationPersistenceService(
+                new MemoryStore());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AdvanceAsync(
+                Start.AddMinutes(30)));
+    }
+
+    [Fact]
+    public async Task AdvancePersistsBeforePublishingUpdatedState()
+    {
+        WorldSimulationState existing = CreateState(seed: 888);
+        var store = new MemoryStore(existing);
+        var service = new WorldSimulationPersistenceService(store);
+
+        WorldSimulationState loaded =
+            await service.LoadOrCreateAsync(
+                Initialization(seed: 999));
+
+        WorldSimulationState advanced =
+            await service.AdvanceAsync(
+                Start.AddMinutes(30));
+
+        Assert.Equal(Start.AddMinutes(30), advanced.RequestedThrough);
+        Assert.Equal(1, store.SaveCount);
+        Assert.Equal(2, store.GetCount);
+        Assert.Same(store.Checkpoint, advanced);
+        Assert.Same(store.Checkpoint, service.Current);
+        Assert.NotSame(loaded, advanced);
+    }
+
+    [Fact]
+    public async Task FailedAdvancePersistenceDoesNotPublishUnpersistedState()
+    {
+        WorldSimulationState existing = CreateState(seed: 1001);
+        var store = new MemoryStore(existing);
+        var service = new WorldSimulationPersistenceService(store);
+
+        WorldSimulationState loaded =
+            await service.LoadOrCreateAsync(
+                Initialization(seed: 1002));
+
+        store.FailWrites = true;
+
+        await Assert.ThrowsAsync<IOException>(
+            () => service.AdvanceAsync(
+                Start.AddMinutes(30)));
+
+        Assert.Same(loaded, service.Current);
+        Assert.Same(existing, store.Checkpoint);
+    }
+
+    [Fact]
+    public async Task NewerPersistedCheckpointWinsOverStaleAdvanceAttempt()
+    {
+        WorldSimulationState existing = CreateState(seed: 1101);
+        var store = new MemoryStore(existing)
+        {
+            RejectStaleWrites = true
+        };
+        var service = new WorldSimulationPersistenceService(store);
+
+        await service.LoadOrCreateAsync(
+            Initialization(seed: 1102));
+
+        WorldSimulationState externallyAdvanced =
+            WorldSimulation.Advance(
+                existing,
+                Start.AddMinutes(50));
+
+        store.SetCheckpoint(externallyAdvanced);
+
+        WorldSimulationState authoritative =
+            await service.AdvanceAsync(
+                Start.AddMinutes(20));
+
+        Assert.Same(externallyAdvanced, authoritative);
+        Assert.Same(externallyAdvanced, service.Current);
+        Assert.Same(externallyAdvanced, store.Checkpoint);
+    }
+
     private static WorldSimulationInitialization Initialization(
         ulong seed) =>
         new(
@@ -162,9 +247,18 @@ public sealed class WorldSimulationPersistenceServiceTests
 
         public bool FailWrites { get; set; }
 
+        public bool RejectStaleWrites { get; set; }
+
         public int GetCount { get; private set; }
 
         public int SaveCount { get; private set; }
+
+        public void SetCheckpoint(
+            WorldSimulationState checkpoint)
+        {
+            ArgumentNullException.ThrowIfNull(checkpoint);
+            Checkpoint = checkpoint;
+        }
 
         public Task SaveAsync(
             WorldSimulationState state,
@@ -176,7 +270,14 @@ public sealed class WorldSimulationPersistenceServiceTests
                 throw new IOException("Synthetic persistence failure.");
 
             SaveCount++;
-            Checkpoint = state;
+
+            if (!RejectStaleWrites
+                || Checkpoint is null
+                || state.RequestedThrough >= Checkpoint.RequestedThrough)
+            {
+                Checkpoint = state;
+            }
+
             return Task.CompletedTask;
         }
 

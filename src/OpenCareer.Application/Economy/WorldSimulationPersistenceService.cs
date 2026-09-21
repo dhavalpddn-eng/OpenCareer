@@ -15,7 +15,7 @@ public sealed record WorldSimulationInitialization(
 public sealed class WorldSimulationPersistenceService
 {
     private readonly IWorldSimulationStateStore _store;
-    private readonly SemaphoreSlim _initializationGate = new(1, 1);
+    private readonly SemaphoreSlim _stateGate = new(1, 1);
 
     public WorldSimulationState? Current { get; private set; }
 
@@ -37,7 +37,7 @@ public sealed class WorldSimulationPersistenceService
         if (string.IsNullOrWhiteSpace(marketId))
             throw new ArgumentException("Market id is required.", nameof(initialization));
 
-        await _initializationGate
+        await _stateGate
             .WaitAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -78,7 +78,56 @@ public sealed class WorldSimulationPersistenceService
         }
         finally
         {
-            _initializationGate.Release();
+            _stateGate.Release();
+        }
+    }
+
+    public async Task<WorldSimulationState> AdvanceAsync(
+        DateTimeOffset through,
+        CancellationToken cancellationToken = default)
+    {
+        await _stateGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            WorldSimulationState current =
+                Current
+                ?? throw new InvalidOperationException(
+                    "World simulation must be loaded before it can advance.");
+
+            if (through == current.RequestedThrough)
+                return current;
+
+            WorldSimulationState next =
+                WorldSimulation.Advance(current, through);
+
+            await _store
+                .SaveAsync(next, cancellationToken)
+                .ConfigureAwait(false);
+
+            string marketId = current.Market.MarketId;
+            WorldSimulationState authoritative = await _store
+                .GetAsync(marketId, cancellationToken)
+                .ConfigureAwait(false)
+                ?? throw new InvalidOperationException(
+                    "World-simulation checkpoint was not readable after advancement persistence.");
+
+            EnsureMarketIdentity(authoritative, marketId);
+
+            if (authoritative.RequestedThrough < next.RequestedThrough)
+            {
+                throw new InvalidOperationException(
+                    "Persisted world-simulation checkpoint is older than the requested advancement.");
+            }
+
+            Current = authoritative;
+            return authoritative;
+        }
+        finally
+        {
+            _stateGate.Release();
         }
     }
 
