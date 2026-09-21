@@ -13,6 +13,7 @@ using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
+using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Infrastructure.Ai;
 using OpenCareer.Infrastructure.Flights;
@@ -60,6 +61,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
         services.AddSingleton<JobBoardGenerationService>();
         services.AddSingleton<IJobContractStore, SqliteJobContractStore>();
+        services.AddSingleton<IJobContractRecoverySource, SqliteJobContractRecoverySource>();
+        services.AddSingleton<JobContractRecoveryService>();
         services.AddSingleton<JobContractLifecycleService>();
         services.AddSingleton<JobOfferAcceptanceService>();
         services.AddSingleton<IEconomyLedgerStore, SqliteEconomyLedgerStore>();
@@ -126,6 +129,30 @@ public partial class App : Microsoft.UI.Xaml.Application
         catch (Exception ex)
         {
             logger.LogError(ex, "OpenCareer settings initialization failed; using defaults.");
+        }
+
+        try
+        {
+            IReadOnlyList<PersistedJobContract> recoveredContracts =
+                await _services
+                    .GetRequiredService<JobContractRecoveryService>()
+                    .RecoverAsync();
+
+            if (recoveredContracts.Count > 0)
+            {
+                logger.LogInformation(
+                    "Recovered {ContractCount} persisted job contracts requiring runtime reconciliation: {AcceptedCount} accepted, {InProgressCount} in progress, {CompletedCount} completed.",
+                    recoveredContracts.Count,
+                    recoveredContracts.Count(item => item.Contract.Status == ContractStatus.Accepted),
+                    recoveredContracts.Count(item => item.Contract.Status == ContractStatus.InProgress),
+                    recoveredContracts.Count(item => item.Contract.Status == ContractStatus.Completed));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Job-contract recovery failed. OpenCareer will continue without claiming recovered active or settlement-pending jobs.");
         }
 
         try
