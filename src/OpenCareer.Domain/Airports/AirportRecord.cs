@@ -13,12 +13,31 @@ public enum RunwaySurface
     Other
 }
 
+public sealed record RunwayEndRecord(
+    string Identifier,
+    double TrueHeadingDegrees,
+    bool IsClosed = false)
+{
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(Identifier);
+
+        if (!double.IsFinite(TrueHeadingDegrees)
+            || TrueHeadingDegrees < 0
+            || TrueHeadingDegrees >= 360)
+        {
+            throw new ArgumentOutOfRangeException(nameof(TrueHeadingDegrees));
+        }
+    }
+}
+
 public sealed record RunwayRecord(
     string Identifier,
     double? UsableLengthFeet,
     double? WidthFeet,
     RunwaySurface Surface,
-    bool IsClosed = false)
+    bool IsClosed = false,
+    IReadOnlyList<RunwayEndRecord>? Ends = null)
 {
     public void Validate()
     {
@@ -38,6 +57,25 @@ public sealed record RunwayRecord(
 
         if (!Enum.IsDefined(Surface))
             throw new ArgumentOutOfRangeException(nameof(Surface));
+
+        if (Ends is not null)
+        {
+            var endIdentifiers = new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (RunwayEndRecord end in Ends)
+            {
+                ArgumentNullException.ThrowIfNull(end);
+                end.Validate();
+
+                if (!endIdentifiers.Add(end.Identifier))
+                {
+                    throw new ArgumentException(
+                        "Runway contains duplicate end identifiers.",
+                        nameof(Ends));
+                }
+            }
+        }
     }
 }
 
