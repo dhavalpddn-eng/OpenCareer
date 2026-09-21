@@ -176,6 +176,98 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task ReconnectPublishesFreshConnectedEvidenceAfterDisconnect()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore();
+
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        await persistence.StartAsync(Epoch);
+
+        var connection =
+            new TestConnection
+            {
+                Current =
+                    new SimulatorConnectionSnapshot(
+                        SimulatorConnectionState.Reconnecting)
+            };
+
+        var telemetry =
+            new TestTelemetrySource();
+
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                persistence,
+                Processor(),
+                new FlightContinuityPolicy(),
+                connection,
+                telemetry,
+                new FixedTimeProvider(
+                    Epoch.AddMinutes(1)));
+
+        var published =
+            new List<FlightStateEvidence>();
+
+        runtime.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightStateEvidence disconnectEvidence =
+            Assert.Single(published);
+
+        Assert.False(disconnectEvidence.Connected);
+        Assert.Equal(
+            FlightSessionStatus.Suspended,
+            coordinator.Current?.Status);
+
+        connection.Current =
+            new SimulatorConnectionSnapshot(
+                SimulatorConnectionState.Connected);
+
+        telemetry.Latest =
+            Telemetry(
+                Epoch.AddMinutes(2),
+                32,
+                -97,
+                onGround: true);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            2,
+            published.Count);
+
+        FlightStateEvidence reconnectEvidence =
+            published[1];
+
+        Assert.True(reconnectEvidence.Connected);
+        Assert.True(reconnectEvidence.StableTelemetry);
+        Assert.True(reconnectEvidence.ValidLoadedAircraft);
+        Assert.True(reconnectEvidence.ContinuityPlausible);
+        Assert.Equal(
+            telemetry.Latest.Timestamp,
+            reconnectEvidence.Timestamp);
+        Assert.Same(
+            reconnectEvidence,
+            runtime.Current);
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current?.Status);
+    }
+
+    [Fact]
     public async Task PlausibleRecoveredGroundSessionResumesAfterStableTelemetry()
     {
         FlightSession suspended =
