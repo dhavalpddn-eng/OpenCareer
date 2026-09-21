@@ -145,7 +145,8 @@ public sealed class SimConnectAirportFacilityTests
             primaryNumber: 18,
             primaryDesignator: 1,
             secondaryNumber: 36,
-            secondaryDesignator: 2));
+            secondaryDesignator: 2,
+            headingTrueDegrees: 181.5f));
         api.Enqueue(SimConnectPackets.RunwayFacility(
             request.RequestId,
             uniqueRequestId: 103,
@@ -160,7 +161,8 @@ public sealed class SimConnectAirportFacilityTests
             secondaryNumber: 27,
             secondaryDesignator: 0,
             primaryClosed: true,
-            secondaryClosed: true));
+            secondaryClosed: true,
+            headingTrueDegrees: 90f));
         api.Enqueue(SimConnectPackets.FacilityDataEnd(request.RequestId));
 
         AirportDataObservation result = Assert.IsType<AirportDataObservation>(await lookup);
@@ -179,6 +181,20 @@ public sealed class SimConnectAirportFacilityTests
                 Assert.InRange(runway.WidthFeet!.Value, 99.9, 100.1);
                 Assert.Equal(RunwaySurface.Concrete, runway.Surface);
                 Assert.True(runway.IsClosed);
+                Assert.Collection(
+                    Assert.IsAssignableFrom<IReadOnlyList<RunwayEndRecord>>(runway.Ends),
+                    end =>
+                    {
+                        Assert.Equal("09", end.Identifier);
+                        Assert.Equal(90, end.TrueHeadingDegrees, 6);
+                        Assert.True(end.IsClosed);
+                    },
+                    end =>
+                    {
+                        Assert.Equal("27", end.Identifier);
+                        Assert.Equal(270, end.TrueHeadingDegrees, 6);
+                        Assert.True(end.IsClosed);
+                    });
             },
             runway =>
             {
@@ -187,6 +203,20 @@ public sealed class SimConnectAirportFacilityTests
                 Assert.InRange(runway.WidthFeet!.Value, 149.9, 150.1);
                 Assert.Equal(RunwaySurface.Asphalt, runway.Surface);
                 Assert.False(runway.IsClosed);
+                Assert.Collection(
+                    Assert.IsAssignableFrom<IReadOnlyList<RunwayEndRecord>>(runway.Ends),
+                    end =>
+                    {
+                        Assert.Equal("18L", end.Identifier);
+                        Assert.Equal(181.5, end.TrueHeadingDegrees, 6);
+                        Assert.False(end.IsClosed);
+                    },
+                    end =>
+                    {
+                        Assert.Equal("36R", end.Identifier);
+                        Assert.Equal(1.5, end.TrueHeadingDegrees, 6);
+                        Assert.False(end.IsClosed);
+                    });
             });
 
         Assert.False(api.OverlapDetected);
