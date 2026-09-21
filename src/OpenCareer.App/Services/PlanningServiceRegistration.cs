@@ -21,9 +21,13 @@ internal static class PlanningServiceRegistration
         services.AddSingleton<IInstalledAircraftRegistryStore>(provider =>
             new SqliteInstalledAircraftRegistryStore(
                 provider.GetRequiredService<OpenCareerDataPaths>().AircraftRegistryDatabaseFile));
-        services.AddSingleton<IAircraftAvailabilityStore>(provider =>
+        services.AddSingleton<SqliteAircraftAvailabilityStore>(provider =>
             new SqliteAircraftAvailabilityStore(
                 provider.GetRequiredService<OpenCareerDataPaths>().AircraftRegistryDatabaseFile));
+        services.AddSingleton<IAircraftAvailabilityStore>(provider =>
+            provider.GetRequiredService<SqliteAircraftAvailabilityStore>());
+        services.AddSingleton<IAircraftReservationStore>(provider =>
+            provider.GetRequiredService<SqliteAircraftAvailabilityStore>());
         services.AddSingleton<PersistentInstalledAircraftObservationSource>();
         services.AddSingleton<IAircraftRegistryObservationSource>(provider =>
             provider.GetRequiredService<PersistentInstalledAircraftObservationSource>());
