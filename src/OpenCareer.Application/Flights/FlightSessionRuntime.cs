@@ -106,7 +106,7 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
                         _timeProvider.GetUtcNow(),
                         current.UpdatedAt);
 
-                var evidence =
+                var disconnectEvidence =
                     new FlightStateEvidence(
                         timestamp,
                         Connected: false,
@@ -114,11 +114,11 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
 
                 await _persistence
                     .AdvanceAsync(
-                        new FlightSessionAdvance(evidence),
+                        new FlightSessionAdvance(disconnectEvidence),
                         cancellationToken)
                     .ConfigureAwait(false);
 
-                Publish(evidence);
+                Publish(disconnectEvidence);
                 return true;
             }
 
@@ -147,7 +147,7 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
                 && current.ContinuityAnchor is not null
                 && !continuityPlausible)
             {
-                var evidence =
+                var continuityFailureEvidence =
                     new FlightStateEvidence(
                         telemetry.Timestamp,
                         Connected: false,
@@ -155,11 +155,11 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
 
                 await _persistence
                     .AdvanceAsync(
-                        new FlightSessionAdvance(evidence),
+                        new FlightSessionAdvance(continuityFailureEvidence),
                         cancellationToken)
                     .ConfigureAwait(false);
 
-                Publish(evidence);
+                Publish(continuityFailureEvidence);
                 return true;
             }
 
