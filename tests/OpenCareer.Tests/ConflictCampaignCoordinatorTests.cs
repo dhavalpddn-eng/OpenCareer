@@ -53,6 +53,93 @@ public sealed class ConflictCampaignCoordinatorTests
     }
 
     [Fact]
+    public async Task LongRunCampaignEvolutionIsDeterministicAndBounded()
+    {
+        ConflictCampaignStoreRecord first =
+            await RunLongCampaignAsync(
+                "campaign-stress-a",
+                theaterSeed: 0x5EEDUL);
+
+        ConflictCampaignStoreRecord second =
+            await RunLongCampaignAsync(
+                "campaign-stress-a",
+                theaterSeed: 0x5EEDUL);
+
+        first.Checkpoint.Validate();
+        second.Checkpoint.Validate();
+
+        Assert.Equal(
+            first.Checkpoint.CampaignState.Phase,
+            second.Checkpoint.CampaignState.Phase);
+        Assert.Equal(
+            first.Checkpoint.CampaignState.Outcome,
+            second.Checkpoint.CampaignState.Outcome);
+        Assert.Equal(
+            first.Checkpoint.CampaignState.EvaluationSequence,
+            second.Checkpoint.CampaignState.EvaluationSequence);
+        Assert.Equal(
+            first.Checkpoint.CampaignState.FriendlyMomentum,
+            second.Checkpoint.CampaignState.FriendlyMomentum,
+            precision: 12);
+        Assert.Equal(
+            first.Checkpoint.CampaignState.FriendlyReplacementReserve,
+            second.Checkpoint.CampaignState.FriendlyReplacementReserve,
+            precision: 12);
+        Assert.Equal(
+            first.Checkpoint.CampaignState.HostileReplacementReserve,
+            second.Checkpoint.CampaignState.HostileReplacementReserve,
+            precision: 12);
+        Assert.Equal(
+            first.Checkpoint.CampaignState.Identity,
+            second.Checkpoint.CampaignState.Identity);
+        Assert.Equal(
+            first.Checkpoint.World.Units,
+            second.Checkpoint.World.Units);
+        Assert.Equal(
+            first.Checkpoint.World.AirUnits,
+            second.Checkpoint.World.AirUnits);
+        Assert.Equal(
+            first.Checkpoint.World.Sectors,
+            second.Checkpoint.World.Sectors);
+        Assert.Equal(
+            first.Checkpoint.World.Threats,
+            second.Checkpoint.World.Threats);
+        Assert.Equal(
+            first.Checkpoint.World.SupportRequests,
+            second.Checkpoint.World.SupportRequests);
+
+        Assert.InRange(
+            first.Checkpoint.CampaignState.FriendlyReplacementReserve,
+            0,
+            1);
+        Assert.InRange(
+            first.Checkpoint.CampaignState.HostileReplacementReserve,
+            0,
+            1);
+        Assert.All(
+            first.Checkpoint.World.Sectors,
+            sector => Assert.InRange(
+                sector.FriendlyControl,
+                0,
+                1));
+        Assert.All(
+            first.Checkpoint.World.Units,
+            unit =>
+            {
+                Assert.InRange(unit.Strength, 0, 1);
+                Assert.InRange(unit.Readiness, 0, 1);
+                Assert.InRange(unit.Pressure, 0, 1);
+            });
+        Assert.All(
+            first.Checkpoint.World.AirUnits,
+            unit =>
+            {
+                Assert.InRange(unit.Strength, 0, 1);
+                Assert.InRange(unit.Readiness, 0, 1);
+            });
+    }
+
+    [Fact]
     public async Task CreateSuccessorCarriesCareerIntoFreshCampaign()
     {
         var store = new MemoryStore();
@@ -296,6 +383,41 @@ public sealed class ConflictCampaignCoordinatorTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => coordinator.SaveMutationAsync(created, invalid));
+    }
+
+    private static async Task<ConflictCampaignStoreRecord> RunLongCampaignAsync(
+        string campaignId,
+        ulong theaterSeed)
+    {
+        var coordinator =
+            new ConflictCampaignCoordinator(
+                new MemoryStore());
+
+        ConflictCampaignStoreRecord current =
+            await coordinator.CreateAsync(
+                campaignId,
+                Template(),
+                theaterSeed,
+                Epoch,
+                MilitaryCareerState.Civilian);
+
+        for (int step = 1; step <= 96; step++)
+        {
+            if (current.Checkpoint.CampaignState.IsTerminal)
+                break;
+
+            DateTimeOffset through =
+                Epoch.AddHours(step * 6);
+
+            current = await coordinator.AdvanceAsync(
+                current,
+                through,
+                through.AddSeconds(1));
+
+            current.Validate();
+        }
+
+        return current;
     }
 
     private static ConflictTheaterTemplate Template() =>
