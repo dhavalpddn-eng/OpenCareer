@@ -128,6 +128,81 @@ public sealed class SqliteOperationConsequenceStoreTests
     }
 
     [Fact]
+    public async Task LatestHistoryQueriesSelectCampaignAndSectorIndependently()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            var options = new OpenCareerDatabaseOptions(
+                Path.Combine(directory, "opencareer.db"));
+            var store = CreateStore(options);
+
+            OperationConsequenceResult first =
+                BuildResult(
+                    OperationOutcomeStatus.Success,
+                    campaignId: "campaign:test",
+                    sectorId: "sector-alpha",
+                    operationId: "support-history-1",
+                    missionId: Guid.Parse(
+                        "11111111-1111-1111-1111-111111111111"),
+                    completedAt: ResolvedAt);
+
+            OperationConsequenceResult second =
+                BuildResult(
+                    OperationOutcomeStatus.Failure,
+                    campaignId: "campaign:test",
+                    sectorId: "sector-bravo",
+                    operationId: "support-history-2",
+                    missionId: Guid.Parse(
+                        "22222222-2222-2222-2222-222222222222"),
+                    completedAt: ResolvedAt.AddMinutes(10));
+
+            OperationConsequenceResult otherCampaign =
+                BuildResult(
+                    OperationOutcomeStatus.Success,
+                    campaignId: "campaign:other",
+                    sectorId: "sector-alpha",
+                    operationId: "support-history-3",
+                    missionId: Guid.Parse(
+                        "33333333-3333-3333-3333-333333333333"),
+                    completedAt: ResolvedAt.AddMinutes(20));
+
+            await store.SaveAsync(
+                first,
+                first.Outcome.CompletedAt.AddSeconds(5));
+            await store.SaveAsync(
+                second,
+                second.Outcome.CompletedAt.AddSeconds(5));
+            await store.SaveAsync(
+                otherCampaign,
+                otherCampaign.Outcome.CompletedAt.AddSeconds(5));
+
+            OperationConsequenceStoreRecord? latestCampaign =
+                await store.LoadLatestForCampaignAsync(
+                    "campaign:test");
+
+            OperationConsequenceStoreRecord? latestSector =
+                await store.LoadLatestForSectorAsync(
+                    "campaign:test",
+                    "sector-alpha");
+
+            Assert.NotNull(latestCampaign);
+            Assert.NotNull(latestSector);
+            Assert.Equal(
+                second.Outcome.MissionId,
+                latestCampaign.Result.Outcome.MissionId);
+            Assert.Equal(
+                first.Outcome.MissionId,
+                latestSector.Result.Outcome.MissionId);
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
     public async Task EmptyDatabaseReturnsNoOperationConsequence()
     {
         string directory = CreateTempDirectory();
@@ -167,13 +242,19 @@ public sealed class SqliteOperationConsequenceStoreTests
                 new InMemoryMilitaryReputationConsequenceRegistry()));
 
     private static OperationConsequenceResult BuildResult(
-        OperationOutcomeStatus status)
+        OperationOutcomeStatus status,
+        string campaignId = "campaign:test",
+        string sectorId = "sector-alpha",
+        string operationId = "support-011",
+        Guid? missionId = null,
+        DateTimeOffset? completedAt = null)
     {
         var outcome = new OperationOutcome(
-            Guid.Parse("e061e733-540c-4aa6-a70d-56398453b2da"),
-            "support-011",
+            missionId
+                ?? Guid.Parse("e061e733-540c-4aa6-a70d-56398453b2da"),
+            operationId,
             status,
-            ResolvedAt);
+            completedAt ?? ResolvedAt);
 
         return new OperationConsequenceResult(
             outcome,
@@ -183,11 +264,11 @@ public sealed class SqliteOperationConsequenceStoreTests
                 FriendlyInfluence: 0.54,
                 HostileInfluence: 0.46),
             new CampaignProgressState(
-                "campaign:test",
+                campaignId,
                 FriendlyProgress: 0.56),
             new TerritoryPressureResult(
                 new TerritoryPressureState(
-                    "sector-alpha",
+                    sectorId,
                     AccumulatedFriendlyPressure: 0.10),
                 FriendlyControlDelta: 0),
             new MilitaryCareerState(
@@ -197,7 +278,7 @@ public sealed class SqliteOperationConsequenceStoreTests
                 SuccessfulOperations: 3,
                 FailedOperations: 1),
             new ConflictResourceState(
-                "campaign:test",
+                campaignId,
                 FriendlySupply: 0.54,
                 FriendlyOperationalReadiness: 0.53,
                 HostileSupply: 0.47));
