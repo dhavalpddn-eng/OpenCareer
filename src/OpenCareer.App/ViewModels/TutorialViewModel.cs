@@ -57,6 +57,12 @@ public sealed class TutorialViewModel : INotifyPropertyChanged
             AppTutorialCatalog.FirstSimulatorConnectionId,
             cancellationToken);
 
+    public Task<bool> TryStartFirstSimulatorDisconnectAsync(
+        CancellationToken cancellationToken = default) =>
+        _coordinator.TryStartPendingAsync(
+            AppTutorialCatalog.FirstSimulatorDisconnectId,
+            cancellationToken);
+
     public Task StartFirstJobAsync(CancellationToken cancellationToken = default) =>
         _coordinator.StartAsync(AppTutorialCatalog.FirstJobId, cancellationToken: cancellationToken);
 
