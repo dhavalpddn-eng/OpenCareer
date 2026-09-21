@@ -4,7 +4,7 @@ namespace OpenCareer.Infrastructure.Persistence;
 
 internal static class OpenCareerDatabaseMigrator
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -122,6 +122,43 @@ internal static class OpenCareerDatabaseMigrator
 
             transaction.Commit();
             version = 2;
+        }
+
+        if (version < 3)
+        {
+            using SqliteTransaction transaction = connection.BeginTransaction();
+
+            await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE TABLE IF NOT EXISTS market_states (
+                    market_id TEXT NOT NULL PRIMARY KEY,
+                    payload_schema_version INTEGER NOT NULL,
+                    segment INTEGER NOT NULL,
+                    updated_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+                """,
+                cancellationToken).ConfigureAwait(false);
+
+            await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE INDEX IF NOT EXISTS ix_market_states_segment
+                    ON market_states (segment, market_id);
+                """,
+                cancellationToken).ConfigureAwait(false);
+
+            await ExecuteAsync(
+                connection,
+                transaction,
+                "PRAGMA user_version = 3;",
+                cancellationToken).ConfigureAwait(false);
+
+            transaction.Commit();
+            version = 3;
         }
 
         if (version != CurrentSchemaVersion)
