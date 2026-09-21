@@ -36,7 +36,7 @@ public sealed class FirstJobArrivalTutorialTests
             }
         };
 
-        sessions.Restore(parked);
+        sessions.CommitPersisted(parked);
 
         Assert.Equal(
             TutorialStepEvidenceState.Waiting,
@@ -52,7 +52,7 @@ public sealed class FirstJobArrivalTutorialTests
             }
         };
 
-        sessions.Restore(shutdown);
+        sessions.CommitPersisted(shutdown);
 
         Assert.Equal(
             TutorialStepEvidenceState.Satisfied,
