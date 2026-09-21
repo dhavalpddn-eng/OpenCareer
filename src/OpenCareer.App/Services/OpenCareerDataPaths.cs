@@ -13,6 +13,7 @@ public sealed class OpenCareerDataPaths
         SettingsFile = Path.Combine(Root, "settings.json");
         TutorialPreferencesFile = Path.Combine(Root, "ui-preferences.json");
         DatabaseFile = Path.Combine(Root, "opencareer.db");
+        AircraftRegistryDatabaseFile = Path.Combine(Root, "aircraft-registry.db");
         LogsFolder = Path.Combine(Root, "Logs");
         LogFile = Path.Combine(LogsFolder, "opencareer.log");
         BackupsFolder = Path.Combine(Root, "Backups");
@@ -23,6 +24,7 @@ public sealed class OpenCareerDataPaths
     public string SettingsFile { get; }
     public string TutorialPreferencesFile { get; }
     public string DatabaseFile { get; }
+    public string AircraftRegistryDatabaseFile { get; }
     public string LogsFolder { get; }
     public string LogFile { get; }
     public string BackupsFolder { get; }

@@ -16,8 +16,13 @@ internal static class PlanningServiceRegistration
         services.AddSingleton<SimConnectInstalledAircraftObservationSource>();
         services.AddSingleton<IInstalledAircraftDiscoverySource>(provider =>
             provider.GetRequiredService<SimConnectInstalledAircraftObservationSource>());
+
+        services.AddSingleton<IInstalledAircraftRegistryStore>(provider =>
+            new SqliteInstalledAircraftRegistryStore(
+                provider.GetRequiredService<OpenCareerDataPaths>().AircraftRegistryDatabaseFile));
+        services.AddSingleton<PersistentInstalledAircraftObservationSource>();
         services.AddSingleton<IAircraftRegistryObservationSource>(provider =>
-            provider.GetRequiredService<SimConnectInstalledAircraftObservationSource>());
+            provider.GetRequiredService<PersistentInstalledAircraftObservationSource>());
 
         services.AddSingleton<MsfsAircraftCfgObservationSource>(_ =>
             new MsfsAircraftCfgObservationSource(
