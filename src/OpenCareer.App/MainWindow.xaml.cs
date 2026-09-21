@@ -17,6 +17,7 @@ public sealed partial class MainWindow : Window
     private readonly FlightSessionRuntime _flightRuntime;
     private readonly ILogger<MainWindow> _logger;
     private readonly CancellationTokenSource _lifetimeCts = new();
+    private readonly SimulatorDisconnectTutorialTrigger _disconnectTutorialTrigger = new();
     private bool _tutorialInitialized;
     private bool _firstConnectionTutorialResolved;
     private bool _firstConnectionTutorialOfferInProgress;
@@ -95,7 +96,9 @@ public sealed partial class MainWindow : Window
         object args)
     {
         ViewModel.RefreshConnectionStatus();
+        _disconnectTutorialTrigger.Observe(ViewModel.IsSimulatorConnected);
         await OfferFirstConnectionTutorialIfNeededAsync();
+        await OfferDisconnectTutorialIfNeededAsync();
         Tutorial.RefreshLiveEvidence();
 
         try
@@ -157,6 +160,35 @@ public sealed partial class MainWindow : Window
         finally
         {
             _firstConnectionTutorialOfferInProgress = false;
+        }
+    }
+
+    private async Task OfferDisconnectTutorialIfNeededAsync()
+    {
+        if (!_disconnectTutorialTrigger.ShouldOffer
+            || !Settings.AutomaticallyOfferTutorials
+            || Tutorial.IsActive)
+        {
+            return;
+        }
+
+        try
+        {
+            await Tutorial
+                .TryStartFirstSimulatorDisconnectAsync(
+                    _lifetimeCts.Token);
+
+            _disconnectTutorialTrigger.MarkHandled();
+        }
+        catch (OperationCanceledException)
+            when (_lifetimeCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "First simulator disconnect tutorial offer failed.");
         }
     }
 
