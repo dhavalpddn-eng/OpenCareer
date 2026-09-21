@@ -816,6 +816,95 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task FailedContinuitySuspensionDoesNotPublishEvidence()
+    {
+        FlightSession active =
+            PreflightSession(
+                anchor:
+                    new FlightContinuityAnchor(
+                        Epoch.AddSeconds(1),
+                        32,
+                        -97,
+                        650,
+                        OnGround: true));
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(active);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = active
+            };
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        Epoch.AddMinutes(1),
+                        32.001,
+                        -97.001,
+                        onGround: true)
+            };
+
+        var runtime =
+            CreateRuntime(
+                coordinator,
+                store,
+                Connected(),
+                telemetry);
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        runtime.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightStateEvidence acceptedEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
+
+        DateTimeOffset acceptedAt =
+            coordinator.Current!.UpdatedAt;
+
+        store.FailWrites = true;
+
+        telemetry.Latest =
+            Telemetry(
+                Epoch.AddMinutes(2),
+                34,
+                -95,
+                onGround: true);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => runtime.RefreshAsync());
+
+        Assert.Single(published);
+        Assert.Same(
+            acceptedEvidence,
+            runtime.Current);
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current!.Status);
+        Assert.Equal(
+            acceptedAt,
+            coordinator.Current.UpdatedAt);
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            store.Checkpoint!.Status);
+        Assert.Equal(
+            acceptedAt,
+            store.Checkpoint.UpdatedAt);
+    }
+
+    [Fact]
     public async Task FailedPersistenceDoesNotPublishOrReplaceAcceptedEvidence()
     {
         FlightSession active =
