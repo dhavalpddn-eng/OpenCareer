@@ -76,7 +76,9 @@ public sealed class SqliteJobBoardStateStoreTests : IAsyncLifetime
         Assert.NotNull(loaded);
         Assert.Equal(expected.AirportIcao, loaded.AirportIcao);
         Assert.Equal(expected.UpdatedAt, loaded.UpdatedAt);
-        Assert.Equal(expected.Offers, loaded.Offers);
+        Assert.Equal(
+            expected.Offers.ToArray(),
+            loaded.Offers.ToArray());
         Assert.Equal(
             expected.RetiredOfferIds.OrderBy(x => x),
             loaded.RetiredOfferIds.OrderBy(x => x));
@@ -123,7 +125,9 @@ public sealed class SqliteJobBoardStateStoreTests : IAsyncLifetime
 
         Assert.NotNull(loaded);
         Assert.Equal(newer.UpdatedAt, loaded.UpdatedAt);
-        Assert.Equal(newer.Offers, loaded.Offers);
+        Assert.Equal(
+            newer.Offers.ToArray(),
+            loaded.Offers.ToArray());
         Assert.Contains(first.OfferId, loaded.RetiredOfferIds);
     }
 
