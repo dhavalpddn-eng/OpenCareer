@@ -4,7 +4,7 @@ namespace OpenCareer.Infrastructure.Persistence;
 
 internal static class OpenCareerDatabaseMigrator
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -112,6 +112,28 @@ internal static class OpenCareerDatabaseMigrator
 
             transaction.Commit();
             version = 4;
+        }
+
+        if (version < 5)
+        {
+            using SqliteTransaction transaction =
+                connection.BeginTransaction();
+
+            await EnsureOperationConsequenceSchemaAsync(
+                    connection,
+                    transaction,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            await ExecuteAsync(
+                    connection,
+                    transaction,
+                    "PRAGMA user_version = 5;",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            transaction.Commit();
+            version = 5;
         }
 
         if (version != CurrentSchemaVersion)
@@ -257,6 +279,46 @@ internal static class OpenCareerDatabaseMigrator
                     payload_json TEXT NOT NULL,
                     CHECK (slot_id = 1)
                 );
+                """,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task EnsureOperationConsequenceSchemaAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE TABLE IF NOT EXISTS military_operation_consequences (
+                    resolution_key TEXT NOT NULL PRIMARY KEY,
+                    operation_id TEXT NOT NULL,
+                    mission_id TEXT NOT NULL,
+                    payload_schema_version INTEGER NOT NULL,
+                    completed_at_ms INTEGER NOT NULL,
+                    saved_at_ms INTEGER NOT NULL,
+                    campaign_id TEXT NOT NULL,
+                    sector_id TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    UNIQUE (operation_id, mission_id)
+                );
+                """,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE INDEX IF NOT EXISTS ix_military_operation_consequences_campaign
+                    ON military_operation_consequences (
+                        campaign_id,
+                        completed_at_ms DESC,
+                        resolution_key ASC
+                    );
                 """,
                 cancellationToken)
             .ConfigureAwait(false);
