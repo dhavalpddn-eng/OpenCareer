@@ -249,6 +249,74 @@ public sealed class OperationDispatchWeatherTests
     }
 
     [Fact]
+    public async Task VisibilityBelowExplicitMinimumIsInfeasible()
+    {
+        var service = Service(
+            WeatherSource(
+                Weather(
+                    "KAAA",
+                    [Wind("18", 5, 3)],
+                    densityAltitudeFeet: null,
+                    visibilityStatuteMiles: 2),
+                Weather(
+                    "KBBB",
+                    [Wind("36", 5, 3)],
+                    densityAltitudeFeet: null,
+                    visibilityStatuteMiles: 10)),
+            Resolution(),
+            Airport("KAAA", Runway("18")),
+            Airport("KBBB", Runway("36")));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB",
+            Requirements(minimumVisibility: 3));
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(
+            result.Issues,
+            static issue => issue.Reason == DispatchFeasibilityReason.VisibilityBelowMinimum);
+
+        Assert.Equal(DispatchEndpoint.Origin, issue.Endpoint);
+        Assert.Equal(2, issue.ObservedVisibilityStatuteMiles);
+        Assert.Equal(3, issue.MinimumVisibilityStatuteMiles);
+    }
+
+    [Fact]
+    public async Task UnknownVisibilityFailsClosedWhenMinimumIsConfigured()
+    {
+        var service = Service(
+            WeatherSource(
+                Weather(
+                    "KAAA",
+                    [Wind("18", 5, 3)],
+                    densityAltitudeFeet: null,
+                    visibilityStatuteMiles: null),
+                Weather(
+                    "KBBB",
+                    [Wind("36", 5, 3)],
+                    densityAltitudeFeet: null,
+                    visibilityStatuteMiles: 10)),
+            Resolution(),
+            Airport("KAAA", Runway("18")),
+            Airport("KBBB", Runway("36")));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB",
+            Requirements(minimumVisibility: 3));
+
+        Assert.Equal(DispatchFeasibilityStatus.InsufficientData, result.Status);
+        Assert.Contains(
+            result.Issues,
+            static issue => issue.Endpoint == DispatchEndpoint.Origin
+                && issue.Reason == DispatchFeasibilityReason.VisibilityUnknown
+                && issue.MinimumVisibilityStatuteMiles == 3);
+    }
+
+    [Fact]
     public async Task DensityAltitudeAboveExplicitLimitIsInfeasible()
     {
         var service = Service(
@@ -347,14 +415,16 @@ public sealed class OperationDispatchWeatherTests
     private static OperationDispatchRequirements Requirements(
         double maximumCrosswind = 15,
         double maximumTailwind = 5,
-        double? maximumDensityAltitude = null) =>
+        double? maximumDensityAltitude = null,
+        double? minimumVisibility = null) =>
         new(
             PayloadPounds: 1000,
             RequiredRangeNauticalMiles: 500,
             WeatherLimits: new(
                 MaximumCrosswindKnots: maximumCrosswind,
                 MaximumTailwindKnots: maximumTailwind,
-                MaximumDensityAltitudeFeet: maximumDensityAltitude));
+                MaximumDensityAltitudeFeet: maximumDensityAltitude,
+                MinimumVisibilityStatuteMiles: minimumVisibility));
 
     private static OperationDispatchPlanningService Service(
         StubWeatherSource weather,
@@ -409,14 +479,16 @@ public sealed class OperationDispatchWeatherTests
     private static AirportDispatchWeatherObservation Weather(
         string icao,
         RunwayWindObservation[] winds,
-        double? densityAltitudeFeet) =>
+        double? densityAltitudeFeet,
+        double? visibilityStatuteMiles = null) =>
         new(
             icao,
             "test-weather",
             DispatchWeatherAuthority.LocalSimulator,
             new DateTimeOffset(2026, 9, 20, 12, 0, 0, TimeSpan.Zero),
             winds,
-            densityAltitudeFeet);
+            densityAltitudeFeet,
+            visibilityStatuteMiles);
 
     private static AirportDispatchWeatherObservation Weather(
         string icao,

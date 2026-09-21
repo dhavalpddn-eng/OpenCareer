@@ -40,6 +40,14 @@ public sealed class AviationWeatherMetarSource(
         @"\b(?<direction>\d{3}|VRB)(?<speed>\d{2,3})(?:G(?<gust>\d{2,3}))?(?<unit>KT|MPS)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    private static readonly Regex FractionalVisibilityPattern = new(
+        @"(?<![A-Z0-9])(?:(?<whole>\d+)\s+)?(?<numerator>\d+)/(?<denominator>\d+)SM\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex DecimalVisibilityPattern = new(
+        @"(?<![A-Z0-9])(?<value>\d+(?:\.\d+)?)SM\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly HttpClient _httpClient = httpClient ?? SharedHttpClient;
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
@@ -123,7 +131,8 @@ public sealed class AviationWeatherMetarSource(
             DispatchWeatherAuthority.Reference,
             metar.ObservedAt,
             runwayWinds,
-            DensityAltitudeFeet: null);
+            DensityAltitudeFeet: null,
+            VisibilityStatuteMiles: metar.VisibilityStatuteMiles);
 
         observation.Validate();
         return observation;
@@ -296,7 +305,62 @@ public sealed class AviationWeatherMetarSource(
             ? ParseWind(windMatch)
             : null;
 
-        return new(observedAt.Value, wind);
+        return new(
+            observedAt.Value,
+            wind,
+            ParseExactVisibilityStatuteMiles(raw));
+    }
+
+    private static double? ParseExactVisibilityStatuteMiles(string raw)
+    {
+        Match fraction = FractionalVisibilityPattern.Match(raw);
+
+        if (fraction.Success)
+        {
+            if (!int.TryParse(
+                    fraction.Groups["numerator"].Value,
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out int numerator)
+                || !int.TryParse(
+                    fraction.Groups["denominator"].Value,
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out int denominator)
+                || denominator <= 0)
+            {
+                return null;
+            }
+
+            int whole = 0;
+            if (fraction.Groups["whole"].Success
+                && !int.TryParse(
+                    fraction.Groups["whole"].Value,
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out whole))
+            {
+                return null;
+            }
+
+            return whole + ((double)numerator / denominator);
+        }
+
+        Match decimalVisibility = DecimalVisibilityPattern.Match(raw);
+
+        if (!decimalVisibility.Success
+            || !double.TryParse(
+                decimalVisibility.Groups["value"].Value,
+                NumberStyles.AllowDecimalPoint,
+                CultureInfo.InvariantCulture,
+                out double visibility)
+            || !double.IsFinite(visibility)
+            || visibility < 0)
+        {
+            return null;
+        }
+
+        return visibility;
     }
 
     private static ParsedWind? ParseWind(Match match)
@@ -415,7 +479,8 @@ public sealed class AviationWeatherMetarSource(
 
     private sealed record ParsedMetar(
         DateTimeOffset ObservedAt,
-        ParsedWind? Wind);
+        ParsedWind? Wind,
+        double? VisibilityStatuteMiles);
 
     private sealed record ParsedWind(
         double? DirectionTrueDegrees,

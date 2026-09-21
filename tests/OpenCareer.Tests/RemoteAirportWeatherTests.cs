@@ -48,6 +48,7 @@ public sealed class RemoteAirportWeatherTests
                 TimeSpan.Zero),
             observation.ObservedAt);
         Assert.Null(observation.DensityAltitudeFeet);
+        Assert.Equal(10, observation.VisibilityStatuteMiles);
 
         RunwayWindObservation wind = Assert.Single(observation.RunwayWinds);
         Assert.Equal("18/36", wind.RunwayIdentifier);
@@ -163,6 +164,50 @@ public sealed class RemoteAirportWeatherTests
 
         Assert.Equal(19.438444924406, wind.SustainedHeadwindKnots!.Value, 9);
         Assert.Equal(38.876889848812, wind.GustHeadwindKnots!.Value, 9);
+    }
+
+    [Fact]
+    public async Task FractionalStatuteMileVisibilityIsParsedExactly()
+    {
+        var handler = new StubHttpMessageHandler(
+            HttpStatusCode.OK,
+            "KAAA 201900Z 18010KT 1 1/2SM BKN020 25/10 A2992");
+        using var client = new HttpClient(handler);
+
+        var source = new AviationWeatherMetarSource(
+            AirportSource(AirportWithRunway(
+                new("18", 180),
+                new("36", 0))),
+            client,
+            new FixedTimeProvider(Now));
+
+        AirportDispatchWeatherObservation observation =
+            Assert.IsType<AirportDispatchWeatherObservation>(
+                await source.FindWeatherAsync("KAAA"));
+
+        Assert.Equal(1.5, observation.VisibilityStatuteMiles);
+    }
+
+    [Fact]
+    public async Task QualifiedStatuteMileVisibilityRemainsUnknown()
+    {
+        var handler = new StubHttpMessageHandler(
+            HttpStatusCode.OK,
+            "KAAA 201900Z 18010KT P6SM CLR 25/10 A2992");
+        using var client = new HttpClient(handler);
+
+        var source = new AviationWeatherMetarSource(
+            AirportSource(AirportWithRunway(
+                new("18", 180),
+                new("36", 0))),
+            client,
+            new FixedTimeProvider(Now));
+
+        AirportDispatchWeatherObservation observation =
+            Assert.IsType<AirportDispatchWeatherObservation>(
+                await source.FindWeatherAsync("KAAA"));
+
+        Assert.Null(observation.VisibilityStatuteMiles);
     }
 
     [Fact]
