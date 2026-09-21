@@ -108,43 +108,76 @@ public sealed class OperationConsequenceOrchestrator
         input.Validate();
         current.Validate();
 
+        OperationResolutionKey key =
+            OperationResolutionKey.Create(
+                input.OperationId,
+                input.MissionId);
+
         OperationOutcome outcome = _resolver.Resolve(input);
         outcome.Validate();
 
-        FactionInfluenceState influence =
-            FactionInfluenceConsequence.Apply(
-                current.FactionInfluence,
-                outcome);
+        bool reputationApplied = false;
 
-        CampaignProgressState progress =
-            CampaignProgressConsequence.Apply(
-                current.CampaignProgress,
-                outcome);
+        try
+        {
+            FactionInfluenceState influence =
+                FactionInfluenceConsequence.Apply(
+                    current.FactionInfluence,
+                    outcome);
 
-        TerritoryPressureResult territory =
-            TerritoryPressureConsequence.Apply(
-                current.TerritoryPressure,
-                outcome);
+            CampaignProgressState progress =
+                CampaignProgressConsequence.Apply(
+                    current.CampaignProgress,
+                    outcome);
 
-        MilitaryCareerState reputation =
-            _reputation.Apply(
-                current.MilitaryCareer,
-                outcome);
+            TerritoryPressureResult territory =
+                TerritoryPressureConsequence.Apply(
+                    current.TerritoryPressure,
+                    outcome);
 
-        ConflictResourceState resources =
-            ConflictResourceConsequence.Apply(
-                current.Resources,
-                outcome);
+            MilitaryCareerState reputation =
+                _reputation.Apply(
+                    current.MilitaryCareer,
+                    outcome);
 
-        var result = new OperationConsequenceResult(
-            outcome,
-            influence,
-            progress,
-            territory,
-            reputation,
-            resources);
+            reputationApplied = true;
 
-        result.Validate();
-        return result;
+            ConflictResourceState resources =
+                ConflictResourceConsequence.Apply(
+                    current.Resources,
+                    outcome);
+
+            var result = new OperationConsequenceResult(
+                outcome,
+                influence,
+                progress,
+                territory,
+                reputation,
+                resources);
+
+            result.Validate();
+            return result;
+        }
+        catch
+        {
+            if (reputationApplied)
+                _reputation.Release(key);
+
+            ReleaseResolutionReservation(key);
+            throw;
+        }
+    }
+
+    public void ReleaseReservations(OperationResolutionKey key)
+    {
+        _reputation.Release(key);
+        ReleaseResolutionReservation(key);
+    }
+
+    private void ReleaseResolutionReservation(
+        OperationResolutionKey key)
+    {
+        if (_resolver is IOperationResolutionReservationReleaser releaser)
+            releaser.Release(key);
     }
 }
