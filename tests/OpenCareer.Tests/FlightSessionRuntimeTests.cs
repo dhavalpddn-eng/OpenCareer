@@ -396,12 +396,40 @@ public sealed class FlightSessionRuntimeTests
                 Connected(),
                 telemetry);
 
+        var published =
+            new List<FlightStateEvidence?>();
+
+        runtime.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        Assert.Null(runtime.Current);
+
         Assert.True(
             await runtime.RefreshAsync());
+
+        FlightStateEvidence reconnectEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
+
+        Assert.True(reconnectEvidence.Connected);
+        Assert.True(reconnectEvidence.StableTelemetry);
+        Assert.True(reconnectEvidence.ValidLoadedAircraft);
+        Assert.True(reconnectEvidence.ContinuityPlausible);
+        Assert.Equal(
+            telemetry.Latest.Timestamp,
+            reconnectEvidence.Timestamp);
+        Assert.Same(
+            reconnectEvidence,
+            runtime.Current);
 
         Assert.Equal(
             FlightSessionStatus.Active,
             coordinator.Current?.Status);
+
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            store.Checkpoint?.Status);
 
         Assert.Equal(
             FlightOperationState.ReadyForStart,
