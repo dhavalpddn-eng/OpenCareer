@@ -3,7 +3,7 @@ using OpenCareer.Domain.Flights;
 
 namespace OpenCareer.Application.Checklists;
 
-public sealed class FlightChecklistCoordinator
+public sealed class FlightChecklistCoordinator : IFlightChecklistSnapshotSource
 {
     private readonly FlightChecklistProfileSelector _profileSelector;
 
@@ -27,6 +27,8 @@ public sealed class FlightChecklistCoordinator
     public FlightChecklistSnapshot? Current =>
         _progression?.Current;
 
+    public event EventHandler<FlightChecklistSnapshotChangedEventArgs>? SnapshotChanged;
+
     public FlightChecklistSnapshot Start(
         FlightChecklistSelectionContext context)
     {
@@ -46,21 +48,47 @@ public sealed class FlightChecklistCoordinator
 
         _profileId = profile.Id;
 
-        return _progression.Current;
+        FlightChecklistSnapshot started =
+            _progression.Current;
+
+        Publish(started);
+        return started;
     }
 
     public FlightChecklistSnapshot Process(
-        FlightStateEvidence evidence) =>
-        RequireProgression()
-            .Process(evidence);
+        FlightStateEvidence evidence)
+    {
+        FlightChecklistProgression progression =
+            RequireProgression();
+
+        FlightChecklistSnapshot previous =
+            progression.Current;
+
+        FlightChecklistSnapshot current =
+            progression.Process(evidence);
+
+        PublishIfChanged(previous, current);
+        return current;
+    }
 
     public FlightChecklistSnapshot ConfirmManual(
         FlightChecklistStepId stepId,
-        DateTimeOffset timestamp) =>
-        RequireProgression()
-            .ConfirmManual(
+        DateTimeOffset timestamp)
+    {
+        FlightChecklistProgression progression =
+            RequireProgression();
+
+        FlightChecklistSnapshot previous =
+            progression.Current;
+
+        FlightChecklistSnapshot current =
+            progression.ConfirmManual(
                 stepId,
                 timestamp);
+
+        PublishIfChanged(previous, current);
+        return current;
+    }
 
     public FlightChecklistSnapshot End()
     {
@@ -73,8 +101,30 @@ public sealed class FlightChecklistCoordinator
         _progression = null;
         _profileId = null;
 
+        Publish(snapshot: null);
         return final;
     }
+
+    private void PublishIfChanged(
+        FlightChecklistSnapshot previous,
+        FlightChecklistSnapshot current)
+    {
+        if (previous.CurrentPhase == current.CurrentPhase
+            && previous.Steps.SequenceEqual(current.Steps))
+        {
+            return;
+        }
+
+        Publish(current);
+    }
+
+    private void Publish(
+        FlightChecklistSnapshot? snapshot) =>
+        SnapshotChanged?.Invoke(
+            this,
+            new FlightChecklistSnapshotChangedEventArgs(
+                _profileId,
+                snapshot));
 
     private FlightChecklistProgression RequireProgression() =>
         _progression

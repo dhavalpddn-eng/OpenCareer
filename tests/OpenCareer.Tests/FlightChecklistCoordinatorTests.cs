@@ -160,6 +160,78 @@ public sealed class FlightChecklistCoordinatorTests
     }
 
     [Fact]
+    public void SnapshotSourcePublishesOnlyObservableStateChanges()
+    {
+        var coordinator =
+            new FlightChecklistCoordinator();
+
+        IFlightChecklistSnapshotSource source =
+            coordinator;
+
+        var changes =
+            new List<FlightChecklistSnapshotChangedEventArgs>();
+
+        source.SnapshotChanged +=
+            (_, args) => changes.Add(args);
+
+        Assert.False(source.IsActive);
+        Assert.Null(source.ActiveProfileId);
+        Assert.Null(source.Current);
+
+        _ =
+            coordinator.Start(
+                new FlightChecklistSelectionContext(
+                    Aircraft()));
+
+        FlightChecklistSnapshotChangedEventArgs started =
+            Assert.Single(changes);
+
+        Assert.True(started.IsActive);
+        Assert.Equal(
+            "standard",
+            started.ActiveProfileId);
+        Assert.Equal(
+            FlightChecklistPhase.Preflight,
+            started.Snapshot!.CurrentPhase);
+
+        _ =
+            coordinator.Process(
+                Evidence(0));
+
+        Assert.Single(changes);
+
+        _ =
+            coordinator.Process(
+                Evidence(
+                    1,
+                    stableTelemetry: true,
+                    validLoadedAircraft: true));
+
+        Assert.Equal(
+            2,
+            changes.Count);
+        Assert.Equal(
+            FlightChecklistPhase.EngineStart,
+            changes[^1].Snapshot!.CurrentPhase);
+
+        _ =
+            coordinator.End();
+
+        Assert.Equal(
+            3,
+            changes.Count);
+
+        FlightChecklistSnapshotChangedEventArgs ended =
+            changes[^1];
+
+        Assert.False(ended.IsActive);
+        Assert.Null(ended.ActiveProfileId);
+        Assert.Null(ended.Snapshot);
+        Assert.False(source.IsActive);
+        Assert.Null(source.Current);
+    }
+
+    [Fact]
     public void OperationsRequireActiveChecklist()
     {
         var coordinator =
