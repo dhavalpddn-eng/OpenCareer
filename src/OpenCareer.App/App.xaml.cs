@@ -13,6 +13,7 @@ using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Domain.Military;
 using OpenCareer.Infrastructure.Ai;
 using OpenCareer.Infrastructure.Flights;
 using OpenCareer.Infrastructure.Persistence;
@@ -76,6 +77,21 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<IConflictTheaterCatalog, DefaultConflictTheaterCatalog>();
         services.AddSingleton<ConflictOperationsService>();
         services.AddSingleton<ConflictCampaignCoordinator>();
+        services.AddSingleton<SqliteOperationConsequenceStore>();
+        services.AddSingleton<IOperationConsequenceStore>(provider =>
+            provider.GetRequiredService<SqliteOperationConsequenceStore>());
+        services.AddSingleton<IOperationConsequenceHistorySource>(provider =>
+            provider.GetRequiredService<SqliteOperationConsequenceStore>());
+        services.AddSingleton<IOperationResolutionRegistry, InMemoryOperationResolutionRegistry>();
+        services.AddSingleton<OperationResolver>();
+        services.AddSingleton<IOperationResolver>(provider =>
+            new IdempotentOperationResolver(
+                provider.GetRequiredService<OperationResolver>(),
+                provider.GetRequiredService<IOperationResolutionRegistry>()));
+        services.AddSingleton<IMilitaryReputationConsequenceRegistry, InMemoryMilitaryReputationConsequenceRegistry>();
+        services.AddSingleton<MilitaryReputationConsequence>();
+        services.AddSingleton<OperationConsequenceOrchestrator>();
+        services.AddSingleton<PersistedOperationConsequenceCoordinator>();
         services.AddSingleton<MilitaryDispatchService>();
         services.AddSingleton<MilitaryCampaignMissionService>();
         services.AddSingleton<MilitaryCampaignTransitionService>();
