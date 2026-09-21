@@ -5,6 +5,7 @@ using Microsoft.UI.Windowing;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Ai;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
@@ -55,6 +56,15 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton(provider =>
             new OpenCareerDatabaseOptions(
                 provider.GetRequiredService<OpenCareerDataPaths>().DatabaseFile));
+
+        services.AddSingleton<SqlitePlayerCareerProfileStore>();
+        services.AddSingleton<IPlayerCareerProfileStore>(provider =>
+            provider.GetRequiredService<SqlitePlayerCareerProfileStore>());
+        services.AddSingleton<PlayerCareerRuntimeState>();
+        services.AddSingleton<PlayerCareerOnboardingCoordinator>();
+        services.AddSingleton<PlayerCareerLocationCoordinator>();
+        services.AddSingleton<PlayerCareerQualificationCoordinator>();
+
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
@@ -173,6 +183,33 @@ public partial class App : Microsoft.UI.Xaml.Application
             logger.LogError(
                 ex,
                 "Pending OpenCareer database restore failed; existing local data was preserved.");
+        }
+
+        try
+        {
+            PlayerCareerProfileStoreRecord? recovered =
+                await _services
+                    .GetRequiredService<PlayerCareerRuntimeState>()
+                    .InitializeAsync();
+
+            if (recovered is not null)
+            {
+                logger.LogInformation(
+                    "Recovered player career profile {CareerId} at revision {Revision}.",
+                    recovered.Profile.CareerId,
+                    recovered.Revision);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "No player career profile found; career onboarding is required.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Player career profile recovery failed; OpenCareer will continue without claiming an active career profile.");
         }
 
         try
