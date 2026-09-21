@@ -341,6 +341,47 @@ public sealed class FlightSessionPersistenceServiceTests
         Assert.Null(coordinator.Current);
     }
 
+    [Fact]
+    public async Task StartWaitsForRecoveryAndCannotOverwriteRecoveredSession()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new DeferredRecoveryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        Task<FlightSession?> recovery = service.RecoverAsync();
+        Task<FlightSession> start = service.StartAsync(Epoch.AddSeconds(1));
+
+        Assert.False(start.IsCompleted);
+        Assert.Null(coordinator.Current);
+        store.LoadCompletion.SetResult(FlightSession.Start(Epoch));
+        FlightSession? recovered = await recovery;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => start);
+        Assert.Same(recovered, coordinator.Current);
+        Assert.Same(recovered, store.Checkpoint);
+    }
+
+    private sealed class DeferredRecoveryStore : IFlightSessionCheckpointStore
+    {
+        public TaskCompletionSource<FlightSession?> LoadCompletion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public FlightSession? Checkpoint { get; private set; }
+
+        public Task<FlightSession?> LoadAsync(CancellationToken cancellationToken = default) =>
+            LoadCompletion.Task;
+
+        public Task SaveAsync(FlightSession session, CancellationToken cancellationToken = default)
+        {
+            Checkpoint = session;
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(CancellationToken cancellationToken = default)
+        {
+            Checkpoint = null;
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class MemoryStore :
         IFlightSessionCheckpointStore
     {
