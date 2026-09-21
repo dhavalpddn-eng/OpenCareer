@@ -42,6 +42,18 @@ public sealed record OperationConsequenceStoreRecord(
     }
 }
 
+public interface IOperationConsequenceHistorySource
+{
+    Task<OperationConsequenceStoreRecord?> LoadLatestForCampaignAsync(
+        string campaignId,
+        CancellationToken cancellationToken = default);
+
+    Task<OperationConsequenceStoreRecord?> LoadLatestForSectorAsync(
+        string campaignId,
+        string sectorId,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IOperationConsequenceStore
 {
     Task<OperationConsequenceStoreRecord?> LoadAsync(
