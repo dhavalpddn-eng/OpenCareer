@@ -80,6 +80,12 @@ public sealed class FlightSessionTutorialEvidenceSource :
                         && parkedAt > taxiAt
                         && shutdownAt > parkedAt,
 
+                "job-complete" =>
+                    static session =>
+                        session.Milestones.ShutdownAt is { } shutdownAt
+                        && session.Milestones.CompletedAt is { } completedAt
+                        && completedAt > shutdownAt,
+
                 "carrier-to-launch" =>
                     static session =>
                         session.Tracking.TakeoffCount > 0,

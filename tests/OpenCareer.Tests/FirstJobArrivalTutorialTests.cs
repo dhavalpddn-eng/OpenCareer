@@ -108,7 +108,7 @@ public sealed class FirstJobArrivalTutorialTests
                 new AppTutorialCatalog().Get(
                     AppTutorialCatalog.FirstJobId));
 
-        Assert.Equal(10, firstJob.Version);
+        Assert.Equal(11, firstJob.Version);
 
         TutorialStep arrival = Assert.Single(
             firstJob.Steps,
