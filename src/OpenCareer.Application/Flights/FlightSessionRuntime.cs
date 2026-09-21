@@ -366,7 +366,10 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
             _processorSessionId = session.SessionId;
 
             if (sessionChanged)
+            {
                 _lastTelemetryTimestamp = null;
+                ClearPublishedEvidence();
+            }
         }
 
         _processorWasSuspended =

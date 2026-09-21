@@ -622,6 +622,99 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task NewFlightSessionClearsPriorEvidenceBeforeNewTelemetry()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore();
+
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        await persistence.StartAsync(Epoch);
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        Epoch.AddMinutes(1),
+                        32,
+                        -97,
+                        onGround: true)
+            };
+
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                persistence,
+                Processor(),
+                new FlightContinuityPolicy(),
+                Connected(),
+                telemetry,
+                new FixedTimeProvider(
+                    Epoch.AddHours(1)));
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        runtime.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightStateEvidence priorEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
+
+        Guid priorSessionId =
+            coordinator.Current!.SessionId;
+
+        await persistence.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddMinutes(2),
+                    Connected: true),
+                CancelRequested: true));
+
+        await persistence.ClearTerminalAsync();
+
+        await persistence.StartAsync(
+            Epoch.AddMinutes(3));
+
+        Assert.NotEqual(
+            priorSessionId,
+            coordinator.Current!.SessionId);
+
+        telemetry.Latest = null;
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Null(runtime.Current);
+        Assert.Equal(
+            2,
+            published.Count);
+        Assert.Same(
+            priorEvidence,
+            published[0]);
+        Assert.Null(published[1]);
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            2,
+            published.Count);
+    }
+
+    [Fact]
     public async Task FailedPersistenceDoesNotPublishOrReplaceAcceptedEvidence()
     {
         FlightSession active =
