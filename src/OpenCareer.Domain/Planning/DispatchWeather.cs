@@ -53,7 +53,8 @@ public sealed record AirportDispatchWeatherObservation(
     DateTimeOffset ObservedAt,
     IReadOnlyList<RunwayWindObservation> RunwayWinds,
     double? DensityAltitudeFeet = null,
-    double? VisibilityStatuteMiles = null)
+    double? VisibilityStatuteMiles = null,
+    double? CeilingFeetAgl = null)
 {
     public void Validate()
     {
@@ -74,6 +75,12 @@ public sealed record AirportDispatchWeatherObservation(
             && (!double.IsFinite(visibility) || visibility < 0))
         {
             throw new ArgumentOutOfRangeException(nameof(VisibilityStatuteMiles));
+        }
+
+        if (CeilingFeetAgl is { } ceiling
+            && (!double.IsFinite(ceiling) || ceiling < 0))
+        {
+            throw new ArgumentOutOfRangeException(nameof(CeilingFeetAgl));
         }
 
         var identifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -108,7 +115,8 @@ public sealed record DispatchWeatherLimits(
     double MaximumCrosswindKnots,
     double MaximumTailwindKnots,
     double? MaximumDensityAltitudeFeet = null,
-    double? MinimumVisibilityStatuteMiles = null)
+    double? MinimumVisibilityStatuteMiles = null,
+    double? MinimumCeilingFeetAgl = null)
 {
     public void Validate()
     {
@@ -123,6 +131,9 @@ public sealed record DispatchWeatherLimits(
 
         if (MinimumVisibilityStatuteMiles is { } minimumVisibility)
             ValidateNonNegative(minimumVisibility, nameof(MinimumVisibilityStatuteMiles));
+
+        if (MinimumCeilingFeetAgl is { } minimumCeiling)
+            ValidateNonNegative(minimumCeiling, nameof(MinimumCeilingFeetAgl));
     }
 
     private static void ValidateNonNegative(double value, string name)
