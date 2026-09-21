@@ -138,13 +138,10 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "current-flight", "current-flight"),
             Step("job-complete", "Complete the operation",
                 "After shutdown, wait for OpenCareer to record the operation as complete. Completion requires the persisted operation-complete milestone after shutdown; a completed-looking UI state alone is not enough.",
-                "current-flight", "current-flight"),
-            Step("job-debrief", "Review the debrief",
-                "Review flight evidence, mission outcome, incidents, assistance flags and any settlement before the operation is written to history.",
-                "logbook", "logbook")
+                "current-flight", "current-flight")
         ];
 
-        return new TutorialDefinition(FirstJobId, 11, steps);
+        return new TutorialDefinition(FirstJobId, 12, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()
