@@ -75,12 +75,47 @@ public sealed class SimConnectAirportDataObservationSource(
                 ? runway.PrimaryClosed
                 : runway.SecondaryClosed;
 
+        IReadOnlyList<RunwayEndRecord>? ends =
+            MapRunwayEnds(runway, primary, secondary);
+
         return new(
             identifier,
             ToPositiveFeet(runway.LengthMeters),
             ToPositiveFeet(runway.WidthMeters),
             MapSurface(runway.Surface),
-            isClosed);
+            isClosed,
+            ends);
+    }
+
+    private static IReadOnlyList<RunwayEndRecord>? MapRunwayEnds(
+        SimConnectRunwayFacilityData runway,
+        string? primary,
+        string? secondary)
+    {
+        if (!float.IsFinite(runway.HeadingTrueDegrees))
+            return null;
+
+        var ends = new List<RunwayEndRecord>(2);
+        double primaryHeading = NormalizeHeading(runway.HeadingTrueDegrees);
+
+        if (primary is not null)
+            ends.Add(new(primary, primaryHeading, runway.PrimaryClosed));
+
+        if (secondary is not null)
+        {
+            ends.Add(new(
+                secondary,
+                NormalizeHeading(primaryHeading + 180.0),
+                runway.SecondaryClosed));
+        }
+
+        return ends.Count == 0 ? null : ends;
+    }
+
+    private static double NormalizeHeading(double heading)
+    {
+        double normalized = heading % 360.0;
+        return normalized < 0 ? normalized + 360.0 : normalized;
     }
 
     private static double? ToPositiveFeet(float meters)
