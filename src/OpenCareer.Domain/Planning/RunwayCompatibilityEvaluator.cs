@@ -56,6 +56,8 @@ public enum DispatchFeasibilityReason
     DensityAltitudeExceedsLimit,
     VisibilityUnknown,
     VisibilityBelowMinimum,
+    CeilingUnknown,
+    CeilingBelowMinimum,
     AircraftTakeoffPerformanceConditionsMissing,
     AircraftLandingPerformanceConditionsMissing,
     AircraftTakeoffPerformanceOutsideEnvelope,
@@ -82,6 +84,8 @@ public sealed record DispatchFeasibilityIssue(
     double? MaximumDensityAltitudeFeet = null,
     double? ObservedVisibilityStatuteMiles = null,
     double? MinimumVisibilityStatuteMiles = null,
+    double? ObservedCeilingFeetAgl = null,
+    double? MinimumCeilingFeetAgl = null,
     double? OutsideAirTemperatureCelsius = null,
     double? PressureAltitudeFeet = null);
 
@@ -131,6 +135,8 @@ public sealed record DispatchFeasibilityResult
             .ThenBy(static issue => issue.MaximumDensityAltitudeFeet)
             .ThenBy(static issue => issue.ObservedVisibilityStatuteMiles)
             .ThenBy(static issue => issue.MinimumVisibilityStatuteMiles)
+            .ThenBy(static issue => issue.ObservedCeilingFeetAgl)
+            .ThenBy(static issue => issue.MinimumCeilingFeetAgl)
             .ThenBy(static issue => issue.OutsideAirTemperatureCelsius)
             .ThenBy(static issue => issue.PressureAltitudeFeet)
             .ToArray();
@@ -316,6 +322,30 @@ public static class RunwayCompatibilityEvaluator
                                 airport.Icao,
                                 ObservedVisibilityStatuteMiles: weather.VisibilityStatuteMiles.Value,
                                 MinimumVisibilityStatuteMiles: minimumVisibility)]);
+                    }
+                }
+
+                if (weatherLimits.MinimumCeilingFeetAgl is { } minimumCeiling)
+                {
+                    if (weather.CeilingFeetAgl is null)
+                    {
+                        endpointIssues.Add(new(
+                            DispatchFeasibilityReason.CeilingUnknown,
+                            endpoint,
+                            airport.Icao,
+                            MinimumCeilingFeetAgl: minimumCeiling));
+                    }
+                    else if (weather.CeilingFeetAgl.Value < minimumCeiling)
+                    {
+                        return new(
+                            DispatchFeasibilityStatus.Infeasible,
+                            null,
+                            [new(
+                                DispatchFeasibilityReason.CeilingBelowMinimum,
+                                endpoint,
+                                airport.Icao,
+                                ObservedCeilingFeetAgl: weather.CeilingFeetAgl.Value,
+                                MinimumCeilingFeetAgl: minimumCeiling)]);
                     }
                 }
             }
