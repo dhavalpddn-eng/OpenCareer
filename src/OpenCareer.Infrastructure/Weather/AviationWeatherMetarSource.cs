@@ -49,7 +49,7 @@ public sealed class AviationWeatherMetarSource(
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex CeilingLayerPattern = new(
-        @"\b(?:BKN|OVC|VV)(?<height>\d{3}|///)(?:[A-Z]{2,3})?\b",
+        @"\b(?:BKN|OVC|VV)(?<height>\d{3}|///)(?:[A-Z]{2,3})?(?=\s|$)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly HttpClient _httpClient = httpClient ?? SharedHttpClient;
