@@ -5,6 +5,7 @@ using Microsoft.UI.Windowing;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Ai;
+using OpenCareer.Application.Checklists;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
@@ -63,6 +64,10 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<AppDataBackupService>();
         services.AddSingleton<DiagnosticBundleService>();
         services.AddSingleton<ShellOpenService>();
+
+        services.AddSingleton<FlightChecklistCoordinator>();
+        services.AddSingleton<IFlightChecklistSnapshotSource>(provider =>
+            provider.GetRequiredService<FlightChecklistCoordinator>());
 
         services.AddSingleton<FlightSessionCoordinator>();
         services.AddSingleton(FlightSessionCheckpointPolicy.Default);

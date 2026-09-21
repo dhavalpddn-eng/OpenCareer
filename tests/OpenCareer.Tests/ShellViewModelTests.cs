@@ -1,7 +1,9 @@
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Checklists;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Checklists;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 
@@ -210,6 +212,78 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task ChecklistSnapshotIsRenderedAndPreferenceControlsVisibility()
+    {
+        var settings = new TestSettingsService();
+        var checklist = new TestChecklistSnapshotSource
+        {
+            Snapshot =
+                new FlightChecklistSnapshot(
+                    FlightChecklistPhase.EngineStart,
+                    [
+                        new(
+                            FlightChecklistStepId.AircraftReady,
+                            FlightChecklistPhase.Preflight,
+                            FlightChecklistVerificationCapability.AutoEvidence,
+                            FlightChecklistStepState.Verified,
+                            DateTimeOffset.UtcNow),
+                        new(
+                            FlightChecklistStepId.EngineStarted,
+                            FlightChecklistPhase.EngineStart,
+                            FlightChecklistVerificationCapability.AutoEvidence,
+                            FlightChecklistStepState.Pending,
+                            null)
+                    ])
+        };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                settings,
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                checklistSnapshots: checklist);
+
+        Assert.True(viewModel.IsChecklistVisible);
+        Assert.Equal(
+            "Current phase · Engine start",
+            viewModel.ChecklistPhaseText);
+        Assert.Equal(2, viewModel.ChecklistSteps.Count);
+        Assert.Equal(
+            "VERIFIED",
+            viewModel.ChecklistSteps[0].Status);
+        Assert.Equal(
+            "PENDING",
+            viewModel.ChecklistSteps[1].Status);
+
+        await settings.UpdateAsync(
+            settings.Current with
+            {
+                ShowChecklistEveryFlight = false
+            });
+
+        Assert.False(viewModel.IsChecklistVisible);
+        Assert.Equal(2, viewModel.ChecklistSteps.Count);
+
+        await settings.UpdateAsync(
+            settings.Current with
+            {
+                ShowChecklistEveryFlight = true
+            });
+
+        Assert.True(viewModel.IsChecklistVisible);
+
+        checklist.Publish(snapshot: null);
+
+        Assert.False(viewModel.IsChecklistVisible);
+        Assert.Equal(
+            "No active checklist",
+            viewModel.ChecklistPhaseText);
+        Assert.Empty(viewModel.ChecklistSteps);
+    }
+
+    [Fact]
     public void MissingRuntimeIsDistinguishedFromWaitingForSimulator()
     {
         var connection = new TestConnection
@@ -300,6 +374,27 @@ public sealed class ShellViewModelTests
         {
             Checkpoint = null;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TestChecklistSnapshotSource : IFlightChecklistSnapshotSource
+    {
+        public FlightChecklistSnapshot? Snapshot { get; set; }
+
+        public bool IsActive => Snapshot is not null;
+        public string? ActiveProfileId => IsActive ? "test" : null;
+        public FlightChecklistSnapshot? Current => Snapshot;
+
+        public event EventHandler<FlightChecklistSnapshotChangedEventArgs>? SnapshotChanged;
+
+        public void Publish(FlightChecklistSnapshot? snapshot)
+        {
+            Snapshot = snapshot;
+            SnapshotChanged?.Invoke(
+                this,
+                new FlightChecklistSnapshotChangedEventArgs(
+                    ActiveProfileId,
+                    Snapshot));
         }
     }
 

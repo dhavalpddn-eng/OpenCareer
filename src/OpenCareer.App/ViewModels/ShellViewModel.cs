@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using OpenCareer.Application.Checklists;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Checklists;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 
@@ -15,6 +17,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly IAppSettingsService _settings;
     private readonly FlightSessionCoordinator _flightSessions;
     private readonly FlightSessionPersistenceService? _flightPersistence;
+    private readonly IFlightChecklistSnapshotSource _checklistSnapshots;
 
     private SimulatorConnectionSnapshot? _lastConnectionSnapshot;
     private AircraftTelemetrySnapshot? _lastTelemetry;
@@ -45,6 +48,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _currentFlightRouteSummary = "—";
     private string _currentFlightPerformanceSummary = "—";
     private string _currentFlightFuelSummary = "—";
+    private bool _isChecklistVisible;
+    private string _checklistPhaseText = "No active checklist";
+    private IReadOnlyList<FlightChecklistStepDisplay> _checklistSteps = Array.Empty<FlightChecklistStepDisplay>();
 
     public ShellViewModel(
         ISimulatorConnection connection,
@@ -55,7 +61,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             telemetrySource,
             settings,
             new FlightSessionCoordinator(),
-            flightPersistence: null)
+            flightPersistence: null,
+            NullFlightChecklistSnapshotSource.Instance)
     {
     }
 
@@ -65,6 +72,23 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         IAppSettingsService settings,
         FlightSessionCoordinator flightSessions,
         FlightSessionPersistenceService? flightPersistence)
+        : this(
+            connection,
+            telemetrySource,
+            settings,
+            flightSessions,
+            flightPersistence,
+            NullFlightChecklistSnapshotSource.Instance)
+    {
+    }
+
+    public ShellViewModel(
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        IAppSettingsService settings,
+        FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService? flightPersistence,
+        IFlightChecklistSnapshotSource checklistSnapshots)
     {
         _connection =
             connection
@@ -83,7 +107,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(flightSessions));
 
         _flightPersistence = flightPersistence;
+        _checklistSnapshots =
+            checklistSnapshots
+            ?? throw new ArgumentNullException(nameof(checklistSnapshots));
+
         _settings.Changed += OnSettingsChanged;
+        _checklistSnapshots.SnapshotChanged += OnChecklistSnapshotChanged;
+        RefreshChecklist();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -110,6 +140,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string CurrentFlightRouteSummary => _currentFlightRouteSummary;
     public string CurrentFlightPerformanceSummary => _currentFlightPerformanceSummary;
     public string CurrentFlightFuelSummary => _currentFlightFuelSummary;
+    public bool IsChecklistVisible => _isChecklistVisible;
+    public string ChecklistPhaseText => _checklistPhaseText;
+    public IReadOnlyList<FlightChecklistStepDisplay> ChecklistSteps => _checklistSteps;
     private bool _hasFlightSession;
     private bool _hasRecoveredFlightSession;
 
@@ -627,7 +660,82 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             _lastFlightSessionUpdatedAt = null;
             RefreshFlightSession();
         }
+
+        RefreshChecklist();
     }
+
+    private void OnChecklistSnapshotChanged(
+        object? sender,
+        FlightChecklistSnapshotChangedEventArgs e) =>
+        RefreshChecklist();
+
+    private void RefreshChecklist()
+    {
+        FlightChecklistSnapshot? snapshot =
+            _checklistSnapshots.Current;
+
+        SetBoolean(
+            ref _isChecklistVisible,
+            _settings.Current.ShowChecklistEveryFlight
+                && snapshot is not null,
+            nameof(IsChecklistVisible));
+
+        SetField(
+            ref _checklistPhaseText,
+            snapshot is null
+                ? "No active checklist"
+                : $"Current phase · {FormatChecklistPhase(snapshot.CurrentPhase)}",
+            nameof(ChecklistPhaseText));
+
+        FlightChecklistStepDisplay[] steps =
+            snapshot?.Steps
+                .Select(step =>
+                    new FlightChecklistStepDisplay(
+                        FormatChecklistStep(step.Id),
+                        step.State == FlightChecklistStepState.Verified
+                            ? "VERIFIED"
+                            : step.VerificationCapability switch
+                            {
+                                FlightChecklistVerificationCapability.ManualOnly => "MANUAL",
+                                FlightChecklistVerificationCapability.Unavailable => "UNAVAILABLE",
+                                _ => "PENDING"
+                            }))
+                .ToArray()
+            ?? [];
+
+        if (_checklistSteps.SequenceEqual(steps))
+            return;
+
+        _checklistSteps = steps;
+        OnPropertyChanged(nameof(ChecklistSteps));
+    }
+
+    private static string FormatChecklistPhase(
+        FlightChecklistPhase phase) =>
+        phase switch
+        {
+            FlightChecklistPhase.EngineStart => "Engine start",
+            FlightChecklistPhase.TaxiOut => "Taxi out",
+            FlightChecklistPhase.TaxiIn => "Taxi in",
+            _ => phase.ToString()
+        };
+
+    private static string FormatChecklistStep(
+        FlightChecklistStepId stepId) =>
+        stepId switch
+        {
+            FlightChecklistStepId.AircraftReady => "Aircraft ready",
+            FlightChecklistStepId.EngineStarted => "Engine started",
+            FlightChecklistStepId.TaxiMovementEstablished => "Taxi movement established",
+            FlightChecklistStepId.TakeoffRollEstablished => "Takeoff roll established",
+            FlightChecklistStepId.AirborneEstablished => "Airborne established",
+            FlightChecklistStepId.ApproachEstablished => "Approach established",
+            FlightChecklistStepId.TouchdownConfirmed => "Touchdown confirmed",
+            FlightChecklistStepId.LandingRolloutComplete => "Landing rollout complete",
+            FlightChecklistStepId.AircraftParked => "Aircraft parked",
+            FlightChecklistStepId.ShutdownConfirmed => "Shutdown confirmed",
+            _ => stepId.ToString()
+        };
 
     private static double FeetToMeters(double feet) => feet * 0.3048;
     private static double KnotsToKilometersPerHour(double knots) => knots * 1.852;
@@ -658,4 +766,23 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+    private sealed class NullFlightChecklistSnapshotSource : IFlightChecklistSnapshotSource
+    {
+        public static NullFlightChecklistSnapshotSource Instance { get; } = new();
+
+        public bool IsActive => false;
+        public string? ActiveProfileId => null;
+        public FlightChecklistSnapshot? Current => null;
+
+        public event EventHandler<FlightChecklistSnapshotChangedEventArgs>? SnapshotChanged
+        {
+            add { }
+            remove { }
+        }
+    }
 }
+
+public sealed record FlightChecklistStepDisplay(
+    string Label,
+    string Status);
