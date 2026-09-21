@@ -136,12 +136,15 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
             Step("job-arrive", "Park and shut down",
                 "After taxi-in progress, park the aircraft and complete shutdown. OpenCareer waits for persisted parking and shutdown milestones in order; landing, taxiing, or a terminal session status alone does not satisfy this step.",
                 "current-flight", "current-flight"),
+            Step("job-complete", "Complete the operation",
+                "After shutdown, wait for OpenCareer to record the operation as complete. Completion requires the persisted operation-complete milestone after shutdown; a completed-looking UI state alone is not enough.",
+                "current-flight", "current-flight"),
             Step("job-debrief", "Review the debrief",
                 "Review flight evidence, mission outcome, incidents, assistance flags and any settlement before the operation is written to history.",
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 10, steps);
+        return new TutorialDefinition(FirstJobId, 11, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()
