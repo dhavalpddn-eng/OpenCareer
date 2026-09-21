@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace OpenCareer.Domain.Careers;
 
 public sealed record PlayerCareerProfile(
@@ -10,6 +12,9 @@ public sealed record PlayerCareerProfile(
 
     public PilotExperienceTotals Experience { get; init; } =
         PilotExperienceTotals.Empty;
+
+    public ImmutableHashSet<Guid> AppliedExperienceDebriefIds { get; init; } =
+        ImmutableHashSet<Guid>.Empty;
 
     public static PlayerCareerProfile Start(
         Guid careerId,
@@ -53,5 +58,12 @@ public sealed record PlayerCareerProfile(
 
         ArgumentNullException.ThrowIfNull(Experience);
         Experience.Validate();
+
+        ArgumentNullException.ThrowIfNull(AppliedExperienceDebriefIds);
+        if (AppliedExperienceDebriefIds.Contains(Guid.Empty))
+        {
+            throw new InvalidOperationException(
+                "Applied experience debrief ids cannot contain an empty id.");
+        }
     }
 }

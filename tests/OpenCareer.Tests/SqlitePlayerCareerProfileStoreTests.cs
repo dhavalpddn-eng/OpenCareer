@@ -44,7 +44,10 @@ public sealed class SqlitePlayerCareerProfileStoreTests
                             NightCareerCreditTime: TimeSpan.FromHours(6.25),
                             ActualInstrumentCareerCreditTime: TimeSpan.FromHours(3.75),
                             TakeoffCount: 28,
-                            LandingEpisodeCount: 27)
+                            LandingEpisodeCount: 27),
+                    AppliedExperienceDebriefIds =
+                        ImmutableHashSet<Guid>.Empty.Add(
+                            Guid.Parse("62973208-9d23-4645-bc7a-4cfb5d08f55d"))
                 };
             profile.Validate();
 
@@ -241,6 +244,9 @@ public sealed class SqlitePlayerCareerProfileStoreTests
         Assert.Equal(
             expected.Profile.Experience,
             actual.Profile.Experience);
+        Assert.True(
+            expected.Profile.AppliedExperienceDebriefIds.SetEquals(
+                actual.Profile.AppliedExperienceDebriefIds));
         Assert.Equal(
             expected.Profile.Location.HomeAirportIcao,
             actual.Profile.Location.HomeAirportIcao);
