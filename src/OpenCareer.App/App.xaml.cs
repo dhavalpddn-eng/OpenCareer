@@ -6,6 +6,7 @@ using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Ai;
 using OpenCareer.Application.Dashboard;
+using OpenCareer.Application.Economy;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Settings;
@@ -53,6 +54,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton(provider =>
             new OpenCareerDatabaseOptions(
                 provider.GetRequiredService<OpenCareerDataPaths>().DatabaseFile));
+        services.AddSingleton<IWorldSimulationStateStore, SqliteWorldSimulationStateStore>();
+        services.AddSingleton<WorldSimulationPersistenceService>();
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
