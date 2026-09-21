@@ -7,7 +7,9 @@
     mc:Ignorable="d"
     Title="OpenCareer">
 
-    <Grid Background="{StaticResource OpenCareerShellBackgroundBrush}" RequestedTheme="Dark">
+    <Grid x:Name="RootGrid"
+          Background="{StaticResource OpenCareerShellBackgroundBrush}"
+          RequestedTheme="Dark">
         <NavigationView
             x:Name="NavView"
             PaneDisplayMode="Left"
@@ -75,6 +77,14 @@
         <Grid x:Name="TutorialLayer"
               Visibility="Collapsed"
               Background="{StaticResource OpenCareerTutorialScrimBrush}">
+            <Canvas IsHitTestVisible="False">
+                <Border x:Name="TutorialSpotlight"
+                        Visibility="Collapsed"
+                        BorderBrush="{StaticResource OpenCareerSelectionBrush}"
+                        BorderThickness="3"
+                        CornerRadius="8" />
+            </Canvas>
+
             <Border Width="620"
                     MaxHeight="760"
                     HorizontalAlignment="Center"
