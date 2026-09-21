@@ -20,6 +20,7 @@ public enum DispatchFeasibilityReason
 {
     AircraftNotFound = 0,
     AircraftNotInstalled,
+    AircraftUnavailable,
     AircraftCapabilityDataIncomplete,
     AircraftRunwayPerformanceUnknown,
     AirportNotFound,
