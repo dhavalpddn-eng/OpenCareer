@@ -54,6 +54,8 @@ public enum DispatchFeasibilityReason
     TailwindExceedsLimit,
     DensityAltitudeUnknown,
     DensityAltitudeExceedsLimit,
+    VisibilityUnknown,
+    VisibilityBelowMinimum,
     AircraftTakeoffPerformanceConditionsMissing,
     AircraftLandingPerformanceConditionsMissing,
     AircraftTakeoffPerformanceOutsideEnvelope,
@@ -78,6 +80,8 @@ public sealed record DispatchFeasibilityIssue(
     double? LimitKnots = null,
     double? ObservedDensityAltitudeFeet = null,
     double? MaximumDensityAltitudeFeet = null,
+    double? ObservedVisibilityStatuteMiles = null,
+    double? MinimumVisibilityStatuteMiles = null,
     double? OutsideAirTemperatureCelsius = null,
     double? PressureAltitudeFeet = null);
 
@@ -125,6 +129,8 @@ public sealed record DispatchFeasibilityResult
             .ThenBy(static issue => issue.LimitKnots)
             .ThenBy(static issue => issue.ObservedDensityAltitudeFeet)
             .ThenBy(static issue => issue.MaximumDensityAltitudeFeet)
+            .ThenBy(static issue => issue.ObservedVisibilityStatuteMiles)
+            .ThenBy(static issue => issue.MinimumVisibilityStatuteMiles)
             .ThenBy(static issue => issue.OutsideAirTemperatureCelsius)
             .ThenBy(static issue => issue.PressureAltitudeFeet)
             .ToArray();
@@ -263,27 +269,54 @@ public static class RunwayCompatibilityEvaluator
                     endpoint,
                     airport.Icao));
             }
-            else if (weatherLimits.MaximumDensityAltitudeFeet is { } maximumDensityAltitude)
+            else
             {
-                if (weather.DensityAltitudeFeet is null)
+                if (weatherLimits.MaximumDensityAltitudeFeet is { } maximumDensityAltitude)
                 {
-                    endpointIssues.Add(new(
-                        DispatchFeasibilityReason.DensityAltitudeUnknown,
-                        endpoint,
-                        airport.Icao,
-                        MaximumDensityAltitudeFeet: maximumDensityAltitude));
-                }
-                else if (weather.DensityAltitudeFeet.Value > maximumDensityAltitude)
-                {
-                    return new(
-                        DispatchFeasibilityStatus.Infeasible,
-                        null,
-                        [new(
-                            DispatchFeasibilityReason.DensityAltitudeExceedsLimit,
+                    if (weather.DensityAltitudeFeet is null)
+                    {
+                        endpointIssues.Add(new(
+                            DispatchFeasibilityReason.DensityAltitudeUnknown,
                             endpoint,
                             airport.Icao,
-                            ObservedDensityAltitudeFeet: weather.DensityAltitudeFeet.Value,
-                            MaximumDensityAltitudeFeet: maximumDensityAltitude)]);
+                            MaximumDensityAltitudeFeet: maximumDensityAltitude));
+                    }
+                    else if (weather.DensityAltitudeFeet.Value > maximumDensityAltitude)
+                    {
+                        return new(
+                            DispatchFeasibilityStatus.Infeasible,
+                            null,
+                            [new(
+                                DispatchFeasibilityReason.DensityAltitudeExceedsLimit,
+                                endpoint,
+                                airport.Icao,
+                                ObservedDensityAltitudeFeet: weather.DensityAltitudeFeet.Value,
+                                MaximumDensityAltitudeFeet: maximumDensityAltitude)]);
+                    }
+                }
+
+                if (weatherLimits.MinimumVisibilityStatuteMiles is { } minimumVisibility)
+                {
+                    if (weather.VisibilityStatuteMiles is null)
+                    {
+                        endpointIssues.Add(new(
+                            DispatchFeasibilityReason.VisibilityUnknown,
+                            endpoint,
+                            airport.Icao,
+                            MinimumVisibilityStatuteMiles: minimumVisibility));
+                    }
+                    else if (weather.VisibilityStatuteMiles.Value < minimumVisibility)
+                    {
+                        return new(
+                            DispatchFeasibilityStatus.Infeasible,
+                            null,
+                            [new(
+                                DispatchFeasibilityReason.VisibilityBelowMinimum,
+                                endpoint,
+                                airport.Icao,
+                                ObservedVisibilityStatuteMiles: weather.VisibilityStatuteMiles.Value,
+                                MinimumVisibilityStatuteMiles: minimumVisibility)]);
+                    }
                 }
             }
         }
