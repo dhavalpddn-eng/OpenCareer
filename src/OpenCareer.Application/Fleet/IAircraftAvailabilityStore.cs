@@ -27,7 +27,10 @@ public interface IAircraftAvailabilityStore
     Task SetAsync(
         AircraftAvailabilityState state,
         CancellationToken cancellationToken = default);
+}
 
+public interface IAircraftReservationStore
+{
     Task<AircraftReservationAcquireResult> TryReserveAsync(
         string canonicalAircraftId,
         string reservationId,
