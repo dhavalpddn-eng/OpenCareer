@@ -13,15 +13,21 @@ public sealed class MilitaryCampaignMissionService
     private readonly MilitaryDispatchService _dispatch;
     private readonly ConflictOperationsService _operations;
     private readonly ConflictCampaignCoordinator _campaigns;
+    private readonly PersistedOperationConsequenceCoordinator _consequences;
+    private readonly IOperationConsequenceHistorySource _consequenceHistory;
 
     public MilitaryCampaignMissionService(
         MilitaryDispatchService dispatch,
         ConflictOperationsService operations,
-        ConflictCampaignCoordinator campaigns)
+        ConflictCampaignCoordinator campaigns,
+        PersistedOperationConsequenceCoordinator consequences,
+        IOperationConsequenceHistorySource consequenceHistory)
     {
         _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
         _operations = operations ?? throw new ArgumentNullException(nameof(operations));
         _campaigns = campaigns ?? throw new ArgumentNullException(nameof(campaigns));
+        _consequences = consequences ?? throw new ArgumentNullException(nameof(consequences));
+        _consequenceHistory = consequenceHistory ?? throw new ArgumentNullException(nameof(consequenceHistory));
     }
 
     public async Task<MilitaryMissionAcceptanceResult> AcceptAsync(
@@ -155,6 +161,11 @@ public sealed class MilitaryCampaignMissionService
             current.Checkpoint.World,
             missionId);
 
+        DateTimeOffset acceptedAt =
+            FindMissionAcceptedAt(
+                current.Checkpoint,
+                missionId);
+
         ConflictWorldState world;
         ConflictCampaignCheckpoint checkpoint = current.Checkpoint;
 
@@ -208,6 +219,29 @@ public sealed class MilitaryCampaignMissionService
             }
         }
 
+        string sectorId =
+            FindConsequenceSectorId(
+                world,
+                request);
+
+        OperationConsequenceStoreRecord consequence =
+            await ResolveConsequencesAsync(
+                    checkpoint,
+                    request,
+                    missionId,
+                    MissionExecutionResult.Completed,
+                    objectivesCompleted: 1,
+                    acceptedAt,
+                    completedAt,
+                    sectorId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        world = ApplyTerritoryControlDelta(
+            world,
+            sectorId,
+            consequence.Result.TerritoryPressure.FriendlyControlDelta);
+
         checkpoint = checkpoint with
         {
             World = world,
@@ -215,11 +249,7 @@ public sealed class MilitaryCampaignMissionService
                 ConflictCampaignDirector.Advance(
                     checkpoint.CampaignState,
                     world),
-            MilitaryCareer =
-                MilitaryCareerProgression.RecordOperationResult(
-                    checkpoint.MilitaryCareer,
-                    success: true,
-                    request.Urgency),
+            MilitaryCareer = consequence.Result.MilitaryCareer,
             SavedAt = completedAt
         };
 
@@ -278,6 +308,11 @@ public sealed class MilitaryCampaignMissionService
             current.Checkpoint.World,
             missionId);
 
+        DateTimeOffset acceptedAt =
+            FindMissionAcceptedAt(
+                current.Checkpoint,
+                missionId);
+
         ConflictWorldState world =
             _operations.FailReservedSupportMission(
                 current.Checkpoint.World,
@@ -285,14 +320,37 @@ public sealed class MilitaryCampaignMissionService
                 missionId,
                 failedAt);
 
+        string sectorId =
+            FindConsequenceSectorId(
+                world,
+                request);
+
+        OperationConsequenceStoreRecord consequence =
+            await ResolveConsequencesAsync(
+                    current.Checkpoint,
+                    request,
+                    missionId,
+                    MissionExecutionResult.Failed,
+                    objectivesCompleted: 0,
+                    acceptedAt,
+                    failedAt,
+                    sectorId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        world = ApplyTerritoryControlDelta(
+            world,
+            sectorId,
+            consequence.Result.TerritoryPressure.FriendlyControlDelta);
+
         var checkpoint = current.Checkpoint with
         {
             World = world,
-            MilitaryCareer =
-                MilitaryCareerProgression.RecordOperationResult(
-                    current.Checkpoint.MilitaryCareer,
-                    success: false,
-                    request.Urgency),
+            CampaignState =
+                ConflictCampaignDirector.Advance(
+                    current.Checkpoint.CampaignState,
+                    world),
+            MilitaryCareer = consequence.Result.MilitaryCareer,
             CombatSupportMissions = current.Checkpoint.CombatSupportMissions
                 .Where(item => item.MissionId != missionId)
                 .ToArray(),
@@ -308,6 +366,180 @@ public sealed class MilitaryCampaignMissionService
         return await _campaigns
             .SaveMutationAsync(current, checkpoint, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private async Task<OperationConsequenceStoreRecord> ResolveConsequencesAsync(
+        ConflictCampaignCheckpoint checkpoint,
+        AirSupportRequest request,
+        Guid missionId,
+        MissionExecutionResult missionResult,
+        int objectivesCompleted,
+        DateTimeOffset acceptedAt,
+        DateTimeOffset resolvedAt,
+        string sectorId,
+        CancellationToken cancellationToken)
+    {
+        OperationResolutionKey key =
+            OperationResolutionKey.Create(
+                request.RequestId,
+                missionId);
+
+        OperationConsequenceStoreRecord? existing =
+            await _consequences
+                .LoadAsync(
+                    key,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (existing is not null)
+            return existing;
+
+        OperationConsequenceState state =
+            await BuildConsequenceStateAsync(
+                    checkpoint,
+                    sectorId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        var input = new OperationResolutionInput(
+            missionId,
+            request.RequestId,
+            missionResult,
+            objectivesCompleted,
+            ObjectivesRequired: 1,
+            AircraftSurvived: true,
+            CrewSurvived: true,
+            MissionDuration: resolvedAt - acceptedAt,
+            ResolvedAt: resolvedAt);
+
+        return await _consequences
+            .ApplyAsync(
+                input,
+                state,
+                resolvedAt,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<OperationConsequenceState> BuildConsequenceStateAsync(
+        ConflictCampaignCheckpoint checkpoint,
+        string sectorId,
+        CancellationToken cancellationToken)
+    {
+        ConflictCampaignIdentity identity =
+            checkpoint.CampaignState.Identity
+            ?? ConflictCampaignIdentityGenerator.Create(
+                checkpoint.CampaignId,
+                checkpoint.World);
+
+        OperationConsequenceStoreRecord? latestCampaign =
+            await _consequenceHistory
+                .LoadLatestForCampaignAsync(
+                    checkpoint.CampaignId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        OperationConsequenceStoreRecord? latestSector =
+            await _consequenceHistory
+                .LoadLatestForSectorAsync(
+                    checkpoint.CampaignId,
+                    sectorId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        return new OperationConsequenceState(
+            new FactionInfluenceState(
+                identity.FriendlyFaction.FactionId,
+                identity.HostileFaction.FactionId,
+                latestCampaign?.Result.FactionInfluence.FriendlyInfluence
+                    ?? 0.50,
+                latestCampaign?.Result.FactionInfluence.HostileInfluence
+                    ?? 0.50),
+            new CampaignProgressState(
+                checkpoint.CampaignId,
+                latestCampaign?.Result.CampaignProgress.FriendlyProgress
+                    ?? 0.50),
+            new TerritoryPressureState(
+                sectorId,
+                latestSector?.Result.TerritoryPressure.State
+                    .AccumulatedFriendlyPressure
+                    ?? 0),
+            checkpoint.MilitaryCareer,
+            new ConflictResourceState(
+                checkpoint.CampaignId,
+                latestCampaign?.Result.Resources.FriendlySupply
+                    ?? 0.50,
+                latestCampaign?.Result.Resources.FriendlyOperationalReadiness
+                    ?? 0.50,
+                latestCampaign?.Result.Resources.HostileSupply
+                    ?? 0.50));
+    }
+
+    private static string FindConsequenceSectorId(
+        ConflictWorldState world,
+        AirSupportRequest request) =>
+        world.Sectors
+            .OrderBy(sector =>
+                ConflictGeometry.DistanceNauticalMiles(
+                    request.TargetPosition,
+                    sector.Center))
+            .ThenBy(sector => sector.SectorId, StringComparer.Ordinal)
+            .Select(sector => sector.SectorId)
+            .FirstOrDefault()
+        ?? $"theater:{world.TheaterId}";
+
+    private static ConflictWorldState ApplyTerritoryControlDelta(
+        ConflictWorldState world,
+        string sectorId,
+        double friendlyControlDelta)
+    {
+        if (Math.Abs(friendlyControlDelta) <= 0.0000001)
+            return world;
+
+        ConflictSectorState[] sectors = world.Sectors
+            .Select(sector =>
+                string.Equals(
+                    sector.SectorId,
+                    sectorId,
+                    StringComparison.Ordinal)
+                    ? sector with
+                    {
+                        FriendlyControl = Math.Clamp(
+                            sector.FriendlyControl + friendlyControlDelta,
+                            0,
+                            1)
+                    }
+                    : sector)
+            .ToArray();
+
+        return world with { Sectors = sectors };
+    }
+
+    private static DateTimeOffset FindMissionAcceptedAt(
+        ConflictCampaignCheckpoint checkpoint,
+        Guid missionId)
+    {
+        AirSupportMission? combat =
+            checkpoint.CombatSupportMissions
+                .SingleOrDefault(item => item.MissionId == missionId);
+
+        if (combat is not null)
+            return combat.AcceptedAt;
+
+        AreaSupportMission? area =
+            checkpoint.AreaSupportMissions
+                .SingleOrDefault(item => item.MissionId == missionId);
+
+        if (area is not null)
+            return area.AcceptedAt;
+
+        AirOperationMission? air =
+            checkpoint.AirOperationMissions
+                .SingleOrDefault(item => item.MissionId == missionId);
+
+        return air?.AcceptedAt
+            ?? throw new InvalidOperationException(
+                "Active military mission was not found.");
     }
 
     private async Task<ConflictCampaignStoreRecord> SaveProgressAsync(
