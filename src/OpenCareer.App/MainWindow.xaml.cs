@@ -18,6 +18,8 @@ public sealed partial class MainWindow : Window
     private readonly ILogger<MainWindow> _logger;
     private readonly CancellationTokenSource _lifetimeCts = new();
     private bool _tutorialInitialized;
+    private bool _firstConnectionTutorialResolved;
+    private bool _firstConnectionTutorialOfferInProgress;
 
     public MainWindow(
         ShellViewModel viewModel,
@@ -93,6 +95,7 @@ public sealed partial class MainWindow : Window
         object args)
     {
         ViewModel.RefreshConnectionStatus();
+        await OfferFirstConnectionTutorialIfNeededAsync();
         Tutorial.RefreshLiveEvidence();
 
         try
@@ -117,6 +120,43 @@ public sealed partial class MainWindow : Window
             _logger.LogError(
                 ex,
                 "FlightSession runtime refresh failed.");
+        }
+    }
+
+    private async Task OfferFirstConnectionTutorialIfNeededAsync()
+    {
+        if (_firstConnectionTutorialResolved
+            || _firstConnectionTutorialOfferInProgress
+            || !Settings.AutomaticallyOfferTutorials
+            || !ViewModel.IsSimulatorConnected
+            || Tutorial.IsActive)
+        {
+            return;
+        }
+
+        _firstConnectionTutorialOfferInProgress = true;
+
+        try
+        {
+            await Tutorial
+                .TryStartFirstSimulatorConnectionAsync(
+                    _lifetimeCts.Token);
+
+            _firstConnectionTutorialResolved = true;
+        }
+        catch (OperationCanceledException)
+            when (_lifetimeCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "First simulator connection tutorial offer failed.");
+        }
+        finally
+        {
+            _firstConnectionTutorialOfferInProgress = false;
         }
     }
 
