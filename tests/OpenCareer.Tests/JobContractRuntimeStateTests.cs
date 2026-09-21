@@ -42,6 +42,17 @@ public sealed class JobContractRuntimeStateTests
         Assert.Same(accepted, first[0]);
         Assert.Equal(1, source.ReadCount);
         Assert.Equal(1, store.ReadCount);
+
+        IJobContractRuntimeSource readOnly = state;
+        Assert.Same(first, readOnly.Current);
+        Assert.Same(
+            accepted,
+            readOnly.Find(
+                accepted.Contract.ContractId));
+        Assert.Null(
+            readOnly.Find(
+                Guid.Parse(
+                    "c1000000-0000-0000-0000-000000000099")));
     }
 
     [Fact]

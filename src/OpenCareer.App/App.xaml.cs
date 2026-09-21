@@ -64,6 +64,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<IJobContractRecoverySource, SqliteJobContractRecoverySource>();
         services.AddSingleton<JobContractRecoveryService>();
         services.AddSingleton<JobContractRuntimeState>();
+        services.AddSingleton<IJobContractRuntimeSource>(provider =>
+            provider.GetRequiredService<JobContractRuntimeState>());
         services.AddSingleton<JobContractLifecycleService>();
         services.AddSingleton<JobOfferAcceptanceService>();
         services.AddSingleton<IEconomyLedgerStore, SqliteEconomyLedgerStore>();

@@ -1,6 +1,7 @@
 namespace OpenCareer.Application.Careers;
 
 public sealed class JobContractRuntimeState
+    : IJobContractRuntimeSource
 {
     private readonly JobContractRecoveryService _recoveryService;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
@@ -23,6 +24,31 @@ public sealed class JobContractRuntimeState
 
     public IReadOnlyList<PersistedJobContract> Current =>
         Volatile.Read(ref _current);
+
+    public PersistedJobContract? Find(
+        Guid contractId)
+    {
+        if (contractId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Contract ID is required.",
+                nameof(contractId));
+        }
+
+        IReadOnlyList<PersistedJobContract> snapshot =
+            Current;
+
+        for (int index = 0; index < snapshot.Count; index++)
+        {
+            PersistedJobContract candidate =
+                snapshot[index];
+
+            if (candidate.Contract.ContractId == contractId)
+                return candidate;
+        }
+
+        return null;
+    }
 
     public async Task<IReadOnlyList<PersistedJobContract>> InitializeAsync(
         CancellationToken cancellationToken = default)
