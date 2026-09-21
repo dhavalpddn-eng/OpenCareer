@@ -39,6 +39,16 @@ public sealed class OperationDispatchPlanningService(
             .FindAircraftAsync(aircraftId, cancellationToken)
             .ConfigureAwait(false);
 
+        if (aircraft is not null
+            && aircraft.InstallationStatus != AircraftInstallationStatus.Installed)
+        {
+            return DispatchFeasibilityResult.Create(
+                DispatchFeasibilityStatus.Infeasible,
+                null,
+                null,
+                [new(DispatchFeasibilityReason.AircraftNotInstalled)]);
+        }
+
         AirportRecord? origin = await airportData
             .FindAirportAsync(originIcao, cancellationToken)
             .ConfigureAwait(false);

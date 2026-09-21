@@ -186,6 +186,25 @@ public sealed class OperationDispatchPlanningTests
     }
 
     [Fact]
+    public async Task KnownButNotInstalledAircraftIsInfeasibleBeforePhysicalEvaluation()
+    {
+        var service = Service(
+            Resolution(isInstalled: false),
+            Airport("KAAA", Runway("18")),
+            Airport("KBBB", Runway("36")));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB",
+            new(1000, 500));
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(result.Issues);
+        Assert.Equal(DispatchFeasibilityReason.AircraftNotInstalled, issue.Reason);
+    }
+
+    [Fact]
     public async Task MissingSourceRecordsFailClosedBeforePhysicalEvaluation()
     {
         var service = new OperationDispatchPlanningService(
@@ -246,7 +265,8 @@ public sealed class OperationDispatchPlanningTests
         double? maximumPayloadPounds = 2000,
         double? maximumRangeNauticalMiles = 800,
         AircraftRunwayPerformanceProfile? runwayPerformance = null,
-        bool includeRunwayPerformance = true)
+        bool includeRunwayPerformance = true,
+        bool isInstalled = true)
     {
         AircraftRunwayPerformanceProfile? resolvedRunwayPerformance =
             includeRunwayPerformance
@@ -266,7 +286,7 @@ public sealed class OperationDispatchPlanningTests
                 ProviderId: "test-source",
                 ProviderRecordId: "fixture",
                 Confidence: AircraftDataConfidence.Verified,
-                IsInstalled: true,
+                IsInstalled: isInstalled,
                 MaximumPayloadPounds: maximumPayloadPounds,
                 MaximumRangeNauticalMiles: maximumRangeNauticalMiles,
                 RunwayPerformance: resolvedRunwayPerformance)
