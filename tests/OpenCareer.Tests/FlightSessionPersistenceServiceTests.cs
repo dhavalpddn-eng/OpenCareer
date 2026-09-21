@@ -385,9 +385,37 @@ public sealed class FlightSessionPersistenceServiceTests
         Assert.Same(recovered, store.Checkpoint);
     }
 
+    [Fact]
+    public async Task FailedRecoveryReadReleasesGateForRetry()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new DeferredRecoveryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        Task<FlightSession?> failedRecovery = service.RecoverAsync();
+        store.LoadCompletion.SetException(new IOException("Synthetic read failure."));
+
+        await Assert.ThrowsAsync<IOException>(() => failedRecovery);
+        Assert.Null(coordinator.Current);
+        Assert.Null(service.LastRecoveredSessionId);
+        Assert.Null(store.Checkpoint);
+
+        var checkpoint = FlightSession.Start(Epoch);
+        store.LoadCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        store.LoadCompletion.SetResult(checkpoint);
+        FlightSession? recovered = await service.RecoverAsync()
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.NotNull(recovered);
+        Assert.Equal(checkpoint.SessionId, recovered.SessionId);
+        Assert.Equal(FlightSessionStatus.Suspended, recovered.Status);
+        Assert.Equal(checkpoint.SessionId, service.LastRecoveredSessionId);
+        Assert.Same(recovered, coordinator.Current);
+        Assert.Same(recovered, store.Checkpoint);
+    }
+
     private sealed class DeferredRecoveryStore : IFlightSessionCheckpointStore
     {
-        public TaskCompletionSource<FlightSession?> LoadCompletion { get; } =
+        public TaskCompletionSource<FlightSession?> LoadCompletion { get; set; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public FlightSession? Checkpoint { get; private set; }
 
