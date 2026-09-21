@@ -440,6 +440,102 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task FailedRecoveredResumeDoesNotPublishOrAdvanceEvidence()
+    {
+        FlightSession suspended =
+            Suspend(
+                PreflightSession(
+                    anchor:
+                        new FlightContinuityAnchor(
+                            Epoch.AddSeconds(1),
+                            32,
+                            -97,
+                            650,
+                            OnGround: true)));
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(suspended);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = suspended,
+                FailWrites = true
+            };
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        Epoch.AddMinutes(1),
+                        32.01,
+                        -97.01,
+                        onGround: true)
+            };
+
+        var runtime =
+            CreateRuntime(
+                coordinator,
+                store,
+                Connected(),
+                telemetry);
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        runtime.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => runtime.RefreshAsync());
+
+        Assert.Empty(published);
+        Assert.Null(runtime.Current);
+        Assert.Equal(
+            FlightSessionStatus.Suspended,
+            coordinator.Current!.Status);
+        Assert.Equal(
+            suspended.UpdatedAt,
+            coordinator.Current.UpdatedAt);
+        Assert.Equal(
+            FlightSessionStatus.Suspended,
+            store.Checkpoint!.Status);
+        Assert.Equal(
+            suspended.UpdatedAt,
+            store.Checkpoint.UpdatedAt);
+
+        store.FailWrites = false;
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightStateEvidence reconnectEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
+
+        Assert.True(reconnectEvidence.Connected);
+        Assert.True(reconnectEvidence.StableTelemetry);
+        Assert.True(reconnectEvidence.ContinuityPlausible);
+        Assert.True(reconnectEvidence.EngineStartObserved);
+        Assert.Equal(
+            telemetry.Latest.Timestamp,
+            reconnectEvidence.Timestamp);
+        Assert.Same(
+            reconnectEvidence,
+            runtime.Current);
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current!.Status);
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            store.Checkpoint!.Status);
+    }
+
+    [Fact]
     public async Task ImplausibleRecoveredAirborneSessionBecomesInterrupted()
     {
         FlightSession suspended =
