@@ -48,6 +48,10 @@ public sealed class AviationWeatherMetarSource(
         @"(?<![A-Z0-9])(?<value>\d+(?:\.\d+)?)SM\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    private static readonly Regex CeilingLayerPattern = new(
+        @"\b(?:BKN|OVC|VV)(?<height>\d{3}|///)(?:[A-Z]{2,3})?\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly HttpClient _httpClient = httpClient ?? SharedHttpClient;
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
@@ -132,7 +136,8 @@ public sealed class AviationWeatherMetarSource(
             metar.ObservedAt,
             runwayWinds,
             DensityAltitudeFeet: null,
-            VisibilityStatuteMiles: metar.VisibilityStatuteMiles);
+            VisibilityStatuteMiles: metar.VisibilityStatuteMiles,
+            CeilingFeetAgl: metar.CeilingFeetAgl);
 
         observation.Validate();
         return observation;
@@ -308,7 +313,42 @@ public sealed class AviationWeatherMetarSource(
         return new(
             observedAt.Value,
             wind,
-            ParseExactVisibilityStatuteMiles(raw));
+            ParseExactVisibilityStatuteMiles(raw),
+            ParseExactCeilingFeetAgl(raw));
+    }
+
+    private static double? ParseExactCeilingFeetAgl(string raw)
+    {
+        MatchCollection matches = CeilingLayerPattern.Matches(raw);
+
+        if (matches.Count == 0)
+            return null;
+
+        double? lowest = null;
+
+        foreach (Match match in matches)
+        {
+            string heightText = match.Groups["height"].Value;
+
+            if (string.Equals(heightText, "///", StringComparison.Ordinal))
+                return null;
+
+            if (!int.TryParse(
+                    heightText,
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out int hundredsFeet))
+            {
+                return null;
+            }
+
+            double feetAgl = hundredsFeet * 100d;
+            lowest = lowest is null
+                ? feetAgl
+                : Math.Min(lowest.Value, feetAgl);
+        }
+
+        return lowest;
     }
 
     private static double? ParseExactVisibilityStatuteMiles(string raw)
@@ -480,7 +520,8 @@ public sealed class AviationWeatherMetarSource(
     private sealed record ParsedMetar(
         DateTimeOffset ObservedAt,
         ParsedWind? Wind,
-        double? VisibilityStatuteMiles);
+        double? VisibilityStatuteMiles,
+        double? CeilingFeetAgl);
 
     private sealed record ParsedWind(
         double? DirectionTrueDegrees,
