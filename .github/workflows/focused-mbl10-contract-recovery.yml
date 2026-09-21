@@ -1,0 +1,23 @@
+name: focused-mbl10-contract-recovery
+
+on:
+  push:
+    branches:
+      - validation/mbl10-contract-recovery-index-20260921
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Run focused recovery tests
+        run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release --filter FullyQualifiedName~SqliteJobContractRecoverySourceTests
