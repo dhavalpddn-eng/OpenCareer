@@ -8,7 +8,8 @@ using OpenCareer.Domain.Military;
 namespace OpenCareer.Infrastructure.Persistence;
 
 public sealed class SqliteOperationConsequenceStore
-    : IOperationConsequenceStore
+    : IOperationConsequenceStore,
+      IOperationConsequenceHistorySource
 {
     private const int PayloadSchemaVersion = 1;
 
@@ -83,6 +84,56 @@ public sealed class SqliteOperationConsequenceStore
 
         record.Validate();
         return record;
+    }
+
+    public Task<OperationConsequenceStoreRecord?> LoadLatestForCampaignAsync(
+        string campaignId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(campaignId);
+
+        return LoadLatestAsync(
+            """
+            SELECT operation_id, mission_id, payload_schema_version, saved_at_ms, payload_json
+            FROM military_operation_consequences
+            WHERE campaign_id = $campaign_id
+            ORDER BY completed_at_ms DESC, saved_at_ms DESC, resolution_key ASC
+            LIMIT 1;
+            """,
+            command =>
+                command.Parameters.AddWithValue(
+                    "$campaign_id",
+                    campaignId),
+            cancellationToken);
+    }
+
+    public Task<OperationConsequenceStoreRecord?> LoadLatestForSectorAsync(
+        string campaignId,
+        string sectorId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(campaignId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sectorId);
+
+        return LoadLatestAsync(
+            """
+            SELECT operation_id, mission_id, payload_schema_version, saved_at_ms, payload_json
+            FROM military_operation_consequences
+            WHERE campaign_id = $campaign_id
+              AND sector_id = $sector_id
+            ORDER BY completed_at_ms DESC, saved_at_ms DESC, resolution_key ASC
+            LIMIT 1;
+            """,
+            command =>
+            {
+                command.Parameters.AddWithValue(
+                    "$campaign_id",
+                    campaignId);
+                command.Parameters.AddWithValue(
+                    "$sector_id",
+                    sectorId);
+            },
+            cancellationToken);
     }
 
     public async Task<OperationConsequenceStoreRecord> SaveAsync(
@@ -209,6 +260,45 @@ public sealed class SqliteOperationConsequenceStore
         {
             _writeGate.Release();
         }
+    }
+
+    private async Task<OperationConsequenceStoreRecord?> LoadLatestAsync(
+        string sql,
+        Action<SqliteCommand> addParameters,
+        CancellationToken cancellationToken)
+    {
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using SqliteConnection connection =
+            await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using SqliteCommand command = connection.CreateCommand();
+
+        command.CommandText = sql;
+        addParameters(command);
+
+        await using SqliteDataReader reader = await command
+            .ExecuteReaderAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        string operationId = reader.GetString(0);
+        Guid missionId = Guid.Parse(reader.GetString(1));
+        int payloadSchemaVersion = reader.GetInt32(2);
+        long savedAtMs = reader.GetInt64(3);
+        string payload = reader.GetString(4);
+
+        OperationConsequenceResult result =
+            ReadResult(payloadSchemaVersion, payload);
+
+        var record = new OperationConsequenceStoreRecord(
+            OperationResolutionKey.Create(operationId, missionId),
+            result,
+            DateTimeOffset.FromUnixTimeMilliseconds(savedAtMs));
+
+        record.Validate();
+        return record;
     }
 
     private async Task EnsureInitializedAsync(
