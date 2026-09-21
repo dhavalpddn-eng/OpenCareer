@@ -4,7 +4,7 @@ namespace OpenCareer.Infrastructure.Persistence;
 
 internal static class OpenCareerDatabaseMigrator
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -134,6 +134,28 @@ internal static class OpenCareerDatabaseMigrator
 
             transaction.Commit();
             version = 5;
+        }
+
+        if (version < 6)
+        {
+            using SqliteTransaction transaction =
+                connection.BeginTransaction();
+
+            await EnsurePlayerCareerProfileSchemaAsync(
+                    connection,
+                    transaction,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            await ExecuteAsync(
+                    connection,
+                    transaction,
+                    "PRAGMA user_version = 6;",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            transaction.Commit();
+            version = 6;
         }
 
         if (version != CurrentSchemaVersion)
@@ -273,6 +295,29 @@ internal static class OpenCareerDatabaseMigrator
                 """
                 CREATE TABLE IF NOT EXISTS military_career_profile (
                     slot_id INTEGER NOT NULL PRIMARY KEY,
+                    revision INTEGER NOT NULL CHECK (revision >= 1),
+                    payload_schema_version INTEGER NOT NULL,
+                    saved_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    CHECK (slot_id = 1)
+                );
+                """,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task EnsurePlayerCareerProfileSchemaAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE TABLE IF NOT EXISTS player_career_profile (
+                    slot_id INTEGER NOT NULL PRIMARY KEY,
+                    career_id TEXT NOT NULL UNIQUE,
                     revision INTEGER NOT NULL CHECK (revision >= 1),
                     payload_schema_version INTEGER NOT NULL,
                     saved_at_ms INTEGER NOT NULL,

@@ -9,7 +9,7 @@ namespace OpenCareer.Tests;
 public sealed class OpenCareerDatabaseMigrationReconciliationTests
 {
     [Fact]
-    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV5()
+    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV6()
     {
         string directory = CreateTempDirectory();
 
@@ -47,7 +47,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV5()
+    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV6()
     {
         string directory = CreateTempDirectory();
 
@@ -82,7 +82,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV5()
+    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV6()
     {
         string directory = CreateTempDirectory();
 
@@ -161,7 +161,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV5()
+    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV6()
     {
         string directory = CreateTempDirectory();
 
@@ -330,13 +330,18 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
                 connection,
                 "military_operation_consequences"));
 
+        Assert.True(
+            await TableExistsAsync(
+                connection,
+                "player_career_profile"));
+
         await using SqliteCommand version =
             connection.CreateCommand();
 
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            5L,
+            6L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));
