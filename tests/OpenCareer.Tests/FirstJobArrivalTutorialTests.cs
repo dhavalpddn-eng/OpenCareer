@@ -28,11 +28,11 @@ public sealed class FirstJobArrivalTutorialTests
 
         FlightSession parked = taxiIn with
         {
-            UpdatedAt = Epoch.AddSeconds(2),
+            UpdatedAt = Epoch.AddSeconds(5),
             OperationState = FlightOperationState.Parked,
             Milestones = taxiIn.Milestones with
             {
-                ParkedAt = Epoch.AddSeconds(2)
+                ParkedAt = Epoch.AddSeconds(5)
             }
         };
 
@@ -44,11 +44,11 @@ public sealed class FirstJobArrivalTutorialTests
 
         FlightSession shutdown = parked with
         {
-            UpdatedAt = Epoch.AddSeconds(3),
+            UpdatedAt = Epoch.AddSeconds(6),
             OperationState = FlightOperationState.Shutdown,
             Milestones = parked.Milestones with
             {
-                ShutdownAt = Epoch.AddSeconds(3)
+                ShutdownAt = Epoch.AddSeconds(6)
             }
         };
 
