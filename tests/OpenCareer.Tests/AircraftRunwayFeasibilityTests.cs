@@ -216,6 +216,29 @@ public class AircraftRunwayFeasibilityTests
     }
 
     [Fact]
+    public async Task KnownButNotInstalledAircraftIsInfeasible()
+    {
+        AircraftRegistryRecord knownOnly = Aircraft() with { IsInstalled = false };
+        var service = new DispatchFeasibilityService(
+            new StubAircraftRegistrySource(knownOnly),
+            new StubAirportDataSource(
+                new Dictionary<string, AirportRecord>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["KAAA"] = Airport("KAAA", Runway("01")),
+                    ["KBBB"] = Airport("KBBB", Runway("19"))
+                }));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB");
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(result.Issues);
+        Assert.Equal(DispatchFeasibilityReason.AircraftNotInstalled, issue.Reason);
+    }
+
+    [Fact]
     public async Task UnknownAircraftAndAirportSourcesFailClosed()
     {
         var service = new DispatchFeasibilityService(
