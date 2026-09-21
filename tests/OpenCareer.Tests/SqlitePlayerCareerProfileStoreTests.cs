@@ -39,6 +39,8 @@ public sealed class SqlitePlayerCareerProfileStoreTests
             Assert.Equal(1, saved.Revision);
             Assert.Equal("KRME", saved.Profile.Location.HomeAirportIcao);
             Assert.Equal("KRME", saved.Profile.Location.CurrentAirportIcao);
+            Assert.True(saved.Profile.Location.Connections.SetEquals(["KRME"]));
+            Assert.Empty(saved.Profile.Location.AppliedTravelContracts);
 
             var restartedStore = CreateStore(options);
             PlayerCareerProfileStoreRecord? recovered =
