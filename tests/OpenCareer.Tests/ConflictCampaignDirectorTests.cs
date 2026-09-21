@@ -55,6 +55,61 @@ public sealed class ConflictCampaignDirectorTests
     }
 
     [Fact]
+    public void AdvanceEvolvesPersistedFactionPosturesWhenPhaseChanges()
+    {
+        ConflictWorldState initialWorld =
+            World(control: 0.50, intelligence: 0.60);
+
+        ConflictCampaignState campaign =
+            ConflictCampaignDirector.Create(
+                "campaign-posture-phase",
+                initialWorld);
+
+        ConflictCampaignIdentity identity =
+            campaign.Identity! with
+            {
+                FriendlyFaction =
+                    campaign.Identity!.FriendlyFaction with
+                    {
+                        Posture =
+                            ConflictFactionOperationalPosture.AirFocused
+                    },
+                HostileFaction =
+                    campaign.Identity.HostileFaction with
+                    {
+                        Posture =
+                            ConflictFactionOperationalPosture.LogisticsFocused
+                    }
+            };
+
+        campaign = campaign with { Identity = identity };
+
+        ConflictWorldState pressuredWorld =
+            World(control: 0.64, intelligence: 0.70) with
+            {
+                UpdatedAt = Epoch.AddHours(2)
+            };
+
+        ConflictCampaignState advanced =
+            ConflictCampaignDirector.Advance(
+                campaign,
+                pressuredWorld);
+
+        Assert.Equal(
+            ConflictCampaignPhase.FriendlyPressure,
+            advanced.Phase);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Aggressive,
+            advanced.Identity!.FriendlyFaction.Posture);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Defensive,
+            advanced.Identity.HostileFaction.Posture);
+        Assert.Equal(
+            identity.OperationId,
+            advanced.Identity.OperationId);
+    }
+
+    [Fact]
     public void AdvanceBackfillsIdentityForLegacyCampaignState()
     {
         var world = World(0.50, 0.50);
