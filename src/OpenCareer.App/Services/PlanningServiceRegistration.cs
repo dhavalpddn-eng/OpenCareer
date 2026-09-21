@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Planning;
 using OpenCareer.Infrastructure.Aircraft;
 using OpenCareer.Infrastructure.Weather;
@@ -19,6 +20,9 @@ internal static class PlanningServiceRegistration
 
         services.AddSingleton<IInstalledAircraftRegistryStore>(provider =>
             new SqliteInstalledAircraftRegistryStore(
+                provider.GetRequiredService<OpenCareerDataPaths>().AircraftRegistryDatabaseFile));
+        services.AddSingleton<IAircraftAvailabilityStore>(provider =>
+            new SqliteAircraftAvailabilityStore(
                 provider.GetRequiredService<OpenCareerDataPaths>().AircraftRegistryDatabaseFile));
         services.AddSingleton<PersistentInstalledAircraftObservationSource>();
         services.AddSingleton<IAircraftRegistryObservationSource>(provider =>
@@ -74,7 +78,8 @@ internal static class PlanningServiceRegistration
             new OperationDispatchPlanningService(
                 provider.GetRequiredService<IAircraftRegistrySource>(),
                 provider.GetRequiredService<IAirportDataSource>(),
-                provider.GetRequiredService<IAirportDispatchWeatherSource>()));
+                provider.GetRequiredService<IAirportDispatchWeatherSource>(),
+                provider.GetRequiredService<IAircraftAvailabilityStore>()));
 
         services.AddSingleton<CompositeDispatchPlanningService>(provider =>
             new CompositeDispatchPlanningService(
