@@ -413,6 +413,33 @@ public sealed class FlightSessionPersistenceServiceTests
         Assert.Same(recovered, store.Checkpoint);
     }
 
+    [Fact]
+    public async Task FailedRecoveryWritePreservesCheckpointAndAllowsRetry()
+    {
+        var checkpoint = FlightSession.Start(Epoch);
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore { Checkpoint = checkpoint, FailWrites = true };
+        var service = new FlightSessionPersistenceService(coordinator, store);
+
+        await Assert.ThrowsAsync<IOException>(() => service.RecoverAsync());
+        Assert.Null(coordinator.Current);
+        Assert.Null(service.LastRecoveredSessionId);
+        Assert.Same(checkpoint, store.Checkpoint);
+        Assert.Equal(0, store.SaveCount);
+
+        store.FailWrites = false;
+        FlightSession? recovered = await service.RecoverAsync()
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.NotNull(recovered);
+        Assert.Equal(checkpoint.SessionId, recovered.SessionId);
+        Assert.Equal(FlightSessionStatus.Suspended, recovered.Status);
+        Assert.Equal(checkpoint.SessionId, service.LastRecoveredSessionId);
+        Assert.Same(recovered, coordinator.Current);
+        Assert.Same(recovered, store.Checkpoint);
+        Assert.Equal(1, store.SaveCount);
+    }
+
     private sealed class DeferredRecoveryStore : IFlightSessionCheckpointStore
     {
         public TaskCompletionSource<FlightSession?> LoadCompletion { get; set; } =
