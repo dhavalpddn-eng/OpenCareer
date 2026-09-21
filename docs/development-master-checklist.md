@@ -426,7 +426,7 @@ Exit gate: maintenance, staffing, facilities and geography affect availability/p
 
 # Chapter 10 — Military/government careers, simulated conflict and special events
 
-Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON PR #10; CORE LINUX/WINDOWS GREEN**
+Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN + OPERATION CONSEQUENCE PIPELINE ON PR #10; LINUX/WINDOWS GREEN**
 
 ## Completed design/foundation
 
@@ -460,6 +460,14 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Implement military affiliation, qualification and assigned-aircraft authorization policy.
 - [x] Ensure installed/owned military-capable aircraft alone never grants military mission access.
 - [x] Implement bounded military trust/progression result updates.
+- [x] Add explicit operation-resolution input/outcome contracts with deterministic Success / PartialSuccess / Failure / Aborted resolution.
+- [x] Add stable operation-resolution keys and duplicate-completion protection.
+- [x] Add deterministic faction influence, campaign progress, thresholded territory pressure, military reputation and conflict-resource consequences.
+- [x] Add application-layer consequence orchestration that produces one validated immutable result.
+- [x] Persist immutable operation outcomes + applied consequence state in SQLite schema v5 with restart-safe duplicate rejection.
+- [x] Add failure compensation/transaction behavior so failed consequence persistence is retryable and cannot double-apply state.
+- [x] Verify reconnect/replay safety so repeated completed-flight events do not reapply campaign, territory, reputation or resource effects.
+- [x] Add end-to-end integration coverage for success, partial success, failure, abort, invalid mission, already-resolved mission, SQLite restart and rollback/retry.
 - [x] Implement seeded fictional theater generation with repeatable ground/air units, sectors and threats.
 - [x] Implement versioned campaign checkpoints for world, military career, simulated player damage and active mission state.
 - [x] Persist conflict campaigns in the shared SQLite database with schema migration and optimistic revision protection.
@@ -472,7 +480,7 @@ Chapter status: **ACTIVE IMPLEMENTATION — PERSISTENT MULTI-MISSION CAMPAIGN ON
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
-Verification note: current verified military implementation head `018e1da5` is green. Linux PR CI passed **402/402 xUnit + 29/29 SimLab**. The latest production WinUI head `555b9dc7` built the WinUI app and live probe with **0 errors** and passed **402/402 xUnit** on Windows; exact-head `018e1da5` Windows CI also passed with its build job skipped because the final slice changed tests only.
+Verification note: current verified military implementation head `9b0331aa` is green in both Linux and Windows CI. This exact head includes the persisted operation-resolution/consequence integration matrix; prior Slice 13 replay-safety and Slice 12 atomicity heads also passed Linux and Windows CI.
 
 ## Remaining
 
@@ -497,6 +505,7 @@ Verification note: current verified military implementation head `018e1da5` is g
 - [x] Verify successor UI storage-failure/cancellation recovery, stable action feedback, stale-campaign refresh, duplicate-click protection and SQLite successor recovery at `4c63e365` in Linux/Windows CI; local MSBuild execution was blocked by workspace socket restrictions.
 - [ ] Add any later dynamic posture changes across campaign phases/outcomes.
 - [ ] Integrate military authorization with authoritative player-career persistence/onboarding.
+- [ ] Wire `PersistedOperationConsequenceCoordinator` into `MilitaryCampaignMissionService` completion/failure and replace the legacy direct `MilitaryCareerProgression.RecordOperationResult` update so reputation cannot be awarded twice.
 - [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
 - [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
 - [x] Implement the first production Military/Government WinUI screen against conflict application snapshots/services; it shows campaign/faction/posture/outcome/reserve/front/support/objective state without UI-owned game logic.
