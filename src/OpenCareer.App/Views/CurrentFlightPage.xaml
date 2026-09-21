@@ -18,7 +18,8 @@
                            Style="{StaticResource OpenCareerPageSubtitleStyle}" />
             </StackPanel>
 
-            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+            <Border x:Name="TutorialCurrentFlightSession"
+                    Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="24">
                 <StackPanel Spacing="18">
                     <StackPanel Spacing="4">

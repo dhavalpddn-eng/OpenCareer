@@ -113,7 +113,7 @@ Chapter status: **ACTIVE**
 - [x] Implement WinUI first-run tutorial overlay with Back / Next / Skip / Finish.
 - [x] Persist tutorial version/progress independently from authoritative career state.
 - [x] Add Settings action to restart the intro tutorial.
-- [ ] Add per-control spotlight/focus targets; page navigation and **Coming Later** readiness labels are implemented.
+- [x] Add per-control spotlight/focus targets for the currently implemented Dashboard and Current Flight surfaces; page navigation and **Coming Later** readiness labels remain implemented.
 - [ ] Launch and inspect the production app locally on the user's Windows machine with MSFS closed.
 - [ ] Verify NavigationView interaction locally.
 - [ ] Verify resize/adaptive behavior on practical desktop window widths.

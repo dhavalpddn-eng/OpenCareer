@@ -58,7 +58,9 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="26">
+                <Border x:Name="TutorialDashboardFlightDesk"
+                        Style="{StaticResource OpenCareerPaperCardStyle}"
+                        Padding="26">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />

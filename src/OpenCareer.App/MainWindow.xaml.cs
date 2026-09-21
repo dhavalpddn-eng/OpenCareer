@@ -286,12 +286,20 @@ public sealed partial class MainWindow : Window
         {
             NavigateToTag(e.NavigationTag, item.Content?.ToString());
         }
+
+        QueueTutorialFocusTargetUpdate();
     }
 
     private void OnTutorialPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(TutorialViewModel.IsActive))
+        {
             UpdateTutorialLayer();
+            return;
+        }
+
+        if (e.PropertyName == nameof(TutorialViewModel.CurrentFocusElementKey))
+            QueueTutorialFocusTargetUpdate();
     }
 
     private void UpdateTutorialLayer()
@@ -300,11 +308,73 @@ public sealed partial class MainWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
 
-        if (Tutorial.IsActive)
+        if (!Tutorial.IsActive)
         {
-            DispatcherQueue.TryEnqueue(() =>
-                TutorialNextButton.Focus(FocusState.Programmatic));
+            TutorialSpotlight.Visibility = Visibility.Collapsed;
+            return;
         }
+
+        QueueTutorialFocusTargetUpdate();
+
+        DispatcherQueue.TryEnqueue(() =>
+            TutorialNextButton.Focus(FocusState.Programmatic));
+    }
+
+    private void QueueTutorialFocusTargetUpdate()
+    {
+        DispatcherQueue.TryEnqueue(UpdateTutorialFocusTarget);
+    }
+
+    private void UpdateTutorialFocusTarget()
+    {
+        TutorialSpotlight.Visibility = Visibility.Collapsed;
+
+        if (!Tutorial.IsActive
+            || string.IsNullOrWhiteSpace(
+                Tutorial.CurrentFocusElementKey)
+            || ContentFrame.Content
+                is not FrameworkElement page)
+        {
+            return;
+        }
+
+        if (page.FindName(
+                Tutorial.CurrentFocusElementKey)
+            is not FrameworkElement target
+            || target.ActualWidth <= 0
+            || target.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        Windows.Foundation.Point origin =
+            target
+                .TransformToVisual(TutorialLayer)
+                .TransformPoint(
+                    new Windows.Foundation.Point(0, 0));
+
+        const double padding = 8;
+        double left = Math.Max(0, origin.X - padding);
+        double top = Math.Max(0, origin.Y - padding);
+        double width = Math.Min(
+            target.ActualWidth + (padding * 2),
+            Math.Max(
+                0,
+                TutorialLayer.ActualWidth - left));
+        double height = Math.Min(
+            target.ActualHeight + (padding * 2),
+            Math.Max(
+                0,
+                TutorialLayer.ActualHeight - top));
+
+        if (width <= 0 || height <= 0)
+            return;
+
+        Canvas.SetLeft(TutorialSpotlight, left);
+        Canvas.SetTop(TutorialSpotlight, top);
+        TutorialSpotlight.Width = width;
+        TutorialSpotlight.Height = height;
+        TutorialSpotlight.Visibility = Visibility.Visible;
     }
 
     private async void NextTutorial_Click(object sender, RoutedEventArgs e) =>

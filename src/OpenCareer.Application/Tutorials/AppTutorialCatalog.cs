@@ -6,6 +6,8 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
     public const string FirstJobId = "first-job";
     public const string FirstSimulatorConnectionId = "first-simulator-connection";
     public const string FirstSimulatorDisconnectId = "first-simulator-disconnect";
+    public const string DashboardFlightDeskFocusKey = "TutorialDashboardFlightDesk";
+    public const string CurrentFlightSessionFocusKey = "TutorialCurrentFlightSession";
     public const string BannerTowId = "mission-banner-tow";
     public const string CarrierTakeoffId = "mission-carrier-takeoff";
     public const string CarrierLandingId = "mission-carrier-landing";
@@ -37,7 +39,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "dashboard", "shell"),
             Step("dashboard", "Home / Dashboard",
                 "Home answers what matters now: simulator status, location, aircraft access, active work, important alerts and the next useful action.",
-                "dashboard", "dashboard"),
+                "dashboard", "dashboard", DashboardFlightDeskFocusKey),
             Step("career-loop", "The normal career loop",
                 "Find suitable work, validate aircraft and route feasibility, accept, prepare, fly, land, park and shut down when required, validate objectives, settle once, then write the logbook.",
                 "dashboard", "career-loop"),
@@ -49,7 +51,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "jobs", "jobs"),
             Step("current-flight", "Current Flight",
                 "Current Flight is the live workspace for checklist, flight status, mission objectives and events. Telemetry is normalized before it reaches the career logic.",
-                "current-flight", "current-flight"),
+                "current-flight", "current-flight", CurrentFlightSessionFocusKey),
             Step("world", "Map / World",
                 "The world view will combine airports, bases, routes, opportunities, events and market overlays while keeping real geographic data distinct from OpenCareer simulation.",
                 "world", "world"),
@@ -103,7 +105,8 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "MSFS connection established",
                 "OpenCareer is connected to Microsoft Flight Simulator 2024. Live aircraft telemetry can now appear on Dashboard and Current Flight, but simulator telemetry alone never creates or completes a career operation. If the simulator disconnects, OpenCareer will reconnect automatically.",
                 "dashboard",
-                "shell")
+                "shell",
+                DashboardFlightDeskFocusKey)
         ];
 
         return new TutorialDefinition(
@@ -121,7 +124,8 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
                 "Simulator connection interrupted",
                 "OpenCareer lost its MSFS connection and will retry automatically. If a FlightSession already exists, it is preserved and normal tracking resumes only after continuity is proven. Disconnecting never completes, cancels, or fabricates career progress.",
                 "current-flight",
-                "current-flight")
+                "current-flight",
+                CurrentFlightSessionFocusKey)
         ];
 
         return new TutorialDefinition(
@@ -273,6 +277,14 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
         string title,
         string body,
         string? navigationTag,
-        string featureKey) =>
-        new(id, 1, title, body, navigationTag, null, featureKey);
+        string featureKey,
+        string? focusElementKey = null) =>
+        new(
+            id,
+            1,
+            title,
+            body,
+            navigationTag,
+            focusElementKey,
+            featureKey);
 }
