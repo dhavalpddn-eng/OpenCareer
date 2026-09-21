@@ -1,3 +1,4 @@
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
@@ -96,6 +97,50 @@ public sealed class CompositeDispatchPlanningTests
             Assert.IsType<DispatchFeasibilityResult>(result.DispatchResult);
         Assert.Equal(DispatchFeasibilityStatus.Feasible, dispatch.Status);
         Assert.Empty(dispatch.Issues);
+    }
+
+    [Fact]
+    public async Task MatchingReservationFlowsThroughCompositeDispatch()
+    {
+        AircraftRegistryResolution resolution = Resolution(
+            fuelCapacityGallons: 100,
+            fuelDensityPoundsPerGallon: 6.0);
+
+        var registry = new StubAircraftRegistrySource(resolution);
+        var cruise = new CruisePerformancePlanningService(registry);
+        var route = new RouteFuelPlanningService(cruise);
+        var fuelWeight = new RouteFuelWeightPlanningService(registry, route);
+        var dispatch = new OperationDispatchPlanningService(
+            registry,
+            new CountingAirportDataSource(
+            [
+                Airport("KAAA", 5000),
+                Airport("KBBB", 5000)
+            ]),
+            weatherSource: null,
+            new StubAircraftAvailabilityStore(
+                new AircraftAvailabilityState(
+                    resolution.CanonicalAircraftId,
+                    AircraftAvailabilityStatus.Unavailable,
+                    "dispatch:alpha")));
+        var service = new CompositeDispatchPlanningService(
+            fuelWeight,
+            dispatch);
+
+        CompositeDispatchPlanningResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB",
+            CruiseRequest(),
+            RouteRequest(cruiseDistance: 100),
+            Requirements(),
+            "dispatch:alpha");
+
+        Assert.Equal(CompositeDispatchPlanningStatus.Evaluated, result.Status);
+        DispatchFeasibilityResult dispatchResult =
+            Assert.IsType<DispatchFeasibilityResult>(result.DispatchResult);
+        Assert.Equal(DispatchFeasibilityStatus.Feasible, dispatchResult.Status);
+        Assert.Empty(dispatchResult.Issues);
     }
 
     [Fact]
@@ -397,6 +442,34 @@ public sealed class CompositeDispatchPlanningTests
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(result);
         }
+    }
+
+    private sealed class StubAircraftAvailabilityStore(
+        AircraftAvailabilityState? state)
+        : IAircraftAvailabilityStore
+    {
+        public Task<AircraftAvailabilityState?> FindAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            AircraftAvailabilityState? result =
+                state is not null
+                && string.Equals(
+                    state.CanonicalAircraftId,
+                    canonicalAircraftId,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? state
+                    : null;
+
+            return Task.FromResult(result);
+        }
+
+        public Task SetAsync(
+            AircraftAvailabilityState state,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class CountingAirportDataSource
