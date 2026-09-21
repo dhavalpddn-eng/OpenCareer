@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980">
+  <rect width="1600" height="980" fill="#08131d"/>
+  <rect x="0" y="0" width="240" height="980" fill="#0d1b28"/>
+  <rect x="240" y="0" width="1360" height="76" fill="#101f2e"/>
+  <text x="30" y="48" fill="#ffffff" font-family="Segoe UI,Arial" font-size="30" font-weight="700">OpenCareer</text>
+  <text x="30" y="70" fill="#8ea6ba" font-family="Segoe UI,Arial" font-size="13">MSFS 2024 Companion</text>
+  <text x="270" y="46" fill="#ffffff" font-family="Segoe UI,Arial" font-size="26" font-weight="600">Dashboard</text>
+  <circle cx="1370" cy="38" r="7" fill="#4ea8de"/>
+  <text x="1388" y="43" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="15">Waiting for MSFS 2024</text>
+
+  <g fill="#a9bac8" font-family="Segoe UI,Arial" font-size="17">
+    <text x="32" y="130" fill="#ffffff" font-weight="600">Dashboard</text>
+    <text x="32" y="178">Dispatch</text><text x="32" y="226">Jobs</text><text x="32" y="274">Current Flight</text>
+    <text x="32" y="322">Map / World</text><text x="32" y="370">Aircraft</text><text x="32" y="418">Hangar / Bases</text>
+    <text x="32" y="466">Maintenance</text><text x="32" y="514">Company</text><text x="32" y="562">Finances</text>
+    <text x="32" y="610">Markets</text><text x="32" y="658">Military / Government</text><text x="32" y="706">Logbook</text>
+    <text x="32" y="754">Career</text><text x="32" y="802">Settings</text>
+  </g>
+
+  <rect x="270" y="105" width="830" height="190" rx="18" fill="#122231" stroke="#294156"/>
+  <text x="300" y="145" fill="#8ea6ba" font-family="Segoe UI,Arial" font-size="13">HOME BASE</text>
+  <text x="300" y="190" fill="#ffffff" font-family="Segoe UI,Arial" font-size="36" font-weight="700">KRME · Griffiss International</text>
+  <text x="300" y="220" fill="#a9bac8" font-family="Segoe UI,Arial" font-size="17">Civilian · Government · Defense support · UAS research</text>
+  <text x="300" y="258" fill="#4ea8de" font-family="Segoe UI,Arial" font-size="15">Local network strength: Developing</text>
+
+  <rect x="1120" y="105" width="450" height="190" rx="18" fill="#122231" stroke="#294156"/>
+  <text x="1150" y="145" fill="#8ea6ba" font-family="Segoe UI,Arial" font-size="13">CAREER STANDING</text>
+  <text x="1150" y="183" fill="#ffffff" font-family="Segoe UI,Arial" font-size="25" font-weight="700">Trusted Employee Pilot</text>
+  <text x="1150" y="220" fill="#a9bac8" font-family="Segoe UI,Arial" font-size="15">63.4 real flight hours</text>
+  <text x="1150" y="248" fill="#a9bac8" font-family="Segoe UI,Arial" font-size="15">Reputation 72 · Employer trust 68</text>
+  <text x="1150" y="276" fill="#d6a84d" font-family="Segoe UI,Arial" font-size="14">Level system: optional future layer</text>
+
+  <rect x="270" y="320" width="560" height="315" rx="18" fill="#122231" stroke="#294156"/>
+  <text x="300" y="360" fill="#ffffff" font-family="Segoe UI,Arial" font-size="23" font-weight="700">Current Assignment</text>
+  <text x="300" y="404" fill="#4ea8de" font-family="Segoe UI,Arial" font-size="14">EMPLOYER AIRCRAFT · NOT OWNED</text>
+  <text x="300" y="438" fill="#ffffff" font-family="Segoe UI,Arial" font-size="25" font-weight="600">Cessna 208B Grand Caravan</text>
+  <text x="300" y="480" fill="#a9bac8" font-family="Segoe UI,Arial" font-size="16">KRME → KSYR · Regional medical cargo</text>
+  <line x1="300" y1="510" x2="800" y2="510" stroke="#294156"/>
+  <text x="300" y="548" fill="#a9bac8" font-family="Segoe UI,Arial" font-size="14">PAY</text><text x="300" y="578" fill="#ffffff" font-family="Segoe UI,Arial" font-size="21">$1,180 pilot wage</text>
+  <text x="525" y="548" fill="#a9bac8" font-family="Segoe UI,Arial" font-size="14">DISTANCE</text><text x="525" y="578" fill="#ffffff" font-family="Segoe UI,Arial" font-size="21">98 NM</text>
+  <text x="690" y="548" fill="#a9bac8" font-family="Segoe UI,Arial" font-size="14">STATUS</text><text x="690" y="578" fill="#52d273" font-family="Segoe UI,Arial" font-size="21">Ready</text>
+
+  <rect x="850" y="320" width="720" height="315" rx="18" fill="#122231" stroke="#294156"/>
+  <text x="880" y="360" fill="#ffffff" font-family="Segoe UI,Arial" font-size="23" font-weight="700">Connected Region</text>
+  <rect x="880" y="390" width="660" height="210" rx="12" fill="#0b1925"/>
+  <path d="M930 535 C1080 430, 1230 565, 1450 440" fill="none" stroke="#4ea8de" stroke-width="4"/>
+  <circle cx="1015" cy="500" r="10" fill="#4ea8de"/><text x="1033" y="505" fill="#ffffff" font-family="Segoe UI,Arial" font-size="15">KRME</text>
+  <circle cx="1190" cy="505" r="8" fill="#52d273"/><text x="1208" y="510" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="14">KSYR</text>
+  <circle cx="1380" cy="470" r="8" fill="#d6a84d"/><text x="1398" y="475" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="14">KALB</text>
+
+  <rect x="270" y="660" width="410" height="270" rx="18" fill="#122231" stroke="#294156"/>
+  <text x="300" y="700" fill="#ffffff" font-family="Segoe UI,Arial" font-size="22" font-weight="700">Local Opportunities</text>
+  <text x="300" y="746" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="16">Civilian cargo</text><text x="600" y="746" fill="#52d273" font-family="Segoe UI,Arial" font-size="16">High</text>
+  <text x="300" y="786" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="16">Government support</text><text x="600" y="786" fill="#52d273" font-family="Segoe UI,Arial" font-size="16">High</text>
+  <text x="300" y="826" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="16">Military / defense</text><text x="600" y="826" fill="#d6a84d" font-family="Segoe UI,Arial" font-size="16">Strong</text>
+  <text x="300" y="866" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="16">UAS / survey</text><text x="600" y="866" fill="#4ea8de" font-family="Segoe UI,Arial" font-size="16">Specialized</text>
+
+  <rect x="700" y="660" width="410" height="270" rx="18" fill="#122231" stroke="#294156"/>
+  <text x="730" y="700" fill="#ffffff" font-family="Segoe UI,Arial" font-size="22" font-weight="700">Ownership Path</text>
+  <text x="730" y="748" fill="#8ea6ba" font-family="Segoe UI,Arial" font-size="13">FIRST USED LIGHT AIRCRAFT TARGET</text>
+  <text x="730" y="786" fill="#ffffff" font-family="Segoe UI,Arial" font-size="28" font-weight="700">50–80 flying hours</text>
+  <text x="730" y="828" fill="#a9bac8" font-family="Segoe UI,Arial" font-size="15">Savings + financing + reserve determine timing.</text>
+  <text x="730" y="862" fill="#a9bac8" font-family="Segoe UI,Arial" font-size="15">No artificial hour unlock.</text>
+  <text x="730" y="896" fill="#4ea8de" font-family="Segoe UI,Arial" font-size="15">Dealer access expands with geography.</text>
+
+  <rect x="1130" y="660" width="440" height="270" rx="18" fill="#122231" stroke="#294156"/>
+  <text x="1160" y="700" fill="#ffffff" font-family="Segoe UI,Arial" font-size="22" font-weight="700">World / Company</text>
+  <text x="1160" y="748" fill="#8ea6ba" font-family="Segoe UI,Arial" font-size="13">PERSISTENCE</text>
+  <text x="1160" y="784" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="16">Markets continue while away</text>
+  <text x="1160" y="820" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="16">Protected solo-player liabilities</text>
+  <text x="1160" y="856" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="16">Hangar / storage is local</text>
+  <text x="1160" y="892" fill="#d8e5ef" font-family="Segoe UI,Arial" font-size="16">Bankruptcy requires sustained failure</text>
+</svg>

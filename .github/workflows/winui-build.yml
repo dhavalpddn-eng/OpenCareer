@@ -1,0 +1,97 @@
+name: winui-build
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/OpenCareer.App/**"
+      - "src/OpenCareer.Application/**"
+      - "src/OpenCareer.Domain/**"
+      - "src/OpenCareer.Infrastructure/**"
+      - "src/OpenCareer.SimConnect/**"
+      - "tools/OpenCareer.LiveProbe/**"
+      - "tools/run-live-probe.ps1"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/winui-build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: winui-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.changed.outputs.code }}
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Detect Windows-relevant changes in this update
+        id: changed
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$ACTION" == "synchronize" ]]; then
+            if [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "null" ]]; then
+              RANGE="$BEFORE_SHA..$HEAD_SHA"
+            else
+              RANGE="$HEAD_SHA^..$HEAD_SHA"
+            fi
+          else
+            RANGE="$BASE_SHA..$HEAD_SHA"
+          fi
+
+          FILES="$(git diff --name-only "$RANGE")"
+          printf '%s\n' "$FILES"
+
+          if printf '%s\n' "$FILES" | grep -Eq '^(src/OpenCareer\.App/|src/OpenCareer\.Application/|src/OpenCareer\.Domain/|src/OpenCareer\.Infrastructure/|src/OpenCareer\.SimConnect/|tools/OpenCareer\.LiveProbe/|tools/run-live-probe\.ps1$|Directory\.Build\.props$|Directory\.Packages\.props$|\.github/workflows/winui-build\.yml$)'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore WinUI app
+        run: dotnet restore src/OpenCareer.App/OpenCareer.App.csproj -p:Platform=x64
+
+      - name: Build WinUI app
+        run: dotnet build src/OpenCareer.App/OpenCareer.App.csproj --configuration Release --no-restore -p:Platform=x64
+
+      - name: Build live SimConnect probe
+        run: dotnet build tools/OpenCareer.LiveProbe/OpenCareer.LiveProbe.csproj --configuration Release -p:Platform=x64
+
+      - name: Test domain and simulator connection lifecycle
+        run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release
