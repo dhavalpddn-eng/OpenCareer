@@ -77,6 +77,35 @@ public sealed class ConflictCampaignRuntimeStateTests
         Assert.Same(record, runtime.Current);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReplacementDuringRecoveryIsPreserved(bool emptyRecovery)
+    {
+        var source = new DeferredRecoverySource();
+        var runtime = new ConflictCampaignRuntimeState(source);
+        Task<ConflictCampaignStoreRecord?> pending = runtime.InitializeAsync();
+        Assert.False(pending.IsCompleted);
+
+        var replacement = Record("replacement-during-recovery");
+        runtime.Replace(replacement);
+        source.Completion.SetResult(emptyRecovery ? null : Record("old-recovery"));
+
+        Assert.Same(replacement, await pending);
+        Assert.Same(replacement, runtime.Current);
+        Assert.Same(replacement, await runtime.InitializeAsync());
+        Assert.True(runtime.IsInitialized);
+    }
+
+    private sealed class DeferredRecoverySource : IConflictCampaignRecoverySource
+    {
+        public TaskCompletionSource<ConflictCampaignStoreRecord?> Completion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<ConflictCampaignStoreRecord?> LoadMostRecentlySavedAsync(
+            CancellationToken cancellationToken = default) => Completion.Task;
+    }
+
     private static ConflictCampaignStoreRecord Record(string campaignId)
     {
         var world = ConflictWorldState.Create(

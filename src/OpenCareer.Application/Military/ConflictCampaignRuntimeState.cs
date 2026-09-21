@@ -63,11 +63,15 @@ public sealed class ConflictCampaignRuntimeState
 
             lock (_sync)
             {
-                _current = recovered;
-                _initialized = true;
-            }
+                // A replacement published while recovery was loading takes precedence.
+                if (!_initialized)
+                {
+                    _current = recovered;
+                    _initialized = true;
+                }
 
-            return recovered;
+                return _current;
+            }
         }
         finally
         {
