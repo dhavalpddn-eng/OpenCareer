@@ -23,7 +23,7 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
     public FlightStateEvidence? Current =>
         Volatile.Read(ref _currentEvidence);
 
-    public event Action<FlightStateEvidence>? EvidenceChanged;
+    public event Action<FlightStateEvidence?>? EvidenceChanged;
 
     public FlightSessionRuntime(
         FlightSessionCoordinator coordinator,
@@ -364,6 +364,18 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
         _processorWasSuspended = false;
         _lastTelemetryTimestamp = null;
         _evidenceProcessor.Reset();
+        ClearPublishedEvidence();
+    }
+
+    private void ClearPublishedEvidence()
+    {
+        FlightStateEvidence? previous =
+            Interlocked.Exchange(
+                ref _currentEvidence,
+                null);
+
+        if (previous is not null)
+            EvidenceChanged?.Invoke(null);
     }
 
     private void Publish(FlightStateEvidence evidence)

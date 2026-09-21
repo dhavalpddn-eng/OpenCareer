@@ -6,5 +6,5 @@ public interface IFlightStateEvidenceSource
 {
     FlightStateEvidence? Current { get; }
 
-    event Action<FlightStateEvidence>? EvidenceChanged;
+    event Action<FlightStateEvidence?>? EvidenceChanged;
 }
