@@ -106,6 +106,33 @@ public sealed class ConflictCampaignRuntimeStateTests
             CancellationToken cancellationToken = default) => Completion.Task;
     }
 
+    [Fact]
+    public void ReplaceRejectsOlderRevisionOfSameCampaign()
+    {
+        var runtime = new ConflictCampaignRuntimeState(new FakeRecoverySource(null));
+        var older = Record("same-campaign");
+        var newer = older with { Revision = 2 };
+        runtime.Replace(newer);
+
+        Assert.Throws<ConflictCampaignConcurrencyException>(() => runtime.Replace(older));
+        Assert.Same(newer, runtime.Current);
+    }
+
+    [Fact]
+    public void ReplaceAllowsNewerRevisionAndDifferentCampaign()
+    {
+        var runtime = new ConflictCampaignRuntimeState(new FakeRecoverySource(null));
+        var original = Record("original");
+        var newer = original with { Revision = 2 };
+        runtime.Replace(original);
+        runtime.Replace(newer);
+        Assert.Same(newer, runtime.Current);
+
+        var successor = Record("successor");
+        runtime.Replace(successor);
+        Assert.Same(successor, runtime.Current);
+    }
+
     private static ConflictCampaignStoreRecord Record(string campaignId)
     {
         var world = ConflictWorldState.Create(

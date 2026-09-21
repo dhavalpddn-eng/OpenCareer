@@ -86,6 +86,15 @@ public sealed class ConflictCampaignRuntimeState
 
         lock (_sync)
         {
+            if (_current is { } existing
+                && string.Equals(existing.Checkpoint.CampaignId,
+                    current.Checkpoint.CampaignId, StringComparison.Ordinal)
+                && current.Revision < existing.Revision)
+            {
+                throw new ConflictCampaignConcurrencyException(
+                    "An older revision cannot replace the current military campaign.");
+            }
+
             _current = current;
             _initialized = true;
         }
