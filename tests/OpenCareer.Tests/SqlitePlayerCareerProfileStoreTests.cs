@@ -36,7 +36,15 @@ public sealed class SqlitePlayerCareerProfileStoreTests
                             ImmutableHashSet.Create(
                                 PilotRating.AirplaneSingleEngineLand,
                                 PilotRating.AirplaneMultiEngineLand,
-                                PilotRating.InstrumentAirplane))
+                                PilotRating.InstrumentAirplane)),
+                    Experience =
+                        new PilotExperienceTotals(
+                            FlightCount: 23,
+                            CareerCreditTime: TimeSpan.FromHours(31.5),
+                            NightCareerCreditTime: TimeSpan.FromHours(6.25),
+                            ActualInstrumentCareerCreditTime: TimeSpan.FromHours(3.75),
+                            TakeoffCount: 28,
+                            LandingEpisodeCount: 27)
                 };
             profile.Validate();
 
@@ -230,6 +238,9 @@ public sealed class SqlitePlayerCareerProfileStoreTests
         Assert.True(
             expected.Profile.Qualifications.Ratings.SetEquals(
                 actual.Profile.Qualifications.Ratings));
+        Assert.Equal(
+            expected.Profile.Experience,
+            actual.Profile.Experience);
         Assert.Equal(
             expected.Profile.Location.HomeAirportIcao,
             actual.Profile.Location.HomeAirportIcao);

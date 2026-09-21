@@ -8,6 +8,9 @@ public sealed record PlayerCareerProfile(
     public PilotQualificationState Qualifications { get; init; } =
         PilotQualificationState.Entry;
 
+    public PilotExperienceTotals Experience { get; init; } =
+        PilotExperienceTotals.Empty;
+
     public static PlayerCareerProfile Start(
         Guid careerId,
         string homeAirportIcao,
@@ -47,5 +50,8 @@ public sealed record PlayerCareerProfile(
 
         ArgumentNullException.ThrowIfNull(Qualifications);
         Qualifications.Validate();
+
+        ArgumentNullException.ThrowIfNull(Experience);
+        Experience.Validate();
     }
 }
