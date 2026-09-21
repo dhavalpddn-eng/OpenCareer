@@ -211,6 +211,72 @@ public sealed class RemoteAirportWeatherTests
     }
 
     [Fact]
+    public async Task LowestBrokenOrOvercastLayerDefinesCeiling()
+    {
+        var handler = new StubHttpMessageHandler(
+            HttpStatusCode.OK,
+            "KAAA 201900Z 18010KT 10SM SCT008 BKN020 OVC035 25/10 A2992");
+        using var client = new HttpClient(handler);
+
+        var source = new AviationWeatherMetarSource(
+            AirportSource(AirportWithRunway(
+                new("18", 180),
+                new("36", 0))),
+            client,
+            new FixedTimeProvider(Now));
+
+        AirportDispatchWeatherObservation observation =
+            Assert.IsType<AirportDispatchWeatherObservation>(
+                await source.FindWeatherAsync("KAAA"));
+
+        Assert.Equal(2000, observation.CeilingFeetAgl);
+    }
+
+    [Fact]
+    public async Task VerticalVisibilityDefinesCeiling()
+    {
+        var handler = new StubHttpMessageHandler(
+            HttpStatusCode.OK,
+            "KAAA 201900Z 18010KT 1SM VV003 10/10 A2992");
+        using var client = new HttpClient(handler);
+
+        var source = new AviationWeatherMetarSource(
+            AirportSource(AirportWithRunway(
+                new("18", 180),
+                new("36", 0))),
+            client,
+            new FixedTimeProvider(Now));
+
+        AirportDispatchWeatherObservation observation =
+            Assert.IsType<AirportDispatchWeatherObservation>(
+                await source.FindWeatherAsync("KAAA"));
+
+        Assert.Equal(300, observation.CeilingFeetAgl);
+    }
+
+    [Fact]
+    public async Task IndeterminateCeilingHeightRemainsUnknown()
+    {
+        var handler = new StubHttpMessageHandler(
+            HttpStatusCode.OK,
+            "KAAA 201900Z 18010KT 2SM BKN/// OVC020 10/10 A2992");
+        using var client = new HttpClient(handler);
+
+        var source = new AviationWeatherMetarSource(
+            AirportSource(AirportWithRunway(
+                new("18", 180),
+                new("36", 0))),
+            client,
+            new FixedTimeProvider(Now));
+
+        AirportDispatchWeatherObservation observation =
+            Assert.IsType<AirportDispatchWeatherObservation>(
+                await source.FindWeatherAsync("KAAA"));
+
+        Assert.Null(observation.CeilingFeetAgl);
+    }
+
+    [Fact]
     public async Task StaleMetarFailsClosed()
     {
         var handler = new StubHttpMessageHandler(
