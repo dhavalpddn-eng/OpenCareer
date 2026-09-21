@@ -63,6 +63,11 @@ internal static class PlanningServiceRegistration
                 provider.GetRequiredService<IAirportDataSource>(),
                 provider.GetRequiredService<IAirportDispatchWeatherSource>()));
 
+        services.AddSingleton<CompositeDispatchPlanningService>(provider =>
+            new CompositeDispatchPlanningService(
+                provider.GetRequiredService<RouteFuelWeightPlanningService>(),
+                provider.GetRequiredService<OperationDispatchPlanningService>()));
+
         return services;
     }
 }
