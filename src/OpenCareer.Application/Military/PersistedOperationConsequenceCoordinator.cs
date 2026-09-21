@@ -17,6 +17,11 @@ public sealed class PersistedOperationConsequenceCoordinator
             ?? throw new ArgumentNullException(nameof(store));
     }
 
+    public Task<OperationConsequenceStoreRecord?> LoadAsync(
+        OperationResolutionKey key,
+        CancellationToken cancellationToken = default) =>
+        _store.LoadAsync(key, cancellationToken);
+
     public async Task<OperationConsequenceStoreRecord> ApplyAsync(
         OperationResolutionInput input,
         OperationConsequenceState current,
