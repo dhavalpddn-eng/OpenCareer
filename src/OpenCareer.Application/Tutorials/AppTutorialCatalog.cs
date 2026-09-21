@@ -133,15 +133,15 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
             Step("job-taxi-in", "Taxi after landing",
                 "Continue moving under the aircraft's own power at taxi speed after landing. OpenCareer confirms ground movement after rollout; it does not yet verify the assigned parking route.",
                 "current-flight", "current-flight"),
-            Step("job-arrive", "Finish the operation",
-                "A landing alone is normally not enough. Conventional jobs require the mission-defined arrival state, usually taxi, parking, unloading or servicing, and shutdown.",
+            Step("job-arrive", "Park and shut down",
+                "After taxi-in progress, park the aircraft and complete shutdown. OpenCareer waits for persisted parking and shutdown milestones in order; landing, taxiing, or a terminal session status alone does not satisfy this step.",
                 "current-flight", "current-flight"),
             Step("job-debrief", "Review the debrief",
                 "Review flight evidence, mission outcome, incidents, assistance flags and any settlement before the operation is written to history.",
                 "logbook", "logbook")
         ];
 
-        return new TutorialDefinition(FirstJobId, 9, steps);
+        return new TutorialDefinition(FirstJobId, 10, steps);
     }
 
     private static TutorialDefinition CreateBannerTow()
