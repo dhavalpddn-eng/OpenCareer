@@ -440,6 +440,31 @@ public sealed class FlightSessionPersistenceServiceTests
         Assert.Equal(1, store.SaveCount);
     }
 
+    [Fact]
+    public async Task FailedTerminalClearPreservesRecoveredStateAndAllowsRetry()
+    {
+        var terminal = FlightSessionEngine.Advance(
+            FlightSession.Start(Epoch),
+            new FlightSessionAdvance(
+                new FlightStateEvidence(Epoch.AddSeconds(1), Connected: true),
+                CancelRequested: true));
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore { Checkpoint = terminal, FailClears = true };
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        await service.RecoverAsync();
+
+        await Assert.ThrowsAsync<IOException>(() => service.ClearTerminalAsync());
+        Assert.Same(terminal, coordinator.Current);
+        Assert.Same(terminal, store.Checkpoint);
+        Assert.Equal(terminal.SessionId, service.LastRecoveredSessionId);
+
+        store.FailClears = false;
+        await service.ClearTerminalAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Null(coordinator.Current);
+        Assert.Null(store.Checkpoint);
+        Assert.Null(service.LastRecoveredSessionId);
+    }
+
     private sealed class DeferredRecoveryStore : IFlightSessionCheckpointStore
     {
         public TaskCompletionSource<FlightSession?> LoadCompletion { get; set; } =
@@ -469,6 +494,8 @@ public sealed class FlightSessionPersistenceServiceTests
 
         public bool FailWrites { get; set; }
 
+        public bool FailClears { get; set; }
+
         public int SaveCount { get; private set; }
 
         public Task SaveAsync(
@@ -493,6 +520,9 @@ public sealed class FlightSessionPersistenceServiceTests
         public Task ClearAsync(
             CancellationToken cancellationToken = default)
         {
+            if (FailClears)
+                throw new IOException("Synthetic checkpoint deletion failure.");
+
             Checkpoint = null;
             return Task.CompletedTask;
         }
