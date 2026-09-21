@@ -69,7 +69,13 @@ public sealed class PersistedOperationConsequenceCoordinator
         }
         catch (OperationConsequenceAlreadyExistsException)
         {
+            _orchestrator.ReleaseReservations(key);
             throw new DuplicateOperationResolutionException(key);
+        }
+        catch
+        {
+            _orchestrator.ReleaseReservations(key);
+            throw;
         }
     }
 }
