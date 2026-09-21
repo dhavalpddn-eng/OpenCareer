@@ -78,6 +78,100 @@ public sealed class SqliteConflictCampaignStoreTests
     }
 
     [Fact]
+    public async Task PhaseEvolvedFactionPosturesSurviveStoreRestart()
+    {
+        string dir = TempDir();
+
+        try
+        {
+            ConflictCampaignCheckpoint checkpoint =
+                Checkpoint("posture-recovery");
+
+            ConflictCampaignIdentity identity =
+                checkpoint.CampaignState.Identity! with
+                {
+                    FriendlyFaction =
+                        checkpoint.CampaignState.Identity!.FriendlyFaction with
+                        {
+                            Posture =
+                                ConflictFactionOperationalPosture.AirFocused
+                        },
+                    HostileFaction =
+                        checkpoint.CampaignState.Identity.HostileFaction with
+                        {
+                            Posture =
+                                ConflictFactionOperationalPosture.LogisticsFocused
+                        }
+                };
+
+            ConflictWorldState pressuredWorld =
+                checkpoint.World with
+                {
+                    UpdatedAt = Epoch.AddMinutes(5),
+                    Sectors = checkpoint.World.Sectors
+                        .Select(sector => sector with
+                        {
+                            FriendlyControl = 0.64
+                        })
+                        .ToArray()
+                };
+
+            ConflictCampaignState evolved =
+                ConflictCampaignDirector.Advance(
+                    checkpoint.CampaignState with
+                    {
+                        Identity = identity
+                    },
+                    pressuredWorld);
+
+            Assert.Equal(
+                ConflictCampaignPhase.FriendlyPressure,
+                evolved.Phase);
+            Assert.Equal(
+                ConflictFactionOperationalPosture.Aggressive,
+                evolved.Identity!.FriendlyFaction.Posture);
+            Assert.Equal(
+                ConflictFactionOperationalPosture.Defensive,
+                evolved.Identity.HostileFaction.Posture);
+
+            ConflictCampaignCheckpoint persisted =
+                checkpoint with
+                {
+                    World = pressuredWorld,
+                    CampaignState = evolved,
+                    SavedAt = Epoch.AddMinutes(6)
+                };
+
+            persisted.Validate();
+
+            await Store(dir).SaveAsync(
+                persisted,
+                expectedRevision: null);
+
+            ConflictCampaignStoreRecord? recovered =
+                await Store(dir).LoadAsync(
+                    persisted.CampaignId);
+
+            Assert.NotNull(recovered);
+            Assert.Equal(
+                evolved.Identity,
+                recovered!.Checkpoint.CampaignState.Identity);
+            Assert.Equal(
+                ConflictFactionOperationalPosture.Aggressive,
+                recovered.Checkpoint.CampaignState.Identity!
+                    .FriendlyFaction.Posture);
+            Assert.Equal(
+                ConflictFactionOperationalPosture.Defensive,
+                recovered.Checkpoint.CampaignState.Identity
+                    .HostileFaction.Posture);
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
+    [Fact]
     public async Task StaleRevisionIsRejected()
     {
         string dir = TempDir();
