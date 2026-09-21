@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
@@ -50,7 +51,54 @@ public sealed class SqliteJobBoardStateStore : IJobBoardStateStore
         {
             await using SqliteConnection connection =
                 await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+            using SqliteTransaction transaction =
+                connection.BeginTransaction();
+
+            JobBoardState? existing =
+                await ReadStateAsync(
+                        connection,
+                        transaction,
+                        state.AirportIcao,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (existing is not null)
+            {
+                if (state.UpdatedAt < existing.UpdatedAt)
+                {
+                    _logger.LogDebug(
+                        "Ignored stale job-board state for {AirportIcao} at {UpdatedAt}.",
+                        state.AirportIcao,
+                        state.UpdatedAt);
+
+                    return;
+                }
+
+                ImmutableHashSet<Guid> retired =
+                    existing.RetiredOfferIds
+                        .Union(state.RetiredOfferIds);
+
+                ImmutableArray<JobMarketOfferDraft> offers =
+                    state.Offers
+                        .Where(
+                            offer =>
+                                !retired.Contains(
+                                    offer.OfferId))
+                        .ToImmutableArray();
+
+                state =
+                    state with
+                    {
+                        Offers = offers,
+                        RetiredOfferIds = retired
+                    };
+
+                state.Validate();
+            }
+
             await using SqliteCommand command = connection.CreateCommand();
+            command.Transaction = transaction;
 
             command.CommandText =
                 """
@@ -73,7 +121,9 @@ public sealed class SqliteJobBoardStateStore : IJobBoardStateStore
                 WHERE excluded.updated_at_ms >= job_board_states.updated_at_ms;
                 """;
 
-            command.Parameters.AddWithValue("$airport_icao", state.AirportIcao);
+            command.Parameters.AddWithValue(
+                "$airport_icao",
+                state.AirportIcao);
             command.Parameters.AddWithValue(
                 "$payload_schema_version",
                 PayloadSchemaVersion);
@@ -82,11 +132,14 @@ public sealed class SqliteJobBoardStateStore : IJobBoardStateStore
                 state.UpdatedAt.ToUnixTimeMilliseconds());
             command.Parameters.AddWithValue(
                 "$payload_json",
-                JsonSerializer.Serialize(state, _jsonOptions));
+                JsonSerializer.Serialize(
+                    state,
+                    _jsonOptions));
 
-            int affected = await command
-                .ExecuteNonQueryAsync(cancellationToken)
-                .ConfigureAwait(false);
+            int affected =
+                await command
+                    .ExecuteNonQueryAsync(cancellationToken)
+                    .ConfigureAwait(false);
 
             if (affected == 0)
             {
@@ -94,12 +147,52 @@ public sealed class SqliteJobBoardStateStore : IJobBoardStateStore
                     "Ignored stale job-board state for {AirportIcao} at {UpdatedAt}.",
                     state.AirportIcao,
                     state.UpdatedAt);
+
+                return;
             }
+
+            transaction.Commit();
         }
         finally
         {
             _writeGate.Release();
         }
+    }
+
+    private async Task<JobBoardState?> ReadStateAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string airportIcao,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT payload_schema_version, payload_json
+            FROM job_board_states
+            WHERE airport_icao = $airport_icao
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue(
+            "$airport_icao",
+            airportIcao);
+
+        await using SqliteDataReader reader =
+            await command
+                .ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!await reader
+            .ReadAsync(cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return ReadState(
+            reader.GetInt32(0),
+            reader.GetString(1));
     }
 
     public async Task<JobBoardState?> GetAsync(

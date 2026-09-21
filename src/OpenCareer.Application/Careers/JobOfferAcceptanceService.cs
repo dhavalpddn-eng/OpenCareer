@@ -6,11 +6,13 @@ public sealed class JobOfferAcceptanceService
 {
     private readonly IJobContractStore _store;
     private readonly JobContractLifecycleService _lifecycle;
+    private readonly IJobBoardStateStore _boardStore;
     private readonly SemaphoreSlim _acceptanceGate = new(1, 1);
 
     public JobOfferAcceptanceService(
         IJobContractStore store,
-        JobContractLifecycleService lifecycle)
+        JobContractLifecycleService lifecycle,
+        IJobBoardStateStore boardStore)
     {
         _store =
             store
@@ -19,6 +21,10 @@ public sealed class JobOfferAcceptanceService
         _lifecycle =
             lifecycle
             ?? throw new ArgumentNullException(nameof(lifecycle));
+
+        _boardStore =
+            boardStore
+            ?? throw new ArgumentNullException(nameof(boardStore));
     }
 
     public async Task<PersistedJobContract> AcceptOfferAsync(
@@ -47,6 +53,22 @@ public sealed class JobOfferAcceptanceService
 
         try
         {
+            JobBoardState board =
+                await LoadBoardAsync(
+                    request.Offer,
+                    cancellationToken)
+                    .ConfigureAwait(false);
+
+            bool offerIsActive =
+                board.Offers.Any(
+                    offer =>
+                        offer.OfferId
+                        == expected.ContractId);
+
+            bool offerIsRetired =
+                board.RetiredOfferIds.Contains(
+                    expected.ContractId);
+
             PersistedJobContract? existing =
                 await _store
                     .ReadJobContractAsync(
@@ -56,6 +78,12 @@ public sealed class JobOfferAcceptanceService
 
             if (existing is null)
             {
+                if (!offerIsActive)
+                {
+                    throw new InvalidOperationException(
+                        "A retired or missing job-board offer cannot create a new contract.");
+                }
+
                 JobContractSaveResult createResult =
                     await _store
                         .CreateJobContractAsync(
@@ -74,12 +102,22 @@ public sealed class JobOfferAcceptanceService
                 if (createResult
                     == JobContractSaveResult.Created)
                 {
-                    return await _lifecycle
-                        .AcceptAsync(
-                            expected.ContractId,
-                            context,
+                    PersistedJobContract accepted =
+                        await _lifecycle
+                            .AcceptAsync(
+                                expected.ContractId,
+                                context,
+                                cancellationToken)
+                            .ConfigureAwait(false);
+
+                    await EnsureOfferRetiredAsync(
+                            board,
+                            request.Offer,
+                            context.Time,
                             cancellationToken)
                         .ConfigureAwait(false);
+
+                    return accepted;
                 }
 
                 existing =
@@ -105,31 +143,163 @@ public sealed class JobOfferAcceptanceService
                     "Existing job contract does not match the accepted market offer.");
             }
 
+            PersistedJobContract accepted;
+
             if (current.Contract.Status
                 == ContractStatus.Offered)
             {
-                return await _lifecycle
-                    .AcceptAsync(
-                        expected.ContractId,
-                        context,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
+                if (!offerIsActive)
+                {
+                    throw new InvalidOperationException(
+                        "A retired or missing job-board offer cannot transition an offered contract to Accepted.");
+                }
 
-            if (current.Contract.Status
+                accepted =
+                    await _lifecycle
+                        .AcceptAsync(
+                            expected.ContractId,
+                            context,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+            }
+            else if (current.Contract.Status
                     == ContractStatus.Accepted
                 && current.Contract.AcceptedAt
                     == context.Time)
             {
-                return current;
+                accepted =
+                    current;
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Market offer contract is already in state {current.Contract.Status}.");
             }
 
-            throw new InvalidOperationException(
-                $"Market offer contract is already in state {current.Contract.Status}.");
+            if (!offerIsRetired)
+            {
+                await EnsureOfferRetiredAsync(
+                        board,
+                        request.Offer,
+                        context.Time,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            return accepted;
         }
         finally
         {
             _acceptanceGate.Release();
+        }
+    }
+
+    private async Task<JobBoardState> LoadBoardAsync(
+        JobMarketOfferDraft expectedOffer,
+        CancellationToken cancellationToken)
+    {
+        JobBoardState board =
+            await _boardStore
+                .GetAsync(
+                    expectedOffer.OriginIcao,
+                    cancellationToken)
+                .ConfigureAwait(false)
+            ?? throw new InvalidOperationException(
+                "The job board containing the accepted offer was not found.");
+
+        board.Validate();
+
+        JobMarketOfferDraft? activeOffer =
+            board.Offers
+                .SingleOrDefault(
+                    offer =>
+                        offer.OfferId
+                        == expectedOffer.OfferId);
+
+        bool retired =
+            board.RetiredOfferIds.Contains(
+                expectedOffer.OfferId);
+
+        if (activeOffer is null && !retired)
+        {
+            throw new InvalidOperationException(
+                "The requested job offer is not active or retired on the authoritative job board.");
+        }
+
+        if (activeOffer is not null
+            && activeOffer != expectedOffer)
+        {
+            throw new InvalidOperationException(
+                "The authoritative job-board offer does not match the requested acceptance.");
+        }
+
+        return board;
+    }
+
+    private async Task EnsureOfferRetiredAsync(
+        JobBoardState board,
+        JobMarketOfferDraft acceptedOffer,
+        DateTimeOffset acceptedAt,
+        CancellationToken cancellationToken)
+    {
+        if (board.RetiredOfferIds.Contains(
+                acceptedOffer.OfferId))
+        {
+            if (board.Offers.Any(
+                    offer =>
+                        offer.OfferId
+                        == acceptedOffer.OfferId))
+            {
+                throw new InvalidOperationException(
+                    "A job-board offer cannot be both active and retired.");
+            }
+
+            return;
+        }
+
+        DateTimeOffset retirementTime =
+            board.UpdatedAt > acceptedAt
+                ? board.UpdatedAt
+                : acceptedAt;
+
+        JobBoardState retired =
+            board.Retire(
+                acceptedOffer.OfferId,
+                retirementTime);
+
+        if (!retired.RetiredOfferIds.Contains(
+                acceptedOffer.OfferId))
+        {
+            throw new InvalidOperationException(
+                "The accepted offer was not active on the authoritative job board.");
+        }
+
+        await _boardStore
+            .SaveAsync(
+                retired,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        JobBoardState authoritative =
+            await _boardStore
+                .GetAsync(
+                    acceptedOffer.OriginIcao,
+                    cancellationToken)
+                .ConfigureAwait(false)
+            ?? throw new InvalidOperationException(
+                "The job board disappeared after accepted-offer retirement.");
+
+        authoritative.Validate();
+
+        if (!authoritative.RetiredOfferIds.Contains(
+                acceptedOffer.OfferId)
+            || authoritative.Offers.Any(
+                offer =>
+                    offer.OfferId
+                    == acceptedOffer.OfferId))
+        {
+            throw new InvalidOperationException(
+                "Accepted job offer retirement was not durably preserved.");
         }
     }
 

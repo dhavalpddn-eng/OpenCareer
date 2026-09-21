@@ -171,6 +171,52 @@ public sealed class SqliteJobBoardStateStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task NewerSnapshotCannotReintroduceRetiredOffer()
+    {
+        JobMarketOfferDraft offer =
+            Offer(
+                Guid.Parse("35000000-0000-0000-0000-000000000001"),
+                "KRME",
+                "KALB",
+                Start,
+                Start.AddHours(6));
+
+        JobBoardState original =
+            JobBoardState.Empty("KRME", Start)
+                .Reconcile(Start, 1, [offer]);
+
+        JobBoardState retired =
+            original.Retire(
+                offer.OfferId,
+                Start.AddHours(1));
+
+        JobBoardState staleSourceButNewerTimestamp =
+            original with
+            {
+                UpdatedAt = Start.AddHours(2)
+            };
+
+        SqliteJobBoardStateStore store =
+            CreateStore();
+
+        await store.SaveAsync(retired);
+        await store.SaveAsync(
+            staleSourceButNewerTimestamp);
+
+        JobBoardState? loaded =
+            await store.GetAsync("KRME");
+
+        Assert.NotNull(loaded);
+        Assert.Empty(loaded.Offers);
+        Assert.Contains(
+            offer.OfferId,
+            loaded.RetiredOfferIds);
+        Assert.Equal(
+            Start.AddHours(2),
+            loaded.UpdatedAt);
+    }
+
+    [Fact]
     public async Task LoadAllUsesStableAirportOrdering()
     {
         SqliteJobBoardStateStore store =
