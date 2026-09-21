@@ -355,6 +355,13 @@ public sealed class FlightSessionRuntimeTests
             await runtime.RefreshAsync());
 
         Assert.Equal(2, changes.Count);
+
+        coordinator.ClearTerminalSession();
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(2, changes.Count);
     }
 
     [Fact]
