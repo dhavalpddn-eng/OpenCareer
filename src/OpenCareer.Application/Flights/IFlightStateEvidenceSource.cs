@@ -10,9 +10,10 @@ public interface IFlightStateEvidenceSource
 }
 
 public sealed class FlightStateEvidenceChangedEventArgs(
-    FlightStateEvidence evidence) : EventArgs
+    FlightStateEvidence? evidence) : EventArgs
 {
-    public FlightStateEvidence Evidence { get; } =
-        evidence
-        ?? throw new ArgumentNullException(nameof(evidence));
+    public FlightStateEvidence? Evidence { get; } = evidence;
+
+    public bool HasEvidence =>
+        Evidence is not null;
 }

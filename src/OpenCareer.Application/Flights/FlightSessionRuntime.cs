@@ -366,6 +366,7 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
         _processorWasSuspended = false;
         _lastTelemetryTimestamp = null;
         _evidenceProcessor.Reset();
+        ClearPublishedEvidence();
     }
 
     private void Publish(
@@ -377,6 +378,19 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
             this,
             new FlightStateEvidenceChangedEventArgs(
                 evidence));
+    }
+
+    private void ClearPublishedEvidence()
+    {
+        if (_currentEvidence is null)
+            return;
+
+        _currentEvidence = null;
+
+        EvidenceChanged?.Invoke(
+            this,
+            new FlightStateEvidenceChangedEventArgs(
+                evidence: null));
     }
 
     private static DateTimeOffset Max(

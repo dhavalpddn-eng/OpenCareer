@@ -85,7 +85,7 @@ public sealed class FlightSessionRuntimeTests
             runtime;
 
         var published =
-            new List<FlightStateEvidence>();
+            new List<FlightStateEvidence?>();
 
         source.EvidenceChanged +=
             (_, args) =>
@@ -95,7 +95,8 @@ public sealed class FlightSessionRuntimeTests
             await runtime.RefreshAsync());
 
         FlightStateEvidence evidence =
-            Assert.Single(published);
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
 
         Assert.Same(
             evidence,
@@ -142,7 +143,7 @@ public sealed class FlightSessionRuntimeTests
                     Epoch.AddMinutes(1)));
 
         var published =
-            new List<FlightStateEvidence>();
+            new List<FlightStateEvidence?>();
 
         runtime.EvidenceChanged +=
             (_, args) =>
@@ -163,7 +164,8 @@ public sealed class FlightSessionRuntimeTests
             runtime;
 
         FlightStateEvidence evidence =
-            Assert.Single(published);
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
 
         Assert.Same(
             evidence,
@@ -214,7 +216,7 @@ public sealed class FlightSessionRuntimeTests
                     Epoch.AddMinutes(1)));
 
         var published =
-            new List<FlightStateEvidence>();
+            new List<FlightStateEvidence?>();
 
         runtime.EvidenceChanged +=
             (_, args) =>
@@ -224,7 +226,8 @@ public sealed class FlightSessionRuntimeTests
             await runtime.RefreshAsync());
 
         FlightStateEvidence disconnectEvidence =
-            Assert.Single(published);
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
 
         Assert.False(disconnectEvidence.Connected);
         Assert.Equal(
@@ -250,7 +253,8 @@ public sealed class FlightSessionRuntimeTests
             published.Count);
 
         FlightStateEvidence reconnectEvidence =
-            published[1];
+            Assert.IsType<FlightStateEvidence>(
+                published[1]);
 
         Assert.True(reconnectEvidence.Connected);
         Assert.True(reconnectEvidence.StableTelemetry);
@@ -550,6 +554,81 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task RuntimeResetClearsPublishedEvidenceExactlyOnce()
+    {
+        FlightSession active =
+            PreflightSession();
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(active);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = active
+            };
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        Epoch.AddMinutes(1),
+                        32,
+                        -97,
+                        onGround: true)
+            };
+
+        var runtime =
+            CreateRuntime(
+                coordinator,
+                store,
+                Connected(),
+                telemetry);
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        runtime.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.NotNull(runtime.Current);
+        Assert.Single(published);
+
+        coordinator.Advance(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddMinutes(2),
+                    Connected: true),
+                CancelRequested: true));
+
+        Assert.True(
+            coordinator.Current!.IsTerminal);
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Null(runtime.Current);
+        Assert.Equal(
+            2,
+            published.Count);
+        Assert.Null(published[1]);
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            2,
+            published.Count);
+    }
+
+    [Fact]
     public async Task DuplicateTelemetryTimestampDoesNotAdvanceTwice()
     {
         FlightSession active =
@@ -585,7 +664,7 @@ public sealed class FlightSessionRuntimeTests
                 telemetry);
 
         var published =
-            new List<FlightStateEvidence>();
+            new List<FlightStateEvidence?>();
 
         runtime.EvidenceChanged +=
             (_, args) =>
@@ -598,7 +677,8 @@ public sealed class FlightSessionRuntimeTests
             coordinator.Current!.UpdatedAt;
 
         FlightStateEvidence firstEvidence =
-            Assert.Single(published);
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
 
         Assert.Same(
             firstEvidence,
