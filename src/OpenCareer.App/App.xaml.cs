@@ -63,6 +63,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<IJobContractStore, SqliteJobContractStore>();
         services.AddSingleton<IJobContractRecoverySource, SqliteJobContractRecoverySource>();
         services.AddSingleton<JobContractRecoveryService>();
+        services.AddSingleton<JobContractRuntimeState>();
         services.AddSingleton<JobContractLifecycleService>();
         services.AddSingleton<JobOfferAcceptanceService>();
         services.AddSingleton<IEconomyLedgerStore, SqliteEconomyLedgerStore>();
@@ -135,8 +136,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         {
             IReadOnlyList<PersistedJobContract> recoveredContracts =
                 await _services
-                    .GetRequiredService<JobContractRecoveryService>()
-                    .RecoverAsync();
+                    .GetRequiredService<JobContractRuntimeState>()
+                    .InitializeAsync();
 
             if (recoveredContracts.Count > 0)
             {
