@@ -100,25 +100,22 @@ public sealed class FirstJobOperationCompleteTutorialTests
     }
 
     [Fact]
-    public void FirstJobDefinitionAddsOperationCompleteBeforeDebrief()
+    public void FirstJobDefinitionEndsAtOperationComplete()
     {
         TutorialDefinition firstJob =
             Assert.IsType<TutorialDefinition>(
                 new AppTutorialCatalog().Get(
                     AppTutorialCatalog.FirstJobId));
 
-        Assert.Equal(11, firstJob.Version);
+        Assert.Equal(12, firstJob.Version);
 
         string[] ids =
             firstJob.Steps
                 .Select(static step => step.Id)
                 .ToArray();
 
-        int completeIndex = Array.IndexOf(ids, "job-complete");
-        int debriefIndex = Array.IndexOf(ids, "job-debrief");
-
-        Assert.True(completeIndex >= 0);
-        Assert.Equal(completeIndex + 1, debriefIndex);
+        Assert.Equal("job-complete", ids[^1]);
+        Assert.DoesNotContain("job-debrief", ids);
     }
 
     private static FlightSession Session(
