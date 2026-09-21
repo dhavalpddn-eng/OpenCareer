@@ -104,8 +104,9 @@ public sealed class FirstJobArrivalTutorialTests
     public void FirstJobDefinitionAdvancesForArrivalEvidenceSlice()
     {
         TutorialDefinition firstJob =
-            new AppTutorialCatalog().GetRequired(
-                AppTutorialCatalog.FirstJobId);
+            Assert.IsType<TutorialDefinition>(
+                new AppTutorialCatalog().Get(
+                    AppTutorialCatalog.FirstJobId));
 
         Assert.Equal(10, firstJob.Version);
 
