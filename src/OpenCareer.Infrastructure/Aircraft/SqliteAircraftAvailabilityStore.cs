@@ -4,7 +4,7 @@ using OpenCareer.Domain.Aircraft;
 
 namespace OpenCareer.Infrastructure.Aircraft;
 
-public sealed class SqliteAircraftAvailabilityStore : IAircraftAvailabilityStore
+public sealed class SqliteAircraftAvailabilityStore : IAircraftAvailabilityStore, IAircraftReservationStore
 {
     private readonly string _connectionString;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
