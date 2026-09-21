@@ -4,7 +4,7 @@ namespace OpenCareer.Infrastructure.Persistence;
 
 internal static class OpenCareerDatabaseMigrator
 {
-    public const int CurrentSchemaVersion = 8;
+    public const int CurrentSchemaVersion = 9;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -305,6 +305,84 @@ internal static class OpenCareerDatabaseMigrator
 
             transaction.Commit();
             version = 8;
+        }
+
+        if (version < 9)
+        {
+            using SqliteTransaction transaction = connection.BeginTransaction();
+
+            await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE TABLE IF NOT EXISTS economy_ledger_transactions (
+                    transaction_id TEXT NOT NULL PRIMARY KEY,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    occurred_at_utc_ticks INTEGER NOT NULL,
+                    description TEXT NOT NULL,
+                    reference_type TEXT NOT NULL,
+                    reference_id TEXT NOT NULL
+                );
+                """,
+                cancellationToken).ConfigureAwait(false);
+
+            await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE TABLE IF NOT EXISTS economy_ledger_postings (
+                    transaction_id TEXT NOT NULL,
+                    posting_index INTEGER NOT NULL,
+                    account_code INTEGER NOT NULL,
+                    debit_cents INTEGER NOT NULL,
+                    credit_cents INTEGER NOT NULL,
+                    memo TEXT NOT NULL,
+                    PRIMARY KEY (transaction_id, posting_index),
+                    FOREIGN KEY (transaction_id)
+                        REFERENCES economy_ledger_transactions(transaction_id)
+                        ON DELETE CASCADE,
+                    CHECK (debit_cents >= 0),
+                    CHECK (credit_cents >= 0),
+                    CHECK (
+                        (debit_cents > 0 AND credit_cents = 0)
+                        OR (credit_cents > 0 AND debit_cents = 0)
+                    )
+                );
+                """,
+                cancellationToken).ConfigureAwait(false);
+
+            await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE INDEX IF NOT EXISTS ix_economy_ledger_transactions_occurred
+                    ON economy_ledger_transactions (
+                        occurred_at_utc_ticks DESC,
+                        transaction_id ASC
+                    );
+                """,
+                cancellationToken).ConfigureAwait(false);
+
+            await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE INDEX IF NOT EXISTS ix_economy_ledger_postings_account
+                    ON economy_ledger_postings (
+                        account_code,
+                        transaction_id
+                    );
+                """,
+                cancellationToken).ConfigureAwait(false);
+
+            await ExecuteAsync(
+                connection,
+                transaction,
+                "PRAGMA user_version = 9;",
+                cancellationToken).ConfigureAwait(false);
+
+            transaction.Commit();
+            version = 9;
         }
 
         if (version != CurrentSchemaVersion)
