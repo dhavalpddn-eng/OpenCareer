@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Current verified military implementation head `9b0331aa` is green in both Linux and Windows CI. The operation-resolution/consequence pipeline through SQLite persistence, restart replay protection and failure rollback is implemented and integration-tested; production mission-lifecycle wiring remains the next bounded step.
+Status: campaign-core completion boundary reached on `feature/military-conflict-system`, draft PR #10. Verified implementation head `16cda14981bc6284e4f33833e88aa8289ff46149` is green in exact-head Linux PR CI and exact-head Windows CI. Production mission completion/failure is wired through persisted operation consequences, deterministic faction posture evolves with campaign phase changes, and bounded long-run deterministic campaign evolution is stress-covered.
 
 ## Boundary
 
@@ -50,7 +50,7 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - validated backup-archive restore staging plus restart-time database replacement before SQLite-backed application state is recovered; invalid/corrupt archives are rejected before the live database changes and a rollback snapshot protects replacement failures,
 - persistent `ConflictCampaignState` with campaign phase, friendly momentum and deterministic strategic objectives for control, intelligence, readiness and threat reduction,
 - deterministic fictional campaign identity with a persistent operation name plus distinct friendly/hostile faction names and short codes; legacy checkpoints without identity are accepted and backfilled deterministically on advance,
-- deterministic faction operational posture persisted with faction identity: Defensive, Aggressive, LogisticsFocused or AirFocused,
+- deterministic faction operational posture persisted with faction identity: Defensive, Aggressive, LogisticsFocused or AirFocused, with deterministic posture evolution across campaign phase transitions while terminal/outcome transitions preserve valid persisted posture semantics,
 - faction posture subtly changes campaign behavior without introducing nondeterministic AI authority: aggressive factions request battlefield support earlier and favor maneuver replacements, logistics-focused factions request resupply earlier and prioritize sustainment roles, air-focused factions widen intercept/escort coverage and favor air-defense support, while defensive posture preserves the baseline behavior,
 - both friendly and hostile posture influence replacement priority; the friendly faction posture also shapes the player-facing support-request mix and urgency,
 - bounded long-term campaign cycles that recover nearby ground units through same-side logistics support, recover simulated air-unit readiness from theater logistics, consolidate sector control from persistent campaign momentum, and resynchronize linked threat severity after recovery,
@@ -66,7 +66,7 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - default successor theaters are abstract fictional operation regions and are supplied through an `IConflictTheaterCatalog` boundary so future world/career sources can replace the built-in catalog without changing transition rules,
 - `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
 - `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
-- `MilitaryCampaignMissionService` that persists acceptance, mission-stage progress, failure/completion lifecycle and simulated threat outcomes without allowing duplicate replay after recovery,
+- `MilitaryCampaignMissionService` that persists acceptance, mission-stage progress, failure/completion lifecycle and simulated threat outcomes without allowing duplicate replay after recovery, and routes terminal completion/failure through `PersistedOperationConsequenceCoordinator` instead of the legacy direct trust/reputation update,
 - deterministic operation-resolution contracts: `OperationResolutionInput`, `OperationOutcome`, terminal Success / PartialSuccess / Failure / Aborted status, and pure `OperationResolver` rules,
 - stable `OperationResolutionKey` identity plus in-process idempotency protection so repeated completion events cannot resolve the same operation twice,
 - isolated deterministic operation consequences for faction influence, bounded campaign progress, thresholded territory pressure, military trust/reputation and conflict supplies/readiness,
@@ -83,12 +83,12 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - operational-map markers expose text labels/tooltips and automation names so color is not the sole carrier of meaning,
 - deterministic read-only communications feed derived only from the current conflict snapshot: command status, active-flight status, support-request dispatch messages and threat advisories are prioritized and ordered without AI authority or invented historical events,
 - communications are capped to bounded current-state messages, use stable communication IDs and UTC support-window text, and are projected through `MilitaryGovernmentViewModel` into the Military/Government page,
-- shared SQLite schema v3 reconciliation after synchronizing FlightSession and military persistence: databases previously stamped v2 by either parallel branch idempotently gain the missing flight-session or conflict-campaign table before advancing to v3,
+- shared SQLite schema v5 reconciliation after synchronizing FlightSession and military persistence: legacy parallel-v2 shapes are repaired idempotently, schema v4 adds the military career profile, and schema v5 adds immutable `military_operation_consequences` persistence,
 - deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation, SQLite campaign recovery, strategic evolution, dispatch authorization and the operations snapshot.
 
-## Operation resolution / consequence handoff
+## Campaign-core completion handoff
 
-Verified implementation head: `9b0331aa` (Linux and Windows CI green).
+Verified implementation head: `16cda14981bc6284e4f33833e88aa8289ff46149` (exact-head Linux PR CI green; exact-head Windows CI green).
 
 Current flow:
 
@@ -127,7 +127,9 @@ Key files added/changed by this sequence:
 - `src/OpenCareer.Infrastructure/Persistence/OpenCareerDatabaseMigrator.cs`
 - focused and integration tests under `tests/OpenCareer.Tests/*Operation*Consequence*` plus migration coverage.
 
-**Exact next military slice:** wire `PersistedOperationConsequenceCoordinator` into the authoritative `MilitaryCampaignMissionService` completion/failure path. Replace the existing direct `MilitaryCareerProgression.RecordOperationResult` call rather than stacking the new reputation consequence on top of it, map the accepted mission/request into `OperationResolutionInput` plus authoritative consequence state, and preserve the rule that battle logic does not directly settle money/XP/jobs.
+Production `MilitaryCampaignMissionService` completion/failure now loads the latest persisted campaign/sector consequence state, resolves exactly once through `PersistedOperationConsequenceCoordinator`, applies the resulting territory/career consequence state, and advances the campaign without the legacy duplicate trust/reputation path. Phase-driven faction-posture evolution and legacy-identity evolution are covered across contested and secured transitions. The 96-step deterministic stress test validates replay equality plus bounded reserves, sector control, unit/air-unit state, threats, support requests, campaign identity and posture state.
+
+**Campaign-core boundary:** complete. Do not start another standalone campaign mechanics slice. Remaining military work is dependency-driven: authoritative career onboarding/profile integration (MBL-13), aircraft assignment issuance/revocation through registry/dispatch (MBL-08/09), authoritative mission/job/economy settlement (MBL-10/14), and representative live gameplay verification after flight-evidence/session-recovery gates (MBL-06/07 plus local MSFS runtime). Local visual/accessibility acceptance and broader balance/tuning remain product-validation work, not unfinished campaign-core mechanics.
 
 ## Deliberately abstract
 
