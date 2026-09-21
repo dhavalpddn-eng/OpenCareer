@@ -1,3 +1,4 @@
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
@@ -239,6 +240,54 @@ public class AircraftRunwayFeasibilityTests
     }
 
     [Fact]
+    public async Task PersistedUnavailableAircraftIsInfeasible()
+    {
+        var service = new DispatchFeasibilityService(
+            new StubAircraftRegistrySource(Aircraft()),
+            new StubAirportDataSource(
+                new Dictionary<string, AirportRecord>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["KAAA"] = Airport("KAAA", Runway("01")),
+                    ["KBBB"] = Airport("KBBB", Runway("19"))
+                }),
+            new StubAircraftAvailabilityStore(
+                new AircraftAvailabilityState(
+                    "fixture-aircraft",
+                    AircraftAvailabilityStatus.Unavailable)));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "provider-alias",
+            "KAAA",
+            "KBBB");
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(result.Issues);
+        Assert.Equal(DispatchFeasibilityReason.AircraftUnavailable, issue.Reason);
+    }
+
+    [Fact]
+    public async Task MissingAvailabilityStateDoesNotBlockInstalledAircraft()
+    {
+        var service = new DispatchFeasibilityService(
+            new StubAircraftRegistrySource(Aircraft()),
+            new StubAirportDataSource(
+                new Dictionary<string, AirportRecord>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["KAAA"] = Airport("KAAA", Runway("01")),
+                    ["KBBB"] = Airport("KBBB", Runway("19"))
+                }),
+            new StubAircraftAvailabilityStore(null));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB");
+
+        Assert.Equal(DispatchFeasibilityStatus.Feasible, result.Status);
+        Assert.Empty(result.Issues);
+    }
+
+    [Fact]
     public async Task UnknownAircraftAndAirportSourcesFailClosed()
     {
         var service = new DispatchFeasibilityService(
@@ -299,6 +348,34 @@ public class AircraftRunwayFeasibilityTests
                 aircraft.Capabilities.RetractableGear,
                 aircraft.RunwayPerformance)
         ]);
+
+    private sealed class StubAircraftAvailabilityStore(
+        AircraftAvailabilityState? state)
+        : IAircraftAvailabilityStore
+    {
+        public Task<AircraftAvailabilityState?> FindAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            AircraftAvailabilityState? result =
+                state is not null
+                && string.Equals(
+                    state.CanonicalAircraftId,
+                    canonicalAircraftId,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? state
+                    : null;
+
+            return Task.FromResult(result);
+        }
+
+        public Task SetAsync(
+            AircraftAvailabilityState state,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
 
     private sealed class StubAirportDataSource(
         IReadOnlyDictionary<string, AirportRecord> airports)
