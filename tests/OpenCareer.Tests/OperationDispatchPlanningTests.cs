@@ -1,3 +1,4 @@
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
@@ -205,6 +206,35 @@ public sealed class OperationDispatchPlanningTests
     }
 
     [Fact]
+    public async Task PersistedUnavailableAircraftIsInfeasibleBeforePhysicalEvaluation()
+    {
+        AircraftRegistryResolution aircraft = Resolution();
+        var service = new OperationDispatchPlanningService(
+            new StubAircraftRegistrySource(aircraft),
+            new StubAirportDataSource(
+                new Dictionary<string, AirportRecord>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["KAAA"] = Airport("KAAA", Runway("18")),
+                    ["KBBB"] = Airport("KBBB", Runway("36"))
+                }),
+            weatherSource: null,
+            new StubAircraftAvailabilityStore(
+                new AircraftAvailabilityState(
+                    aircraft.CanonicalAircraftId,
+                    AircraftAvailabilityStatus.Unavailable)));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "provider-alias",
+            "KAAA",
+            "KBBB",
+            new(1000, 500));
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(result.Issues);
+        Assert.Equal(DispatchFeasibilityReason.AircraftUnavailable, issue.Reason);
+    }
+
+    [Fact]
     public async Task MissingSourceRecordsFailClosedBeforePhysicalEvaluation()
     {
         var service = new OperationDispatchPlanningService(
@@ -315,6 +345,34 @@ public sealed class OperationDispatchPlanningTests
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(result);
         }
+    }
+
+    private sealed class StubAircraftAvailabilityStore(
+        AircraftAvailabilityState? state)
+        : IAircraftAvailabilityStore
+    {
+        public Task<AircraftAvailabilityState?> FindAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            AircraftAvailabilityState? result =
+                state is not null
+                && string.Equals(
+                    state.CanonicalAircraftId,
+                    canonicalAircraftId,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? state
+                    : null;
+
+            return Task.FromResult(result);
+        }
+
+        public Task SetAsync(
+            AircraftAvailabilityState state,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class StubAirportDataSource(
