@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="960" viewBox="0 0 1440 960" role="img" aria-labelledby="title desc"><title id="title">OpenCareer dashboard concept</title><desc id="desc">Planned Windows companion dashboard with F-22 military assignment at Griffiss, career finances, civilian ownership options and local work. All data illustrative.</desc><defs><linearGradient id="panel" x2="1" y2="1"><stop stop-color="#203749"/><stop offset="1" stop-color="#132231"/></linearGradient></defs><style>text{font-family:Segoe UI,Arial,sans-serif;fill:#e6edf3}.muted{fill:#91a6b8}.teal{fill:#63dcc9}.small{font-size:13px}.label{font-size:15px}.value{font-size:30px;font-weight:600}.head{font-size:22px;font-weight:600}</style><rect width="1440" height="960" fill="#0c141f"/><rect width="222" height="960" fill="#111d2a"/>
+<text x="26" y="47" class="head">OpenCareer</text>
+<text x="27" y="71" class="small muted">FLIGHT · CAREER · WORLD</text>
+<rect x="14" y="103" width="194" height="42" rx="8" fill="#203d47"/>
+<text x="30" y="131" class="label teal">Dashboard</text>
+<text x="30" y="182" class="label muted">Dispatch</text>
+<text x="30" y="233" class="label muted">Current Flight</text>
+<text x="30" y="284" class="label muted">Fleet</text>
+<text x="30" y="335" class="label muted">Dealers</text>
+<text x="30" y="386" class="label muted">Finance</text>
+<text x="30" y="437" class="label muted">Markets</text>
+<text x="30" y="488" class="label muted">Military</text>
+<text x="30" y="539" class="label muted">Logbook</text>
+<text x="30" y="878" class="label muted">Settings</text>
+<text x="30" y="916" class="small muted">WINDOWS APP CONCEPT</text>
+<text x="256" y="54" class="value">Operations overview</text>
+<text x="257" y="83" class="label muted">Griffiss International · KRME</text>
+<rect x="1160" y="29" width="244" height="34" rx="7" fill="#243744"/>
+<text x="1176" y="51" class="small teal">CONCEPT / SAMPLE DATA</text>
+<text x="1133" y="84" class="small muted">Simulator connected · illustrative</text>
+<rect x="256" y="113" width="269" height="121" rx="12" fill="#172534"/>
+<text x="275" y="140" class="small muted">AVAILABLE CASH</text>
+<text x="275" y="178" class="value">$64,000</text>
+<text x="275" y="210" class="small muted">Reserve protected</text>
+<rect x="549" y="113" width="269" height="121" rx="12" fill="#172534"/>
+<text x="568" y="140" class="small muted">CAREER STANDING</text>
+<text x="568" y="178" class="value">742</text>
+<text x="568" y="210" class="small muted">Illustrative game score</text>
+<rect x="842" y="113" width="269" height="121" rx="12" fill="#172534"/>
+<text x="861" y="140" class="small muted">REAL FLIGHT HOURS</text>
+<text x="861" y="178" class="value">64.0</text>
+<text x="861" y="210" class="small muted">Experience, not an unlock</text>
+<rect x="1135" y="113" width="269" height="121" rx="12" fill="#172534"/>
+<text x="1154" y="140" class="small muted">HOME AIRPORT</text>
+<text x="1154" y="178" class="value">KRME</text>
+<text x="1154" y="210" class="small muted">Civilian + defense support</text>
+<rect x="256" y="257" width="739" height="389" rx="12" fill="#172534"/>
+<text x="278" y="291" class="head">Current assignment</text>
+<rect x="782" y="272" width="191" height="28" rx="6" fill="#243f47"/>
+<text x="796" y="291" class="small teal">MILITARY ASSIGNMENT</text>
+<rect x="277" y="314" width="697" height="188" rx="8" fill="url(#panel)"/>
+<g transform="translate(635 403) rotate(-11)"><path d="M0 -80 L18 -16 L102 30 L95 43 L29 31 L37 77 L17 69 L0 41 L-17 69 L-37 77 L-29 31 L-95 43 L-102 30 L-18 -16 Z" fill="#819aa9" stroke="#b9cbd4" stroke-width="2"/><path d="M0 -67 L9 -15 L0 21 L-9 -15 Z" fill="#243847"/><path d="M-18 3 L-12 51 M18 3 L12 51" stroke="#c9d9df" stroke-width="3"/></g>
+<text x="293" y="484" class="small muted">F-22 · schematic illustration</text>
+<text x="279" y="539" class="head">F-22 Raptor</text>
+<text x="279" y="568" class="label muted">Training sortie · estimated 1h 30m</text>
+<text x="279" y="597" class="small muted">Assigned aircraft · not a civilian sale listing</text>
+<rect x="794" y="540" width="178" height="43" rx="8" fill="#63dcc9"/>
+<text x="817" y="567" style="fill:#10202b;font-size:15px;font-weight:600">Review briefing</text>
+<rect x="1016" y="257" width="388" height="389" rx="12" fill="#172534"/>
+<text x="1037" y="291" class="head">Home airport</text>
+<rect x="1037" y="314" width="345" height="188" rx="8" fill="#13212c"/>
+<g stroke="#263b49" stroke-width="1"><path d="M1038 354H1382 M1038 394H1382 M1038 434H1382 M1038 474H1382 M1090 315V502 M1150 315V502 M1210 315V502 M1270 315V502 M1330 315V502"/></g><path d="M1107 472L1302 341" stroke="#526b7c" stroke-width="22"/><path d="M1107 472L1302 341" stroke="#b5c9d5" stroke-dasharray="10 9" stroke-width="2"/><circle cx="1185" cy="374" r="6" fill="#63dcc9"/>
+<text x="1049" y="487" class="small muted">SCHEMATIC · NOT FOR NAVIGATION</text>
+<text x="1037" y="538" class="label">KRME / Griffiss International</text>
+<text x="1037" y="568" class="small muted">Civilian · Government · Military</text>
+<text x="1037" y="598" class="small teal">Connections earned through travel</text>
+<rect x="256" y="669" width="557" height="204" rx="12" fill="#172534"/>
+<text x="278" y="704" class="head">Ownership options</text>
+<text x="279" y="740" class="label">Used light aircraft</text>
+<text x="641" y="740" class="small teal">Buy outright</text>
+<text x="279" y="766" class="small muted">Keep an operating reserve after purchase</text>
+<text x="279" y="808" class="label">Larger aircraft</text>
+<text x="608" y="808" class="small teal">Compare financing</text>
+<text x="279" y="837" class="small muted">Career credit + income + collateral checks</text>
+<rect x="834" y="669" width="570" height="204" rx="12" fill="#172534"/>
+<text x="856" y="704" class="head">Local opportunities</text>
+<text x="857" y="740" class="label">Cargo</text>
+<text x="1162" y="740" class="small muted">Civilian employment</text>
+<text x="857" y="784" class="label">Government courier</text>
+<text x="1162" y="784" class="small muted">Authorization required</text>
+<text x="857" y="828" class="label">Military training</text>
+<text x="1162" y="828" class="small muted">Assigned aircraft</text>
+<text x="257" y="914" class="small teal">World continues · Absence protection enabled</text>
+<text x="257" y="938" class="small muted">Design concept only. Features, connection status, figures and jobs shown are illustrative; application UI is not implemented.</text>
+</svg>
