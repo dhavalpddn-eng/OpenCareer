@@ -178,6 +178,74 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task SuspendedDisconnectedSessionDoesNotRepublishDisconnectEvidence()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore();
+
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        await persistence.StartAsync(Epoch);
+
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                persistence,
+                Processor(),
+                new FlightContinuityPolicy(),
+                new TestConnection
+                {
+                    Current =
+                        new SimulatorConnectionSnapshot(
+                            SimulatorConnectionState.Reconnecting)
+                },
+                new TestTelemetrySource(),
+                new FixedTimeProvider(
+                    Epoch.AddMinutes(1)));
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        runtime.EvidenceChanged +=
+            (_, args) =>
+                published.Add(args.Evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightStateEvidence disconnectEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
+
+        DateTimeOffset suspendedAt =
+            coordinator.Current!.UpdatedAt;
+
+        Assert.Equal(
+            FlightSessionStatus.Suspended,
+            coordinator.Current.Status);
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Single(published);
+        Assert.Same(
+            disconnectEvidence,
+            runtime.Current);
+        Assert.Equal(
+            suspendedAt,
+            coordinator.Current.UpdatedAt);
+        Assert.Equal(
+            suspendedAt,
+            store.Checkpoint!.UpdatedAt);
+    }
+
+    [Fact]
     public async Task ReconnectPublishesFreshConnectedEvidenceAfterDisconnect()
     {
         var coordinator =
