@@ -239,8 +239,7 @@ public sealed class AviationWeatherMetarSource(
 
         return raw
             .Split(
-                ['', '
-'],
+                new[] { '\r', '\n' },
                 StringSplitOptions.TrimEntries
                 | StringSplitOptions.RemoveEmptyEntries)
             .Select(line => TryParseMetar(line, requestedIcao, now))
