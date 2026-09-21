@@ -58,6 +58,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<IWorldSimulationStateStore, SqliteWorldSimulationStateStore>();
         services.AddSingleton<WorldSimulationPersistenceService>();
         services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
+        services.AddSingleton<JobBoardGenerationService>();
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
