@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenCareer.Domain.Military;
 using OpenCareer.Infrastructure.Flights;
 using OpenCareer.Infrastructure.Persistence;
 
