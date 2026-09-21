@@ -1,3 +1,4 @@
+using OpenCareer.Application.Fleet;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Planning;
@@ -26,7 +27,8 @@ public interface IAirportDataSource
 /// </summary>
 public sealed class DispatchFeasibilityService(
     IAircraftRegistrySource aircraftRegistry,
-    IAirportDataSource airportData)
+    IAirportDataSource airportData,
+    IAircraftAvailabilityStore? aircraftAvailability = null)
 {
     public async Task<DispatchFeasibilityResult> EvaluateAsync(
         string aircraftId,
@@ -50,6 +52,22 @@ public sealed class DispatchFeasibilityService(
                 null,
                 null,
                 [new(DispatchFeasibilityReason.AircraftNotInstalled)]);
+        }
+
+        if (resolution is not null && aircraftAvailability is not null)
+        {
+            AircraftAvailabilityState? availability = await aircraftAvailability
+                .FindAsync(resolution.CanonicalAircraftId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (availability?.Status == AircraftAvailabilityStatus.Unavailable)
+            {
+                return DispatchFeasibilityResult.Create(
+                    DispatchFeasibilityStatus.Infeasible,
+                    null,
+                    null,
+                    [new(DispatchFeasibilityReason.AircraftUnavailable)]);
+            }
         }
 
         AirportRecord? origin = await airportData
