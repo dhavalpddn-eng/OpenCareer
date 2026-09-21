@@ -200,11 +200,9 @@ public sealed class FlightChecklistProgressionTests
     {
         var checklist =
             new FlightChecklistProgression(
-                new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>
-                {
-                    [FlightChecklistStepId.EngineStarted] =
-                        FlightChecklistVerificationCapability.ManualOnly
-                });
+                ProfileWithCapability(
+                    FlightChecklistStepId.EngineStarted,
+                    FlightChecklistVerificationCapability.ManualOnly));
 
         _ =
             checklist.Process(
@@ -255,11 +253,9 @@ public sealed class FlightChecklistProgressionTests
     {
         var checklist =
             new FlightChecklistProgression(
-                new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>
-                {
-                    [FlightChecklistStepId.EngineStarted] =
-                        FlightChecklistVerificationCapability.Unavailable
-                });
+                ProfileWithCapability(
+                    FlightChecklistStepId.EngineStarted,
+                    FlightChecklistVerificationCapability.Unavailable));
 
         _ =
             checklist.Process(
@@ -310,17 +306,98 @@ public sealed class FlightChecklistProgressionTests
     {
         var checklist =
             new FlightChecklistProgression(
-                new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>
-                {
-                    [FlightChecklistStepId.EngineStarted] =
-                        FlightChecklistVerificationCapability.ManualOnly
-                });
+                ProfileWithCapability(
+                    FlightChecklistStepId.EngineStarted,
+                    FlightChecklistVerificationCapability.ManualOnly));
 
         Assert.Throws<InvalidOperationException>(
             () =>
                 checklist.ConfirmManual(
                     FlightChecklistStepId.EngineStarted,
                     Epoch));
+    }
+
+    [Fact]
+    public void CustomProfileContainsOnlyItsRequiredSteps()
+    {
+        var profile =
+            new FlightChecklistProfile(
+                "ground-start-minimal",
+                [
+                    new(
+                        FlightChecklistStepId.AircraftReady,
+                        FlightChecklistVerificationCapability.AutoEvidence),
+                    new(
+                        FlightChecklistStepId.EngineStarted,
+                        FlightChecklistVerificationCapability.ManualOnly)
+                ]);
+
+        var checklist =
+            new FlightChecklistProgression(profile);
+
+        FlightChecklistSnapshot ready =
+            checklist.Process(
+                Evidence(
+                    0,
+                    stableTelemetry: true,
+                    validLoadedAircraft: true,
+                    engineStartObserved: true));
+
+        Assert.Equal(
+            FlightChecklistPhase.EngineStart,
+            ready.CurrentPhase);
+        Assert.Equal(2, ready.Steps.Count);
+        Assert.DoesNotContain(
+            ready.Steps,
+            static step =>
+                step.Id == FlightChecklistStepId.TaxiMovementEstablished);
+
+        FlightChecklistSnapshot complete =
+            checklist.ConfirmManual(
+                FlightChecklistStepId.EngineStarted,
+                Epoch.AddSeconds(1));
+
+        Assert.True(complete.IsComplete);
+    }
+
+    [Fact]
+    public void ProfileStepsMustFollowCanonicalFlightOrder()
+    {
+        var profile =
+            new FlightChecklistProfile(
+                "out-of-order",
+                [
+                    new(
+                        FlightChecklistStepId.EngineStarted,
+                        FlightChecklistVerificationCapability.AutoEvidence),
+                    new(
+                        FlightChecklistStepId.AircraftReady,
+                        FlightChecklistVerificationCapability.AutoEvidence)
+                ]);
+
+        Assert.Throws<ArgumentException>(
+            () =>
+                new FlightChecklistProgression(profile));
+    }
+
+    [Fact]
+    public void ProfileRejectsDuplicateRequiredSteps()
+    {
+        var profile =
+            new FlightChecklistProfile(
+                "duplicate",
+                [
+                    new(
+                        FlightChecklistStepId.AircraftReady,
+                        FlightChecklistVerificationCapability.AutoEvidence),
+                    new(
+                        FlightChecklistStepId.AircraftReady,
+                        FlightChecklistVerificationCapability.ManualOnly)
+                ]);
+
+        Assert.Throws<ArgumentException>(
+            () =>
+                new FlightChecklistProgression(profile));
     }
 
     [Fact]
@@ -371,6 +448,22 @@ public sealed class FlightChecklistProgressionTests
                 Assert.Null(step.VerifiedAt);
             });
     }
+
+    private static FlightChecklistProfile ProfileWithCapability(
+        FlightChecklistStepId stepId,
+        FlightChecklistVerificationCapability capability) =>
+        new(
+            "test-profile",
+            FlightChecklistProfiles.Standard.Steps
+                .Select(
+                    step =>
+                        step.Id == stepId
+                            ? step with
+                            {
+                                VerificationCapability = capability
+                            }
+                            : step)
+                .ToArray());
 
     private static FlightChecklistStepSnapshot Step(
         FlightChecklistSnapshot snapshot,

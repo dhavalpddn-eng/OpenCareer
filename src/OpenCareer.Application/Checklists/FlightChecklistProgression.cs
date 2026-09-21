@@ -61,30 +61,59 @@ public sealed class FlightChecklistProgression
     ];
 
     private readonly Dictionary<FlightChecklistStepId, DateTimeOffset> _verifiedAt = [];
+    private readonly StepDefinition[] _definitions;
     private readonly IReadOnlyDictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>
         _verificationCapabilities;
     private DateTimeOffset? _lastEvidenceTimestamp;
 
     public FlightChecklistProgression(
-        IReadOnlyDictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>?
-            verificationCapabilities = null)
+        FlightChecklistProfile? profile = null)
     {
-        var configured = verificationCapabilities is null
-            ? new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>()
-            : new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>(
-                verificationCapabilities);
+        FlightChecklistProfile resolved =
+            profile
+            ?? FlightChecklistProfiles.Standard;
 
-        foreach ((FlightChecklistStepId id, FlightChecklistVerificationCapability capability)
-                 in configured)
+        resolved.Validate();
+
+        var definitionIndexes = Definitions
+            .Select((definition, index) => (definition, index))
+            .ToDictionary(
+                static item => item.definition.Id,
+                static item => item.index);
+
+        int previousIndex = -1;
+        var definitions = new List<StepDefinition>(resolved.Steps.Count);
+        var capabilities =
+            new Dictionary<FlightChecklistStepId, FlightChecklistVerificationCapability>(
+                resolved.Steps.Count);
+
+        foreach (FlightChecklistProfileStep step in resolved.Steps)
         {
-            if (!Enum.IsDefined(id))
-                throw new ArgumentOutOfRangeException(nameof(verificationCapabilities));
+            if (!definitionIndexes.TryGetValue(step.Id, out int index))
+            {
+                throw new ArgumentException(
+                    "Checklist profile references an unsupported step.",
+                    nameof(profile));
+            }
 
-            if (!Enum.IsDefined(capability))
-                throw new ArgumentOutOfRangeException(nameof(verificationCapabilities));
+            if (index <= previousIndex)
+            {
+                throw new ArgumentException(
+                    "Checklist profile steps must follow canonical flight order.",
+                    nameof(profile));
+            }
+
+            StepDefinition definition = Definitions[index];
+            definitions.Add(definition);
+            capabilities.Add(
+                step.Id,
+                step.VerificationCapability);
+
+            previousIndex = index;
         }
 
-        _verificationCapabilities = configured;
+        _definitions = definitions.ToArray();
+        _verificationCapabilities = capabilities;
     }
 
     public FlightChecklistSnapshot Current =>
@@ -108,9 +137,9 @@ public sealed class FlightChecklistProgression
         if (!evidence.Connected)
             return CreateSnapshot();
 
-        for (int index = 0; index < Definitions.Length; index++)
+        for (int index = 0; index < _definitions.Length; index++)
         {
-            StepDefinition definition = Definitions[index];
+            StepDefinition definition = _definitions[index];
 
             if (_verifiedAt.ContainsKey(definition.Id))
                 continue;
@@ -143,7 +172,7 @@ public sealed class FlightChecklistProgression
             throw new ArgumentOutOfRangeException(nameof(stepId));
 
         int index = Array.FindIndex(
-            Definitions,
+            _definitions,
             definition => definition.Id == stepId);
 
         if (index < 0)
@@ -189,7 +218,7 @@ public sealed class FlightChecklistProgression
     {
         for (int index = 0; index < exclusiveEnd; index++)
         {
-            if (!_verifiedAt.ContainsKey(Definitions[index].Id))
+            if (!_verifiedAt.ContainsKey(_definitions[index].Id))
                 return false;
         }
 
@@ -198,7 +227,7 @@ public sealed class FlightChecklistProgression
 
     private FlightChecklistSnapshot CreateSnapshot()
     {
-        FlightChecklistStepSnapshot[] steps = Definitions
+        FlightChecklistStepSnapshot[] steps = _definitions
             .Select(definition =>
             {
                 bool verified = _verifiedAt.TryGetValue(
