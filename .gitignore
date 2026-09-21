@@ -1,0 +1,46 @@
+**/bin/
+**/obj/
+.vs/
+TestResults/
+*.user
+*.suo
+
+# Local app/runtime data
+OpenCareer/
+**/OpenCareer/
+*.log
+*.log.*
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.bak
+*.zip
+
+# Local settings and secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.local.json
+secrets.json
+*.secrets.json
+*.secret
+*.token
+*.key
+
+# Certificates / private keys
+*.pfx
+*.p12
+*.pem
+*.crt
+*.cer
+*.der
+*.jks
+
+# IDE / OS noise
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
