@@ -24,12 +24,46 @@ public sealed class OperationDispatchPlanningService(
     IAirportDispatchWeatherSource? weatherSource = null,
     IAircraftAvailabilityStore? aircraftAvailability = null)
 {
-    public async Task<DispatchFeasibilityResult> EvaluateAsync(
+    public Task<DispatchFeasibilityResult> EvaluateAsync(
         string aircraftId,
         string originIcao,
         string destinationIcao,
         OperationDispatchRequirements requirements,
+        CancellationToken cancellationToken = default) =>
+        EvaluateCoreAsync(
+            aircraftId,
+            originIcao,
+            destinationIcao,
+            requirements,
+            reservationId: null,
+            cancellationToken);
+
+    public Task<DispatchFeasibilityResult> EvaluateAsync(
+        string aircraftId,
+        string originIcao,
+        string destinationIcao,
+        OperationDispatchRequirements requirements,
+        string reservationId,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservationId);
+
+        return EvaluateCoreAsync(
+            aircraftId,
+            originIcao,
+            destinationIcao,
+            requirements,
+            reservationId.Trim(),
+            cancellationToken);
+    }
+
+    private async Task<DispatchFeasibilityResult> EvaluateCoreAsync(
+        string aircraftId,
+        string originIcao,
+        string destinationIcao,
+        OperationDispatchRequirements requirements,
+        string? reservationId,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftId);
         ArgumentException.ThrowIfNullOrWhiteSpace(originIcao);
@@ -59,11 +93,22 @@ public sealed class OperationDispatchPlanningService(
 
             if (availability?.Status == AircraftAvailabilityStatus.Unavailable)
             {
-                return DispatchFeasibilityResult.Create(
-                    DispatchFeasibilityStatus.Infeasible,
-                    null,
-                    null,
-                    [new(DispatchFeasibilityReason.AircraftUnavailable)]);
+                bool heldByCaller =
+                    availability.ReservationId is not null
+                    && reservationId is not null
+                    && string.Equals(
+                        availability.ReservationId,
+                        reservationId,
+                        StringComparison.Ordinal);
+
+                if (!heldByCaller)
+                {
+                    return DispatchFeasibilityResult.Create(
+                        DispatchFeasibilityStatus.Infeasible,
+                        null,
+                        null,
+                        [new(DispatchFeasibilityReason.AircraftUnavailable)]);
+                }
             }
         }
 

@@ -33,14 +33,56 @@ public sealed class CompositeDispatchPlanningService(
     RouteFuelWeightPlanningService fuelWeightPlanning,
     OperationDispatchPlanningService dispatchPlanning)
 {
-    public async Task<CompositeDispatchPlanningResult> EvaluateAsync(
+    public Task<CompositeDispatchPlanningResult> EvaluateAsync(
         string aircraftId,
         string originIcao,
         string destinationIcao,
         CruisePerformancePlanningRequest cruiseRequest,
         RouteFuelPlanningRequest routeFuelRequest,
         OperationDispatchRequirements requirements,
+        CancellationToken cancellationToken = default) =>
+        EvaluateCoreAsync(
+            aircraftId,
+            originIcao,
+            destinationIcao,
+            cruiseRequest,
+            routeFuelRequest,
+            requirements,
+            reservationId: null,
+            cancellationToken);
+
+    public Task<CompositeDispatchPlanningResult> EvaluateAsync(
+        string aircraftId,
+        string originIcao,
+        string destinationIcao,
+        CruisePerformancePlanningRequest cruiseRequest,
+        RouteFuelPlanningRequest routeFuelRequest,
+        OperationDispatchRequirements requirements,
+        string reservationId,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservationId);
+
+        return EvaluateCoreAsync(
+            aircraftId,
+            originIcao,
+            destinationIcao,
+            cruiseRequest,
+            routeFuelRequest,
+            requirements,
+            reservationId.Trim(),
+            cancellationToken);
+    }
+
+    private async Task<CompositeDispatchPlanningResult> EvaluateCoreAsync(
+        string aircraftId,
+        string originIcao,
+        string destinationIcao,
+        CruisePerformancePlanningRequest cruiseRequest,
+        RouteFuelPlanningRequest routeFuelRequest,
+        OperationDispatchRequirements requirements,
+        string? reservationId,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftId);
         ArgumentException.ThrowIfNullOrWhiteSpace(originIcao);
@@ -90,14 +132,25 @@ public sealed class CompositeDispatchPlanningService(
         OperationDispatchRequirements fueledRequirements =
             fuelResult.FuelWeightPlan.ApplyTo(requirements);
 
-        DispatchFeasibilityResult dispatchResult = await dispatchPlanning
-            .EvaluateAsync(
-                aircraftId,
-                originIcao,
-                destinationIcao,
-                fueledRequirements,
-                cancellationToken)
-            .ConfigureAwait(false);
+        DispatchFeasibilityResult dispatchResult =
+            reservationId is null
+                ? await dispatchPlanning
+                    .EvaluateAsync(
+                        aircraftId,
+                        originIcao,
+                        destinationIcao,
+                        fueledRequirements,
+                        cancellationToken)
+                    .ConfigureAwait(false)
+                : await dispatchPlanning
+                    .EvaluateAsync(
+                        aircraftId,
+                        originIcao,
+                        destinationIcao,
+                        fueledRequirements,
+                        reservationId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
         return new(
             CompositeDispatchPlanningStatus.Evaluated,

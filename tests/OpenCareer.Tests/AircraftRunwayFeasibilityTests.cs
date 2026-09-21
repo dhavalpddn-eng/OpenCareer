@@ -266,6 +266,88 @@ public class AircraftRunwayFeasibilityTests
     }
 
     [Fact]
+    public async Task MatchingReservationCanUseReservedAircraft()
+    {
+        var service = new DispatchFeasibilityService(
+            new StubAircraftRegistrySource(Aircraft()),
+            new StubAirportDataSource(
+                new Dictionary<string, AirportRecord>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["KAAA"] = Airport("KAAA", Runway("01")),
+                    ["KBBB"] = Airport("KBBB", Runway("19"))
+                }),
+            new StubAircraftAvailabilityStore(
+                new AircraftAvailabilityState(
+                    "fixture-aircraft",
+                    AircraftAvailabilityStatus.Unavailable,
+                    "dispatch:alpha")));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "provider-alias",
+            "KAAA",
+            "KBBB",
+            "dispatch:alpha");
+
+        Assert.Equal(DispatchFeasibilityStatus.Feasible, result.Status);
+        Assert.Empty(result.Issues);
+    }
+
+    [Fact]
+    public async Task ReservedAircraftBlocksCallerWithoutReservation()
+    {
+        var service = new DispatchFeasibilityService(
+            new StubAircraftRegistrySource(Aircraft()),
+            new StubAirportDataSource(
+                new Dictionary<string, AirportRecord>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["KAAA"] = Airport("KAAA", Runway("01")),
+                    ["KBBB"] = Airport("KBBB", Runway("19"))
+                }),
+            new StubAircraftAvailabilityStore(
+                new AircraftAvailabilityState(
+                    "fixture-aircraft",
+                    AircraftAvailabilityStatus.Unavailable,
+                    "dispatch:alpha")));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "provider-alias",
+            "KAAA",
+            "KBBB");
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(result.Issues);
+        Assert.Equal(DispatchFeasibilityReason.AircraftUnavailable, issue.Reason);
+    }
+
+    [Fact]
+    public async Task ReservedAircraftBlocksDifferentReservation()
+    {
+        var service = new DispatchFeasibilityService(
+            new StubAircraftRegistrySource(Aircraft()),
+            new StubAirportDataSource(
+                new Dictionary<string, AirportRecord>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["KAAA"] = Airport("KAAA", Runway("01")),
+                    ["KBBB"] = Airport("KBBB", Runway("19"))
+                }),
+            new StubAircraftAvailabilityStore(
+                new AircraftAvailabilityState(
+                    "fixture-aircraft",
+                    AircraftAvailabilityStatus.Unavailable,
+                    "dispatch:alpha")));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "provider-alias",
+            "KAAA",
+            "KBBB",
+            "dispatch:bravo");
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(result.Issues);
+        Assert.Equal(DispatchFeasibilityReason.AircraftUnavailable, issue.Reason);
+    }
+
+    [Fact]
     public async Task MissingAvailabilityStateDoesNotBlockInstalledAircraft()
     {
         var service = new DispatchFeasibilityService(
