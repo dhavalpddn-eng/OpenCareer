@@ -1,6 +1,6 @@
 # Conflict simulation foundation
 
-Status: active implementation on `feature/military-conflict-system`, draft PR #10. Current verified military implementation head `018e1da5` is green: Linux passed 402/402 xUnit + 29/29 SimLab. The latest production WinUI head `555b9dc7` built WinUI/live-probe with 0 errors and passed 402/402 xUnit on Windows; exact-head `018e1da5` Windows CI also passed with the build job intentionally skipped because the final slice was test-only.
+Status: active implementation on `feature/military-conflict-system`, draft PR #10. Current verified military implementation head `9b0331aa` is green in both Linux and Windows CI. The operation-resolution/consequence pipeline through SQLite persistence, restart replay protection and failure rollback is implemented and integration-tested; production mission-lifecycle wiring remains the next bounded step.
 
 ## Boundary
 
@@ -67,6 +67,14 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - `ConflictCampaignCoordinator` that creates, advances and revision-saves world + strategic state together,
 - `MilitaryDispatchService` that exposes eligibility per support request and refuses acceptance when affiliation, qualification, aircraft assignment, capability/access or damage-state rules fail,
 - `MilitaryCampaignMissionService` that persists acceptance, mission-stage progress, failure/completion lifecycle and simulated threat outcomes without allowing duplicate replay after recovery,
+- deterministic operation-resolution contracts: `OperationResolutionInput`, `OperationOutcome`, terminal Success / PartialSuccess / Failure / Aborted status, and pure `OperationResolver` rules,
+- stable `OperationResolutionKey` identity plus in-process idempotency protection so repeated completion events cannot resolve the same operation twice,
+- isolated deterministic operation consequences for faction influence, bounded campaign progress, thresholded territory pressure, military trust/reputation and conflict supplies/readiness,
+- application-layer `OperationConsequenceOrchestrator` that resolves once and produces one validated immutable consequence result without database or UI logic in the domain,
+- SQLite schema v5 `military_operation_consequences` persistence with immutable one-row-per-resolution-key history and uniqueness on operation/mission identity,
+- `PersistedOperationConsequenceCoordinator` restart-safe duplicate protection that checks SQLite before invoking resolution, so reconnect/replay cannot reapply campaign, territory, reputation or resource effects,
+- failure compensation and explicit SQLite transactions so calculation/save failures release in-memory reservations and the exact operation can retry cleanly without partial or double consequences,
+- end-to-end integration coverage across success, partial success, failure, abort, invalid input, already-resolved operations, fresh-process reload, persistence failure/retry and repeated reconnect replay,
 - `ConflictOperationsSnapshotBuilder` that projects operation/faction identity and posture, campaign outcome, replacement reserves, campaign/front/unit/threat/support/strategic-objective/trust/damage/active-operation state for the Military/Government UI,
 - first production WinUI Military/Government screen replacing the placeholder: active operation, faction names/postures, phase/outcome, control/momentum, replacement reserves, trust, OpenCareer damage, front/threat summary, support requests and strategic objectives are projected through `MilitaryGovernmentViewModel` without moving campaign logic into the UI,
 - successor-operation offer presentation with Accept / Decline for now / Reconsider actions routed through `MilitaryCampaignTransitionService`, including stale-offer protection already enforced by the application layer,
@@ -77,6 +85,49 @@ OpenCareer does not assume native MSFS weapons, targets, hit events, enemy AI co
 - communications are capped to bounded current-state messages, use stable communication IDs and UTC support-window text, and are projected through `MilitaryGovernmentViewModel` into the Military/Government page,
 - shared SQLite schema v3 reconciliation after synchronizing FlightSession and military persistence: databases previously stamped v2 by either parallel branch idempotently gain the missing flight-session or conflict-campaign table before advancing to v3,
 - deterministic xUnit tests across ground conflict, air conflict, mission families, request lifecycle, authorization, theater generation, SQLite campaign recovery, strategic evolution, dispatch authorization and the operations snapshot.
+
+## Operation resolution / consequence handoff
+
+Verified implementation head: `9b0331aa` (Linux and Windows CI green).
+
+Current flow:
+
+```text
+completed mission evidence
+    -> OperationResolutionInput
+    -> IdempotentOperationResolver
+    -> OperationOutcome
+    -> OperationConsequenceOrchestrator
+        -> faction influence
+        -> campaign progress
+        -> territory pressure
+        -> military reputation
+        -> conflict resources
+    -> PersistedOperationConsequenceCoordinator
+    -> SqliteOperationConsequenceStore
+```
+
+SQLite schema v5 stores the complete immutable `OperationConsequenceResult` under a stable resolution key. A persisted key is checked before the resolver runs, so the same completion event after app restart/reconnect is rejected without recalculating or reapplying consequences. Save/consequence failures release in-memory reservations, allowing a clean retry; successful persisted outcomes remain duplicate-protected.
+
+Key files added/changed by this sequence:
+
+- `src/OpenCareer.Domain/Military/OperationOutcome.cs`
+- `src/OpenCareer.Domain/Military/OperationResolutionInput.cs`
+- `src/OpenCareer.Domain/Military/OperationResolver.cs`
+- `src/OpenCareer.Domain/Military/OperationResolutionIdempotency.cs`
+- `src/OpenCareer.Domain/Military/MilitaryReputationConsequence.cs`
+- `src/OpenCareer.Domain/Conflict/FactionInfluence.cs`
+- `src/OpenCareer.Domain/Conflict/CampaignProgress.cs`
+- `src/OpenCareer.Domain/Conflict/TerritoryPressure.cs`
+- `src/OpenCareer.Domain/Conflict/ConflictResources.cs`
+- `src/OpenCareer.Application/Military/OperationConsequenceOrchestrator.cs`
+- `src/OpenCareer.Application/Military/OperationConsequencePersistence.cs`
+- `src/OpenCareer.Application/Military/PersistedOperationConsequenceCoordinator.cs`
+- `src/OpenCareer.Infrastructure/Persistence/SqliteOperationConsequenceStore.cs`
+- `src/OpenCareer.Infrastructure/Persistence/OpenCareerDatabaseMigrator.cs`
+- focused and integration tests under `tests/OpenCareer.Tests/*Operation*Consequence*` plus migration coverage.
+
+**Exact next military slice:** wire `PersistedOperationConsequenceCoordinator` into the authoritative `MilitaryCampaignMissionService` completion/failure path. Replace the existing direct `MilitaryCareerProgression.RecordOperationResult` call rather than stacking the new reputation consequence on top of it, map the accepted mission/request into `OperationResolutionInput` plus authoritative consequence state, and preserve the rule that battle logic does not directly settle money/XP/jobs.
 
 ## Deliberately abstract
 
