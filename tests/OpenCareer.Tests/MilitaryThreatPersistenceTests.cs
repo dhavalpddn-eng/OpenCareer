@@ -19,10 +19,22 @@ public sealed class MilitaryThreatPersistenceTests
 
         var campaigns = new ConflictCampaignCoordinator(store);
         var operations = new ConflictOperationsService();
+        var consequences = new NoopConsequenceStore();
+        var consequenceCoordinator =
+            new PersistedOperationConsequenceCoordinator(
+                new OperationConsequenceOrchestrator(
+                    new IdempotentOperationResolver(
+                        new OperationResolver(),
+                        new InMemoryOperationResolutionRegistry()),
+                    new MilitaryReputationConsequence(
+                        new InMemoryMilitaryReputationConsequenceRegistry())),
+                consequences);
         var service = new MilitaryCampaignMissionService(
             new MilitaryDispatchService(operations),
             operations,
-            campaigns);
+            campaigns,
+            consequenceCoordinator,
+            consequences);
 
         Guid missionId =
             Guid.Parse("96000000-0000-0000-0000-000000000001");
@@ -164,6 +176,34 @@ public sealed class MilitaryThreatPersistenceTests
             true,
             true,
             true);
+
+    private sealed class NoopConsequenceStore :
+        IOperationConsequenceStore,
+        IOperationConsequenceHistorySource
+    {
+        public Task<OperationConsequenceStoreRecord?> LoadAsync(
+            OperationResolutionKey key,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<OperationConsequenceStoreRecord?>(null);
+
+        public Task<OperationConsequenceStoreRecord?> LoadLatestForCampaignAsync(
+            string campaignId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<OperationConsequenceStoreRecord?>(null);
+
+        public Task<OperationConsequenceStoreRecord?> LoadLatestForSectorAsync(
+            string campaignId,
+            string sectorId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<OperationConsequenceStoreRecord?>(null);
+
+        public Task<OperationConsequenceStoreRecord> SaveAsync(
+            OperationConsequenceResult result,
+            DateTimeOffset savedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException(
+                "Threat persistence test does not settle mission consequences.");
+    }
 
     private sealed class MemoryStore : IConflictCampaignStore
     {
