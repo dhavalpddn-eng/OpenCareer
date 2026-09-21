@@ -16,6 +16,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/m1-simulation-core
     paths:
       - "src/**"
       - "tests/**"

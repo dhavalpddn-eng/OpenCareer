@@ -8,10 +8,12 @@ using OpenCareer.Application.Ai;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Application.Military;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Domain.Military;
 using OpenCareer.Infrastructure.Ai;
 using OpenCareer.Infrastructure.Flights;
 using OpenCareer.Infrastructure.Persistence;
@@ -58,6 +60,42 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SqliteLogbookStore>());
         services.AddSingleton<ILogbookWriter>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
+
+        services.AddSingleton<SqliteConflictCampaignStore>();
+        services.AddSingleton<SqliteMilitaryCareerProfileStore>();
+        services.AddSingleton<IMilitaryCareerProfileStore>(provider =>
+            provider.GetRequiredService<SqliteMilitaryCareerProfileStore>());
+        services.AddSingleton<SqliteDatabaseSnapshotService>();
+        services.AddSingleton<SqliteBackupArchiveRestoreService>();
+        services.AddSingleton<AppDataRestoreService>();
+        services.AddSingleton<IConflictCampaignStore>(provider =>
+            provider.GetRequiredService<SqliteConflictCampaignStore>());
+        services.AddSingleton<IConflictCampaignRecoverySource>(provider =>
+            provider.GetRequiredService<SqliteConflictCampaignStore>());
+        services.AddSingleton<ConflictCampaignRuntimeState>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IConflictTheaterCatalog, DefaultConflictTheaterCatalog>();
+        services.AddSingleton<ConflictOperationsService>();
+        services.AddSingleton<ConflictCampaignCoordinator>();
+        services.AddSingleton<SqliteOperationConsequenceStore>();
+        services.AddSingleton<IOperationConsequenceStore>(provider =>
+            provider.GetRequiredService<SqliteOperationConsequenceStore>());
+        services.AddSingleton<IOperationConsequenceHistorySource>(provider =>
+            provider.GetRequiredService<SqliteOperationConsequenceStore>());
+        services.AddSingleton<IOperationResolutionRegistry, InMemoryOperationResolutionRegistry>();
+        services.AddSingleton<OperationResolver>();
+        services.AddSingleton<IOperationResolver>(provider =>
+            new IdempotentOperationResolver(
+                provider.GetRequiredService<OperationResolver>(),
+                provider.GetRequiredService<IOperationResolutionRegistry>()));
+        services.AddSingleton<IMilitaryReputationConsequenceRegistry, InMemoryMilitaryReputationConsequenceRegistry>();
+        services.AddSingleton<MilitaryReputationConsequence>();
+        services.AddSingleton<OperationConsequenceOrchestrator>();
+        services.AddSingleton<PersistedOperationConsequenceCoordinator>();
+        services.AddSingleton<MilitaryDispatchService>();
+        services.AddSingleton<MilitaryCampaignMissionService>();
+        services.AddSingleton<MilitaryCampaignTransitionService>();
+
         services.AddSingleton<LogbookCommitCoordinator>();
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
@@ -94,6 +132,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<LogbookViewModel>();
+        services.AddSingleton<MilitaryGovernmentViewModel>();
         services.AddSingleton<TutorialViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MainWindow>();
@@ -119,6 +158,25 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         try
         {
+            bool restored = await _services
+                .GetRequiredService<AppDataRestoreService>()
+                .ApplyPendingDatabaseRestoreAsync();
+
+            if (restored)
+            {
+                logger.LogInformation(
+                    "Applied pending OpenCareer database restore before application data stores were opened.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Pending OpenCareer database restore failed; existing local data was preserved.");
+        }
+
+        try
+        {
             FlightSession? recovered =
                 await _services
                     .GetRequiredService<FlightSessionPersistenceService>()
@@ -138,6 +196,27 @@ public partial class App : Microsoft.UI.Xaml.Application
             logger.LogError(
                 ex,
                 "FlightSession recovery failed. OpenCareer will continue without claiming a recovered active flight.");
+        }
+
+        try
+        {
+            ConflictCampaignStoreRecord? recovered = await _services
+                .GetRequiredService<ConflictCampaignRuntimeState>()
+                .InitializeAsync();
+
+            if (recovered is not null)
+            {
+                logger.LogInformation(
+                    "Recovered military conflict campaign {CampaignId} at revision {Revision}.",
+                    recovered.Checkpoint.CampaignId,
+                    recovered.Revision);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Military conflict campaign recovery failed; the rest of OpenCareer will continue.");
         }
 
         _window = _services.GetRequiredService<MainWindow>();
