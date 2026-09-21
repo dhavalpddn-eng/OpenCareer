@@ -1,0 +1,24 @@
+namespace OpenCareer.Domain.Flights;
+
+public sealed record FlightStateEvidence(
+    DateTimeOffset Timestamp,
+    bool Connected,
+    bool StableTelemetry = false,
+    bool ValidLoadedAircraft = false,
+    bool ContinuityPlausible = false,
+    bool AuthorizedAirborneStart = false,
+    bool AuthorizedRunwayStart = false,
+    bool EngineStartObserved = false,
+    bool SelfPoweredMovementForFlight = false,
+    bool TakeoffCandidate = false,
+    bool RejectedTakeoffConfirmed = false,
+    bool AirborneConfirmed = false,
+    bool ApproachConfirmed = false,
+    bool TouchdownConfirmed = false,
+    bool BounceRecontact = false,
+    bool GoAroundConfirmed = false,
+    bool TouchAndGoConfirmed = false,
+    bool LandingRolloutConfirmed = false,
+    bool ParkingConfirmed = false,
+    bool OperationCompleteConfirmed = false,
+    bool CrashReported = false);
