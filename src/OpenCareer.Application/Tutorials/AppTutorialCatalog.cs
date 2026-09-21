@@ -4,6 +4,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
 {
     public const string AppIntroId = "app-intro";
     public const string FirstJobId = "first-job";
+    public const string FirstSimulatorConnectionId = "first-simulator-connection";
     public const string BannerTowId = "mission-banner-tow";
     public const string CarrierTakeoffId = "mission-carrier-takeoff";
     public const string CarrierLandingId = "mission-carrier-landing";
@@ -13,6 +14,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
         {
             [AppIntroId] = CreateAppIntro(),
             [FirstJobId] = CreateFirstJob(),
+            [FirstSimulatorConnectionId] = CreateFirstSimulatorConnection(),
             [BannerTowId] = CreateBannerTow(),
             [CarrierTakeoffId] = CreateCarrierTakeoff(),
             [CarrierLandingId] = CreateCarrierLanding()
@@ -88,6 +90,24 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
         ];
 
         return new TutorialDefinition(AppIntroId, 1, steps);
+    }
+
+    private static TutorialDefinition CreateFirstSimulatorConnection()
+    {
+        TutorialStep[] steps =
+        [
+            Step(
+                "simulator-connected",
+                "MSFS connection established",
+                "OpenCareer is connected to Microsoft Flight Simulator 2024. Live aircraft telemetry can now appear on Dashboard and Current Flight, but simulator telemetry alone never creates or completes a career operation. If the simulator disconnects, OpenCareer will reconnect automatically.",
+                "dashboard",
+                "shell")
+        ];
+
+        return new TutorialDefinition(
+            FirstSimulatorConnectionId,
+            1,
+            steps);
     }
 
     private static TutorialDefinition CreateFirstJob()
