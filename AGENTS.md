@@ -1,28 +1,27 @@
 # OpenCareer AI Agent Instructions
 
-## Prompt command router
+## Compact prompt commands
 
-OpenCareer's canonical AI development prompt library is located at:
+For `P01`-`P15` commands, use these definitions directly. Do NOT read `docs/ai/prompt-library.md` unless the user explicitly asks for the full prompt/reference.
 
-`docs/ai/prompt-library.md`
+Global rules for all development commands: current remote code is truth; preserve current lane ownership; inspect only directly relevant files; do not redo completed work; prefer one smallest meaningful slice; use focused verification; avoid broad audits/full suites unless required; recheck remote before commit; never manufacture work when blocked or at a boundary.
 
-When the user sends a prompt command matching `P01` through `P15` (case-insensitive), treat it as an instruction to read the current version of `docs/ai/prompt-library.md` and execute the matching prompt using the current chat's lane, repository state, audit context, blockers, and active ownership boundaries.
+- **P01 — Bootstrap:** Establish the named/current lane, verify remote/relevant commits, read only relevant repo instructions, choose one smallest unfinished slice, implement, focused-test, commit, STOP.
+- **P02 — Next:** Verify remote, complete exactly one smallest meaningful unfinished slice in the current lane, focused-test, commit, STOP. If none remains, report boundary reached.
+- **P03 — Audit:** NO implementation. Audit current lane against current remote + relevant MBL/checklist. Report HEAD, complete state, meaningful unblocked work, blockers, local verification, BOUNDARY REACHED/NOT REACHED, and CONTINUE/PARK.
+- **P04 — Resume audit:** Verify remote, use the latest audit as boundary map, complete exactly one smallest audited unblocked slice, focused-test, commit, STOP.
+- **P05 — Hung recovery:** Stop/recover the current long-running slice; preserve valid work; do not repeat expensive commands; use narrow verification; finish only the active slice if safe; commit and STOP. Never destructively discard parallel/current work.
+- **P06 — Route:** NO implementation. Determine the best currently unowned unfinished lane, prioritizing established work that unblocks multiple systems. Report lane, why, head, unblocked/blocked work, first slice.
+- **P07 — Verify:** NO new feature. Verify current completed work with the narrowest sufficient tests/build. Fix only defects caused by that work if necessary; commit fix if any; STOP.
+- **P08 — Finish:** Freeze scope. Finish only the currently active slice, focused-test, commit, STOP.
+- **P09 — Lane guard:** Do not modify another active lane. Use existing contracts or mark dependency blocked. Complete one independent owned slice if available; otherwise report boundary reached.
+- **P10 — Reconcile:** Remote moved. Compare remote vs working changes, preserve both valid sides, reconcile only active-slice overlap, focused-test, commit safely, STOP. No force/destructive discard.
+- **P11 — Test hang:** Stop the expensive verification command; freeze implementation; use the smallest valid test/filter/project/build target; fix only slice-caused failures; commit if validated; STOP.
+- **P12 — Park:** NO new feature. If needed, synchronize only relevant tracker/handoff docs, commit that sync, report final head/status/blockers/local verification, STOP.
+- **P13 — Recheck:** NO implementation. Recheck whether a parked lane's known blockers are genuinely removed by current remote state. Report unblocked now, still blocked, REACTIVATE/KEEP PARKED, and first slice if reactivated.
+- **P14 — Integration check:** NO implementation. Establish producer authority, consumer, existing/minimal boundary, persistence/idempotency needs, focused tests, and smallest integration slice. Avoid duplicate authority/circular dependencies.
+- **P15 — MSFS gate:** NO speculative implementation. Identify exactly what requires real MSFS validation, minimum scenarios, expected evidence/state transitions, pass conditions, and failure evidence; STOP.
 
-Examples:
+Additional text after a command narrows/modifies that invocation when compatible, e.g. `P07 only check SQLite persistence changes`.
 
-- `P02` — execute the current-lane Next Slice workflow.
-- `P03` — execute the Boundary Audit workflow.
-- `P05` — execute Hung Chat Recovery.
-- `P12` — execute Completion / Park.
-- `P13` — recheck whether the current parked lane has become unblocked.
-
-Rules:
-
-1. Always use the CURRENT remote repository state as truth.
-2. Read the prompt library entry at execution time; do not rely on a remembered older copy.
-3. Fill placeholders from the current chat/repository context when they are known.
-4. If a required placeholder cannot be determined safely, ask only for the missing information rather than inventing it.
-5. A short command such as `P03` is sufficient; the user does not need to paste the full prompt.
-6. Additional text after the command modifies that invocation when compatible. Example: `P07 only check the SQLite persistence changes`.
-7. Prompt commands do not override lane ownership, anti-hang rules, repository architecture, or safety constraints.
-8. If this file and the prompt library disagree about workflow details, the current prompt-library entry controls the command behavior.
+The expanded reference versions remain in `docs/ai/prompt-library.md`, but normal P-command execution must not load that file.
