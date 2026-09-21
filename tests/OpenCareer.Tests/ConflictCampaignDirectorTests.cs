@@ -366,6 +366,91 @@ public sealed class ConflictCampaignDirectorTests
     }
 
     [Fact]
+    public void RepeatedFriendlySecuredEvaluationPreservesPosturesWhileOutcomeAdvances()
+    {
+        ConflictWorldState initialWorld =
+            World(control: 0.50, intelligence: 0.60);
+
+        ConflictCampaignState campaign =
+            ConflictCampaignDirector.Create(
+                "campaign-posture-secured-repeat",
+                initialWorld);
+
+        ConflictCampaignIdentity identity =
+            campaign.Identity! with
+            {
+                FriendlyFaction =
+                    campaign.Identity!.FriendlyFaction with
+                    {
+                        Posture =
+                            ConflictFactionOperationalPosture.AirFocused
+                    },
+                HostileFaction =
+                    campaign.Identity.HostileFaction with
+                    {
+                        Posture =
+                            ConflictFactionOperationalPosture.Aggressive
+                    }
+            };
+
+        campaign = campaign with { Identity = identity };
+
+        ConflictWorldState securedWorld =
+            World(control: 0.82, intelligence: 0.70) with
+            {
+                UpdatedAt = Epoch.AddHours(1),
+                Units = World(0.82, 0.70).Units
+                    .Select(unit => unit.Side == ConflictSide.Hostile
+                        ? unit with
+                        {
+                            Strength = 0.10,
+                            Readiness = 0.40
+                        }
+                        : unit)
+                    .ToArray()
+            };
+
+        ConflictCampaignState first =
+            ConflictCampaignDirector.Advance(
+                campaign,
+                securedWorld);
+
+        Assert.Equal(
+            ConflictCampaignPhase.FriendlySecured,
+            first.Phase);
+        Assert.Equal(
+            ConflictCampaignOutcome.Ongoing,
+            first.Outcome);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.LogisticsFocused,
+            first.Identity!.FriendlyFaction.Posture);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Defensive,
+            first.Identity.HostileFaction.Posture);
+
+        ConflictCampaignState second =
+            ConflictCampaignDirector.Advance(
+                first,
+                securedWorld with
+                {
+                    UpdatedAt = Epoch.AddHours(2)
+                });
+
+        Assert.Equal(
+            ConflictCampaignOutcome.Victory,
+            second.Outcome);
+        Assert.Equal(
+            first.Identity,
+            second.Identity);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.LogisticsFocused,
+            second.Identity!.FriendlyFaction.Posture);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Defensive,
+            second.Identity.HostileFaction.Posture);
+    }
+
+    [Fact]
     public void AdvanceBackfillsIdentityForLegacyCampaignState()
     {
         var world = World(0.50, 0.50);
