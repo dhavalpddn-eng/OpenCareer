@@ -14,13 +14,9 @@ public sealed class MilitaryCampaignMissionServiceTests
     public async Task AcceptedMissionIsPersistedAndFailureClosesReservation()
     {
         var store = new MemoryStore();
+        var consequences = new MemoryConsequenceStore();
         var current = await store.SaveAsync(Checkpoint(), null);
-        var campaigns = new ConflictCampaignCoordinator(store);
-        var operations = new ConflictOperationsService();
-        var service = new MilitaryCampaignMissionService(
-            new MilitaryDispatchService(operations),
-            operations,
-            campaigns);
+        var service = CreateService(store, consequences);
 
         Guid missionId =
             Guid.Parse("91000000-0000-0000-0000-000000000001");
@@ -55,16 +51,93 @@ public sealed class MilitaryCampaignMissionServiceTests
         Assert.Equal(
             SupportRequestStatus.Failed,
             failed.Checkpoint.World.SupportRequests.Single().Status);
-        Assert.True(failed.Checkpoint.MilitaryCareer.Trust < trustBefore);
+        Assert.Equal(
+            trustBefore - 0.03,
+            failed.Checkpoint.MilitaryCareer.Trust,
+            precision: 10);
         Assert.Equal(
             accepted.Record.Checkpoint.MilitaryCareer.FailedOperations + 1,
             failed.Checkpoint.MilitaryCareer.FailedOperations);
+        OperationConsequenceStoreRecord consequence =
+            Assert.Single(consequences.Records);
+        Assert.Equal(
+            OperationOutcomeStatus.Failure,
+            consequence.Result.Outcome.Status);
+        Assert.Equal(
+            failed.Checkpoint.MilitaryCareer,
+            consequence.Result.MilitaryCareer);
+    }
+
+    [Fact]
+    public async Task CompletedMissionPersistsConsequencesAndUpdatesCareerOnce()
+    {
+        var store = new MemoryStore();
+        var consequences = new MemoryConsequenceStore();
+        var current = await store.SaveAsync(Checkpoint(), null);
+        var service = CreateService(store, consequences);
+
+        Guid missionId =
+            Guid.Parse("91500000-0000-0000-0000-000000000001");
+
+        MilitaryMissionAcceptanceResult accepted =
+            await service.AcceptAsync(
+                current,
+                current.Checkpoint.World.SupportRequests.Single().RequestId,
+                missionId,
+                Epoch.AddMinutes(1),
+                Fighter(),
+                aircraftAssignedForOperation: true);
+
+        AirSupportMission mission =
+            accepted.Record.Checkpoint.CombatSupportMissions.Single()
+            with
+            {
+                Stage = AirSupportMissionStage.ObjectiveComplete,
+                LastUpdatedAt = Epoch.AddMinutes(2)
+            };
+
+        ConflictCampaignStoreRecord ready =
+            accepted.Record with
+            {
+                Checkpoint = accepted.Record.Checkpoint with
+                {
+                    CombatSupportMissions = new[] { mission }
+                }
+            };
+
+        ConflictCampaignStoreRecord completed =
+            await service.CompleteAsync(
+                ready,
+                missionId,
+                Epoch.AddMinutes(3));
+
+        Assert.Empty(completed.Checkpoint.CombatSupportMissions);
+        Assert.Equal(
+            SupportRequestStatus.Completed,
+            completed.Checkpoint.World.SupportRequests.Single().Status);
+        Assert.Equal(
+            0.62,
+            completed.Checkpoint.MilitaryCareer.Trust,
+            precision: 10);
+        Assert.Equal(
+            3,
+            completed.Checkpoint.MilitaryCareer.SuccessfulOperations);
+
+        OperationConsequenceStoreRecord consequence =
+            Assert.Single(consequences.Records);
+        Assert.Equal(
+            OperationOutcomeStatus.Success,
+            consequence.Result.Outcome.Status);
+        Assert.Equal(
+            completed.Checkpoint.MilitaryCareer,
+            consequence.Result.MilitaryCareer);
     }
 
     [Fact]
     public async Task TerminalCampaignCannotAcceptNewMilitaryMission()
     {
         var store = new MemoryStore();
+        var consequences = new MemoryConsequenceStore();
         ConflictCampaignCheckpoint checkpoint = Checkpoint();
 
         checkpoint = checkpoint with
@@ -80,12 +153,7 @@ public sealed class MilitaryCampaignMissionServiceTests
             checkpoint,
             expectedRevision: null);
 
-        var campaigns = new ConflictCampaignCoordinator(store);
-        var operations = new ConflictOperationsService();
-        var service = new MilitaryCampaignMissionService(
-            new MilitaryDispatchService(operations),
-            operations,
-            campaigns);
+        var service = CreateService(store, consequences);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.AcceptAsync(
@@ -101,13 +169,9 @@ public sealed class MilitaryCampaignMissionServiceTests
     public async Task SecondActiveMilitaryMissionIsRejected()
     {
         var store = new MemoryStore();
+        var consequences = new MemoryConsequenceStore();
         var current = await store.SaveAsync(Checkpoint(), null);
-        var campaigns = new ConflictCampaignCoordinator(store);
-        var operations = new ConflictOperationsService();
-        var service = new MilitaryCampaignMissionService(
-            new MilitaryDispatchService(operations),
-            operations,
-            campaigns);
+        var service = CreateService(store, consequences);
 
         var first = await service.AcceptAsync(
             current,
@@ -125,6 +189,38 @@ public sealed class MilitaryCampaignMissionServiceTests
                 Epoch.AddMinutes(2),
                 Fighter(),
                 aircraftAssignedForOperation: true));
+    }
+
+    private static MilitaryCampaignMissionService CreateService(
+        MemoryStore campaignStore,
+        MemoryConsequenceStore consequenceStore)
+    {
+        var operations = new ConflictOperationsService();
+        var campaigns =
+            new ConflictCampaignCoordinator(campaignStore);
+
+        var resolver =
+            new IdempotentOperationResolver(
+                new OperationResolver(),
+                new InMemoryOperationResolutionRegistry());
+
+        var reputation =
+            new MilitaryReputationConsequence(
+                new InMemoryMilitaryReputationConsequenceRegistry());
+
+        var consequenceCoordinator =
+            new PersistedOperationConsequenceCoordinator(
+                new OperationConsequenceOrchestrator(
+                    resolver,
+                    reputation),
+                consequenceStore);
+
+        return new MilitaryCampaignMissionService(
+            new MilitaryDispatchService(operations),
+            operations,
+            campaigns,
+            consequenceCoordinator,
+            consequenceStore);
     }
 
     private static ConflictCampaignCheckpoint Checkpoint()
@@ -211,6 +307,96 @@ public sealed class MilitaryCampaignMissionServiceTests
             true,
             true,
             true);
+
+    private sealed class MemoryConsequenceStore :
+        IOperationConsequenceStore,
+        IOperationConsequenceHistorySource
+    {
+        private readonly List<OperationConsequenceStoreRecord> _records = [];
+
+        public IReadOnlyList<OperationConsequenceStoreRecord> Records =>
+            _records;
+
+        public Task<OperationConsequenceStoreRecord?> LoadAsync(
+            OperationResolutionKey key,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(
+                _records.SingleOrDefault(
+                    item => item.ResolutionKey == key));
+        }
+
+        public Task<OperationConsequenceStoreRecord?> LoadLatestForCampaignAsync(
+            string campaignId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(
+                _records
+                    .Where(item =>
+                        string.Equals(
+                            item.Result.CampaignProgress.CampaignId,
+                            campaignId,
+                            StringComparison.Ordinal))
+                    .OrderByDescending(item => item.Result.Outcome.CompletedAt)
+                    .ThenByDescending(item => item.SavedAt)
+                    .FirstOrDefault());
+        }
+
+        public Task<OperationConsequenceStoreRecord?> LoadLatestForSectorAsync(
+            string campaignId,
+            string sectorId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(
+                _records
+                    .Where(item =>
+                        string.Equals(
+                            item.Result.CampaignProgress.CampaignId,
+                            campaignId,
+                            StringComparison.Ordinal)
+                        && string.Equals(
+                            item.Result.TerritoryPressure.State.SectorId,
+                            sectorId,
+                            StringComparison.Ordinal))
+                    .OrderByDescending(item => item.Result.Outcome.CompletedAt)
+                    .ThenByDescending(item => item.SavedAt)
+                    .FirstOrDefault());
+        }
+
+        public Task<OperationConsequenceStoreRecord> SaveAsync(
+            OperationConsequenceResult result,
+            DateTimeOffset savedAt,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            OperationResolutionKey key =
+                OperationResolutionKey.Create(
+                    result.Outcome.OperationId,
+                    result.Outcome.MissionId);
+
+            if (_records.Any(item => item.ResolutionKey == key))
+            {
+                throw new OperationConsequenceAlreadyExistsException(
+                    key);
+            }
+
+            var record = new OperationConsequenceStoreRecord(
+                key,
+                result,
+                savedAt);
+
+            record.Validate();
+            _records.Add(record);
+            return Task.FromResult(record);
+        }
+    }
 
     private sealed class MemoryStore : IConflictCampaignStore
     {
