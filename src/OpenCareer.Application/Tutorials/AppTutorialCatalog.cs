@@ -5,6 +5,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
     public const string AppIntroId = "app-intro";
     public const string FirstJobId = "first-job";
     public const string FirstSimulatorConnectionId = "first-simulator-connection";
+    public const string FirstSimulatorDisconnectId = "first-simulator-disconnect";
     public const string BannerTowId = "mission-banner-tow";
     public const string CarrierTakeoffId = "mission-carrier-takeoff";
     public const string CarrierLandingId = "mission-carrier-landing";
@@ -15,6 +16,7 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
             [AppIntroId] = CreateAppIntro(),
             [FirstJobId] = CreateFirstJob(),
             [FirstSimulatorConnectionId] = CreateFirstSimulatorConnection(),
+            [FirstSimulatorDisconnectId] = CreateFirstSimulatorDisconnect(),
             [BannerTowId] = CreateBannerTow(),
             [CarrierTakeoffId] = CreateCarrierTakeoff(),
             [CarrierLandingId] = CreateCarrierLanding()
@@ -106,6 +108,24 @@ public sealed class AppTutorialCatalog : ITutorialCatalog
 
         return new TutorialDefinition(
             FirstSimulatorConnectionId,
+            1,
+            steps);
+    }
+
+    private static TutorialDefinition CreateFirstSimulatorDisconnect()
+    {
+        TutorialStep[] steps =
+        [
+            Step(
+                "simulator-disconnected",
+                "Simulator connection interrupted",
+                "OpenCareer lost its MSFS connection and will retry automatically. If a FlightSession already exists, it is preserved and normal tracking resumes only after continuity is proven. Disconnecting never completes, cancels, or fabricates career progress.",
+                "current-flight",
+                "current-flight")
+        ];
+
+        return new TutorialDefinition(
+            FirstSimulatorDisconnectId,
             1,
             steps);
     }
