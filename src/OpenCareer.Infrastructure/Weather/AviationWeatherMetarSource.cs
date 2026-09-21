@@ -33,11 +33,11 @@ public sealed class AviationWeatherMetarSource(
     private static readonly HttpClient SharedHttpClient = CreateHttpClient();
 
     private static readonly Regex HeaderPattern = new(
-        @"^(?:(?:METAR|SPECI)s+)?(?<icao>[A-Z0-9]{4})s+(?<day>d{2})(?<hour>d{2})(?<minute>d{2})Z",
+        @"^(?:(?:METAR|SPECI)\s+)?(?<icao>[A-Z0-9]{4})\s+(?<day>\d{2})(?<hour>\d{2})(?<minute>\d{2})Z\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex WindPattern = new(
-        @"(?<direction>d{3}|VRB)(?<speed>d{2,3})(?:G(?<gust>d{2,3}))?(?<unit>KT|MPS)",
+        @"\b(?<direction>\d{3}|VRB)(?<speed>\d{2,3})(?:G(?<gust>\d{2,3}))?(?<unit>KT|MPS)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly HttpClient _httpClient = httpClient ?? SharedHttpClient;
