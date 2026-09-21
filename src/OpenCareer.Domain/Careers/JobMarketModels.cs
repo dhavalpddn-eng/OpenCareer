@@ -77,6 +77,77 @@ public sealed record JobMarketDestination(
     }
 }
 
+public sealed record JobMarketGenerationRequest(
+    ulong GenerationSeed,
+    DateTimeOffset Time,
+    AirportCareerProfile Origin,
+    IReadOnlyList<JobMarketDestination> Destinations,
+    JobMarketAccess Access,
+    int CareerLevel = 1,
+    JobMarketPolicy? Policy = null,
+    AirportMarketCapacity? Capacity = null)
+{
+    public JobMarketPolicy EffectivePolicy =>
+        Policy ?? JobMarketPolicy.Default;
+
+    public AirportMarketCapacity EffectiveCapacity =>
+        Capacity
+        ?? AirportMarketCapacity.ForScale(
+            AirportMarketScale.Regional);
+
+    public void Validate()
+    {
+        ArgumentNullException.ThrowIfNull(Origin);
+        ArgumentNullException.ThrowIfNull(Destinations);
+
+        Origin.Validate();
+        EffectivePolicy.Validate();
+        EffectiveCapacity.Validate();
+
+        if ((Access & ~JobMarketAccess.All) != 0)
+            throw new ArgumentOutOfRangeException(nameof(Access));
+
+        if (CareerLevel < 1
+            || CareerLevel > EffectivePolicy.CareerLevelCap)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(CareerLevel));
+        }
+
+        if (Destinations.Count == 0)
+        {
+            throw new ArgumentException(
+                "At least one destination is required.",
+                nameof(Destinations));
+        }
+
+        string originIcao =
+            JobMarketIcao.Normalize(Origin.Icao);
+
+        foreach (JobMarketDestination destination in Destinations)
+        {
+            destination.Validate();
+
+            if (destination.DemandProfile is not { } demand)
+                continue;
+
+            if (!string.Equals(
+                    demand.OriginIcao,
+                    originIcao,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    demand.DestinationIcao,
+                    destination.NormalizedIcao,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Route demand profile must match the job-market origin and destination.",
+                    nameof(Destinations));
+            }
+        }
+    }
+}
+
 public sealed record JobMarketOfferDraft(
     Guid OfferId,
     ServiceTrack ServiceTrack,
