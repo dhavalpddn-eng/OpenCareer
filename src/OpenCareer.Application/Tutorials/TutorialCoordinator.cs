@@ -46,6 +46,38 @@ public sealed class TutorialCoordinator(
     public Task RestartAsync(string tutorialId, CancellationToken cancellationToken = default) =>
         StartAsync(tutorialId, resume: false, cancellationToken);
 
+    public async Task<bool> TryStartPendingAsync(
+        string tutorialId,
+        CancellationToken cancellationToken = default)
+    {
+        if (Current.IsActive)
+            return false;
+
+        TutorialDefinition definition = RequireDefinition(tutorialId);
+        TutorialProgress progress = await progressStore
+            .GetAsync(tutorialId, cancellationToken)
+            .ConfigureAwait(true);
+
+        if (progress.CompletedVersion >= definition.Version
+            || progress.SkippedVersion >= definition.Version)
+        {
+            return false;
+        }
+
+        int index = FindResumeIndex(
+            definition,
+            progress.LastStepId);
+
+        await ActivateAsync(
+                definition,
+                progress,
+                index,
+                cancellationToken)
+            .ConfigureAwait(true);
+
+        return true;
+    }
+
     public async Task NextAsync(CancellationToken cancellationToken = default)
     {
         if (!TryGetActive(out TutorialDefinition definition, out TutorialProgress progress))
