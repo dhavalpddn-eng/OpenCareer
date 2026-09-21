@@ -51,6 +51,12 @@ public sealed class TutorialViewModel : INotifyPropertyChanged
     public void RefreshLiveEvidence() =>
         _coordinator.RefreshLiveEvidence();
 
+    public Task<bool> TryStartFirstSimulatorConnectionAsync(
+        CancellationToken cancellationToken = default) =>
+        _coordinator.TryStartPendingAsync(
+            AppTutorialCatalog.FirstSimulatorConnectionId,
+            cancellationToken);
+
     public Task StartFirstJobAsync(CancellationToken cancellationToken = default) =>
         _coordinator.StartAsync(AppTutorialCatalog.FirstJobId, cancellationToken: cancellationToken);
 
