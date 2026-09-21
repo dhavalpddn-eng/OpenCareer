@@ -74,11 +74,11 @@ public sealed class FlightSessionTutorialEvidenceSource :
 
                 "job-arrive" =>
                     static session =>
-                        session.Status
-                            == FlightSessionStatus.Completed
-                        || Reached(
-                            session,
-                            FlightOperationState.Shutdown),
+                        session.Milestones.TaxiInProgressAt is { } taxiAt
+                        && session.Milestones.ParkedAt is { } parkedAt
+                        && session.Milestones.ShutdownAt is { } shutdownAt
+                        && parkedAt > taxiAt
+                        && shutdownAt > parkedAt,
 
                 "carrier-to-launch" =>
                     static session =>
