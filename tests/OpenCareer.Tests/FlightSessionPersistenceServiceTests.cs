@@ -360,6 +360,31 @@ public sealed class FlightSessionPersistenceServiceTests
         Assert.Same(recovered, store.Checkpoint);
     }
 
+    [Fact]
+    public async Task CancelledQueuedFlushDoesNotReleaseRecoveryGate()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new DeferredRecoveryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        Task<FlightSession?> recovery = service.RecoverAsync();
+        using var cancellation = new CancellationTokenSource();
+        Task flush = service.FlushAsync(cancellation.Token);
+        Assert.False(flush.IsCompleted);
+
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => flush);
+        Task<FlightSession> start = service.StartAsync(Epoch.AddSeconds(1));
+        Assert.False(start.IsCompleted);
+        Assert.Null(coordinator.Current);
+
+        store.LoadCompletion.SetResult(FlightSession.Start(Epoch));
+        FlightSession? recovered = await recovery;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => start);
+        await service.FlushAsync();
+        Assert.Same(recovered, coordinator.Current);
+        Assert.Same(recovered, store.Checkpoint);
+    }
+
     private sealed class DeferredRecoveryStore : IFlightSessionCheckpointStore
     {
         public TaskCompletionSource<FlightSession?> LoadCompletion { get; } =
