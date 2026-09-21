@@ -110,6 +110,79 @@ public sealed class ConflictCampaignDirectorTests
     }
 
     [Fact]
+    public void ReturningToContestedPreservesLastEvolvedFactionPostures()
+    {
+        ConflictWorldState initialWorld =
+            World(control: 0.50, intelligence: 0.60);
+
+        ConflictCampaignState campaign =
+            ConflictCampaignDirector.Create(
+                "campaign-posture-contested",
+                initialWorld);
+
+        ConflictCampaignIdentity identity =
+            campaign.Identity! with
+            {
+                FriendlyFaction =
+                    campaign.Identity!.FriendlyFaction with
+                    {
+                        Posture =
+                            ConflictFactionOperationalPosture.AirFocused
+                    },
+                HostileFaction =
+                    campaign.Identity.HostileFaction with
+                    {
+                        Posture =
+                            ConflictFactionOperationalPosture.LogisticsFocused
+                    }
+            };
+
+        campaign = campaign with { Identity = identity };
+
+        ConflictWorldState pressuredWorld =
+            World(control: 0.64, intelligence: 0.70) with
+            {
+                UpdatedAt = Epoch.AddHours(1)
+            };
+
+        ConflictCampaignState pressured =
+            ConflictCampaignDirector.Advance(
+                campaign,
+                pressuredWorld);
+
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Aggressive,
+            pressured.Identity!.FriendlyFaction.Posture);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Defensive,
+            pressured.Identity.HostileFaction.Posture);
+
+        ConflictWorldState contestedWorld =
+            World(control: 0.50, intelligence: 0.70) with
+            {
+                UpdatedAt = Epoch.AddHours(2)
+            };
+
+        ConflictCampaignState contested =
+            ConflictCampaignDirector.Advance(
+                pressured,
+                contestedWorld);
+
+        Assert.Equal(
+            ConflictCampaignPhase.Contested,
+            contested.Phase);
+        Assert.Equal(
+            pressured.Identity,
+            contested.Identity);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Aggressive,
+            contested.Identity!.FriendlyFaction.Posture);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Defensive,
+            contested.Identity.HostileFaction.Posture);
+    }
+
+    [Fact]
     public void AdvanceBackfillsIdentityForLegacyCampaignState()
     {
         var world = World(0.50, 0.50);
