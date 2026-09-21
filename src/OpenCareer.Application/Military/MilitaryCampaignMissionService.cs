@@ -347,9 +347,13 @@ public sealed class MilitaryCampaignMissionService
         {
             World = world,
             CampaignState =
-                ConflictCampaignDirector.Advance(
-                    current.Checkpoint.CampaignState,
-                    world),
+                Math.Abs(
+                    consequence.Result.TerritoryPressure.FriendlyControlDelta)
+                    > 0.0000001
+                    ? ConflictCampaignDirector.Advance(
+                        current.Checkpoint.CampaignState,
+                        world)
+                    : current.Checkpoint.CampaignState,
             MilitaryCareer = consequence.Result.MilitaryCareer,
             CombatSupportMissions = current.Checkpoint.CombatSupportMissions
                 .Where(item => item.MissionId != missionId)
