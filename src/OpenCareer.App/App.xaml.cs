@@ -61,6 +61,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<JobBoardGenerationService>();
         services.AddSingleton<IJobContractStore, SqliteJobContractStore>();
         services.AddSingleton<IEconomyLedgerStore, SqliteEconomyLedgerStore>();
+        services.AddSingleton<EconomySettlementService>();
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
