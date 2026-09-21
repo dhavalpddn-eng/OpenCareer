@@ -567,6 +567,50 @@ public sealed class ConflictCampaignDirectorTests
     }
 
     [Fact]
+    public void LegacyIdentityBackfillAppliesPressurePhasePostures()
+    {
+        ConflictWorldState world =
+            World(control: 0.50, intelligence: 0.60);
+
+        ConflictCampaignState current =
+            ConflictCampaignDirector.Create(
+                "campaign-legacy-pressure",
+                world) with
+            {
+                Identity = null
+            };
+
+        current.Validate();
+
+        ConflictWorldState pressuredWorld =
+            World(control: 0.64, intelligence: 0.70) with
+            {
+                UpdatedAt = Epoch.AddMinutes(30)
+            };
+
+        ConflictCampaignState advanced =
+            ConflictCampaignDirector.Advance(
+                current,
+                pressuredWorld);
+
+        Assert.Equal(
+            ConflictCampaignPhase.FriendlyPressure,
+            advanced.Phase);
+        Assert.NotNull(advanced.Identity);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Aggressive,
+            advanced.Identity!.FriendlyFaction.Posture);
+        Assert.Equal(
+            ConflictFactionOperationalPosture.Defensive,
+            advanced.Identity.HostileFaction.Posture);
+        Assert.Equal(
+            ConflictCampaignIdentityGenerator.Create(
+                current.CampaignId,
+                pressuredWorld).OperationId,
+            advanced.Identity.OperationId);
+    }
+
+    [Fact]
     public void SecuredCampaignRequiresTwoEvaluationsBeforeVictory()
     {
         ConflictWorldState world = World(0.82, 0.70) with
