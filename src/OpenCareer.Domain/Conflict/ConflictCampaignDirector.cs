@@ -261,10 +261,13 @@ public static class ConflictCampaignDirector
             Objectives = outcome == ConflictCampaignOutcome.Ongoing
                 ? BuildObjectives(world)
                 : Array.Empty<ConflictStrategicObjective>(),
-            Identity = previous.Identity
-                ?? ConflictCampaignIdentityGenerator.Create(
-                    previous.CampaignId,
-                    world)
+            Identity = ConflictFactionPostureEvolution.Apply(
+                previous.Identity
+                    ?? ConflictCampaignIdentityGenerator.Create(
+                        previous.CampaignId,
+                        world),
+                previous.Phase,
+                phase)
         };
 
         updated.Validate();
