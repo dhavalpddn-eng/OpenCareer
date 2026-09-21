@@ -50,6 +50,9 @@ public sealed class MilitaryReputationConsequence
             ?? throw new ArgumentNullException(nameof(registry));
     }
 
+    public void Release(OperationResolutionKey key) =>
+        _registry.Remove(key);
+
     public MilitaryCareerState Apply(
         MilitaryCareerState current,
         OperationOutcome outcome)
