@@ -31,10 +31,10 @@ public sealed class FirstJobOperationCompleteTutorialTests
         {
             Status = FlightSessionStatus.Completed,
             OperationState = FlightOperationState.Complete,
-            UpdatedAt = Epoch.AddSeconds(4),
+            UpdatedAt = Epoch.AddSeconds(6),
             Milestones = shutdown.Milestones with
             {
-                CompletedAt = Epoch.AddSeconds(4)
+                CompletedAt = Epoch.AddSeconds(6)
             }
         };
 
