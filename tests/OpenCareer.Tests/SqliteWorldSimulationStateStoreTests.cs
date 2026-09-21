@@ -96,8 +96,15 @@ public sealed class SqliteWorldSimulationStateStoreTests : IAsyncLifetime
             expectedContinuation.Schedule,
             loadedContinuation.Schedule);
         Assert.Equal(
-            expectedContinuation.Events,
-            loadedContinuation.Events);
+            expectedContinuation.Events.Length,
+            loadedContinuation.Events.Length);
+
+        for (int i = 0; i < expectedContinuation.Events.Length; i++)
+        {
+            AssertEventEquivalent(
+                expectedContinuation.Events[i],
+                loadedContinuation.Events[i]);
+        }
     }
 
     [Fact]
@@ -156,6 +163,24 @@ public sealed class SqliteWorldSimulationStateStoreTests : IAsyncLifetime
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => store.SaveAsync(invalid));
+    }
+
+    private static void AssertEventEquivalent(
+        WorldEventInstance expected,
+        WorldEventInstance actual)
+    {
+        Assert.Equal(expected.InstanceId, actual.InstanceId);
+        Assert.Equal(expected.DefinitionId, actual.DefinitionId);
+        Assert.Equal(expected.Name, actual.Name);
+        Assert.Equal(expected.Tier, actual.Tier);
+        Assert.Equal(expected.Scope, actual.Scope);
+        Assert.Equal(expected.ScopeTarget, actual.ScopeTarget);
+        Assert.Equal(expected.StartsAt, actual.StartsAt);
+        Assert.Equal(expected.EndsAt, actual.EndsAt);
+        Assert.Equal(expected.Effects, actual.Effects);
+        Assert.Equal(
+            expected.AffectedMarketSegments,
+            actual.AffectedMarketSegments);
     }
 
     private SqliteWorldSimulationStateStore CreateStore() =>
