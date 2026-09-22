@@ -69,6 +69,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<JobContractRuntimeState>();
         services.AddSingleton<IJobContractRuntimeSource>(provider =>
             provider.GetRequiredService<JobContractRuntimeState>());
+        services.AddSingleton<JobContractLifecycleService>();
+        services.AddSingleton<JobOfferAcceptanceService>();
         services.AddSingleton<IEconomyLedgerStore, SqliteEconomyLedgerStore>();
 
         services.AddSingleton<SqlitePlayerCareerProfileStore>();
@@ -146,6 +148,8 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SimConnectConnection>());
 
         services.AddOpenCareerPlanningServices();
+
+        services.AddSingleton<JobAcceptanceFleetBridge>();
 
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();
