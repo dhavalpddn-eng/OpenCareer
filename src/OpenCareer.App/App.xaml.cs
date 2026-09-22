@@ -7,12 +7,14 @@ using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Ai;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Dashboard;
+using OpenCareer.Application.Economy;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Military;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
+using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Military;
 using OpenCareer.Infrastructure.Ai;
@@ -56,6 +58,18 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton(provider =>
             new OpenCareerDatabaseOptions(
                 provider.GetRequiredService<OpenCareerDataPaths>().DatabaseFile));
+
+        services.AddSingleton<IWorldSimulationStateStore, SqliteWorldSimulationStateStore>();
+        services.AddSingleton<ICommodityMarketSnapshotStore, SqliteCommodityMarketSnapshotStore>();
+        services.AddSingleton<WorldSimulationPersistenceService>();
+        services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
+        services.AddSingleton<IJobContractStore, SqliteJobContractStore>();
+        services.AddSingleton<IJobContractRecoverySource, SqliteJobContractRecoverySource>();
+        services.AddSingleton<JobContractRecoveryService>();
+        services.AddSingleton<JobContractRuntimeState>();
+        services.AddSingleton<IJobContractRuntimeSource>(provider =>
+            provider.GetRequiredService<JobContractRuntimeState>());
+        services.AddSingleton<IEconomyLedgerStore, SqliteEconomyLedgerStore>();
 
         services.AddSingleton<SqlitePlayerCareerProfileStore>();
         services.AddSingleton<IPlayerCareerProfileStore>(provider =>
@@ -210,6 +224,35 @@ public partial class App : Microsoft.UI.Xaml.Application
             logger.LogError(
                 ex,
                 "Player career profile recovery failed; OpenCareer will continue without claiming an active career profile.");
+        }
+
+        try
+        {
+            IReadOnlyList<PersistedJobContract> recoveredContracts =
+                await _services
+                    .GetRequiredService<JobContractRuntimeState>()
+                    .InitializeAsync();
+
+            if (recoveredContracts.Count > 0)
+            {
+                logger.LogInformation(
+                    "Recovered {ContractCount} persisted job contracts requiring runtime reconciliation: {AcceptedCount} accepted, {InProgressCount} in progress, {CompletedCount} completed.",
+                    recoveredContracts.Count,
+                    recoveredContracts.Count(item => item.Contract.Status == ContractStatus.Accepted),
+                    recoveredContracts.Count(item => item.Contract.Status == ContractStatus.InProgress),
+                    recoveredContracts.Count(item => item.Contract.Status == ContractStatus.Completed));
+            }
+            else
+            {
+                logger.LogInformation(
+                    "No persisted job contracts require runtime reconciliation.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Job-contract recovery failed. OpenCareer will continue without claiming recovered active or settlement-pending jobs.");
         }
 
         try
