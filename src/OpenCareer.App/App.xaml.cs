@@ -162,6 +162,8 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<JobFlightCompletionEvidenceTracker>();
 
+        services.AddSingleton<JobFlightSessionCompletionBridge>();
+
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();
         services.AddSingleton<ITutorialStepEvidenceSource>(provider =>
