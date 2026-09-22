@@ -187,6 +187,10 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<CareerJobPlayableLoopReadinessSource>();
 
+        services.AddSingleton(StandardPointToPointMissionPolicy.Default);
+        services.AddSingleton<StandardPointToPointMissionCompletionSource>();
+        services.AddSingleton<ICareerJobMissionCompletionSource>(provider =>
+            provider.GetRequiredService<StandardPointToPointMissionCompletionSource>());
         services.AddSingleton<CareerJobCompletionInputSource>();
 
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();

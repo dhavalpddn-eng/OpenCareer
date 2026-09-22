@@ -132,7 +132,9 @@ public sealed class SimConnectAirportFacilityTests
             request.RequestId,
             uniqueRequestId: 101,
             name: "Fixture Municipal",
-            icao: "KAAA"));
+            icao: "KAAA",
+            latitudeDegrees: 43.1112,
+            longitudeDegrees: -76.1063));
         api.Enqueue(SimConnectPackets.RunwayFacility(
             request.RequestId,
             uniqueRequestId: 102,
@@ -171,6 +173,8 @@ public sealed class SimConnectAirportFacilityTests
         Assert.Equal("msfs-simconnect-facility", result.Provenance.SourceId);
         Assert.Equal("KAAA", result.Airport.Icao);
         Assert.Equal("Fixture Municipal", result.Airport.Name);
+        Assert.Equal(43.1112, result.Airport.LatitudeDegrees);
+        Assert.Equal(-76.1063, result.Airport.LongitudeDegrees);
 
         Assert.Collection(
             result.Airport.Runways,

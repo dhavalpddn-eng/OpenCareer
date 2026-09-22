@@ -50,7 +50,12 @@ public sealed class SimConnectAirportDataObservationSource(
             : snapshot.Name;
 
         var observation = new AirportDataObservation(
-            new AirportRecord(snapshot.Icao, name, runways),
+            new AirportRecord(
+                snapshot.Icao,
+                name,
+                runways,
+                snapshot.LatitudeDegrees,
+                snapshot.LongitudeDegrees),
             new AirportDataProvenance(
                 SourceId,
                 Authority,

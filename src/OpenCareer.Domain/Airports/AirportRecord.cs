@@ -82,13 +82,39 @@ public sealed record RunwayRecord(
 public sealed record AirportRecord(
     string Icao,
     string Name,
-    IReadOnlyList<RunwayRecord> Runways)
+    IReadOnlyList<RunwayRecord> Runways,
+    double? LatitudeDegrees = null,
+    double? LongitudeDegrees = null)
 {
+    public bool HasPosition =>
+        LatitudeDegrees is not null
+        && LongitudeDegrees is not null;
+
     public void Validate()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(Icao);
         ArgumentException.ThrowIfNullOrWhiteSpace(Name);
         ArgumentNullException.ThrowIfNull(Runways);
+
+        if ((LatitudeDegrees is null) != (LongitudeDegrees is null))
+        {
+            throw new ArgumentException(
+                "Airport latitude and longitude must be supplied together.");
+        }
+
+        if (LatitudeDegrees is { } latitude
+            && (!double.IsFinite(latitude)
+                || latitude is < -90 or > 90))
+        {
+            throw new ArgumentOutOfRangeException(nameof(LatitudeDegrees));
+        }
+
+        if (LongitudeDegrees is { } longitude
+            && (!double.IsFinite(longitude)
+                || longitude is < -180 or > 180))
+        {
+            throw new ArgumentOutOfRangeException(nameof(LongitudeDegrees));
+        }
 
         var identifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
