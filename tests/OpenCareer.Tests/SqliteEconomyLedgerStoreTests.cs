@@ -85,7 +85,30 @@ public sealed class SqliteEconomyLedgerStoreTests : IAsyncLifetime
             await reopened.FindByIdempotencyKeyAsync(
                 "fixture:income");
 
-        Assert.Equal(transaction, found);
+        EconomyLedgerTransaction persisted =
+            Assert.IsType<EconomyLedgerTransaction>(found);
+
+        Assert.Equal(
+            transaction.TransactionId,
+            persisted.TransactionId);
+        Assert.Equal(
+            transaction.IdempotencyKey,
+            persisted.IdempotencyKey);
+        Assert.Equal(
+            transaction.OccurredAt,
+            persisted.OccurredAt);
+        Assert.Equal(
+            transaction.Description,
+            persisted.Description);
+        Assert.Equal(
+            transaction.ReferenceType,
+            persisted.ReferenceType);
+        Assert.Equal(
+            transaction.ReferenceId,
+            persisted.ReferenceId);
+        Assert.Equal(
+            transaction.Postings.ToArray(),
+            persisted.Postings.ToArray());
     }
 
     [Fact]

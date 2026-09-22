@@ -91,8 +91,42 @@ public sealed class SqliteCommodityMarketSnapshotStoreTests :
             expected.CapturedAt,
             loaded.CapturedAt);
         Assert.Equal(
-            expected.Commodities,
-            loaded.Commodities);
+            expected.Commodities.Length,
+            loaded.Commodities.Length);
+
+        for (int i = 0; i < expected.Commodities.Length; i++)
+        {
+            CommodityMarketEntry expectedEntry =
+                expected.Commodities[i];
+
+            CommodityMarketEntry loadedEntry =
+                loaded.Commodities[i];
+
+            Assert.Equal(
+                expectedEntry.CommodityId,
+                loadedEntry.CommodityId);
+            Assert.Equal(
+                expectedEntry.SupplyPressure,
+                loadedEntry.SupplyPressure);
+            Assert.Equal(
+                expectedEntry.DemandPressure,
+                loadedEntry.DemandPressure);
+            Assert.Equal(
+                expectedEntry.UnitPrice,
+                loadedEntry.UnitPrice);
+            Assert.Equal(
+                expectedEntry.Trend,
+                loadedEntry.Trend);
+            Assert.Equal(
+                expectedEntry.Balance,
+                loadedEntry.Balance);
+            Assert.Equal(
+                expectedEntry.ActiveEventModifierIds.ToArray(),
+                loadedEntry.ActiveEventModifierIds.ToArray());
+            Assert.Equal(
+                expectedEntry.AvailabilityConfidence,
+                loadedEntry.AvailabilityConfidence);
+        }
         Assert.True(
             File.Exists(_databasePath));
     }
