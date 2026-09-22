@@ -170,7 +170,12 @@ public static class JobMarketGenerator
                     destination.RelationshipStrength,
                     track.Weight
                         * kind.Weight
-                        * destination.Weight));
+                        * destination.Weight,
+                    CreateContractTermsEnvelope(
+                        track.Value,
+                        kind.Value,
+                        JobScenarioKind.Standard,
+                        destination)));
 
             added++;
         }
@@ -304,6 +309,8 @@ public static class JobMarketGenerator
                         null,
                         0,
                         0,
+                        DemandAttractiveness:
+                            1,
                         policy.LocalOperationWeight),
                     policy.LocalOperationWeight));
         }
@@ -372,6 +379,7 @@ public static class JobMarketGenerator
                     destination.EstimatedFlightHours,
                     destination.RouteStrength,
                     destination.RelationshipStrength,
+                    demandAttractiveness,
                     weight);
 
             choices.Add(new(choice, weight));
@@ -380,6 +388,66 @@ public static class JobMarketGenerator
         return choices.Count == 0
             ? null
             : ChooseWeighted(choices, random).Value;
+    }
+
+    private static JobMarketContractTermsEnvelope? CreateContractTermsEnvelope(
+        ServiceTrack track,
+        ContractKind kind,
+        JobScenarioKind scenario,
+        DestinationChoice destination)
+    {
+        if (track != ServiceTrack.CivilianEmployment
+            || kind is not (
+                ContractKind.Ferry
+                or ContractKind.Reposition)
+            || scenario != JobScenarioKind.Standard
+            || destination.EstimatedFlightHours is not { } hours
+            || hours <= 0)
+        {
+            return null;
+        }
+
+        var requirements =
+            new AircraftMissionRequirements(
+                AllowedAccess:
+                    AircraftAccess.Civilian,
+                MinimumRangeNauticalMiles:
+                    destination.DistanceNm,
+                MinimumSeats:
+                    0);
+
+        return new(
+            AuthorityId:
+                "job-market:standard-civilian-point-to-point-v1",
+            requirements,
+            EstimatedFlightHours:
+                hours,
+            PayloadPounds:
+                0,
+            DemandAttractiveness:
+                destination.DemandAttractiveness,
+            Urgency:
+                0,
+            Difficulty:
+                0,
+            EstimatedPlayerOperatingCosts:
+                0m,
+            EmployerId:
+                null,
+            MustStartBy:
+                null,
+            MustCompleteBy:
+                null,
+            ReputationReward:
+                1.0,
+            ReputationPenalty:
+                2.0,
+            MarketId:
+                null,
+            WorldEventId:
+                null,
+            GovernmentAuthorizationRequired:
+                false);
     }
 
     private static double DemandAttractiveness(
@@ -533,5 +601,6 @@ public static class JobMarketGenerator
         double? EstimatedFlightHours,
         double RouteStrength,
         double RelationshipStrength,
+        double DemandAttractiveness,
         double Weight);
 }

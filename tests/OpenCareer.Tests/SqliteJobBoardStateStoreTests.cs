@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Infrastructure.Persistence;
 
@@ -48,7 +49,31 @@ public sealed class SqliteJobBoardStateStoreTests : IAsyncLifetime
                 "KRME",
                 "KALB",
                 Start,
-                Start.AddHours(6));
+                Start.AddHours(6)) with
+            {
+                Kind =
+                    ContractKind.Ferry,
+                ContractTerms =
+                    new JobMarketContractTermsEnvelope(
+                        "job-market:standard-civilian-point-to-point-v1",
+                        new AircraftMissionRequirements(
+                            AllowedAccess:
+                                AircraftAccess.Civilian,
+                            MinimumRangeNauticalMiles:
+                                100,
+                            MinimumSeats:
+                                0),
+                        EstimatedFlightHours:
+                            1.2,
+                        PayloadPounds:
+                            0,
+                        DemandAttractiveness:
+                            1,
+                        Urgency:
+                            0,
+                        Difficulty:
+                            0)
+            };
 
         Guid retired =
             Guid.Parse("10000000-0000-0000-0000-000000000002");

@@ -193,5 +193,7 @@ public sealed record JobBoardState(
                 "Invalid job-market offer.",
                 nameof(offer));
         }
+
+        offer.ContractTerms?.ValidateForOffer(offer);
     }
 }

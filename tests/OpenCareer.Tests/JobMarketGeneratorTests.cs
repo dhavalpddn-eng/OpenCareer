@@ -1,4 +1,5 @@
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Economy;
 
 namespace OpenCareer.Tests;
@@ -215,6 +216,98 @@ public sealed class JobMarketGeneratorTests
         Assert.True(
             highSelections > lowSelections,
             $"Expected cargo pressure to bias route selection; high={highSelections}, low={lowSelections}.");
+    }
+
+    [Fact]
+    public void CivilianPointToPointOffersCarryDeterministicContractTerms()
+    {
+        JobMarketOfferDraft[] pointToPoint =
+            Enumerable.Range(0, 500)
+                .SelectMany(
+                    index =>
+                        JobMarketGenerator.Generate(
+                            Request(
+                                Epoch.AddHours(index),
+                                JobMarketAccess.CivilianEmployment)))
+                .Where(
+                    offer =>
+                        offer.ServiceTrack
+                            == ServiceTrack.CivilianEmployment
+                        && offer.Kind is
+                            ContractKind.Ferry
+                                or ContractKind.Reposition
+                        && offer.EstimatedFlightHours is > 0)
+                .ToArray();
+
+        Assert.NotEmpty(
+            pointToPoint);
+
+        foreach (JobMarketOfferDraft offer in pointToPoint)
+        {
+            JobMarketContractTermsEnvelope terms =
+                Assert.IsType<JobMarketContractTermsEnvelope>(
+                    offer.ContractTerms);
+
+            terms.ValidateForOffer(
+                offer);
+
+            Assert.Equal(
+                "job-market:standard-civilian-point-to-point-v1",
+                terms.AuthorityId);
+            Assert.Equal(
+                offer.EstimatedFlightHours,
+                terms.EstimatedFlightHours);
+            Assert.Equal(
+                0,
+                terms.PayloadPounds);
+            Assert.Equal(
+                AircraftAccess.Civilian,
+                terms.AircraftRequirements.AllowedAccess);
+            Assert.Equal(
+                offer.DistanceNm,
+                terms.AircraftRequirements.MinimumRangeNauticalMiles);
+            Assert.Equal(
+                0m,
+                terms.EstimatedPlayerOperatingCosts);
+            Assert.Equal(
+                0,
+                terms.Urgency);
+            Assert.Equal(
+                0,
+                terms.Difficulty);
+            Assert.Null(
+                terms.MustStartBy);
+            Assert.Null(
+                terms.MustCompleteBy);
+        }
+    }
+
+    [Fact]
+    public void NonPointToPointOffersDoNotReceiveCivilianEnvelope()
+    {
+        JobMarketOfferDraft[] offers =
+            Enumerable.Range(0, 100)
+                .SelectMany(
+                    index =>
+                        JobMarketGenerator.Generate(
+                            Request(
+                                Epoch.AddHours(index),
+                                JobMarketAccess.CivilianEmployment)))
+                .Where(
+                    offer =>
+                        offer.Kind is not (
+                            ContractKind.Ferry
+                                or ContractKind.Reposition))
+                .ToArray();
+
+        Assert.NotEmpty(
+            offers);
+
+        Assert.All(
+            offers,
+            static offer =>
+                Assert.Null(
+                    offer.ContractTerms));
     }
 
     private static JobMarketGenerationRequest Request(

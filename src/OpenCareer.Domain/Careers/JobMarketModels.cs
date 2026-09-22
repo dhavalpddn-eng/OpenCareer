@@ -1,3 +1,4 @@
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Economy;
 
 namespace OpenCareer.Domain.Careers;
@@ -148,6 +149,110 @@ public sealed record JobMarketGenerationRequest(
     }
 }
 
+public sealed record JobMarketContractTermsEnvelope(
+    string AuthorityId,
+    AircraftMissionRequirements AircraftRequirements,
+    double EstimatedFlightHours,
+    double PayloadPounds,
+    double DemandAttractiveness,
+    double Urgency,
+    double Difficulty,
+    decimal EstimatedPlayerOperatingCosts = 0m,
+    Guid? EmployerId = null,
+    DateTimeOffset? MustStartBy = null,
+    DateTimeOffset? MustCompleteBy = null,
+    double ReputationReward = 1.0,
+    double ReputationPenalty = 2.0,
+    string? MarketId = null,
+    string? WorldEventId = null,
+    bool GovernmentAuthorizationRequired = false)
+{
+    public void ValidateForOffer(
+        JobMarketOfferDraft offer)
+    {
+        ArgumentNullException.ThrowIfNull(offer);
+        ArgumentException.ThrowIfNullOrWhiteSpace(AuthorityId);
+        ArgumentNullException.ThrowIfNull(AircraftRequirements);
+
+        AircraftRequirements.Validate();
+
+        if (!double.IsFinite(EstimatedFlightHours)
+            || EstimatedFlightHours <= 0
+            || !double.IsFinite(PayloadPounds)
+            || PayloadPounds < 0
+            || !double.IsFinite(DemandAttractiveness)
+            || DemandAttractiveness is < 0.25 or > 4
+            || !double.IsFinite(Urgency)
+            || Urgency is < 0 or > 1
+            || !double.IsFinite(Difficulty)
+            || Difficulty is < 0 or > 1
+            || !double.IsFinite(ReputationReward)
+            || ReputationReward < 0
+            || !double.IsFinite(ReputationPenalty)
+            || ReputationPenalty < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(JobMarketContractTermsEnvelope));
+        }
+
+        if (decimal.Round(
+                EstimatedPlayerOperatingCosts,
+                2,
+                MidpointRounding.AwayFromZero)
+                != EstimatedPlayerOperatingCosts
+            || EstimatedPlayerOperatingCosts < 0m)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(EstimatedPlayerOperatingCosts));
+        }
+
+        if (offer.EstimatedFlightHours is { } offeredHours
+            && Math.Abs(
+                offeredHours - EstimatedFlightHours) > 1e-9)
+        {
+            throw new ArgumentException(
+                "Contract-term duration must match the persisted market offer.");
+        }
+
+        if (AircraftRequirements.MinimumRangeNauticalMiles + 1e-9
+            < offer.DistanceNm)
+        {
+            throw new ArgumentException(
+                "Contract-term aircraft range cannot understate the persisted offer route.");
+        }
+
+        if (MustStartBy is { } start
+            && start < offer.OfferedAt)
+        {
+            throw new ArgumentException(
+                "Contract-term start deadline cannot precede the offer.");
+        }
+
+        if (MustCompleteBy is { } complete
+            && (complete < offer.OfferedAt
+                || (MustStartBy is { } start
+                    && complete < start)))
+        {
+            throw new ArgumentException(
+                "Contract-term completion deadline is invalid.");
+        }
+
+        if (MarketId is not null
+            && string.IsNullOrWhiteSpace(MarketId))
+        {
+            throw new ArgumentException(
+                "Market identity must be non-empty when supplied.");
+        }
+
+        if (WorldEventId is not null
+            && string.IsNullOrWhiteSpace(WorldEventId))
+        {
+            throw new ArgumentException(
+                "World-event identity must be non-empty when supplied.");
+        }
+    }
+}
+
 public sealed record JobMarketOfferDraft(
     Guid OfferId,
     ServiceTrack ServiceTrack,
@@ -162,7 +267,8 @@ public sealed record JobMarketOfferDraft(
     bool IsLockedPreview,
     double RouteStrength,
     double RelationshipStrength,
-    double MarketSelectionWeight)
+    double MarketSelectionWeight,
+    JobMarketContractTermsEnvelope? ContractTerms = null)
 {
     public bool IsLocalOperation =>
         string.Equals(OriginIcao, DestinationIcao, StringComparison.Ordinal);

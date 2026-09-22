@@ -134,6 +134,8 @@ public sealed record JobContractCreationRequest(
                 "Invalid job-market offer.",
                 nameof(Offer));
         }
+
+        offer.ContractTerms?.ValidateForOffer(offer);
     }
 
     private static void ValidateMoney(
