@@ -213,6 +213,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<LogbookViewModel>();
+        services.AddSingleton<JobsViewModel>();
         services.AddSingleton<MilitaryGovernmentViewModel>();
         services.AddSingleton<TutorialViewModel>();
         services.AddSingleton<SettingsViewModel>();

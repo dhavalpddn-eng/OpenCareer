@@ -23,6 +23,7 @@ public sealed partial class MainWindow : Window
         ShellViewModel viewModel,
         DashboardViewModel dashboard,
         LogbookViewModel logbook,
+        JobsViewModel jobs,
         MilitaryGovernmentViewModel militaryGovernment,
         TutorialViewModel tutorial,
         SettingsViewModel settings,
@@ -32,6 +33,7 @@ public sealed partial class MainWindow : Window
         ViewModel = viewModel;
         Dashboard = dashboard;
         Logbook = logbook;
+        Jobs = jobs;
         MilitaryGovernment = militaryGovernment;
         Tutorial = tutorial;
         Settings = settings;
@@ -63,6 +65,7 @@ public sealed partial class MainWindow : Window
     public ShellViewModel ViewModel { get; }
     public DashboardViewModel Dashboard { get; }
     public LogbookViewModel Logbook { get; }
+    public JobsViewModel Jobs { get; }
     public MilitaryGovernmentViewModel MilitaryGovernment { get; }
     public TutorialViewModel Tutorial { get; }
     public SettingsViewModel Settings { get; }
@@ -145,6 +148,9 @@ public sealed partial class MainWindow : Window
         {
             case "dashboard":
                 Navigate(typeof(DashboardPage), Dashboard);
+                break;
+            case "jobs":
+                Navigate(typeof(JobsPage), Jobs);
                 break;
             case "current-flight":
                 Navigate(typeof(CurrentFlightPage), ViewModel);
