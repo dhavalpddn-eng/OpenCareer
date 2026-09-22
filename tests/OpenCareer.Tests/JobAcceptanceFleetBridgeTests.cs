@@ -844,5 +844,18 @@ public sealed class JobAcceptanceFleetBridgeTests
 
             return Task.FromResult(result);
         }
+
+        public Task<IReadOnlyList<JobBoardState>> LoadAllAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            IReadOnlyList<JobBoardState> result =
+                State is null
+                    ? Array.Empty<JobBoardState>()
+                    : [State];
+
+            return Task.FromResult(result);
+        }
     }
 }
