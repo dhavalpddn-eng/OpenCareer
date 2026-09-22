@@ -56,6 +56,7 @@ public partial class App : Microsoft.UI.Xaml.Application
             new OpenCareerDatabaseOptions(
                 provider.GetRequiredService<OpenCareerDataPaths>().DatabaseFile));
         services.AddSingleton<IWorldSimulationStateStore, SqliteWorldSimulationStateStore>();
+        services.AddSingleton<ICommodityMarketSnapshotStore, SqliteCommodityMarketSnapshotStore>();
         services.AddSingleton<WorldSimulationPersistenceService>();
         services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
         services.AddSingleton<JobBoardGenerationService>();
