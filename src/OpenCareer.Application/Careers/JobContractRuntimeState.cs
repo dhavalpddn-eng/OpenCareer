@@ -1,3 +1,5 @@
+using OpenCareer.Domain.Careers;
+
 namespace OpenCareer.Application.Careers;
 
 public sealed class JobContractRuntimeState
@@ -48,6 +50,101 @@ public sealed class JobContractRuntimeState
         }
 
         return null;
+    }
+
+    public async Task PublishAuthoritativeAsync(
+        PersistedJobContract persisted,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(persisted);
+        persisted.Validate();
+
+        if (persisted.Contract.Status is not
+            (ContractStatus.Accepted
+            or ContractStatus.InProgress
+            or ContractStatus.Completed))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(persisted),
+                "Only accepted, in-progress, or completed contracts belong in recoverable runtime state.");
+        }
+
+        if (!IsInitialized)
+        {
+            await InitializeAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        await _initializationGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            IReadOnlyList<PersistedJobContract> current =
+                Current;
+
+            int existingIndex = -1;
+
+            for (int index = 0; index < current.Count; index++)
+            {
+                if (current[index].Contract.ContractId
+                    == persisted.Contract.ContractId)
+                {
+                    existingIndex = index;
+                    break;
+                }
+            }
+
+            if (existingIndex >= 0)
+            {
+                PersistedJobContract existing =
+                    current[existingIndex];
+
+                if (persisted.Version < existing.Version)
+                {
+                    throw new InvalidOperationException(
+                        "Authoritative runtime publication cannot roll back a newer persisted contract version.");
+                }
+
+                if (persisted.Version == existing.Version)
+                {
+                    if (persisted.Contract != existing.Contract)
+                    {
+                        throw new InvalidOperationException(
+                            "Equal job-contract versions cannot contain different authoritative state.");
+                    }
+
+                    return;
+                }
+            }
+
+            PersistedJobContract[] next =
+                current.ToArray();
+
+            if (existingIndex >= 0)
+            {
+                next[existingIndex] =
+                    persisted;
+            }
+            else
+            {
+                Array.Resize(
+                    ref next,
+                    next.Length + 1);
+
+                next[^1] =
+                    persisted;
+            }
+
+            Volatile.Write(
+                ref _current,
+                Array.AsReadOnly(next));
+        }
+        finally
+        {
+            _initializationGate.Release();
+        }
     }
 
     public async Task<IReadOnlyList<PersistedJobContract>> InitializeAsync(

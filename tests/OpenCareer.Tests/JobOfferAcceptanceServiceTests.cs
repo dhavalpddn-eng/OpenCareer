@@ -24,10 +24,15 @@ public sealed class JobOfferAcceptanceServiceTests
                 BoardWithOffer(
                     request.Offer));
 
+        JobContractRuntimeState runtimeState =
+            CreateRuntimeState(
+                contractStore);
+
         var service =
             CreateService(
                 contractStore,
-                boardStore);
+                boardStore,
+                runtimeState);
 
         PersistedJobContract result =
             await service.AcceptOfferAsync(
@@ -60,6 +65,12 @@ public sealed class JobOfferAcceptanceServiceTests
             1,
             boardStore.SaveCount);
 
+        Assert.True(runtimeState.IsInitialized);
+        Assert.Same(
+            result,
+            runtimeState.Find(
+                result.Contract.ContractId));
+
         Assert.DoesNotContain(
             boardStore.State!.Offers,
             offer =>
@@ -85,10 +96,15 @@ public sealed class JobOfferAcceptanceServiceTests
                 BoardWithOffer(
                     request.Offer));
 
+        JobContractRuntimeState runtimeState =
+            CreateRuntimeState(
+                contractStore);
+
         var service =
             CreateService(
                 contractStore,
-                boardStore);
+                boardStore,
+                runtimeState);
 
         PersistedJobContract first =
             await service.AcceptOfferAsync(
@@ -118,6 +134,11 @@ public sealed class JobOfferAcceptanceServiceTests
         Assert.Equal(
             1,
             boardStore.SaveCount);
+        Assert.Single(runtimeState.Current);
+        Assert.Equal(
+            second,
+            runtimeState.Find(
+                second.Contract.ContractId));
     }
 
     [Fact]
@@ -462,12 +483,23 @@ public sealed class JobOfferAcceptanceServiceTests
 
     private static JobOfferAcceptanceService CreateService(
         IJobContractStore contractStore,
-        IJobBoardStateStore boardStore) =>
+        IJobBoardStateStore boardStore,
+        JobContractRuntimeState? runtimeState = null) =>
         new(
             contractStore,
             new JobContractLifecycleService(
                 contractStore),
-            boardStore);
+            boardStore,
+            runtimeState
+            ?? CreateRuntimeState(
+                contractStore));
+
+    private static JobContractRuntimeState CreateRuntimeState(
+        IJobContractStore contractStore) =>
+        new(
+            new JobContractRecoveryService(
+                new EmptyRecoverySource(),
+                contractStore));
 
     private static JobBoardState BoardWithOffer(
         JobMarketOfferDraft offer) =>
@@ -560,6 +592,20 @@ public sealed class JobOfferAcceptanceServiceTests
             new WorldEventEffects(),
             QualificationsVerified: true,
             DispatchFeasibilityVerified: true);
+
+    private sealed class EmptyRecoverySource
+        : IJobContractRecoverySource
+    {
+        public Task<IReadOnlyList<JobContractRecoveryCandidate>>
+            ReadRecoveryCandidatesAsync(
+                CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult<IReadOnlyList<JobContractRecoveryCandidate>>(
+                Array.Empty<JobContractRecoveryCandidate>());
+        }
+    }
 
     private sealed class FakeContractStore : IJobContractStore
     {

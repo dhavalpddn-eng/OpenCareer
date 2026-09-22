@@ -7,12 +7,14 @@ public sealed class JobOfferAcceptanceService
     private readonly IJobContractStore _store;
     private readonly JobContractLifecycleService _lifecycle;
     private readonly IJobBoardStateStore _boardStore;
+    private readonly JobContractRuntimeState _runtimeState;
     private readonly SemaphoreSlim _acceptanceGate = new(1, 1);
 
     public JobOfferAcceptanceService(
         IJobContractStore store,
         JobContractLifecycleService lifecycle,
-        IJobBoardStateStore boardStore)
+        IJobBoardStateStore boardStore,
+        JobContractRuntimeState runtimeState)
     {
         _store =
             store
@@ -25,6 +27,10 @@ public sealed class JobOfferAcceptanceService
         _boardStore =
             boardStore
             ?? throw new ArgumentNullException(nameof(boardStore));
+
+        _runtimeState =
+            runtimeState
+            ?? throw new ArgumentNullException(nameof(runtimeState));
     }
 
     public async Task<PersistedJobContract> AcceptOfferAsync(
@@ -110,6 +116,12 @@ public sealed class JobOfferAcceptanceService
                                 cancellationToken)
                             .ConfigureAwait(false);
 
+                    await _runtimeState
+                        .PublishAuthoritativeAsync(
+                            accepted,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
                     await EnsureOfferRetiredAsync(
                             board,
                             request.Offer,
@@ -175,6 +187,12 @@ public sealed class JobOfferAcceptanceService
                 throw new InvalidOperationException(
                     $"Market offer contract is already in state {current.Contract.Status}.");
             }
+
+            await _runtimeState
+                .PublishAuthoritativeAsync(
+                    accepted,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             if (!offerIsRetired)
             {

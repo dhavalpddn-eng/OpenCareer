@@ -56,6 +56,35 @@ public sealed class JobContractRuntimeStateTests
     }
 
     [Fact]
+    public async Task AuthoritativePublicationAddsAcceptedContractAndIsIdempotent()
+    {
+        var state =
+            new JobContractRuntimeState(
+                new JobContractRecoveryService(
+                    new FakeRecoverySource(
+                        Array.Empty<JobContractRecoveryCandidate>()),
+                    new FakeContractStore(
+                        Array.Empty<PersistedJobContract>())));
+
+        PersistedJobContract accepted =
+            AcceptedContract(
+                Guid.Parse(
+                    "c1000000-0000-0000-0000-000000000003"));
+
+        await state.PublishAuthoritativeAsync(
+            accepted);
+        await state.PublishAuthoritativeAsync(
+            accepted);
+
+        Assert.True(state.IsInitialized);
+        Assert.Single(state.Current);
+        Assert.Same(
+            accepted,
+            state.Find(
+                accepted.Contract.ContractId));
+    }
+
+    [Fact]
     public async Task FailedInitializationCanRetryWithoutPublishingPartialState()
     {
         PersistedJobContract accepted =
