@@ -9,7 +9,7 @@ namespace OpenCareer.Tests;
 public sealed class OpenCareerDatabaseMigrationReconciliationTests
 {
     [Fact]
-    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV6()
+    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV7()
     {
         string directory = CreateTempDirectory();
 
@@ -47,7 +47,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV6()
+    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV7()
     {
         string directory = CreateTempDirectory();
 
@@ -82,7 +82,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV6()
+    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV7()
     {
         string directory = CreateTempDirectory();
 
@@ -161,7 +161,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV6()
+    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV7()
     {
         string directory = CreateTempDirectory();
 
@@ -335,13 +335,31 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
                 connection,
                 "player_career_profile"));
 
+        foreach (string tableName in new[]
+        {
+            "JobContracts",
+            "EconomyLedgerTransactions",
+            "EconomyLedgerPostings",
+            "ActivePlayBillingState",
+            "OwnedAircraft",
+            "AircraftLoans",
+            "AircraftLoanState"
+        })
+        {
+            Assert.True(
+                await TableExistsAsync(
+                    connection,
+                    tableName),
+                $"Expected unified schema table '{tableName}'.");
+        }
+
         await using SqliteCommand version =
             connection.CreateCommand();
 
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            6L,
+            7L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));

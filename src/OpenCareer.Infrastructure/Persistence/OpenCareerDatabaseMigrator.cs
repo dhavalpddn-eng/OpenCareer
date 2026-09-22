@@ -4,7 +4,7 @@ namespace OpenCareer.Infrastructure.Persistence;
 
 internal static class OpenCareerDatabaseMigrator
 {
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -156,6 +156,28 @@ internal static class OpenCareerDatabaseMigrator
 
             transaction.Commit();
             version = 6;
+        }
+
+        if (version < 7)
+        {
+            using SqliteTransaction transaction =
+                connection.BeginTransaction();
+
+            await EnsureEconomySchemaAsync(
+                    connection,
+                    transaction,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            await ExecuteAsync(
+                    connection,
+                    transaction,
+                    "PRAGMA user_version = 7;",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            transaction.Commit();
+            version = 7;
         }
 
         if (version != CurrentSchemaVersion)
@@ -364,6 +386,115 @@ internal static class OpenCareerDatabaseMigrator
                         completed_at_ms DESC,
                         resolution_key ASC
                     );
+                """,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+
+    private static async Task EnsureEconomySchemaAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                CREATE TABLE IF NOT EXISTS JobContracts (
+                    ContractId TEXT NOT NULL PRIMARY KEY,
+                    ContractJson TEXT NOT NULL,
+                    Status INTEGER NOT NULL,
+                    Version INTEGER NOT NULL CHECK (Version >= 0),
+                    UpdatedAtUtcTicks INTEGER NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS IX_JobContracts_Status_Updated
+                    ON JobContracts (Status, UpdatedAtUtcTicks DESC);
+
+                CREATE TABLE IF NOT EXISTS EconomyLedgerTransactions (
+                    TransactionId TEXT NOT NULL PRIMARY KEY,
+                    IdempotencyKey TEXT NOT NULL UNIQUE,
+                    OccurredAtUtcTicks INTEGER NOT NULL,
+                    Description TEXT NOT NULL,
+                    ReferenceType TEXT NOT NULL,
+                    ReferenceId TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS EconomyLedgerPostings (
+                    TransactionId TEXT NOT NULL,
+                    PostingIndex INTEGER NOT NULL,
+                    AccountCode INTEGER NOT NULL,
+                    DebitCents INTEGER NOT NULL,
+                    CreditCents INTEGER NOT NULL,
+                    Memo TEXT NOT NULL,
+                    PRIMARY KEY (TransactionId, PostingIndex),
+                    FOREIGN KEY (TransactionId)
+                        REFERENCES EconomyLedgerTransactions(TransactionId)
+                        ON DELETE CASCADE,
+                    CHECK (DebitCents >= 0),
+                    CHECK (CreditCents >= 0),
+                    CHECK (
+                        (DebitCents > 0 AND CreditCents = 0)
+                        OR (CreditCents > 0 AND DebitCents = 0)
+                    )
+                );
+
+                CREATE TABLE IF NOT EXISTS ActivePlayBillingState (
+                    OwnershipId TEXT NOT NULL PRIMARY KEY,
+                    CycleIndex INTEGER NOT NULL CHECK (CycleIndex >= 0),
+                    CycleProgressTicks INTEGER NOT NULL CHECK (CycleProgressTicks >= 0),
+                    Version INTEGER NOT NULL CHECK (Version >= 0),
+                    UpdatedAtUtcTicks INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS OwnedAircraft (
+                    OwnershipId TEXT NOT NULL PRIMARY KEY,
+                    DealerId TEXT NOT NULL,
+                    ListingId TEXT NOT NULL,
+                    AircraftId TEXT NOT NULL,
+                    AcquisitionMethod INTEGER NOT NULL,
+                    AcquisitionPriceCents INTEGER NOT NULL CHECK (AcquisitionPriceCents > 0),
+                    AcquiredAtUtcTicks INTEGER NOT NULL,
+                    StorageIcao TEXT NOT NULL,
+                    LoanId TEXT NULL,
+                    UNIQUE (DealerId, ListingId),
+                    UNIQUE (LoanId)
+                );
+
+                CREATE TABLE IF NOT EXISTS AircraftLoans (
+                    LoanId TEXT NOT NULL PRIMARY KEY,
+                    OwnershipId TEXT NOT NULL UNIQUE,
+                    LenderId TEXT NOT NULL,
+                    OriginalPrincipalCents INTEGER NOT NULL CHECK (OriginalPrincipalCents > 0),
+                    AnnualRateText TEXT NOT NULL,
+                    TermMonths INTEGER NOT NULL CHECK (TermMonths > 0),
+                    ScheduledPaymentCents INTEGER NOT NULL CHECK (ScheduledPaymentCents > 0),
+                    OriginatedAtUtcTicks INTEGER NOT NULL,
+                    FOREIGN KEY (OwnershipId)
+                        REFERENCES OwnedAircraft(OwnershipId)
+                        ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS AircraftLoanState (
+                    LoanId TEXT NOT NULL PRIMARY KEY,
+                    OwnershipId TEXT NOT NULL UNIQUE,
+                    RemainingPrincipalCents INTEGER NOT NULL CHECK (RemainingPrincipalCents >= 0),
+                    Version INTEGER NOT NULL CHECK (Version >= 0),
+                    UpdatedAtUtcTicks INTEGER NOT NULL,
+                    FOREIGN KEY (LoanId)
+                        REFERENCES AircraftLoans(LoanId)
+                        ON DELETE CASCADE,
+                    FOREIGN KEY (OwnershipId)
+                        REFERENCES OwnedAircraft(OwnershipId)
+                        ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS IX_EconomyLedgerTransactions_Occurred
+                    ON EconomyLedgerTransactions (OccurredAtUtcTicks DESC);
+
+                CREATE INDEX IF NOT EXISTS IX_EconomyLedgerPostings_Account
+                    ON EconomyLedgerPostings (AccountCode, TransactionId);
                 """,
                 cancellationToken)
             .ConfigureAwait(false);
