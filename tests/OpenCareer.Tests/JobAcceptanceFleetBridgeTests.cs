@@ -2,6 +2,8 @@ using OpenCareer.Application.Careers;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
+using OpenCareer.Domain.Airports;
+using OpenCareer.Domain.Planning;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Events;
 
@@ -178,6 +180,191 @@ public sealed class JobAcceptanceFleetBridgeTests
                 request.Offer.OfferId));
     }
 
+    [Fact]
+    public async Task AcceptedReservationIsUsedForAuthoritativeDispatchEvaluation()
+    {
+        JobContractCreationRequest request = Request();
+        var contractStore = new FakeContractStore();
+        var boardStore =
+            new FakeBoardStore(
+                BoardWithOffer(request.Offer));
+        var reservationStore =
+            new StatefulReservationStore();
+
+        AcceptedJobDispatchResult result =
+            await CreateDispatchBridge(
+                    contractStore,
+                    boardStore,
+                    reservationStore,
+                    StandardAirports())
+                .AcceptReserveAndEvaluateAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime),
+                    new OperationDispatchRequirements(
+                        PayloadPounds: 500,
+                        RequiredRangeNauticalMiles: 150));
+
+        Assert.Equal(
+            JobAcceptanceFleetStatus.AcceptedAndReserved,
+            result.FleetResult.Status);
+        Assert.NotNull(result.DispatchResult);
+        Assert.Equal(
+            DispatchFeasibilityStatus.Feasible,
+            result.DispatchResult.Status);
+        Assert.Equal(
+            result.FleetResult.ReservationId,
+            reservationStore.State?.ReservationId);
+    }
+
+    [Fact]
+    public async Task DispatchReplayReusesContractReservationAndRemainsFeasible()
+    {
+        JobContractCreationRequest request = Request();
+        var contractStore = new FakeContractStore();
+        var boardStore =
+            new FakeBoardStore(
+                BoardWithOffer(request.Offer));
+        var reservationStore =
+            new StatefulReservationStore();
+
+        AcceptedJobDispatchResult first =
+            await CreateDispatchBridge(
+                    contractStore,
+                    boardStore,
+                    reservationStore,
+                    StandardAirports())
+                .AcceptReserveAndEvaluateAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime),
+                    new OperationDispatchRequirements(500, 150));
+
+        AcceptedJobDispatchResult replay =
+            await CreateDispatchBridge(
+                    contractStore,
+                    boardStore,
+                    reservationStore,
+                    StandardAirports())
+                .AcceptReserveAndEvaluateAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime),
+                    new OperationDispatchRequirements(500, 150));
+
+        Assert.Equal(
+            JobAcceptanceFleetStatus.AcceptedAndReserved,
+            first.FleetResult.Status);
+        Assert.Equal(
+            JobAcceptanceFleetStatus.AcceptedAndReservationReused,
+            replay.FleetResult.Status);
+        Assert.Equal(
+            first.FleetResult.ReservationId,
+            replay.FleetResult.ReservationId);
+        Assert.Equal(
+            DispatchFeasibilityStatus.Feasible,
+            replay.DispatchResult?.Status);
+        Assert.Equal(1, reservationStore.AcquiredCount);
+    }
+
+    [Fact]
+    public async Task UnrelatedReservationStopsBeforeDispatchEvaluation()
+    {
+        JobContractCreationRequest request = Request();
+        var reservationStore =
+            new StatefulReservationStore(
+                new AircraftAvailabilityState(
+                    "canonical-aircraft",
+                    AircraftAvailabilityStatus.Unavailable,
+                    "dispatch:unrelated"));
+
+        AcceptedJobDispatchResult result =
+            await CreateDispatchBridge(
+                    new FakeContractStore(),
+                    new FakeBoardStore(
+                        BoardWithOffer(request.Offer)),
+                    reservationStore,
+                    StandardAirports())
+                .AcceptReserveAndEvaluateAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime),
+                    new OperationDispatchRequirements(500, 150));
+
+        Assert.Equal(
+            JobAcceptanceFleetStatus.AircraftReservedByAnother,
+            result.FleetResult.Status);
+        Assert.Null(result.DispatchResult);
+        Assert.Equal(
+            "dispatch:unrelated",
+            reservationStore.State?.ReservationId);
+    }
+
+    [Fact]
+    public async Task AuthoritativeDispatchFailureIsRetainedForAcceptedOperation()
+    {
+        JobContractCreationRequest request = Request();
+        var contractStore = new FakeContractStore();
+        var reservationStore =
+            new StatefulReservationStore();
+
+        AirportRecord[] airports =
+        [
+            Airport("KRME", 1200),
+            Airport("KSYR", 5000)
+        ];
+
+        AcceptedJobDispatchResult result =
+            await CreateDispatchBridge(
+                    contractStore,
+                    new FakeBoardStore(
+                        BoardWithOffer(request.Offer)),
+                    reservationStore,
+                    airports)
+                .AcceptReserveAndEvaluateAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime),
+                    new OperationDispatchRequirements(500, 150));
+
+        Assert.Equal(
+            ContractStatus.Accepted,
+            result.FleetResult.AcceptedContract?.Contract.Status);
+        Assert.NotNull(result.DispatchResult);
+        Assert.Equal(
+            DispatchFeasibilityStatus.Infeasible,
+            result.DispatchResult.Status);
+        Assert.Contains(
+            result.DispatchResult.Issues,
+            issue =>
+                issue.Endpoint == DispatchEndpoint.Origin
+                && issue.Reason
+                    == DispatchFeasibilityReason.RunwayTooShort);
+        Assert.Equal(
+            result.FleetResult.ReservationId,
+            reservationStore.State?.ReservationId);
+    }
+
+    [Fact]
+    public async Task DispatchCannotUnderstateAcceptedJobPayloadOrRoute()
+    {
+        JobContractCreationRequest request = Request();
+        AcceptedJobDispatchBridge bridge =
+            CreateDispatchBridge(
+                new FakeContractStore(),
+                new FakeBoardStore(
+                    BoardWithOffer(request.Offer)),
+                new StatefulReservationStore(),
+                StandardAirports());
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => bridge.AcceptReserveAndEvaluateAsync(
+                request,
+                DispatchContext(request.AcceptanceTime),
+                new OperationDispatchRequirements(499, 150)));
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => bridge.AcceptReserveAndEvaluateAsync(
+                request,
+                DispatchContext(request.AcceptanceTime),
+                new OperationDispatchRequirements(500, 149)));
+    }
+
     private static JobAcceptanceFleetBridge CreateBridge(
         FakeContractStore contractStore,
         FakeBoardStore boardStore,
@@ -222,6 +409,80 @@ public sealed class JobAcceptanceFleetBridgeTests
             contractStore,
             reservations);
     }
+
+    private static AcceptedJobDispatchBridge CreateDispatchBridge(
+        FakeContractStore contractStore,
+        FakeBoardStore boardStore,
+        StatefulReservationStore reservationStore,
+        IReadOnlyList<AirportRecord> airports) =>
+        new(
+            CreateBridge(
+                contractStore,
+                boardStore,
+                reservationStore),
+            new OperationDispatchPlanningService(
+                new StubAircraftRegistrySource(
+                    DispatchResolution()),
+                new StubAirportDataSource(
+                    airports.ToDictionary(
+                        airport => airport.Icao,
+                        StringComparer.OrdinalIgnoreCase)),
+                weatherSource: null,
+                reservationStore));
+
+    private static AircraftRegistryResolution DispatchResolution() =>
+        AircraftRegistryResolver.Resolve(
+        [
+            new AircraftRegistryObservation(
+                CanonicalAircraftId:
+                    "canonical-aircraft",
+                ProviderId:
+                    "test-source",
+                ProviderRecordId:
+                    "fixture",
+                Confidence:
+                    AircraftDataConfidence.Verified,
+                IsInstalled:
+                    true,
+                MaximumPayloadPounds:
+                    2_000,
+                MaximumRangeNauticalMiles:
+                    1_000,
+                RunwayPerformance:
+                    new AircraftRunwayPerformanceProfile(
+                        MinimumTakeoffRunwayFeet:
+                            1_800,
+                        MinimumLandingRunwayFeet:
+                            1_600,
+                        MinimumRunwayWidthFeet:
+                            50,
+                        SupportedSurfaces:
+                            RunwaySurfaceSupport.Asphalt,
+                        Confidence:
+                            AircraftDataConfidence.Verified,
+                        Source:
+                            "test"))
+        ]);
+
+    private static AirportRecord[] StandardAirports() =>
+    [
+        Airport("KRME", 5_000),
+        Airport("KSYR", 5_000)
+    ];
+
+    private static AirportRecord Airport(
+        string icao,
+        double runwayLengthFeet) =>
+        new(
+            icao,
+            $"{icao} Fixture",
+            [
+                new RunwayRecord(
+                    "18",
+                    runwayLengthFeet,
+                    100,
+                    RunwaySurface.Asphalt)
+            ]);
 
     private static JobBoardState BoardWithOffer(
         JobMarketOfferDraft offer) =>
@@ -320,15 +581,59 @@ public sealed class JobAcceptanceFleetBridgeTests
         }
     }
 
+    private sealed class StubAirportDataSource(
+        IReadOnlyDictionary<string, AirportRecord> airports)
+        : IAirportDataSource
+    {
+        public Task<AirportRecord?> FindAirportAsync(
+            string icao,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            airports.TryGetValue(
+                icao,
+                out AirportRecord? airport);
+            return Task.FromResult(airport);
+        }
+    }
+
     private sealed class StatefulReservationStore(
         AircraftAvailabilityState? initial = null)
-        : IAircraftReservationStore
+        : IAircraftReservationStore, IAircraftAvailabilityStore
     {
         public AircraftAvailabilityState? State { get; private set; } =
             initial;
         public int TryReserveCount { get; private set; }
         public int AcquiredCount { get; private set; }
         public int ReleaseCount { get; private set; }
+
+        public Task<AircraftAvailabilityState?> FindAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            AircraftAvailabilityState? result =
+                State is not null
+                && string.Equals(
+                    State.CanonicalAircraftId,
+                    canonicalAircraftId,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? State
+                    : null;
+
+            return Task.FromResult(result);
+        }
+
+        public Task SetAsync(
+            AircraftAvailabilityState state,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ArgumentNullException.ThrowIfNull(state);
+            State = state.Normalize();
+            return Task.CompletedTask;
+        }
 
         public Task<AircraftReservationAcquireResult> TryReserveAsync(
             string canonicalAircraftId,

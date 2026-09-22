@@ -151,6 +151,8 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<JobAcceptanceFleetBridge>();
 
+        services.AddSingleton<AcceptedJobDispatchBridge>();
+
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();
         services.AddSingleton<ITutorialStepEvidenceSource>(provider =>
