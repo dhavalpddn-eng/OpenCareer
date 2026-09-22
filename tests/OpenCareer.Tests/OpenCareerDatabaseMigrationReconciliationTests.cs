@@ -9,7 +9,7 @@ namespace OpenCareer.Tests;
 public sealed class OpenCareerDatabaseMigrationReconciliationTests
 {
     [Fact]
-    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV7()
+    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV11()
     {
         string directory = CreateTempDirectory();
 
@@ -47,7 +47,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV7()
+    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV11()
     {
         string directory = CreateTempDirectory();
 
@@ -82,7 +82,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV7()
+    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV11()
     {
         string directory = CreateTempDirectory();
 
@@ -161,7 +161,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV7()
+    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV11()
     {
         string directory = CreateTempDirectory();
 
@@ -337,13 +337,15 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
 
         foreach (string tableName in new[]
         {
-            "JobContracts",
-            "EconomyLedgerTransactions",
-            "EconomyLedgerPostings",
-            "ActivePlayBillingState",
-            "OwnedAircraft",
-            "AircraftLoans",
-            "AircraftLoanState"
+            "market_states",
+            "economic_cycle_states",
+            "world_event_states",
+            "world_simulation_checkpoints",
+            "job_board_states",
+            "job_contracts",
+            "economy_ledger_transactions",
+            "economy_ledger_postings",
+            "commodity_market_snapshots"
         })
         {
             Assert.True(
@@ -359,7 +361,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            7L,
+            11L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));

@@ -7,27 +7,36 @@ namespace OpenCareer.Tests;
 public sealed class PlayableLoopDatabaseMigrationTests
 {
     [Fact]
-    public async Task FreshDatabaseCreatesUnifiedEconomyAndCareerSchema()
+    public async Task FreshDatabaseCreatesUnifiedSchemaThroughEconomyStore()
     {
         string directory = CreateTempDirectory();
 
         try
         {
-            string path = Path.Combine(directory, "opencareer.db");
+            string path =
+                Path.Combine(
+                    directory,
+                    "opencareer.db");
 
-            await TriggerMigrationAsync(path);
+            var store =
+                CreateLedgerStore(path);
 
-            await AssertSchemaVersionAsync(path, 7);
+            Assert.Equal(
+                0m,
+                await store.ReadCashBalanceAsync());
+
+            await AssertSchemaVersionAsync(
+                path,
+                11);
+
             await AssertTablesExistAsync(
                 path,
                 "player_career_profile",
-                "JobContracts",
-                "EconomyLedgerTransactions",
-                "EconomyLedgerPostings",
-                "ActivePlayBillingState",
-                "OwnedAircraft",
-                "AircraftLoans",
-                "AircraftLoanState");
+                "job_board_states",
+                "job_contracts",
+                "economy_ledger_transactions",
+                "economy_ledger_postings",
+                "commodity_market_snapshots");
         }
         finally
         {
@@ -36,68 +45,70 @@ public sealed class PlayableLoopDatabaseMigrationTests
     }
 
     [Fact]
-    public async Task EconomyLegacyDatabasePreservesRowsAndAddsCareerSchema()
+    public async Task EconomyV10DatabasePreservesCurrentRowsAndAddsCareerSchema()
     {
         string directory = CreateTempDirectory();
 
         try
         {
-            string path = Path.Combine(directory, "opencareer.db");
-            const string transactionId =
-                "9f113d5d-f51c-4be1-bdb0-c3933f75de59";
+            string path =
+                Path.Combine(
+                    directory,
+                    "opencareer.db");
 
-            await CreateEconomyLegacyDatabaseAsync(
+            await CreateEconomyV10DatabaseAsync(path);
+
+            var store =
+                CreateLedgerStore(path);
+
+            Assert.Equal(
+                123.45m,
+                await store.ReadCashBalanceAsync());
+
+            await AssertSchemaVersionAsync(
                 path,
-                transactionId);
+                11);
 
-            await TriggerMigrationAsync(path);
-
-            await AssertSchemaVersionAsync(path, 7);
             await AssertTablesExistAsync(
                 path,
                 "player_career_profile",
-                "JobContracts",
-                "EconomyLedgerTransactions",
-                "EconomyLedgerPostings");
+                "conflict_campaigns",
+                "military_career_profile",
+                "military_operation_consequences");
 
             await using SqliteConnection connection =
                 await OpenReadOnlyAsync(path);
 
-            await using SqliteCommand transaction =
+            await using SqliteCommand ledger =
                 connection.CreateCommand();
-            transaction.CommandText =
+
+            ledger.CommandText =
                 """
-                SELECT Description
-                FROM EconomyLedgerTransactions
-                WHERE TransactionId = $transaction_id;
+                SELECT description
+                FROM economy_ledger_transactions
+                WHERE transaction_id = '10000000-0000-0000-0000-000000000001';
                 """;
-            transaction.Parameters.AddWithValue(
-                "$transaction_id",
-                transactionId);
 
             Assert.Equal(
-                "legacy-economy-sentinel",
+                "economy-v10-sentinel",
                 Convert.ToString(
-                    await transaction.ExecuteScalarAsync(),
+                    await ledger.ExecuteScalarAsync(),
                     System.Globalization.CultureInfo.InvariantCulture));
 
-            await using SqliteCommand posting =
+            await using SqliteCommand contract =
                 connection.CreateCommand();
-            posting.CommandText =
+
+            contract.CommandText =
                 """
-                SELECT DebitCents
-                FROM EconomyLedgerPostings
-                WHERE TransactionId = $transaction_id
-                  AND PostingIndex = 0;
+                SELECT payload_json
+                FROM job_contracts
+                WHERE contract_id = '20000000-0000-0000-0000-000000000001';
                 """;
-            posting.Parameters.AddWithValue(
-                "$transaction_id",
-                transactionId);
 
             Assert.Equal(
-                12345L,
-                Convert.ToInt64(
-                    await posting.ExecuteScalarAsync(),
+                "{\"currentEconomy\":true}",
+                Convert.ToString(
+                    await contract.ExecuteScalarAsync(),
                     System.Globalization.CultureInfo.InvariantCulture));
         }
         finally
@@ -107,39 +118,44 @@ public sealed class PlayableLoopDatabaseMigrationTests
     }
 
     [Fact]
-    public async Task CareerV6DatabasePreservesRowsAndAddsEconomySchema()
+    public async Task CareerV6DatabasePreservesProfileAndAddsCurrentEconomySchema()
     {
         string directory = CreateTempDirectory();
 
         try
         {
-            string path = Path.Combine(directory, "opencareer.db");
-            const string careerId =
-                "6651324d-7d57-4439-b82c-e3235acc0d10";
+            string path =
+                Path.Combine(
+                    directory,
+                    "opencareer.db");
 
-            await CreateCareerV6DatabaseAsync(
+            await CreateCareerV6DatabaseAsync(path);
+
+            var store =
+                CreateLedgerStore(path);
+
+            Assert.Equal(
+                0m,
+                await store.ReadCashBalanceAsync());
+
+            await AssertSchemaVersionAsync(
                 path,
-                careerId);
+                11);
 
-            await TriggerMigrationAsync(path);
-
-            await AssertSchemaVersionAsync(path, 7);
             await AssertTablesExistAsync(
                 path,
-                "player_career_profile",
-                "JobContracts",
-                "EconomyLedgerTransactions",
-                "EconomyLedgerPostings",
-                "ActivePlayBillingState",
-                "OwnedAircraft",
-                "AircraftLoans",
-                "AircraftLoanState");
+                "job_board_states",
+                "job_contracts",
+                "economy_ledger_transactions",
+                "economy_ledger_postings",
+                "commodity_market_snapshots");
 
             await using SqliteConnection connection =
                 await OpenReadOnlyAsync(path);
 
             await using SqliteCommand profile =
                 connection.CreateCommand();
+
             profile.CommandText =
                 """
                 SELECT career_id, revision, payload_json
@@ -151,9 +167,15 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 await profile.ExecuteReaderAsync();
 
             Assert.True(await reader.ReadAsync());
-            Assert.Equal(careerId, reader.GetString(0));
-            Assert.Equal(3L, reader.GetInt64(1));
-            Assert.Equal("{\"migrationSentinel\":true}", reader.GetString(2));
+            Assert.Equal(
+                "30000000-0000-0000-0000-000000000001",
+                reader.GetString(0));
+            Assert.Equal(
+                3L,
+                reader.GetInt64(1));
+            Assert.Equal(
+                "{\"careerV6\":true}",
+                reader.GetString(2));
         }
         finally
         {
@@ -161,21 +183,240 @@ public sealed class PlayableLoopDatabaseMigrationTests
         }
     }
 
-    private static async Task TriggerMigrationAsync(
-        string path)
+    [Fact]
+    public async Task IntegrationV7LegacyEconomyRowsRemainVisibleToCurrentStores()
     {
-        var store =
-            new SqliteConflictCampaignStore(
-                new OpenCareerDatabaseOptions(path),
-                NullLogger<SqliteConflictCampaignStore>.Instance);
+        string directory = CreateTempDirectory();
 
-        Assert.Null(
-            await store.LoadMostRecentlySavedAsync());
+        try
+        {
+            string path =
+                Path.Combine(
+                    directory,
+                    "opencareer.db");
+
+            await CreateIntegrationV7DatabaseAsync(path);
+
+            var store =
+                CreateLedgerStore(path);
+
+            Assert.Equal(
+                50m,
+                await store.ReadCashBalanceAsync());
+
+            await AssertSchemaVersionAsync(
+                path,
+                11);
+
+            await using SqliteConnection connection =
+                await OpenReadOnlyAsync(path);
+
+            await using SqliteCommand ledger =
+                connection.CreateCommand();
+
+            ledger.CommandText =
+                """
+                SELECT description
+                FROM economy_ledger_transactions
+                WHERE transaction_id = '40000000-0000-0000-0000-000000000001';
+                """;
+
+            Assert.Equal(
+                "integration-v7-sentinel",
+                Convert.ToString(
+                    await ledger.ExecuteScalarAsync(),
+                    System.Globalization.CultureInfo.InvariantCulture));
+
+            await using SqliteCommand contract =
+                connection.CreateCommand();
+
+            contract.CommandText =
+                """
+                SELECT
+                    payload_schema_version,
+                    status,
+                    version,
+                    updated_at_ms,
+                    payload_json
+                FROM job_contracts
+                WHERE contract_id = '50000000-0000-0000-0000-000000000001';
+                """;
+
+            await using SqliteDataReader reader =
+                await contract.ExecuteReaderAsync();
+
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(1, reader.GetInt32(0));
+            Assert.Equal(1, reader.GetInt32(1));
+            Assert.Equal(2L, reader.GetInt64(2));
+            Assert.Equal(12345L, reader.GetInt64(3));
+            Assert.Equal(
+                "{\"legacyContract\":true}",
+                reader.GetString(4));
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
     }
 
-    private static async Task CreateEconomyLegacyDatabaseAsync(
-        string path,
-        string transactionId)
+    private static SqliteEconomyLedgerStore CreateLedgerStore(
+        string path) =>
+        new(
+            new OpenCareerDatabaseOptions(path),
+            NullLogger<SqliteEconomyLedgerStore>.Instance);
+
+    private static async Task CreateEconomyV10DatabaseAsync(
+        string path)
+    {
+        await using SqliteConnection connection =
+            await OpenReadWriteAsync(path);
+
+        await using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            CREATE TABLE job_contracts (
+                contract_id TEXT NOT NULL PRIMARY KEY,
+                payload_schema_version INTEGER NOT NULL,
+                status INTEGER NOT NULL,
+                version INTEGER NOT NULL CHECK (version >= 0),
+                updated_at_ms INTEGER NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+
+            CREATE TABLE economy_ledger_transactions (
+                transaction_id TEXT NOT NULL PRIMARY KEY,
+                idempotency_key TEXT NOT NULL UNIQUE,
+                occurred_at_utc_ticks INTEGER NOT NULL,
+                description TEXT NOT NULL,
+                reference_type TEXT NOT NULL,
+                reference_id TEXT NOT NULL
+            );
+
+            CREATE TABLE economy_ledger_postings (
+                transaction_id TEXT NOT NULL,
+                posting_index INTEGER NOT NULL,
+                account_code INTEGER NOT NULL,
+                debit_cents INTEGER NOT NULL,
+                credit_cents INTEGER NOT NULL,
+                memo TEXT NOT NULL,
+                PRIMARY KEY (transaction_id, posting_index)
+            );
+
+            INSERT INTO job_contracts (
+                contract_id,
+                payload_schema_version,
+                status,
+                version,
+                updated_at_ms,
+                payload_json
+            )
+            VALUES (
+                '20000000-0000-0000-0000-000000000001',
+                1,
+                1,
+                3,
+                1789952400000,
+                '{"currentEconomy":true}'
+            );
+
+            INSERT INTO economy_ledger_transactions (
+                transaction_id,
+                idempotency_key,
+                occurred_at_utc_ticks,
+                description,
+                reference_type,
+                reference_id
+            )
+            VALUES (
+                '10000000-0000-0000-0000-000000000001',
+                'economy-v10-idempotency',
+                638941572000000000,
+                'economy-v10-sentinel',
+                'MigrationTest',
+                'economy-v10'
+            );
+
+            INSERT INTO economy_ledger_postings (
+                transaction_id,
+                posting_index,
+                account_code,
+                debit_cents,
+                credit_cents,
+                memo
+            )
+            VALUES
+                (
+                    '10000000-0000-0000-0000-000000000001',
+                    0,
+                    0,
+                    12345,
+                    0,
+                    'cash'
+                ),
+                (
+                    '10000000-0000-0000-0000-000000000001',
+                    1,
+                    1,
+                    0,
+                    12345,
+                    'revenue'
+                );
+
+            PRAGMA user_version = 10;
+            """;
+
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task CreateCareerV6DatabaseAsync(
+        string path)
+    {
+        await using SqliteConnection connection =
+            await OpenReadWriteAsync(path);
+
+        await using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            CREATE TABLE player_career_profile (
+                slot_id INTEGER NOT NULL PRIMARY KEY,
+                career_id TEXT NOT NULL UNIQUE,
+                revision INTEGER NOT NULL CHECK (revision >= 1),
+                payload_schema_version INTEGER NOT NULL,
+                saved_at_ms INTEGER NOT NULL,
+                payload_json TEXT NOT NULL,
+                CHECK (slot_id = 1)
+            );
+
+            INSERT INTO player_career_profile (
+                slot_id,
+                career_id,
+                revision,
+                payload_schema_version,
+                saved_at_ms,
+                payload_json
+            )
+            VALUES (
+                1,
+                '30000000-0000-0000-0000-000000000001',
+                3,
+                1,
+                1789952400000,
+                '{"careerV6":true}'
+            );
+
+            PRAGMA user_version = 6;
+            """;
+
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task CreateIntegrationV7DatabaseAsync(
+        string path)
     {
         await using SqliteConnection connection =
             await OpenReadWriteAsync(path);
@@ -193,9 +434,6 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 UpdatedAtUtcTicks INTEGER NOT NULL
             );
 
-            CREATE INDEX IX_JobContracts_Status_Updated
-                ON JobContracts (Status, UpdatedAtUtcTicks DESC);
-
             CREATE TABLE EconomyLedgerTransactions (
                 TransactionId TEXT NOT NULL PRIMARY KEY,
                 IdempotencyKey TEXT NOT NULL UNIQUE,
@@ -212,73 +450,23 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 DebitCents INTEGER NOT NULL,
                 CreditCents INTEGER NOT NULL,
                 Memo TEXT NOT NULL,
-                PRIMARY KEY (TransactionId, PostingIndex),
-                FOREIGN KEY (TransactionId)
-                    REFERENCES EconomyLedgerTransactions(TransactionId)
-                    ON DELETE CASCADE,
-                CHECK (DebitCents >= 0),
-                CHECK (CreditCents >= 0),
-                CHECK (
-                    (DebitCents > 0 AND CreditCents = 0)
-                    OR (CreditCents > 0 AND DebitCents = 0)
-                )
+                PRIMARY KEY (TransactionId, PostingIndex)
             );
 
-            CREATE TABLE ActivePlayBillingState (
-                OwnershipId TEXT NOT NULL PRIMARY KEY,
-                CycleIndex INTEGER NOT NULL CHECK (CycleIndex >= 0),
-                CycleProgressTicks INTEGER NOT NULL CHECK (CycleProgressTicks >= 0),
-                Version INTEGER NOT NULL CHECK (Version >= 0),
-                UpdatedAtUtcTicks INTEGER NOT NULL
+            INSERT INTO JobContracts (
+                ContractId,
+                ContractJson,
+                Status,
+                Version,
+                UpdatedAtUtcTicks
+            )
+            VALUES (
+                '50000000-0000-0000-0000-000000000001',
+                '{"legacyContract":true}',
+                1,
+                2,
+                621356091450000000
             );
-
-            CREATE TABLE OwnedAircraft (
-                OwnershipId TEXT NOT NULL PRIMARY KEY,
-                DealerId TEXT NOT NULL,
-                ListingId TEXT NOT NULL,
-                AircraftId TEXT NOT NULL,
-                AcquisitionMethod INTEGER NOT NULL,
-                AcquisitionPriceCents INTEGER NOT NULL CHECK (AcquisitionPriceCents > 0),
-                AcquiredAtUtcTicks INTEGER NOT NULL,
-                StorageIcao TEXT NOT NULL,
-                LoanId TEXT NULL,
-                UNIQUE (DealerId, ListingId),
-                UNIQUE (LoanId)
-            );
-
-            CREATE TABLE AircraftLoans (
-                LoanId TEXT NOT NULL PRIMARY KEY,
-                OwnershipId TEXT NOT NULL UNIQUE,
-                LenderId TEXT NOT NULL,
-                OriginalPrincipalCents INTEGER NOT NULL CHECK (OriginalPrincipalCents > 0),
-                AnnualRateText TEXT NOT NULL,
-                TermMonths INTEGER NOT NULL CHECK (TermMonths > 0),
-                ScheduledPaymentCents INTEGER NOT NULL CHECK (ScheduledPaymentCents > 0),
-                OriginatedAtUtcTicks INTEGER NOT NULL,
-                FOREIGN KEY (OwnershipId)
-                    REFERENCES OwnedAircraft(OwnershipId)
-                    ON DELETE CASCADE
-            );
-
-            CREATE TABLE AircraftLoanState (
-                LoanId TEXT NOT NULL PRIMARY KEY,
-                OwnershipId TEXT NOT NULL UNIQUE,
-                RemainingPrincipalCents INTEGER NOT NULL CHECK (RemainingPrincipalCents >= 0),
-                Version INTEGER NOT NULL CHECK (Version >= 0),
-                UpdatedAtUtcTicks INTEGER NOT NULL,
-                FOREIGN KEY (LoanId)
-                    REFERENCES AircraftLoans(LoanId)
-                    ON DELETE CASCADE,
-                FOREIGN KEY (OwnershipId)
-                    REFERENCES OwnedAircraft(OwnershipId)
-                    ON DELETE CASCADE
-            );
-
-            CREATE INDEX IX_EconomyLedgerTransactions_Occurred
-                ON EconomyLedgerTransactions (OccurredAtUtcTicks DESC);
-
-            CREATE INDEX IX_EconomyLedgerPostings_Account
-                ON EconomyLedgerPostings (AccountCode, TransactionId);
 
             INSERT INTO EconomyLedgerTransactions (
                 TransactionId,
@@ -286,14 +474,16 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 OccurredAtUtcTicks,
                 Description,
                 ReferenceType,
-                ReferenceId)
+                ReferenceId
+            )
             VALUES (
-                $transaction_id,
-                'legacy-economy-idempotency',
-                638938368000000000,
-                'legacy-economy-sentinel',
+                '40000000-0000-0000-0000-000000000001',
+                'integration-v7-idempotency',
+                638941572000000000,
+                'integration-v7-sentinel',
                 'MigrationTest',
-                'legacy');
+                'integration-v7'
+            );
 
             INSERT INTO EconomyLedgerPostings (
                 TransactionId,
@@ -301,131 +491,28 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 AccountCode,
                 DebitCents,
                 CreditCents,
-                Memo)
-            VALUES (
-                $transaction_id,
-                0,
-                0,
-                12345,
-                0,
-                'preserve-me');
+                Memo
+            )
+            VALUES
+                (
+                    '40000000-0000-0000-0000-000000000001',
+                    0,
+                    0,
+                    5000,
+                    0,
+                    'cash'
+                ),
+                (
+                    '40000000-0000-0000-0000-000000000001',
+                    1,
+                    1,
+                    0,
+                    5000,
+                    'revenue'
+                );
+
+            PRAGMA user_version = 7;
             """;
-        command.Parameters.AddWithValue(
-            "$transaction_id",
-            transactionId);
-
-        await command.ExecuteNonQueryAsync();
-
-        await using SqliteCommand version =
-            connection.CreateCommand();
-        version.CommandText = "PRAGMA user_version;";
-        Assert.Equal(
-            0L,
-            Convert.ToInt64(
-                await version.ExecuteScalarAsync(),
-                System.Globalization.CultureInfo.InvariantCulture));
-    }
-
-    private static async Task CreateCareerV6DatabaseAsync(
-        string path,
-        string careerId)
-    {
-        await using SqliteConnection connection =
-            await OpenReadWriteAsync(path);
-
-        await using SqliteCommand command =
-            connection.CreateCommand();
-
-        command.CommandText =
-            """
-            CREATE TABLE logbook_entries (
-                entry_id TEXT NOT NULL PRIMARY KEY,
-                idempotency_key TEXT NOT NULL UNIQUE,
-                payload_schema_version INTEGER NOT NULL,
-                committed_at_ms INTEGER NOT NULL,
-                ended_at_ms INTEGER NOT NULL,
-                entry_kind INTEGER NOT NULL,
-                safety_outcome INTEGER NOT NULL,
-                mission_outcome INTEGER NOT NULL,
-                aircraft_name TEXT NOT NULL,
-                departure TEXT NULL,
-                arrival TEXT NULL,
-                contract_id TEXT NULL,
-                search_text TEXT NOT NULL,
-                payload_json TEXT NOT NULL
-            );
-
-            CREATE TABLE flight_session_checkpoint (
-                slot_id INTEGER NOT NULL PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                payload_schema_version INTEGER NOT NULL,
-                status INTEGER NOT NULL,
-                updated_at_utc_ticks INTEGER NOT NULL,
-                payload_json TEXT NOT NULL,
-                CHECK (slot_id = 1)
-            );
-
-            CREATE TABLE conflict_campaigns (
-                campaign_id TEXT NOT NULL PRIMARY KEY,
-                revision INTEGER NOT NULL CHECK (revision >= 1),
-                checkpoint_schema_version INTEGER NOT NULL,
-                saved_at_ms INTEGER NOT NULL,
-                world_updated_at_ms INTEGER NOT NULL,
-                payload_json TEXT NOT NULL
-            );
-
-            CREATE TABLE military_career_profile (
-                slot_id INTEGER NOT NULL PRIMARY KEY,
-                revision INTEGER NOT NULL CHECK (revision >= 1),
-                payload_schema_version INTEGER NOT NULL,
-                saved_at_ms INTEGER NOT NULL,
-                payload_json TEXT NOT NULL,
-                CHECK (slot_id = 1)
-            );
-
-            CREATE TABLE military_operation_consequences (
-                resolution_key TEXT NOT NULL PRIMARY KEY,
-                operation_id TEXT NOT NULL,
-                mission_id TEXT NOT NULL,
-                payload_schema_version INTEGER NOT NULL,
-                completed_at_ms INTEGER NOT NULL,
-                saved_at_ms INTEGER NOT NULL,
-                campaign_id TEXT NOT NULL,
-                sector_id TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                UNIQUE (operation_id, mission_id)
-            );
-
-            CREATE TABLE player_career_profile (
-                slot_id INTEGER NOT NULL PRIMARY KEY,
-                career_id TEXT NOT NULL UNIQUE,
-                revision INTEGER NOT NULL CHECK (revision >= 1),
-                payload_schema_version INTEGER NOT NULL,
-                saved_at_ms INTEGER NOT NULL,
-                payload_json TEXT NOT NULL,
-                CHECK (slot_id = 1)
-            );
-
-            INSERT INTO player_career_profile (
-                slot_id,
-                career_id,
-                revision,
-                payload_schema_version,
-                saved_at_ms,
-                payload_json)
-            VALUES (
-                1,
-                $career_id,
-                3,
-                1,
-                1789948800000,
-                '{"migrationSentinel":true}');
-
-            PRAGMA user_version = 6;
-            """;
-        command.Parameters.AddWithValue(
-            "$career_id",
-            careerId);
 
         await command.ExecuteNonQueryAsync();
     }
@@ -439,7 +526,9 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
         await using SqliteCommand command =
             connection.CreateCommand();
-        command.CommandText = "PRAGMA user_version;";
+
+        command.CommandText =
+            "PRAGMA user_version;";
 
         Assert.Equal(
             expected,
@@ -459,6 +548,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
         {
             await using SqliteCommand command =
                 connection.CreateCommand();
+
             command.CommandText =
                 """
                 SELECT COUNT(*)
@@ -466,6 +556,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 WHERE type = 'table'
                   AND name = $name;
                 """;
+
             command.Parameters.AddWithValue(
                 "$name",
                 tableName);
@@ -528,7 +619,11 @@ public sealed class PlayableLoopDatabaseMigrationTests
         try
         {
             if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
+            {
+                Directory.Delete(
+                    directory,
+                    recursive: true);
+            }
         }
         catch
         {

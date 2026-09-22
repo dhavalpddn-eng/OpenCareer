@@ -4,7 +4,10 @@ namespace OpenCareer.Infrastructure.Persistence;
 
 internal static class OpenCareerDatabaseMigrator
 {
-    public const int CurrentSchemaVersion = 7;
+    // Career and Economy branches independently reused schema versions 1-10.
+    // Version 11 is the first shared convergence point; pre-v11 user_version
+    // alone cannot be used to infer which subsystem tables already exist.
+    public const int CurrentSchemaVersion = 11;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -23,171 +26,32 @@ internal static class OpenCareerDatabaseMigrator
                 $"OpenCareer database schema {version} is newer than supported schema {CurrentSchemaVersion}.");
         }
 
-        if (version < 1)
-        {
-            using SqliteTransaction transaction =
-                connection.BeginTransaction();
+        using SqliteTransaction transaction =
+            connection.BeginTransaction();
 
-            await CreateLogbookSchemaAsync(
-                    connection,
-                    transaction,
-                    cancellationToken)
-                .ConfigureAwait(false);
+        await EnsureUnifiedSchemaAsync(
+                connection,
+                transaction,
+                cancellationToken)
+            .ConfigureAwait(false);
 
-            await ExecuteAsync(
-                    connection,
-                    transaction,
-                    "PRAGMA user_version = 1;",
-                    cancellationToken)
-                .ConfigureAwait(false);
+        await MigrateLegacyIntegrationEconomyAsync(
+                connection,
+                transaction,
+                cancellationToken)
+            .ConfigureAwait(false);
 
-            transaction.Commit();
-            version = 1;
-        }
+        await ExecuteAsync(
+                connection,
+                transaction,
+                $"PRAGMA user_version = {CurrentSchemaVersion};",
+                cancellationToken)
+            .ConfigureAwait(false);
 
-        if (version < 2)
-        {
-            using SqliteTransaction transaction =
-                connection.BeginTransaction();
-
-            await EnsureFlightAndConflictSchemasAsync(
-                    connection,
-                    transaction,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            await ExecuteAsync(
-                    connection,
-                    transaction,
-                    "PRAGMA user_version = 2;",
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            transaction.Commit();
-            version = 2;
-        }
-
-        if (version < 3)
-        {
-            using SqliteTransaction transaction =
-                connection.BeginTransaction();
-
-            // Both parallel feature branches independently used schema v2.
-            // Re-create both v2 tables idempotently so either legacy v2 shape
-            // is repaired before the shared database advances to v3.
-            await EnsureFlightAndConflictSchemasAsync(
-                    connection,
-                    transaction,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            await ExecuteAsync(
-                    connection,
-                    transaction,
-                    "PRAGMA user_version = 3;",
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            transaction.Commit();
-            version = 3;
-        }
-
-        if (version < 4)
-        {
-            using SqliteTransaction transaction =
-                connection.BeginTransaction();
-
-            await EnsureMilitaryCareerProfileSchemaAsync(
-                    connection,
-                    transaction,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            await ExecuteAsync(
-                    connection,
-                    transaction,
-                    "PRAGMA user_version = 4;",
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            transaction.Commit();
-            version = 4;
-        }
-
-        if (version < 5)
-        {
-            using SqliteTransaction transaction =
-                connection.BeginTransaction();
-
-            await EnsureOperationConsequenceSchemaAsync(
-                    connection,
-                    transaction,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            await ExecuteAsync(
-                    connection,
-                    transaction,
-                    "PRAGMA user_version = 5;",
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            transaction.Commit();
-            version = 5;
-        }
-
-        if (version < 6)
-        {
-            using SqliteTransaction transaction =
-                connection.BeginTransaction();
-
-            await EnsurePlayerCareerProfileSchemaAsync(
-                    connection,
-                    transaction,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            await ExecuteAsync(
-                    connection,
-                    transaction,
-                    "PRAGMA user_version = 6;",
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            transaction.Commit();
-            version = 6;
-        }
-
-        if (version < 7)
-        {
-            using SqliteTransaction transaction =
-                connection.BeginTransaction();
-
-            await EnsureEconomySchemaAsync(
-                    connection,
-                    transaction,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            await ExecuteAsync(
-                    connection,
-                    transaction,
-                    "PRAGMA user_version = 7;",
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            transaction.Commit();
-            version = 7;
-        }
-
-        if (version != CurrentSchemaVersion)
-        {
-            throw new InvalidOperationException(
-                $"OpenCareer database migration ended at schema {version}; expected {CurrentSchemaVersion}.");
-        }
+        transaction.Commit();
     }
 
-    private static async Task CreateLogbookSchemaAsync(
+    private static async Task EnsureUnifiedSchemaAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         CancellationToken cancellationToken)
@@ -212,60 +76,19 @@ internal static class OpenCareerDatabaseMigrator
                     search_text TEXT NOT NULL,
                     payload_json TEXT NOT NULL
                 );
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
 
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE INDEX IF NOT EXISTS ix_logbook_entries_ended_at
                     ON logbook_entries (ended_at_ms DESC, entry_id ASC);
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
 
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE INDEX IF NOT EXISTS ix_logbook_entries_entry_kind
                     ON logbook_entries (entry_kind, ended_at_ms DESC);
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
 
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE INDEX IF NOT EXISTS ix_logbook_entries_safety
                     ON logbook_entries (safety_outcome, ended_at_ms DESC);
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
 
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE INDEX IF NOT EXISTS ix_logbook_entries_contract
                     ON logbook_entries (contract_id);
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
-    }
 
-    private static async Task EnsureFlightAndConflictSchemasAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE TABLE IF NOT EXISTS flight_session_checkpoint (
                     slot_id INTEGER NOT NULL PRIMARY KEY,
                     session_id TEXT NOT NULL,
@@ -275,14 +98,7 @@ internal static class OpenCareerDatabaseMigrator
                     payload_json TEXT NOT NULL,
                     CHECK (slot_id = 1)
                 );
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
 
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE TABLE IF NOT EXISTS conflict_campaigns (
                     campaign_id TEXT NOT NULL PRIMARY KEY,
                     revision INTEGER NOT NULL CHECK (revision >= 1),
@@ -291,30 +107,13 @@ internal static class OpenCareerDatabaseMigrator
                     world_updated_at_ms INTEGER NOT NULL,
                     payload_json TEXT NOT NULL
                 );
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
 
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE INDEX IF NOT EXISTS ix_conflict_campaigns_world_updated
-                    ON conflict_campaigns (world_updated_at_ms DESC, campaign_id ASC);
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
-    }
+                    ON conflict_campaigns (
+                        world_updated_at_ms DESC,
+                        campaign_id ASC
+                    );
 
-    private static async Task EnsureMilitaryCareerProfileSchemaAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE TABLE IF NOT EXISTS military_career_profile (
                     slot_id INTEGER NOT NULL PRIMARY KEY,
                     revision INTEGER NOT NULL CHECK (revision >= 1),
@@ -323,43 +122,7 @@ internal static class OpenCareerDatabaseMigrator
                     payload_json TEXT NOT NULL,
                     CHECK (slot_id = 1)
                 );
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
-    }
 
-    private static async Task EnsurePlayerCareerProfileSchemaAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
-                CREATE TABLE IF NOT EXISTS player_career_profile (
-                    slot_id INTEGER NOT NULL PRIMARY KEY,
-                    career_id TEXT NOT NULL UNIQUE,
-                    revision INTEGER NOT NULL CHECK (revision >= 1),
-                    payload_schema_version INTEGER NOT NULL,
-                    saved_at_ms INTEGER NOT NULL,
-                    payload_json TEXT NOT NULL,
-                    CHECK (slot_id = 1)
-                );
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    private static async Task EnsureOperationConsequenceSchemaAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE TABLE IF NOT EXISTS military_operation_consequences (
                     resolution_key TEXT NOT NULL PRIMARY KEY,
                     operation_id TEXT NOT NULL,
@@ -372,132 +135,301 @@ internal static class OpenCareerDatabaseMigrator
                     payload_json TEXT NOT NULL,
                     UNIQUE (operation_id, mission_id)
                 );
-                """,
-                cancellationToken)
-            .ConfigureAwait(false);
 
-        await ExecuteAsync(
-                connection,
-                transaction,
-                """
                 CREATE INDEX IF NOT EXISTS ix_military_operation_consequences_campaign
                     ON military_operation_consequences (
                         campaign_id,
                         completed_at_ms DESC,
                         resolution_key ASC
                     );
+
+                CREATE TABLE IF NOT EXISTS player_career_profile (
+                    slot_id INTEGER NOT NULL PRIMARY KEY,
+                    career_id TEXT NOT NULL UNIQUE,
+                    revision INTEGER NOT NULL CHECK (revision >= 1),
+                    payload_schema_version INTEGER NOT NULL,
+                    saved_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    CHECK (slot_id = 1)
+                );
+
+                CREATE TABLE IF NOT EXISTS market_states (
+                    market_id TEXT NOT NULL PRIMARY KEY,
+                    payload_schema_version INTEGER NOT NULL,
+                    segment INTEGER NOT NULL,
+                    updated_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_market_states_segment
+                    ON market_states (segment, market_id);
+
+                CREATE TABLE IF NOT EXISTS economic_cycle_states (
+                    region_id TEXT NOT NULL PRIMARY KEY,
+                    payload_schema_version INTEGER NOT NULL,
+                    updated_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS world_event_states (
+                    snapshot_id TEXT NOT NULL PRIMARY KEY,
+                    payload_schema_version INTEGER NOT NULL,
+                    updated_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS world_simulation_checkpoints (
+                    market_id TEXT NOT NULL PRIMARY KEY,
+                    payload_schema_version INTEGER NOT NULL,
+                    requested_through_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS job_board_states (
+                    airport_icao TEXT NOT NULL PRIMARY KEY,
+                    payload_schema_version INTEGER NOT NULL,
+                    updated_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS job_contracts (
+                    contract_id TEXT NOT NULL PRIMARY KEY,
+                    payload_schema_version INTEGER NOT NULL,
+                    status INTEGER NOT NULL,
+                    version INTEGER NOT NULL CHECK (version >= 0),
+                    updated_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_job_contracts_status_updated
+                    ON job_contracts (
+                        status,
+                        updated_at_ms DESC,
+                        contract_id ASC
+                    );
+
+                CREATE TABLE IF NOT EXISTS economy_ledger_transactions (
+                    transaction_id TEXT NOT NULL PRIMARY KEY,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    occurred_at_utc_ticks INTEGER NOT NULL,
+                    description TEXT NOT NULL,
+                    reference_type TEXT NOT NULL,
+                    reference_id TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS economy_ledger_postings (
+                    transaction_id TEXT NOT NULL,
+                    posting_index INTEGER NOT NULL,
+                    account_code INTEGER NOT NULL,
+                    debit_cents INTEGER NOT NULL,
+                    credit_cents INTEGER NOT NULL,
+                    memo TEXT NOT NULL,
+                    PRIMARY KEY (transaction_id, posting_index),
+                    FOREIGN KEY (transaction_id)
+                        REFERENCES economy_ledger_transactions(transaction_id)
+                        ON DELETE CASCADE,
+                    CHECK (debit_cents >= 0),
+                    CHECK (credit_cents >= 0),
+                    CHECK (
+                        (debit_cents > 0 AND credit_cents = 0)
+                        OR (credit_cents > 0 AND debit_cents = 0)
+                    )
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_economy_ledger_transactions_occurred
+                    ON economy_ledger_transactions (
+                        occurred_at_utc_ticks DESC,
+                        transaction_id ASC
+                    );
+
+                CREATE INDEX IF NOT EXISTS ix_economy_ledger_postings_account
+                    ON economy_ledger_postings (
+                        account_code,
+                        transaction_id
+                    );
+
+                CREATE TABLE IF NOT EXISTS commodity_market_snapshots (
+                    scope INTEGER NOT NULL,
+                    location_id TEXT NOT NULL,
+                    payload_schema_version INTEGER NOT NULL,
+                    captured_at_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (scope, location_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_commodity_market_snapshots_captured
+                    ON commodity_market_snapshots (
+                        captured_at_ms DESC,
+                        scope ASC,
+                        location_id ASC
+                    );
                 """,
                 cancellationToken)
             .ConfigureAwait(false);
     }
 
-
-    private static async Task EnsureEconomySchemaAsync(
+    private static async Task MigrateLegacyIntegrationEconomyAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         CancellationToken cancellationToken)
     {
+        if (await TableExistsAsync(
+                connection,
+                transaction,
+                "JobContracts",
+                cancellationToken)
+            .ConfigureAwait(false))
+        {
+            await ExecuteAsync(
+                    connection,
+                    transaction,
+                    """
+                    INSERT INTO job_contracts (
+                        contract_id,
+                        payload_schema_version,
+                        status,
+                        version,
+                        updated_at_ms,
+                        payload_json
+                    )
+                    SELECT
+                        legacy.ContractId,
+                        1,
+                        legacy.Status,
+                        legacy.Version,
+                        (legacy.UpdatedAtUtcTicks - 621355968000000000) / 10000,
+                        legacy.ContractJson
+                    FROM JobContracts AS legacy
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM job_contracts AS current
+                        WHERE current.contract_id = legacy.ContractId
+                    );
+                    """,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        bool hasLegacyLedgerTransactions =
+            await TableExistsAsync(
+                    connection,
+                    transaction,
+                    "EconomyLedgerTransactions",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        bool hasLegacyLedgerPostings =
+            await TableExistsAsync(
+                    connection,
+                    transaction,
+                    "EconomyLedgerPostings",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!hasLegacyLedgerTransactions
+            || !hasLegacyLedgerPostings)
+        {
+            return;
+        }
+
         await ExecuteAsync(
                 connection,
                 transaction,
                 """
-                CREATE TABLE IF NOT EXISTS JobContracts (
-                    ContractId TEXT NOT NULL PRIMARY KEY,
-                    ContractJson TEXT NOT NULL,
-                    Status INTEGER NOT NULL,
-                    Version INTEGER NOT NULL CHECK (Version >= 0),
-                    UpdatedAtUtcTicks INTEGER NOT NULL
+                DROP TABLE IF EXISTS temp.legacy_economy_transactions_to_migrate;
+
+                CREATE TEMP TABLE legacy_economy_transactions_to_migrate (
+                    transaction_id TEXT NOT NULL PRIMARY KEY
                 );
 
-                CREATE INDEX IF NOT EXISTS IX_JobContracts_Status_Updated
-                    ON JobContracts (Status, UpdatedAtUtcTicks DESC);
-
-                CREATE TABLE IF NOT EXISTS EconomyLedgerTransactions (
-                    TransactionId TEXT NOT NULL PRIMARY KEY,
-                    IdempotencyKey TEXT NOT NULL UNIQUE,
-                    OccurredAtUtcTicks INTEGER NOT NULL,
-                    Description TEXT NOT NULL,
-                    ReferenceType TEXT NOT NULL,
-                    ReferenceId TEXT NOT NULL
+                INSERT INTO legacy_economy_transactions_to_migrate (
+                    transaction_id
+                )
+                SELECT legacy.TransactionId
+                FROM EconomyLedgerTransactions AS legacy
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM economy_ledger_transactions AS current
+                    WHERE current.transaction_id = legacy.TransactionId
+                )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM economy_ledger_transactions AS current
+                    WHERE current.idempotency_key = legacy.IdempotencyKey
                 );
 
-                CREATE TABLE IF NOT EXISTS EconomyLedgerPostings (
-                    TransactionId TEXT NOT NULL,
-                    PostingIndex INTEGER NOT NULL,
-                    AccountCode INTEGER NOT NULL,
-                    DebitCents INTEGER NOT NULL,
-                    CreditCents INTEGER NOT NULL,
-                    Memo TEXT NOT NULL,
-                    PRIMARY KEY (TransactionId, PostingIndex),
-                    FOREIGN KEY (TransactionId)
-                        REFERENCES EconomyLedgerTransactions(TransactionId)
-                        ON DELETE CASCADE,
-                    CHECK (DebitCents >= 0),
-                    CHECK (CreditCents >= 0),
-                    CHECK (
-                        (DebitCents > 0 AND CreditCents = 0)
-                        OR (CreditCents > 0 AND DebitCents = 0)
-                    )
-                );
+                INSERT INTO economy_ledger_transactions (
+                    transaction_id,
+                    idempotency_key,
+                    occurred_at_utc_ticks,
+                    description,
+                    reference_type,
+                    reference_id
+                )
+                SELECT
+                    legacy.TransactionId,
+                    legacy.IdempotencyKey,
+                    legacy.OccurredAtUtcTicks,
+                    legacy.Description,
+                    legacy.ReferenceType,
+                    legacy.ReferenceId
+                FROM EconomyLedgerTransactions AS legacy
+                INNER JOIN legacy_economy_transactions_to_migrate AS migrate
+                    ON migrate.transaction_id = legacy.TransactionId;
 
-                CREATE TABLE IF NOT EXISTS ActivePlayBillingState (
-                    OwnershipId TEXT NOT NULL PRIMARY KEY,
-                    CycleIndex INTEGER NOT NULL CHECK (CycleIndex >= 0),
-                    CycleProgressTicks INTEGER NOT NULL CHECK (CycleProgressTicks >= 0),
-                    Version INTEGER NOT NULL CHECK (Version >= 0),
-                    UpdatedAtUtcTicks INTEGER NOT NULL
-                );
+                INSERT INTO economy_ledger_postings (
+                    transaction_id,
+                    posting_index,
+                    account_code,
+                    debit_cents,
+                    credit_cents,
+                    memo
+                )
+                SELECT
+                    legacy.TransactionId,
+                    legacy.PostingIndex,
+                    legacy.AccountCode,
+                    legacy.DebitCents,
+                    legacy.CreditCents,
+                    legacy.Memo
+                FROM EconomyLedgerPostings AS legacy
+                INNER JOIN legacy_economy_transactions_to_migrate AS migrate
+                    ON migrate.transaction_id = legacy.TransactionId;
 
-                CREATE TABLE IF NOT EXISTS OwnedAircraft (
-                    OwnershipId TEXT NOT NULL PRIMARY KEY,
-                    DealerId TEXT NOT NULL,
-                    ListingId TEXT NOT NULL,
-                    AircraftId TEXT NOT NULL,
-                    AcquisitionMethod INTEGER NOT NULL,
-                    AcquisitionPriceCents INTEGER NOT NULL CHECK (AcquisitionPriceCents > 0),
-                    AcquiredAtUtcTicks INTEGER NOT NULL,
-                    StorageIcao TEXT NOT NULL,
-                    LoanId TEXT NULL,
-                    UNIQUE (DealerId, ListingId),
-                    UNIQUE (LoanId)
-                );
-
-                CREATE TABLE IF NOT EXISTS AircraftLoans (
-                    LoanId TEXT NOT NULL PRIMARY KEY,
-                    OwnershipId TEXT NOT NULL UNIQUE,
-                    LenderId TEXT NOT NULL,
-                    OriginalPrincipalCents INTEGER NOT NULL CHECK (OriginalPrincipalCents > 0),
-                    AnnualRateText TEXT NOT NULL,
-                    TermMonths INTEGER NOT NULL CHECK (TermMonths > 0),
-                    ScheduledPaymentCents INTEGER NOT NULL CHECK (ScheduledPaymentCents > 0),
-                    OriginatedAtUtcTicks INTEGER NOT NULL,
-                    FOREIGN KEY (OwnershipId)
-                        REFERENCES OwnedAircraft(OwnershipId)
-                        ON DELETE CASCADE
-                );
-
-                CREATE TABLE IF NOT EXISTS AircraftLoanState (
-                    LoanId TEXT NOT NULL PRIMARY KEY,
-                    OwnershipId TEXT NOT NULL UNIQUE,
-                    RemainingPrincipalCents INTEGER NOT NULL CHECK (RemainingPrincipalCents >= 0),
-                    Version INTEGER NOT NULL CHECK (Version >= 0),
-                    UpdatedAtUtcTicks INTEGER NOT NULL,
-                    FOREIGN KEY (LoanId)
-                        REFERENCES AircraftLoans(LoanId)
-                        ON DELETE CASCADE,
-                    FOREIGN KEY (OwnershipId)
-                        REFERENCES OwnedAircraft(OwnershipId)
-                        ON DELETE CASCADE
-                );
-
-                CREATE INDEX IF NOT EXISTS IX_EconomyLedgerTransactions_Occurred
-                    ON EconomyLedgerTransactions (OccurredAtUtcTicks DESC);
-
-                CREATE INDEX IF NOT EXISTS IX_EconomyLedgerPostings_Account
-                    ON EconomyLedgerPostings (AccountCode, TransactionId);
+                DROP TABLE temp.legacy_economy_transactions_to_migrate;
                 """,
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private static async Task<bool> TableExistsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string tableName,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = $name;
+            """;
+        command.Parameters.AddWithValue(
+            "$name",
+            tableName);
+
+        object? result = await command
+            .ExecuteScalarAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return Convert.ToInt64(
+            result,
+            System.Globalization.CultureInfo.InvariantCulture) == 1;
     }
 
     private static async Task<int> GetSchemaVersionAsync(
