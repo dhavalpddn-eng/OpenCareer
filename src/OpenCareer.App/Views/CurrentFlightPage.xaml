@@ -87,6 +87,19 @@
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="24">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="CAREER WORKFLOW"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="{Binding CareerWorkflowStatus}"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="{Binding CareerWorkflowDetail}"
+                               TextWrapping="Wrap"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="24">
                 <StackPanel Spacing="18">
                     <StackPanel Spacing="4">
                         <TextBlock Text="AIRCRAFT TELEMETRY"

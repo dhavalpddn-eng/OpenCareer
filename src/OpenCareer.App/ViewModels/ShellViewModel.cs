@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
@@ -15,6 +16,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly IAppSettingsService _settings;
     private readonly FlightSessionCoordinator _flightSessions;
     private readonly FlightSessionPersistenceService? _flightPersistence;
+    private readonly CareerJobPlayableLoopReadinessSource? _careerReadiness;
 
     private SimulatorConnectionSnapshot? _lastConnectionSnapshot;
     private AircraftTelemetrySnapshot? _lastTelemetry;
@@ -45,6 +47,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _currentFlightRouteSummary = "—";
     private string _currentFlightPerformanceSummary = "—";
     private string _currentFlightFuelSummary = "—";
+    private string _careerWorkflowStatus = "CAREER WORKFLOW UNAVAILABLE";
+    private string _careerWorkflowDetail =
+        "Career workflow readiness is not connected to this view.";
+
 
     public ShellViewModel(
         ISimulatorConnection connection,
@@ -65,6 +71,24 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         IAppSettingsService settings,
         FlightSessionCoordinator flightSessions,
         FlightSessionPersistenceService? flightPersistence)
+        : this(
+            connection,
+            telemetrySource,
+            settings,
+            flightSessions,
+            flightPersistence,
+            careerReadiness:
+                null)
+    {
+    }
+
+    public ShellViewModel(
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        IAppSettingsService settings,
+        FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService? flightPersistence,
+        CareerJobPlayableLoopReadinessSource? careerReadiness)
     {
         _connection =
             connection
@@ -83,6 +107,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(flightSessions));
 
         _flightPersistence = flightPersistence;
+        _careerReadiness = careerReadiness;
         _settings.Changed += OnSettingsChanged;
     }
 
@@ -110,6 +135,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string CurrentFlightRouteSummary => _currentFlightRouteSummary;
     public string CurrentFlightPerformanceSummary => _currentFlightPerformanceSummary;
     public string CurrentFlightFuelSummary => _currentFlightFuelSummary;
+    public string CareerWorkflowStatus => _careerWorkflowStatus;
+    public string CareerWorkflowDetail => _careerWorkflowDetail;
     private bool _hasFlightSession;
     private bool _hasRecoveredFlightSession;
 
@@ -140,6 +167,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
 
         RefreshFlightSession();
+        RefreshCareerWorkflow();
     }
 
     private void RefreshConnection(SimulatorConnectionSnapshot snapshot)
@@ -295,6 +323,37 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             FormattableString.Invariant(
                 $"{gear} / Flaps {telemetry.FlapsPositionPercent:0}% / {telemetry.EnginesRunning} engine(s) running"),
             nameof(ConfigurationSummary));
+    }
+
+    private void RefreshCareerWorkflow()
+    {
+        if (_careerReadiness is null)
+        {
+            SetField(
+                ref _careerWorkflowStatus,
+                "CAREER WORKFLOW UNAVAILABLE",
+                nameof(CareerWorkflowStatus));
+
+            SetField(
+                ref _careerWorkflowDetail,
+                "Career workflow readiness is not connected to this view.",
+                nameof(CareerWorkflowDetail));
+
+            return;
+        }
+
+        CareerJobPlayableReadinessSnapshot snapshot =
+            _careerReadiness.Current;
+
+        SetField(
+            ref _careerWorkflowStatus,
+            snapshot.StatusText,
+            nameof(CareerWorkflowStatus));
+
+        SetField(
+            ref _careerWorkflowDetail,
+            snapshot.Detail,
+            nameof(CareerWorkflowDetail));
     }
 
     private void RefreshFlightSession()
