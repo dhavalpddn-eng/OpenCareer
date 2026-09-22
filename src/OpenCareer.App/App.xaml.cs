@@ -76,6 +76,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<EconomySettlementService>();
         services.AddSingleton<SettlementPendingContractSource>();
 
+        services.AddSingleton<SettlementPendingContractCoordinator>();
+
         services.AddSingleton<SqlitePlayerCareerProfileStore>();
         services.AddSingleton<IPlayerCareerProfileStore>(provider =>
             provider.GetRequiredService<SqlitePlayerCareerProfileStore>());
