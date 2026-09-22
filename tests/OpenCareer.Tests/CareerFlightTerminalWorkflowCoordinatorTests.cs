@@ -37,6 +37,14 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
             result.CareerProfile.Profile
                 .AppliedExperienceDebriefIds);
         Assert.Equal(
+            "KSYR",
+            result.CareerProfile.Profile.Location
+                .CurrentAirportIcao);
+        Assert.Contains(
+            result.Settlement.PersistedContract.Contract.ContractId,
+            result.CareerProfile.Profile.Location
+                .AppliedTravelContracts);
+        Assert.Equal(
             CareerFlightFinalizationStatus.Finalized,
             result.Finalization.Status);
 
@@ -46,7 +54,7 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
         Assert.Single(
             context.Logbook.Entries);
         Assert.Equal(
-            1,
+            2,
             context.ProfileStore.SaveCount);
         Assert.Equal(
             1,
@@ -89,7 +97,7 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
         Assert.Single(
             context.Logbook.Entries);
         Assert.Equal(
-            1,
+            2,
             context.ProfileStore.SaveCount);
         Assert.Equal(
             1,
@@ -143,7 +151,7 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
         Assert.Single(
             context.Logbook.Entries);
         Assert.Equal(
-            1,
+            2,
             context.ProfileStore.SaveCount);
         Assert.Null(
             context.Sessions.Current);
@@ -221,6 +229,11 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
                     profileStore,
                     profileRuntime));
 
+        var location =
+            new PlayerCareerLocationCoordinator(
+                profileStore,
+                profileRuntime);
+
         string reservationId =
             JobAcceptanceFleetBridge.GetReservationId(
                 contractId);
@@ -248,6 +261,7 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
                 settledLogbook,
                 logbookStore,
                 experience,
+                location,
                 finalization);
 
         DateTimeOffset settledAt =

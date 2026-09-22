@@ -51,6 +51,63 @@ public sealed class PlayerCareerLocationCoordinatorTests
     }
 
     [Fact]
+    public async Task CompletedTravelPersistsExactlyOnceAcrossReplay()
+    {
+        PlayerCareerProfileStoreRecord existing =
+            ExistingRecord(revision: 3);
+        var store = new FakeStore(existing);
+        var runtime = new PlayerCareerRuntimeState(store);
+        var coordinator =
+            new PlayerCareerLocationCoordinator(
+                store,
+                runtime);
+
+        Guid contractId =
+            Guid.Parse(
+                "7b08fc87-a9d4-465c-b88d-498596617077");
+
+        JobContract completed =
+            CompletedTravelContract(
+                contractId,
+                completedAt:
+                    Epoch.AddHours(2));
+
+        PlayerCareerProfileStoreRecord first =
+            await coordinator.ApplyCompletedTravelAsync(
+                completed,
+                savedAt:
+                    Epoch.AddHours(3));
+
+        PlayerCareerProfileStoreRecord replay =
+            await coordinator.ApplyCompletedTravelAsync(
+                completed,
+                savedAt:
+                    Epoch.AddHours(4));
+
+        Assert.Equal(
+            "KALB",
+            first.Profile.Location.CurrentAirportIcao);
+        Assert.Contains(
+            contractId,
+            first.Profile.Location.AppliedTravelContracts);
+        Assert.Contains(
+            "KALB",
+            first.Profile.Location.Connections);
+        Assert.Equal(
+            completed.CompletedAt,
+            first.Profile.Location.UpdatedAt);
+        Assert.Equal(
+            1,
+            store.SaveCount);
+        Assert.Same(
+            first,
+            replay);
+        Assert.Same(
+            first,
+            runtime.Current);
+    }
+
+    [Fact]
     public async Task UpdateRequiresCompletedOnboarding()
     {
         var store = new FakeStore(null);
@@ -160,6 +217,61 @@ public sealed class PlayerCareerLocationCoordinatorTests
         Assert.Equal(5, store.LastExpectedRevision);
         Assert.Equal(1, store.SaveCount);
         Assert.Same(existing, runtime.Current);
+    }
+
+    private static JobContract CompletedTravelContract(
+        Guid contractId,
+        DateTimeOffset completedAt)
+    {
+        var contract =
+            new JobContract(
+                contractId,
+                EmployerId:
+                    null,
+                Kind:
+                    ContractKind.Ferry,
+                ServiceTrack:
+                    ServiceTrack.CivilianEmployment,
+                OriginIcao:
+                    "KRME",
+                DestinationIcao:
+                    "KALB",
+                Compensation:
+                    new ContractCompensation(
+                        CompensationModel.PilotWage,
+                        GrossCustomerRevenue:
+                            500m,
+                        PilotCompensation:
+                            250m,
+                        EmployerCoversFuel:
+                            true,
+                        EmployerCoversMaintenance:
+                            true,
+                        EmployerCoversAirportFees:
+                            true),
+                OfferedAt:
+                    Epoch.AddHours(-1),
+                MustStartBy:
+                    null,
+                MustCompleteBy:
+                    null,
+                AircraftRequirements:
+                    new OpenCareer.Domain.Aircraft.AircraftMissionRequirements(
+                        AllowedAccess:
+                            OpenCareer.Domain.Aircraft.AircraftAccess.Civilian,
+                        MinimumSeats:
+                            0),
+                Status:
+                    ContractStatus.Completed,
+                AcceptedAt:
+                    Epoch,
+                StartedAt:
+                    Epoch.AddHours(1),
+                CompletedAt:
+                    completedAt);
+
+        contract.Validate();
+        return contract;
     }
 
     private static PlayerCareerProfileStoreRecord ExistingRecord(

@@ -42,6 +42,14 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         Assert.Equal(
             CareerFlightFinalizationStatus.Finalized,
             first.Terminal.Finalization.Status);
+        Assert.Equal(
+            "KSYR",
+            first.Terminal.CareerProfile.Profile.Location
+                .CurrentAirportIcao);
+        Assert.Contains(
+            first.CompletedContract.Contract.ContractId,
+            first.Terminal.CareerProfile.Profile.Location
+                .AppliedTravelContracts);
 
         Assert.Null(
             context.Sessions.Current);
@@ -51,7 +59,7 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         Assert.Single(
             context.Logbook.Entries);
         Assert.Equal(
-            1,
+            2,
             context.ProfileStore.SaveCount);
         Assert.Equal(
             1,
@@ -81,7 +89,7 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         Assert.Single(
             context.Logbook.Entries);
         Assert.Equal(
-            1,
+            2,
             context.ProfileStore.SaveCount);
         Assert.Equal(
             1,
@@ -185,6 +193,11 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                     profileStore,
                     profileRuntime));
 
+        var location =
+            new PlayerCareerLocationCoordinator(
+                profileStore,
+                profileRuntime);
+
         string reservationId =
             JobAcceptanceFleetBridge.GetReservationId(
                 contractId);
@@ -209,6 +222,7 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                 settledLogbook,
                 logbook,
                 experience,
+                location,
                 finalization);
 
         var registry =

@@ -22,6 +22,7 @@ public sealed class CareerFlightTerminalWorkflowCoordinator
     private readonly SettledJobLogbookCoordinator _logbook;
     private readonly ILogbookIdempotencySource _logbookLookup;
     private readonly CareerLogbookExperienceCoordinator _experience;
+    private readonly PlayerCareerLocationCoordinator _location;
     private readonly CareerFlightFinalizationCoordinator _finalization;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -30,6 +31,7 @@ public sealed class CareerFlightTerminalWorkflowCoordinator
         SettledJobLogbookCoordinator logbook,
         ILogbookIdempotencySource logbookLookup,
         CareerLogbookExperienceCoordinator experience,
+        PlayerCareerLocationCoordinator location,
         CareerFlightFinalizationCoordinator finalization)
     {
         _settlement =
@@ -44,6 +46,9 @@ public sealed class CareerFlightTerminalWorkflowCoordinator
         _experience =
             experience
             ?? throw new ArgumentNullException(nameof(experience));
+        _location =
+            location
+            ?? throw new ArgumentNullException(nameof(location));
         _finalization =
             finalization
             ?? throw new ArgumentNullException(nameof(finalization));
@@ -98,10 +103,27 @@ public sealed class CareerFlightTerminalWorkflowCoordinator
                             existingEntry,
                             settlement));
 
-            PlayerCareerProfileStoreRecord careerProfile =
+            PlayerCareerProfileStoreRecord experiencedProfile =
                 await _experience
                     .ApplyAsync(
                         logbook,
+                        request.ExperienceSavedAt,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (!experiencedProfile.Profile
+                    .AppliedExperienceDebriefIds
+                    .Contains(
+                        logbook.Entry.Debrief.DebriefId))
+            {
+                throw new InvalidOperationException(
+                    "Career travel cannot settle before the committed debrief is applied to Career/Profile experience.");
+            }
+
+            PlayerCareerProfileStoreRecord careerProfile =
+                await _location
+                    .ApplyCompletedTravelAsync(
+                        settlement.PersistedContract.Contract,
                         request.ExperienceSavedAt,
                         cancellationToken)
                     .ConfigureAwait(false);
