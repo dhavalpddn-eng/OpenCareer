@@ -185,6 +185,9 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<CareerJobPlayableLoopCoordinator>();
 
+        services.AddSingleton<PersistedJobContractTermsSource>();
+        services.AddSingleton<ICareerJobContractTermsSource>(provider =>
+            provider.GetRequiredService<PersistedJobContractTermsSource>());
         services.AddSingleton<CareerJobStartInputSource>();
 
         services.AddSingleton<CareerJobPlayableLoopReadinessSource>();
