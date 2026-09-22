@@ -54,6 +54,51 @@ public sealed class JobMarketGeneratorTests
     }
 
     [Fact]
+    public void AllowedKindsRestrictGenerationWithoutChangingDeterminism()
+    {
+        JobMarketGenerationRequest request =
+            Request(
+                Epoch,
+                JobMarketAccess.CivilianEmployment) with
+            {
+                AllowedContractKinds =
+                    new HashSet<ContractKind>
+                    {
+                        ContractKind.Ferry,
+                        ContractKind.Reposition
+                    }
+            };
+
+        JobMarketOfferDraft[] first =
+            JobMarketGenerator
+                .Generate(
+                    request)
+                .ToArray();
+
+        JobMarketOfferDraft[] second =
+            JobMarketGenerator
+                .Generate(
+                    request)
+                .ToArray();
+
+        Assert.NotEmpty(
+            first);
+        Assert.Equal(
+            first,
+            second);
+        Assert.All(
+            first,
+            static offer =>
+                Assert.Contains(
+                    offer.Kind,
+                    new[]
+                    {
+                        ContractKind.Ferry,
+                        ContractKind.Reposition
+                    }));
+    }
+
+    [Fact]
     public void NewCycleChangesDeterministicOfferIdentity()
     {
         JobMarketPolicy policy =

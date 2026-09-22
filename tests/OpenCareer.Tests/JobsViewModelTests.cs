@@ -212,6 +212,46 @@ public sealed class JobsViewModelTests
             action.LastAircraftId);
     }
 
+    [Fact]
+    public async Task ProductionRefreshBoundaryInvokesBoardRefillExactlyOnce()
+    {
+        JobBoardState board =
+            Board(
+                "KRME",
+                Offer(
+                    "KRME",
+                    "KSYR",
+                    locked:
+                        false));
+
+        var refill =
+            new FakeBoardRefill(
+                board);
+
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    board),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection:
+                    null,
+                startAction:
+                    null,
+                logger:
+                    null,
+                boardRefill:
+                    refill);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(
+            1,
+            refill.CallCount);
+        Assert.Single(
+            viewModel.Offers);
+    }
+
     private static PlayerCareerRuntimeState CareerRuntime(
         string airportIcao)
     {
@@ -274,6 +314,29 @@ public sealed class JobsViewModelTests
                 0.5,
             MarketSelectionWeight:
                 1);
+
+    private sealed class FakeBoardRefill(
+        JobBoardState board)
+        : ICareerJobBoardRefillService
+    {
+        public int CallCount { get; private set; }
+
+        public Task<JobBoardState> RefillAsync(
+            PlayerCareerProfile profile,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            profile.Validate();
+            CallCount++;
+
+            Assert.Equal(
+                profile.Location.CurrentAirportIcao,
+                board.AirportIcao);
+
+            return Task.FromResult(
+                board);
+        }
+    }
 
     private sealed class FakeDiscovery
         : IInstalledAircraftDiscoverySource

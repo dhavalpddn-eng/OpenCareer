@@ -11,6 +11,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private readonly IJobBoardStateStore _jobBoards;
     private readonly PlayerCareerRuntimeState _career;
     private readonly TimeProvider _timeProvider;
+    private readonly ICareerJobBoardRefillService? _boardRefill;
     private readonly CareerJobAircraftSelectionSource? _aircraftSelection;
     private readonly ICareerJobStartAction? _startAction;
     private readonly ILogger<JobsViewModel>? _logger;
@@ -44,6 +45,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             startAction:
                 null,
             logger:
+                null,
+            boardRefill:
                 null)
     {
     }
@@ -54,7 +57,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         TimeProvider timeProvider,
         CareerJobAircraftSelectionSource? aircraftSelection,
         ICareerJobStartAction? startAction,
-        ILogger<JobsViewModel>? logger)
+        ILogger<JobsViewModel>? logger,
+        ICareerJobBoardRefillService? boardRefill = null)
     {
         _jobBoards =
             jobBoards
@@ -65,6 +69,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         _timeProvider =
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
+        _boardRefill =
+            boardRefill;
         _aircraftSelection =
             aircraftSelection;
         _startAction =
@@ -117,12 +123,43 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             string currentAirport =
                 career.Profile.Location.CurrentAirportIcao;
 
-            JobBoardState? board =
-                await _jobBoards
-                    .GetAsync(
-                        currentAirport,
-                        cancellationToken)
-                    .ConfigureAwait(true);
+            JobBoardState? board;
+
+            if (_boardRefill is not null)
+            {
+                try
+                {
+                    board =
+                        await _boardRefill
+                            .RefillAsync(
+                                career.Profile,
+                                cancellationToken)
+                            .ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(
+                        ex,
+                        "Career job-board refill failed at {AirportIcao}; preserving the last authoritative board.",
+                        currentAirport);
+
+                    board =
+                        await _jobBoards
+                            .GetAsync(
+                                currentAirport,
+                                cancellationToken)
+                            .ConfigureAwait(true);
+                }
+            }
+            else
+            {
+                board =
+                    await _jobBoards
+                        .GetAsync(
+                            currentAirport,
+                            cancellationToken)
+                        .ConfigureAwait(true);
+            }
 
             SetField(
                 ref _airportText,

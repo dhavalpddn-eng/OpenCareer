@@ -86,7 +86,8 @@ public sealed record JobMarketGenerationRequest(
     JobMarketAccess Access,
     int CareerLevel = 1,
     JobMarketPolicy? Policy = null,
-    AirportMarketCapacity? Capacity = null)
+    AirportMarketCapacity? Capacity = null,
+    IReadOnlySet<ContractKind>? AllowedContractKinds = null)
 {
     public JobMarketPolicy EffectivePolicy =>
         Policy ?? JobMarketPolicy.Default;
@@ -107,6 +108,14 @@ public sealed record JobMarketGenerationRequest(
 
         if ((Access & ~JobMarketAccess.All) != 0)
             throw new ArgumentOutOfRangeException(nameof(Access));
+
+        if (AllowedContractKinds is not null
+            && AllowedContractKinds.Any(
+                static kind => !Enum.IsDefined(kind)))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(AllowedContractKinds));
+        }
 
         if (CareerLevel < 1
             || CareerLevel > EffectivePolicy.CareerLevelCap)

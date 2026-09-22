@@ -63,6 +63,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ICommodityMarketSnapshotStore, SqliteCommodityMarketSnapshotStore>();
         services.AddSingleton<WorldSimulationPersistenceService>();
         services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
+        services.AddSingleton<JobBoardGenerationService>();
         services.AddSingleton<IJobContractStore, SqliteJobContractStore>();
         services.AddSingleton<IJobContractRecoverySource, SqliteJobContractRecoverySource>();
         services.AddSingleton<JobContractRecoveryService>();
@@ -162,6 +163,10 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SimConnectConnection>());
 
         services.AddOpenCareerPlanningServices();
+
+        services.AddSingleton<CareerJobBoardRefillService>();
+        services.AddSingleton<ICareerJobBoardRefillService>(provider =>
+            provider.GetRequiredService<CareerJobBoardRefillService>());
 
         services.AddSingleton<JobAcceptanceFleetBridge>();
 

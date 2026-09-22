@@ -113,7 +113,8 @@ public static class JobMarketGenerator
                 BuildKindChoices(
                     track.Value,
                     request.Origin,
-                    policy);
+                    policy,
+                    request.AllowedContractKinds);
 
             if (kindChoices.Count == 0)
                 continue;
@@ -218,7 +219,8 @@ public static class JobMarketGenerator
     private static List<Weighted<ContractKind>> BuildKindChoices(
         ServiceTrack track,
         AirportCareerProfile airport,
-        JobMarketPolicy policy)
+        JobMarketPolicy policy,
+        IReadOnlySet<ContractKind>? allowedKinds)
     {
         List<Weighted<ContractKind>> choices =
             track switch
@@ -258,6 +260,14 @@ public static class JobMarketGenerator
                     ],
                 _ => []
             };
+
+        if (allowedKinds is not null)
+        {
+            choices.RemoveAll(
+                choice =>
+                    !allowedKinds.Contains(
+                        choice.Value));
+        }
 
         if (airport.Opportunities
                 .HasFlag(AirportOpportunity.UasResearch)
