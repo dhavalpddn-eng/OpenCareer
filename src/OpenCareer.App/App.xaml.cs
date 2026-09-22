@@ -365,7 +365,8 @@ public partial class App : Microsoft.UI.Xaml.Application
             if (contracts.Current.Any(
                     item =>
                         item.Contract.Status
-                            == ContractStatus.InProgress)
+                            is ContractStatus.Accepted
+                                or ContractStatus.InProgress)
                 && _services
                     .GetRequiredService<FlightSessionCoordinator>()
                     .Current is null)
