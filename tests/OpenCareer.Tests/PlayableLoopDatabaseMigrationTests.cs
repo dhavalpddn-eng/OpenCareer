@@ -465,7 +465,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 '{"legacyContract":true}',
                 1,
                 2,
-                621356091450000000
+                621355968123450000
             );
 
             INSERT INTO EconomyLedgerTransactions (
