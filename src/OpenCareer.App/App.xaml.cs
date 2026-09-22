@@ -177,6 +177,8 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<CareerFlightReservationReleaseCoordinator>();
 
+        services.AddSingleton<CareerFlightFinalizationCoordinator>();
+
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();
         services.AddSingleton<ITutorialStepEvidenceSource>(provider =>
