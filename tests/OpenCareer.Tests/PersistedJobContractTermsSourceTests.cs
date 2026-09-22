@@ -28,8 +28,6 @@ public sealed class PersistedJobContractTermsSourceTests
                     150,
                 MinimumSeats:
                     1,
-                MinimumEngineCount:
-                    1,
                 RequiresIfr:
                     true);
 
