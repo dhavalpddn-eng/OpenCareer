@@ -110,6 +110,13 @@ public sealed record LogbookAppendResult(
     LogbookAppendDisposition Disposition,
     LogbookEntry Entry);
 
+public interface ILogbookIdempotencySource
+{
+    Task<LogbookEntry?> FindByIdempotencyKeyAsync(
+        string idempotencyKey,
+        CancellationToken cancellationToken = default);
+}
+
 public interface ILogbookWriter
 {
     Task<LogbookAppendResult> TryAppendAsync(

@@ -92,6 +92,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
+        services.AddSingleton<ILogbookIdempotencySource>(provider =>
+            provider.GetRequiredService<SqliteLogbookStore>());
         services.AddSingleton<ILogbookWriter>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
 
@@ -178,6 +180,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<CareerFlightReservationReleaseCoordinator>();
 
         services.AddSingleton<CareerFlightFinalizationCoordinator>();
+
+        services.AddSingleton<CareerFlightTerminalWorkflowCoordinator>();
 
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();
