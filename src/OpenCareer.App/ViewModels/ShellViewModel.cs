@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
@@ -17,6 +18,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly FlightSessionCoordinator _flightSessions;
     private readonly FlightSessionPersistenceService? _flightPersistence;
     private readonly CareerJobPlayableLoopReadinessSource? _careerReadiness;
+    private readonly ICareerJobCompletionAction? _careerCompletionAction;
+    private readonly ILogger<ShellViewModel>? _logger;
+    private readonly SemaphoreSlim _careerCompletionGate = new(1, 1);
 
     private SimulatorConnectionSnapshot? _lastConnectionSnapshot;
     private AircraftTelemetrySnapshot? _lastTelemetry;
@@ -50,6 +54,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _careerWorkflowStatus = "CAREER WORKFLOW UNAVAILABLE";
     private string _careerWorkflowDetail =
         "Career workflow readiness is not connected to this view.";
+
+    private bool _canCompleteCareerFlight;
+    private bool _isCareerCompletionBusy;
+    private string _careerCompletionActionText =
+        "Complete Career Flight";
+    private string _careerCompletionActionDetail =
+        "Career completion inputs have not been checked yet.";
 
 
     public ShellViewModel(
@@ -89,6 +100,29 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         FlightSessionCoordinator flightSessions,
         FlightSessionPersistenceService? flightPersistence,
         CareerJobPlayableLoopReadinessSource? careerReadiness)
+        : this(
+            connection,
+            telemetrySource,
+            settings,
+            flightSessions,
+            flightPersistence,
+            careerReadiness,
+            careerCompletionAction:
+                null,
+            logger:
+                null)
+    {
+    }
+
+    public ShellViewModel(
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        IAppSettingsService settings,
+        FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService? flightPersistence,
+        CareerJobPlayableLoopReadinessSource? careerReadiness,
+        ICareerJobCompletionAction? careerCompletionAction,
+        ILogger<ShellViewModel>? logger)
     {
         _connection =
             connection
@@ -108,6 +142,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         _flightPersistence = flightPersistence;
         _careerReadiness = careerReadiness;
+        _careerCompletionAction = careerCompletionAction;
+        _logger = logger;
         _settings.Changed += OnSettingsChanged;
     }
 
@@ -137,6 +173,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string CurrentFlightFuelSummary => _currentFlightFuelSummary;
     public string CareerWorkflowStatus => _careerWorkflowStatus;
     public string CareerWorkflowDetail => _careerWorkflowDetail;
+    public bool CanCompleteCareerFlight => _canCompleteCareerFlight;
+    public bool IsCareerCompletionBusy => _isCareerCompletionBusy;
+    public string CareerCompletionActionText => _careerCompletionActionText;
+    public string CareerCompletionActionDetail => _careerCompletionActionDetail;
     private bool _hasFlightSession;
     private bool _hasRecoveredFlightSession;
 
@@ -323,6 +363,169 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             FormattableString.Invariant(
                 $"{gear} / Flaps {telemetry.FlapsPositionPercent:0}% / {telemetry.EnginesRunning} engine(s) running"),
             nameof(ConfigurationSummary));
+    }
+
+    public async Task RefreshCareerCompletionActionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_careerCompletionAction is null)
+        {
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                false,
+                nameof(CanCompleteCareerFlight));
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                "Career completion action is not connected to this view.",
+                nameof(CareerCompletionActionDetail));
+
+            return;
+        }
+
+        bool entered =
+            await _careerCompletionGate
+                .WaitAsync(
+                    millisecondsTimeout:
+                        0,
+                    cancellationToken);
+
+        if (!entered)
+            return;
+
+        try
+        {
+            CareerJobCompletionActionAvailability availability =
+                await _careerCompletionAction
+                    .ReadAvailabilityAsync(
+                        cancellationToken);
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                availability.CanComplete
+                    && !_isCareerCompletionBusy,
+                nameof(CanCompleteCareerFlight));
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                availability.Detail,
+                nameof(CareerCompletionActionDetail));
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Career completion readiness refresh failed.");
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                false,
+                nameof(CanCompleteCareerFlight));
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                "Career completion readiness could not be verified.",
+                nameof(CareerCompletionActionDetail));
+        }
+        finally
+        {
+            _careerCompletionGate.Release();
+        }
+    }
+
+    public async Task CompleteCareerFlightAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_careerCompletionAction is null)
+            return;
+
+        await _careerCompletionGate
+            .WaitAsync(cancellationToken);
+
+        try
+        {
+            SetBoolean(
+                ref _isCareerCompletionBusy,
+                true,
+                nameof(IsCareerCompletionBusy));
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                false,
+                nameof(CanCompleteCareerFlight));
+
+            SetField(
+                ref _careerCompletionActionText,
+                "Completing Career Flight…",
+                nameof(CareerCompletionActionText));
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                "Applying authoritative completion, settlement, logbook, career progression, and cleanup.",
+                nameof(CareerCompletionActionDetail));
+
+            await _careerCompletionAction
+                .CompleteAsync(cancellationToken);
+
+            RefreshConnectionStatus();
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                "Career flight completed. Settlement, logbook, experience, Fleet release, and terminal cleanup finished.",
+                nameof(CareerCompletionActionDetail));
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Career flight completion failed.");
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                $"Career flight completion failed: {ex.Message}",
+                nameof(CareerCompletionActionDetail));
+
+            try
+            {
+                CareerJobCompletionActionAvailability availability =
+                    await _careerCompletionAction
+                        .ReadAvailabilityAsync(
+                            cancellationToken);
+
+                SetBoolean(
+                    ref _canCompleteCareerFlight,
+                    availability.CanComplete,
+                    nameof(CanCompleteCareerFlight));
+            }
+            catch (Exception refreshEx)
+            {
+                _logger?.LogWarning(
+                    refreshEx,
+                    "Career completion readiness could not be refreshed after a failed completion attempt.");
+            }
+        }
+        finally
+        {
+            SetBoolean(
+                ref _isCareerCompletionBusy,
+                false,
+                nameof(IsCareerCompletionBusy));
+
+            SetField(
+                ref _careerCompletionActionText,
+                "Complete Career Flight",
+                nameof(CareerCompletionActionText));
+
+            _careerCompletionGate.Release();
+        }
     }
 
     private void RefreshCareerWorkflow()

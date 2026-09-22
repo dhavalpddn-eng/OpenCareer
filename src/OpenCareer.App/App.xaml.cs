@@ -198,6 +198,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ICareerJobSettlementCostsSource>(provider =>
             provider.GetRequiredService<PersistedFlightSettlementCostsSource>());
         services.AddSingleton<CareerJobCompletionInputSource>();
+        services.AddSingleton<CareerJobCompletionActionService>();
+        services.AddSingleton<ICareerJobCompletionAction>(provider =>
+            provider.GetRequiredService<CareerJobCompletionActionService>());
 
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();

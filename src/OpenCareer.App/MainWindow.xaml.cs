@@ -109,6 +109,10 @@ public sealed partial class MainWindow : Window
             {
                 ViewModel.RefreshConnectionStatus();
                 Tutorial.RefreshLiveEvidence();
+
+                await ViewModel
+                    .RefreshCareerCompletionActionAsync(
+                        _lifetimeCts.Token);
             }
         }
         catch (OperationCanceledException)

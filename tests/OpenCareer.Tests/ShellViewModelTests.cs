@@ -1,4 +1,5 @@
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
@@ -210,6 +211,107 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task CareerCompletionActionEnablesOnlyWhenAuthoritativeInputsAreReady()
+    {
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete:
+                            false,
+                        CareerJobCompletionInputState.SettlementCostsUnavailable,
+                        "Actual settlement costs are unavailable.")
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence:
+                    null,
+                careerReadiness:
+                    null,
+                action,
+                logger:
+                    null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Assert.False(
+            viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "cost",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+
+        action.Availability =
+            new(
+                CanComplete:
+                    true,
+                CareerJobCompletionInputState.Ready,
+                "Authoritative completion inputs are ready.");
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Assert.True(
+            viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "ready",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CareerCompletionActionDelegatesOnceAndDisablesAfterSuccess()
+    {
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete:
+                            true,
+                        CareerJobCompletionInputState.Ready,
+                        "Authoritative completion inputs are ready.")
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence:
+                    null,
+                careerReadiness:
+                    null,
+                action,
+                logger:
+                    null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        Assert.True(
+            viewModel.CanCompleteCareerFlight);
+
+        await viewModel.CompleteCareerFlightAsync();
+
+        Assert.Equal(
+            1,
+            action.CompleteCount);
+        Assert.False(
+            viewModel.CanCompleteCareerFlight);
+        Assert.False(
+            viewModel.IsCareerCompletionBusy);
+        Assert.Contains(
+            "completed",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void MissingRuntimeIsDistinguishedFromWaitingForSimulator()
     {
         var connection = new TestConnection
@@ -262,6 +364,36 @@ public sealed class ShellViewModelTests
             true,
             paused,
             false);
+
+    private sealed class FakeCareerCompletionAction
+        : ICareerJobCompletionAction
+    {
+        public CareerJobCompletionActionAvailability Availability { get; set; } =
+            new(
+                CanComplete:
+                    false,
+                CareerJobCompletionInputState.NoCareerFlight,
+                "No career flight.");
+
+        public int CompleteCount { get; private set; }
+
+        public Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(
+                Availability);
+        }
+
+        public Task CompleteAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CompleteCount++;
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class TestConnection : ISimulatorConnection
     {

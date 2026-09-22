@@ -95,6 +95,20 @@
                     <TextBlock Text="{Binding CareerWorkflowDetail}"
                                TextWrapping="Wrap"
                                Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <Border Margin="0,8,0,0"
+                            Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding CareerCompletionActionDetail}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                            <Button Content="{Binding CareerCompletionActionText}"
+                                    IsEnabled="{Binding CanCompleteCareerFlight}"
+                                    Click="CompleteCareerFlight_Click"
+                                    Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                    HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 
