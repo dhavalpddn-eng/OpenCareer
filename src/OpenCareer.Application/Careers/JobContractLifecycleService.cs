@@ -73,6 +73,42 @@ public sealed class JobContractLifecycleService
         return started;
     }
 
+    public async Task<PersistedJobContract> CompleteAsync(
+        Guid contractId,
+        DateTimeOffset time,
+        bool flightCompletionVerified,
+        CancellationToken cancellationToken = default)
+    {
+        if (_runtimeState is not null
+            && !_runtimeState.IsInitialized)
+        {
+            await _runtimeState
+                .InitializeAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        PersistedJobContract completed =
+            await TransitionAsync(
+                contractId,
+                contract =>
+                    contract.Complete(
+                        time,
+                        flightCompletionVerified),
+                cancellationToken)
+                .ConfigureAwait(false);
+
+        if (_runtimeState is not null)
+        {
+            await _runtimeState
+                .PublishAuthoritativeAsync(
+                    completed,
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+
+        return completed;
+    }
+
     public Task<PersistedJobContract> FailAsync(
         Guid contractId,
         CancellationToken cancellationToken = default) =>

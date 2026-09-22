@@ -137,6 +137,100 @@ public sealed class JobContractLifecycleServiceTests
     }
 
     [Fact]
+    public async Task CompletePublishesDurableCompletedStateToRuntime()
+    {
+        JobContract inProgress =
+            BaseContract() with
+            {
+                Status = ContractStatus.InProgress,
+                AcceptedAt = OfferedAt.AddMinutes(5),
+                StartedAt = OfferedAt.AddMinutes(15)
+            };
+
+        var store =
+            new FakeStore(
+                new PersistedJobContract(
+                    inProgress,
+                    Version: 2));
+
+        JobContractRuntimeState runtimeState =
+            CreateRuntimeState(
+                store,
+                new PersistedJobContract(
+                    inProgress,
+                    Version: 2));
+
+        await runtimeState.InitializeAsync();
+
+        var service =
+            new JobContractLifecycleService(
+                store,
+                runtimeState);
+
+        DateTimeOffset completedAt =
+            OfferedAt.AddHours(1);
+
+        PersistedJobContract result =
+            await service.CompleteAsync(
+                inProgress.ContractId,
+                completedAt,
+                flightCompletionVerified:
+                    true);
+
+        PersistedJobContract? runtime =
+            runtimeState.Find(
+                inProgress.ContractId);
+
+        Assert.NotNull(runtime);
+        Assert.Equal(
+            ContractStatus.Completed,
+            result.Contract.Status);
+        Assert.Equal(
+            completedAt,
+            result.Contract.CompletedAt);
+        Assert.Equal(
+            3,
+            result.Version);
+        Assert.Equal(
+            result,
+            runtime);
+    }
+
+    [Fact]
+    public async Task CompleteRejectsUnverifiedFlightBeforePersistence()
+    {
+        JobContract inProgress =
+            BaseContract() with
+            {
+                Status = ContractStatus.InProgress,
+                AcceptedAt = OfferedAt.AddMinutes(5),
+                StartedAt = OfferedAt.AddMinutes(15)
+            };
+
+        var store =
+            new FakeStore(
+                new PersistedJobContract(
+                    inProgress,
+                    Version: 2));
+
+        var service =
+            new JobContractLifecycleService(
+                store);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                service.CompleteAsync(
+                    inProgress.ContractId,
+                    OfferedAt.AddHours(1),
+                    flightCompletionVerified:
+                        false));
+
+        Assert.Equal(
+            0,
+            store.UpdateCount);
+    }
+
+    [Fact]
     public async Task InvalidTransitionIsRejectedBeforePersistence()
     {
         JobContract offered =
