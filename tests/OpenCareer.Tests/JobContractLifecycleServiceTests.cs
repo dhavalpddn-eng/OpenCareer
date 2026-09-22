@@ -85,6 +85,58 @@ public sealed class JobContractLifecycleServiceTests
     }
 
     [Fact]
+    public async Task StartPublishesDurableInProgressStateToRuntime()
+    {
+        JobContract accepted =
+            BaseContract() with
+            {
+                Status = ContractStatus.Accepted,
+                AcceptedAt = OfferedAt.AddMinutes(5)
+            };
+
+        var store =
+            new FakeStore(
+                new PersistedJobContract(
+                    accepted,
+                    Version: 1));
+
+        JobContractRuntimeState runtimeState =
+            CreateRuntimeState(
+                store,
+                new PersistedJobContract(
+                    accepted,
+                    Version: 1));
+
+        await runtimeState.InitializeAsync();
+
+        var service =
+            new JobContractLifecycleService(
+                store,
+                runtimeState);
+
+        PersistedJobContract result =
+            await service.StartAsync(
+                accepted.ContractId,
+                DispatchContext(
+                    OfferedAt.AddMinutes(15)));
+
+        PersistedJobContract? runtime =
+            runtimeState.Find(
+                accepted.ContractId);
+
+        Assert.NotNull(runtime);
+        Assert.Equal(
+            ContractStatus.InProgress,
+            runtime.Contract.Status);
+        Assert.Equal(
+            result,
+            runtime);
+        Assert.Equal(
+            2,
+            runtime.Version);
+    }
+
+    [Fact]
     public async Task InvalidTransitionIsRejectedBeforePersistence()
     {
         JobContract offered =
@@ -209,6 +261,20 @@ public sealed class JobContractLifecycleServiceTests
                     "92000000-0000-0000-0000-000000000001")));
     }
 
+    private static JobContractRuntimeState CreateRuntimeState(
+        IJobContractStore store,
+        PersistedJobContract recovered)
+    {
+        var source =
+            new SingleRecoverySource(
+                recovered);
+
+        return new JobContractRuntimeState(
+            new JobContractRecoveryService(
+                source,
+                store));
+    }
+
     private static ContractDispatchContext DispatchContext(
         DateTimeOffset time) =>
         new(
@@ -264,6 +330,35 @@ public sealed class JobContractLifecycleServiceTests
                     MinimumPayloadPounds: 500,
                     MinimumRangeNauticalMiles: 400,
                     MinimumSeats: 0));
+
+    private sealed class SingleRecoverySource(
+        PersistedJobContract persisted)
+        : IJobContractRecoverySource
+    {
+        public Task<IReadOnlyList<JobContractRecoveryCandidate>>
+            ReadRecoveryCandidatesAsync(
+                CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            DateTimeOffset updatedAt =
+                persisted.Contract.CompletedAt
+                ?? persisted.Contract.StartedAt
+                ?? persisted.Contract.AcceptedAt
+                ?? persisted.Contract.OfferedAt;
+
+            IReadOnlyList<JobContractRecoveryCandidate> candidates =
+                [
+                    new JobContractRecoveryCandidate(
+                        persisted.Contract.ContractId,
+                        persisted.Contract.Status,
+                        persisted.Version,
+                        updatedAt)
+                ];
+
+            return Task.FromResult(candidates);
+        }
+    }
 
     private sealed class FakeStore(
         PersistedJobContract? initial)

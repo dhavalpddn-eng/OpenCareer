@@ -5,6 +5,7 @@ namespace OpenCareer.Application.Careers;
 public sealed class JobContractLifecycleService
 {
     private readonly IJobContractStore _store;
+    private readonly JobContractRuntimeState? _runtimeState;
     private readonly SemaphoreSlim _transitionGate = new(1, 1);
 
     public JobContractLifecycleService(
@@ -13,6 +14,16 @@ public sealed class JobContractLifecycleService
         _store =
             store
             ?? throw new ArgumentNullException(nameof(store));
+    }
+
+    public JobContractLifecycleService(
+        IJobContractStore store,
+        JobContractRuntimeState runtimeState)
+        : this(store)
+    {
+        _runtimeState =
+            runtimeState
+            ?? throw new ArgumentNullException(nameof(runtimeState));
     }
 
     public Task<PersistedJobContract> AcceptAsync(
@@ -28,17 +39,38 @@ public sealed class JobContractLifecycleService
             cancellationToken);
     }
 
-    public Task<PersistedJobContract> StartAsync(
+    public async Task<PersistedJobContract> StartAsync(
         Guid contractId,
         ContractDispatchContext context,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        return TransitionAsync(
-            contractId,
-            contract => contract.Start(context),
-            cancellationToken);
+        if (_runtimeState is not null
+            && !_runtimeState.IsInitialized)
+        {
+            await _runtimeState
+                .InitializeAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        PersistedJobContract started =
+            await TransitionAsync(
+                contractId,
+                contract => contract.Start(context),
+                cancellationToken)
+                .ConfigureAwait(false);
+
+        if (_runtimeState is not null)
+        {
+            await _runtimeState
+                .PublishAuthoritativeAsync(
+                    started,
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+
+        return started;
     }
 
     public Task<PersistedJobContract> FailAsync(
