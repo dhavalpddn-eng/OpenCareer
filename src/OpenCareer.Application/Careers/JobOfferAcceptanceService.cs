@@ -108,7 +108,7 @@ public sealed class JobOfferAcceptanceService
                 if (createResult
                     == JobContractSaveResult.Created)
                 {
-                    PersistedJobContract accepted =
+                    PersistedJobContract createdAccepted =
                         await _lifecycle
                             .AcceptAsync(
                                 expected.ContractId,
@@ -118,7 +118,7 @@ public sealed class JobOfferAcceptanceService
 
                     await _runtimeState
                         .PublishAuthoritativeAsync(
-                            accepted,
+                            createdAccepted,
                             cancellationToken)
                         .ConfigureAwait(false);
 
@@ -129,7 +129,7 @@ public sealed class JobOfferAcceptanceService
                             cancellationToken)
                         .ConfigureAwait(false);
 
-                    return accepted;
+                    return createdAccepted;
                 }
 
                 existing =

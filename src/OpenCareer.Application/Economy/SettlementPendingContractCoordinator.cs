@@ -1,3 +1,4 @@
+using OpenCareer.Application.Careers;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
 
