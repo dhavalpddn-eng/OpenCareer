@@ -1,4 +1,5 @@
 using OpenCareer.Application.Planning;
+using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Planning;
 
 namespace OpenCareer.Application.Careers;
