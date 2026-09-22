@@ -5,9 +5,9 @@ namespace OpenCareer.Infrastructure.Persistence;
 internal static class OpenCareerDatabaseMigrator
 {
     // Career and Economy branches independently reused schema versions 1-10.
-    // Version 11 is the first shared convergence point; pre-v11 user_version
+    // Version 11 was the first shared convergence point; pre-v11 user_version
     // alone cannot be used to infer which subsystem tables already exist.
-    public const int CurrentSchemaVersion = 11;
+    public const int CurrentSchemaVersion = 12;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -36,6 +36,12 @@ internal static class OpenCareerDatabaseMigrator
             .ConfigureAwait(false);
 
         await MigrateLegacyIntegrationEconomyAsync(
+                connection,
+                transaction,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await EnsureAircraftAvailabilityReservationColumnAsync(
                 connection,
                 transaction,
                 cancellationToken)
@@ -263,7 +269,74 @@ internal static class OpenCareerDatabaseMigrator
                         scope ASC,
                         location_id ASC
                     );
+
+                CREATE TABLE IF NOT EXISTS installed_aircraft_observations (
+                    canonical_aircraft_id TEXT NOT NULL,
+                    provider_id TEXT NOT NULL,
+                    provider_record_id TEXT NOT NULL,
+                    payload_schema_version INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (provider_id, provider_record_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_installed_aircraft_observations_canonical
+                    ON installed_aircraft_observations (
+                        canonical_aircraft_id COLLATE NOCASE,
+                        provider_id,
+                        provider_record_id
+                    );
+
+                CREATE TABLE IF NOT EXISTS aircraft_availability (
+                    canonical_aircraft_id TEXT NOT NULL PRIMARY KEY COLLATE NOCASE,
+                    status INTEGER NOT NULL CHECK (status IN (0, 1)),
+                    reservation_id TEXT NULL
+                );
                 """,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task EnsureAircraftAvailabilityReservationColumnAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        bool hasReservationId = false;
+
+        await using (SqliteCommand command =
+            connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText =
+                "PRAGMA table_info(aircraft_availability);";
+
+            await using SqliteDataReader reader =
+                await command
+                    .ExecuteReaderAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+            while (await reader
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(false))
+            {
+                if (string.Equals(
+                        reader.GetString(1),
+                        "reservation_id",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    hasReservationId = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasReservationId)
+            return;
+
+        await ExecuteAsync(
+                connection,
+                transaction,
+                "ALTER TABLE aircraft_availability ADD COLUMN reservation_id TEXT NULL;",
                 cancellationToken)
             .ConfigureAwait(false);
     }

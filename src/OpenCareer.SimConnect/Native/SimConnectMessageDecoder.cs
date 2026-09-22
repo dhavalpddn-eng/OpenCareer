@@ -11,6 +11,13 @@ internal static class SimConnectMessageDecoder
     private const int ExceptionSize = HeaderSize + 3 * sizeof(uint);
     private const int EventSize = HeaderSize + 3 * sizeof(uint);
     private const int SimObjectDataHeaderSize = HeaderSize + 7 * sizeof(uint);
+    private const int ListHeaderSize = HeaderSize + 4 * sizeof(uint);
+    private const int SimObjectLiverySize = 512;
+    // The native C++ layout pads after the 1-byte IsListItem field so ItemIndex,
+    // ListSize, and the flexible Data payload remain DWORD-aligned.
+    private const int FacilityDataPayloadOffset = 40;
+    private const int AirportFacilityPayloadSize = 88;
+    private const int RunwayFacilityPayloadSize = 50;
 
     internal static SimConnectMessage Decode(nint data, uint bufferSize)
     {
@@ -30,6 +37,10 @@ internal static class SimConnectMessageDecoder
             SimConnectMessageKind.Event => DecodeEvent(data, declaredSize),
             SimConnectMessageKind.SimObjectData => DecodeSimObjectData(data, declaredSize),
             SimConnectMessageKind.SystemState => DecodeSystemState(data, declaredSize),
+            SimConnectMessageKind.FacilityData => DecodeFacilityData(data, declaredSize),
+            SimConnectMessageKind.FacilityDataEnd => DecodeFacilityDataEnd(data, declaredSize),
+            SimConnectMessageKind.EnumerateSimObjectAndLiveryList =>
+                DecodeSimObjectAndLiveryList(data, declaredSize),
             _ => new(SimConnectMessageKind.None)
         };
     }
@@ -88,6 +99,170 @@ internal static class SimConnectMessageDecoder
             RequestId: requestId,
             DefinitionId: definitionId,
             Data: values);
+    }
+
+    private static SimConnectMessage DecodeFacilityData(nint data, uint size)
+    {
+        RequireSize(size, FacilityDataPayloadOffset + sizeof(uint));
+
+        uint requestId = unchecked((uint)Marshal.ReadInt32(data, 12));
+        uint uniqueRequestId = unchecked((uint)Marshal.ReadInt32(data, 16));
+        uint parentUniqueRequestId = unchecked((uint)Marshal.ReadInt32(data, 20));
+        var type = (SimConnectFacilityDataType)unchecked((uint)Marshal.ReadInt32(data, 24));
+        bool isListItem = Marshal.ReadByte(data, 28) != 0;
+        uint itemIndex = unchecked((uint)Marshal.ReadInt32(data, 32));
+        uint listSize = unchecked((uint)Marshal.ReadInt32(data, 36));
+
+        return type switch
+        {
+            SimConnectFacilityDataType.Airport => DecodeAirportFacilityData(
+                data,
+                size,
+                requestId,
+                uniqueRequestId,
+                parentUniqueRequestId,
+                isListItem,
+                itemIndex,
+                listSize),
+            SimConnectFacilityDataType.Runway => DecodeRunwayFacilityData(
+                data,
+                size,
+                requestId,
+                uniqueRequestId,
+                parentUniqueRequestId,
+                isListItem,
+                itemIndex,
+                listSize),
+            _ => throw new InvalidDataException("Unexpected SimConnect facility data type.")
+        };
+    }
+
+    private static SimConnectMessage DecodeAirportFacilityData(
+        nint data,
+        uint size,
+        uint requestId,
+        uint uniqueRequestId,
+        uint parentUniqueRequestId,
+        bool isListItem,
+        uint itemIndex,
+        uint listSize)
+    {
+        RequireSize(size, FacilityDataPayloadOffset + AirportFacilityPayloadSize);
+
+        var payload = new SimConnectAirportFacilityData(
+            ReadDouble(data, FacilityDataPayloadOffset),
+            ReadDouble(data, FacilityDataPayloadOffset + 8),
+            ReadFixedAnsi(data + FacilityDataPayloadOffset + 16, 64).Trim(),
+            ReadFixedAnsi(data + FacilityDataPayloadOffset + 80, 8).Trim());
+
+        return new(
+            SimConnectMessageKind.FacilityData,
+            RequestId: requestId,
+            FacilityDataType: SimConnectFacilityDataType.Airport,
+            UniqueRequestId: uniqueRequestId,
+            ParentUniqueRequestId: parentUniqueRequestId,
+            IsListItem: isListItem,
+            ItemIndex: itemIndex,
+            ListSize: listSize,
+            AirportFacilityData: payload);
+    }
+
+    private static SimConnectMessage DecodeRunwayFacilityData(
+        nint data,
+        uint size,
+        uint requestId,
+        uint uniqueRequestId,
+        uint parentUniqueRequestId,
+        bool isListItem,
+        uint itemIndex,
+        uint listSize)
+    {
+        RequireSize(size, FacilityDataPayloadOffset + RunwayFacilityPayloadSize);
+
+        var payload = new SimConnectRunwayFacilityData(
+            ReadDouble(data, FacilityDataPayloadOffset),
+            ReadDouble(data, FacilityDataPayloadOffset + 8),
+            ReadSingle(data, FacilityDataPayloadOffset + 16),
+            ReadSingle(data, FacilityDataPayloadOffset + 20),
+            ReadSingle(data, FacilityDataPayloadOffset + 24),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 28),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 32),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 36),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 40),
+            Marshal.ReadInt32(data, FacilityDataPayloadOffset + 44),
+            Marshal.ReadByte(data, FacilityDataPayloadOffset + 48) != 0,
+            Marshal.ReadByte(data, FacilityDataPayloadOffset + 49) != 0);
+
+        return new(
+            SimConnectMessageKind.FacilityData,
+            RequestId: requestId,
+            FacilityDataType: SimConnectFacilityDataType.Runway,
+            UniqueRequestId: uniqueRequestId,
+            ParentUniqueRequestId: parentUniqueRequestId,
+            IsListItem: isListItem,
+            ItemIndex: itemIndex,
+            ListSize: listSize,
+            RunwayFacilityData: payload);
+    }
+
+    private static SimConnectMessage DecodeFacilityDataEnd(nint data, uint size)
+    {
+        RequireSize(size, HeaderSize + sizeof(uint));
+        return new(
+            SimConnectMessageKind.FacilityDataEnd,
+            RequestId: unchecked((uint)Marshal.ReadInt32(data, 12)));
+    }
+
+    private static float ReadSingle(nint data, int offset) =>
+        BitConverter.Int32BitsToSingle(Marshal.ReadInt32(data, offset));
+
+    private static double ReadDouble(nint data, int offset) =>
+        BitConverter.Int64BitsToDouble(Marshal.ReadInt64(data, offset));
+
+    private static SimConnectMessage DecodeSimObjectAndLiveryList(nint data, uint size)
+    {
+        RequireSize(size, ListHeaderSize);
+
+        uint requestId = unchecked((uint)Marshal.ReadInt32(data, 12));
+        uint arraySize = unchecked((uint)Marshal.ReadInt32(data, 16));
+        uint entryNumber = unchecked((uint)Marshal.ReadInt32(data, 20));
+        uint outOf = unchecked((uint)Marshal.ReadInt32(data, 24));
+
+        if (outOf == 0 || entryNumber >= outOf || arraySize > int.MaxValue)
+            throw new InvalidDataException("Invalid SimConnect aircraft enumeration page metadata.");
+
+        long requiredSize = ListHeaderSize + (long)arraySize * SimObjectLiverySize;
+        if (requiredSize > size)
+            throw new InvalidDataException("Truncated SimConnect aircraft enumeration page.");
+
+        var entries = new SimConnectObjectLivery[checked((int)arraySize)];
+        for (int index = 0; index < entries.Length; index++)
+        {
+            int offset = ListHeaderSize + index * SimObjectLiverySize;
+            string title = ReadFixedAnsi(data + offset, 256);
+            string livery = ReadFixedAnsi(data + offset + 256, 256);
+
+            if (string.IsNullOrWhiteSpace(title))
+                throw new InvalidDataException("SimConnect returned an aircraft entry without a title.");
+
+            entries[index] = new(title.Trim(), livery.Trim());
+        }
+
+        return new(
+            SimConnectMessageKind.EnumerateSimObjectAndLiveryList,
+            RequestId: requestId,
+            ListEntryNumber: entryNumber,
+            ListOutOf: outOf,
+            ObjectLiveries: entries);
+    }
+
+    private static string ReadFixedAnsi(nint data, int capacity)
+    {
+        byte[] buffer = new byte[capacity];
+        Marshal.Copy(data, buffer, 0, capacity);
+        int terminator = Array.IndexOf(buffer, (byte)0);
+        int length = terminator >= 0 ? terminator : capacity;
+        return Marshal.PtrToStringAnsi(data, length) ?? string.Empty;
     }
 
     private static Version ReadVersion(ReadOnlySpan<byte> data)

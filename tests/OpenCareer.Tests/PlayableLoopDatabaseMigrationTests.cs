@@ -27,7 +27,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                11);
+                12);
 
             await AssertTablesExistAsync(
                 path,
@@ -36,7 +36,9 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 "job_contracts",
                 "economy_ledger_transactions",
                 "economy_ledger_postings",
-                "commodity_market_snapshots");
+                "commodity_market_snapshots",
+                "installed_aircraft_observations",
+                "aircraft_availability");
         }
         finally
         {
@@ -67,7 +69,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                11);
+                12);
 
             await AssertTablesExistAsync(
                 path,
@@ -140,7 +142,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                11);
+                12);
 
             await AssertTablesExistAsync(
                 path,
@@ -206,7 +208,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                11);
+                12);
 
             await using SqliteConnection connection =
                 await OpenReadOnlyAsync(path);
@@ -253,6 +255,89 @@ public sealed class PlayableLoopDatabaseMigrationTests
             Assert.Equal(
                 "{\"legacyContract\":true}",
                 reader.GetString(4));
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
+    public async Task LegacyFleetAvailabilityPreservesStateAndGainsReservationColumn()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            string path =
+                Path.Combine(
+                    directory,
+                    "opencareer.db");
+
+            await using (SqliteConnection connection =
+                await OpenReadWriteAsync(path))
+            {
+                await using SqliteCommand command =
+                    connection.CreateCommand();
+
+                command.CommandText =
+                    """
+                    CREATE TABLE aircraft_availability (
+                        canonical_aircraft_id TEXT NOT NULL PRIMARY KEY COLLATE NOCASE,
+                        status INTEGER NOT NULL CHECK (status IN (0, 1))
+                    );
+
+                    INSERT INTO aircraft_availability (
+                        canonical_aircraft_id,
+                        status
+                    )
+                    VALUES (
+                        'msfs-title:legacy-fixture',
+                        1
+                    );
+
+                    PRAGMA user_version = 1;
+                    """;
+
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var store =
+                new OpenCareer.Infrastructure.Aircraft.SqliteAircraftAvailabilityStore(
+                    path);
+
+            OpenCareer.Domain.Aircraft.AircraftAvailabilityState? state =
+                await store.FindAsync(
+                    "MSFS-TITLE:LEGACY-FIXTURE");
+
+            Assert.NotNull(state);
+            Assert.Equal(
+                OpenCareer.Domain.Aircraft.AircraftAvailabilityStatus.Unavailable,
+                state.Status);
+            Assert.Null(state.ReservationId);
+
+            await AssertSchemaVersionAsync(
+                path,
+                12);
+
+            await using SqliteConnection verification =
+                await OpenReadOnlyAsync(path);
+
+            await using SqliteCommand column =
+                verification.CreateCommand();
+
+            column.CommandText =
+                """
+                SELECT COUNT(*)
+                FROM pragma_table_info('aircraft_availability')
+                WHERE name = 'reservation_id';
+                """;
+
+            Assert.Equal(
+                1L,
+                Convert.ToInt64(
+                    await column.ExecuteScalarAsync(),
+                    System.Globalization.CultureInfo.InvariantCulture));
         }
         finally
         {

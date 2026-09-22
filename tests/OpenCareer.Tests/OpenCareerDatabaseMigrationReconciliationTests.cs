@@ -9,7 +9,7 @@ namespace OpenCareer.Tests;
 public sealed class OpenCareerDatabaseMigrationReconciliationTests
 {
     [Fact]
-    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV11()
+    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV12()
     {
         string directory = CreateTempDirectory();
 
@@ -47,7 +47,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV11()
+    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV12()
     {
         string directory = CreateTempDirectory();
 
@@ -82,7 +82,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV11()
+    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV12()
     {
         string directory = CreateTempDirectory();
 
@@ -161,7 +161,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV11()
+    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV12()
     {
         string directory = CreateTempDirectory();
 
@@ -345,7 +345,9 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
             "job_contracts",
             "economy_ledger_transactions",
             "economy_ledger_postings",
-            "commodity_market_snapshots"
+            "commodity_market_snapshots",
+            "installed_aircraft_observations",
+            "aircraft_availability"
         })
         {
             Assert.True(
@@ -361,7 +363,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            11L,
+            12L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));
