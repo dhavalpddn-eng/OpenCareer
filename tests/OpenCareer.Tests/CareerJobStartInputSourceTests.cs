@@ -361,7 +361,9 @@ public sealed class CareerJobStartInputSourceTests
                 Difficulty:
                     0,
                 EstimatedPlayerOperatingCosts:
-                    0m);
+                    0m,
+                AuthorizedAircraftAccess:
+                    AircraftAccess.Civilian);
     }
 
     private sealed class FixedDispatchAuthoritySource(
