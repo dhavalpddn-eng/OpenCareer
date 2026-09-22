@@ -313,6 +313,32 @@ public sealed class SettlementPendingContractCoordinatorTests
             Version: 3);
     }
 
+    private static bool Equivalent(
+        EconomyLedgerTransaction left,
+        EconomyLedgerTransaction right) =>
+        left.TransactionId
+            == right.TransactionId
+        && string.Equals(
+            left.IdempotencyKey,
+            right.IdempotencyKey,
+            StringComparison.Ordinal)
+        && left.OccurredAt
+            == right.OccurredAt
+        && string.Equals(
+            left.Description,
+            right.Description,
+            StringComparison.Ordinal)
+        && string.Equals(
+            left.ReferenceType,
+            right.ReferenceType,
+            StringComparison.Ordinal)
+        && string.Equals(
+            left.ReferenceId,
+            right.ReferenceId,
+            StringComparison.Ordinal)
+        && left.Postings.SequenceEqual(
+            right.Postings);
+
     private sealed class FakeRuntimeSource(
         IReadOnlyList<PersistedJobContract> current)
         : IJobContractRuntimeSource
@@ -384,8 +410,9 @@ public sealed class SettlementPendingContractCoordinatorTests
                     transaction.IdempotencyKey,
                     out EconomyLedgerTransaction? existing))
             {
-                if (existing
-                    != transaction)
+                if (!Equivalent(
+                        existing,
+                        transaction))
                 {
                     throw new InvalidOperationException(
                         "Conflicting duplicate settlement.");
