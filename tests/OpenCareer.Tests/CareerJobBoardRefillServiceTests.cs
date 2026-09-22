@@ -116,8 +116,15 @@ public sealed class CareerJobBoardRefillServiceTests
         }
         finally
         {
-            if (Directory.Exists(root))
-                Directory.Delete(root, recursive: true);
+            try
+            {
+                if (Directory.Exists(root))
+                    Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // Test cleanup should not mask the actual assertion result.
+            }
         }
     }
 
