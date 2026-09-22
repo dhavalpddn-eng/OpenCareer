@@ -86,6 +86,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<PlayerCareerLocationCoordinator>();
         services.AddSingleton<PlayerCareerQualificationCoordinator>();
 
+        services.AddSingleton<PlayerCareerExperienceCoordinator>();
+        services.AddSingleton<CareerLogbookExperienceCoordinator>();
+
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
