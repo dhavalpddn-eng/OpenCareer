@@ -175,6 +175,8 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<CompletedJobContractBridge>();
 
+        services.AddSingleton<CareerFlightReservationReleaseCoordinator>();
+
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();
         services.AddSingleton<ITutorialStepEvidenceSource>(provider =>

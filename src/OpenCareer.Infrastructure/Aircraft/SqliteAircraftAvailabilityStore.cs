@@ -5,7 +5,7 @@ using OpenCareer.Infrastructure.Persistence;
 
 namespace OpenCareer.Infrastructure.Aircraft;
 
-public sealed class SqliteAircraftAvailabilityStore : IAircraftAvailabilityStore, IAircraftReservationStore
+public sealed class SqliteAircraftAvailabilityStore : IAircraftAvailabilityStore, IAircraftReservationStore, IAircraftReservationLookup
 {
     private readonly string _connectionString;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
@@ -89,6 +89,77 @@ public sealed class SqliteAircraftAvailabilityStore : IAircraftAvailabilityStore
         {
             _writeGate.Release();
         }
+    }
+
+    public async Task<AircraftReservationOwnership?> FindByReservationIdAsync(
+        string reservationId,
+        CancellationToken cancellationToken = default)
+    {
+        string normalizedReservationId =
+            NormalizeRequired(
+                reservationId,
+                nameof(reservationId));
+
+        await EnsureInitializedAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await using var connection =
+            new SqliteConnection(
+                _connectionString);
+
+        await connection
+            .OpenAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await ConfigureConnectionAsync(
+                connection,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT canonical_aircraft_id, reservation_id
+            FROM aircraft_availability
+            WHERE reservation_id = $reservationId
+            ORDER BY canonical_aircraft_id
+            LIMIT 2;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$reservationId",
+            normalizedReservationId);
+
+        await using SqliteDataReader reader =
+            await command
+                .ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!await reader
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var ownership =
+            new AircraftReservationOwnership(
+                reader.GetString(0),
+                reader.GetString(1));
+
+        ownership.Validate();
+
+        if (await reader
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(false))
+        {
+            throw new InvalidOperationException(
+                "A reservation id is associated with multiple aircraft.");
+        }
+
+        return ownership;
     }
 
     public async Task<AircraftReservationAcquireResult> TryReserveAsync(

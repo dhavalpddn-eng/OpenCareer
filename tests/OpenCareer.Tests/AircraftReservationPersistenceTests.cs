@@ -65,6 +65,45 @@ public sealed class AircraftReservationPersistenceTests : IDisposable
     }
 
     [Fact]
+    public async Task ReservationCanBeRecoveredByDeterministicReservationId()
+    {
+        var store =
+            new SqliteAircraftAvailabilityStore(
+                DatabasePath);
+
+        const string reservationId =
+            "contract:00000000-0000-0000-0000-000000000123:aircraft-v1";
+
+        await store.TryReserveAsync(
+            "msfs-title:Fixture Recovery",
+            reservationId);
+
+        var reopened =
+            new SqliteAircraftAvailabilityStore(
+                DatabasePath);
+
+        AircraftReservationOwnership? recovered =
+            await reopened.FindByReservationIdAsync(
+                reservationId);
+
+        Assert.NotNull(recovered);
+        Assert.Equal(
+            "msfs-title:Fixture Recovery",
+            recovered.CanonicalAircraftId);
+        Assert.Equal(
+            reservationId,
+            recovered.ReservationId);
+
+        await reopened.ReleaseReservationAsync(
+            recovered.CanonicalAircraftId,
+            reservationId);
+
+        Assert.Null(
+            await reopened.FindByReservationIdAsync(
+                reservationId));
+    }
+
+    [Fact]
     public async Task ExplicitUnavailableAircraftCannotBeReserved()
     {
         var store = new SqliteAircraftAvailabilityStore(DatabasePath);

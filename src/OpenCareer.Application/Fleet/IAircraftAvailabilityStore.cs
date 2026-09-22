@@ -29,6 +29,26 @@ public interface IAircraftAvailabilityStore
         CancellationToken cancellationToken = default);
 }
 
+public sealed record AircraftReservationOwnership(
+    string CanonicalAircraftId,
+    string ReservationId)
+{
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            CanonicalAircraftId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            ReservationId);
+    }
+}
+
+public interface IAircraftReservationLookup
+{
+    Task<AircraftReservationOwnership?> FindByReservationIdAsync(
+        string reservationId,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IAircraftReservationStore
 {
     Task<AircraftReservationAcquireResult> TryReserveAsync(
