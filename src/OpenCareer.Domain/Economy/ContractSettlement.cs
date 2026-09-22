@@ -81,6 +81,19 @@ public sealed record ContractSettlementSummary(
 
 public static class ContractSettlementEngine
 {
+    public static string GetIdempotencyKey(
+        Guid contractId)
+    {
+        if (contractId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Contract ID is required.",
+                nameof(contractId));
+        }
+
+        return $"contract:{contractId:D}:settlement-v1";
+    }
+
     public static ContractSettlementSummary Create(
         JobContract contract,
         ContractSettlementCosts actualCosts,
@@ -206,7 +219,8 @@ public static class ContractSettlementEngine
                 TransactionId:
                     contract.ContractId,
                 IdempotencyKey:
-                    $"contract:{contract.ContractId:D}:settlement-v1",
+                    GetIdempotencyKey(
+                        contract.ContractId),
                 OccurredAt:
                     settledAt,
                 Description:
