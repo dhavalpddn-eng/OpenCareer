@@ -248,8 +248,8 @@ public sealed record JobMarketContractTermsEnvelope(
 
         if (MustCompleteBy is { } complete
             && (complete < offer.OfferedAt
-                || (MustStartBy is { } start
-                    && complete < start)))
+                || (MustStartBy is { } completionStart
+                    && complete < completionStart)))
         {
             throw new ArgumentException(
                 "Contract-term completion deadline is invalid.");

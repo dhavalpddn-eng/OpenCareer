@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Simulation;
 
