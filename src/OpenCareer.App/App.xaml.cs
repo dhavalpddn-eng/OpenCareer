@@ -188,7 +188,14 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<PersistedJobContractTermsSource>();
         services.AddSingleton<ICareerJobContractTermsSource>(provider =>
             provider.GetRequiredService<PersistedJobContractTermsSource>());
+        services.AddSingleton<StandardCivilianPointToPointDispatchAuthoritySource>();
+        services.AddSingleton<ICareerJobDispatchAuthoritySource>(provider =>
+            provider.GetRequiredService<StandardCivilianPointToPointDispatchAuthoritySource>());
         services.AddSingleton<CareerJobStartInputSource>();
+        services.AddSingleton<CareerJobAircraftSelectionSource>();
+        services.AddSingleton<CareerJobStartActionService>();
+        services.AddSingleton<ICareerJobStartAction>(provider =>
+            provider.GetRequiredService<CareerJobStartActionService>());
 
         services.AddSingleton<CareerJobPlayableLoopReadinessSource>();
 

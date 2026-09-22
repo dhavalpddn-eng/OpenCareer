@@ -252,7 +252,7 @@ public sealed class JobMarketGeneratorTests
                 offer);
 
             Assert.Equal(
-                "job-market:standard-civilian-point-to-point-v1",
+                "job-market:standard-civilian-point-to-point-v2",
                 terms.AuthorityId);
             Assert.Equal(
                 offer.EstimatedFlightHours,
@@ -275,6 +275,12 @@ public sealed class JobMarketGeneratorTests
             Assert.Equal(
                 0,
                 terms.Difficulty);
+            Assert.Equal(
+                PilotQualificationState.Entry,
+                terms.RequiredPilotQualifications);
+            Assert.Equal(
+                AircraftAccess.Civilian,
+                terms.AuthorizedAircraftAccess);
             Assert.Null(
                 terms.MustStartBy);
             Assert.Null(

@@ -6,7 +6,7 @@ public sealed class PersistedJobContractTermsSource
     : ICareerJobContractTermsSource
 {
     public const string AuthorityId =
-        "job-market:standard-civilian-point-to-point-v1";
+        "job-market:standard-civilian-point-to-point-v2";
 
     public Task<CareerJobContractTermsEvidence?> ReadAsync(
         JobMarketOfferDraft offer,
@@ -53,7 +53,9 @@ public sealed class PersistedJobContractTermsSource
                 envelope.ReputationPenalty,
                 envelope.MarketId,
                 envelope.WorldEventId,
-                envelope.GovernmentAuthorizationRequired));
+                envelope.GovernmentAuthorizationRequired,
+                envelope.RequiredPilotQualifications,
+                envelope.AuthorizedAircraftAccess));
     }
 
     private static bool Supports(

@@ -22,7 +22,9 @@ public sealed record CareerJobContractTermsEvidence(
     double ReputationPenalty = 2.0,
     string? MarketId = null,
     string? WorldEventId = null,
-    bool GovernmentAuthorizationRequired = false)
+    bool GovernmentAuthorizationRequired = false,
+    PilotQualificationState? RequiredPilotQualifications = null,
+    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None)
 {
     public void ValidateIdentity(
         JobMarketOfferDraft offer)
@@ -38,6 +40,13 @@ public sealed record CareerJobContractTermsEvidence(
         }
 
         AircraftRequirements.Validate();
+        RequiredPilotQualifications?.Validate();
+
+        if ((AuthorizedAircraftAccess & ~AircraftAccess.Any) != 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(AuthorizedAircraftAccess));
+        }
     }
 }
 
@@ -120,11 +129,13 @@ public enum CareerJobStartInputState
     AircraftUnavailable = 7,
     AircraftCapabilityDataIncomplete = 8,
     DispatchAuthorityUnavailable = 9,
-    DispatchRequirementsInvalid = 10,
-    PreflightInfeasible = 11,
-    PreflightDataInsufficient = 12,
-    DomainDispatchGateRejected = 13,
-    Ready = 14
+    QualificationsNotMet = 10,
+    AircraftAccessUnauthorized = 11,
+    DispatchRequirementsInvalid = 12,
+    PreflightInfeasible = 13,
+    PreflightDataInsufficient = 14,
+    DomainDispatchGateRejected = 15,
+    Ready = 16
 }
 
 public sealed record CareerJobStartInputSnapshot(
@@ -411,6 +422,27 @@ public sealed class CareerJobStartInputSource
         dispatchAuthority.ValidateIdentity(
             offer,
             aircraft);
+
+        if (!dispatchAuthority.QualificationsVerified)
+        {
+            return Blocked(
+                CareerJobStartInputState.QualificationsNotMet,
+                offerId,
+                "The current Career/Profile qualifications do not satisfy this job.");
+        }
+
+        if (terms.AuthorizedAircraftAccess == AircraftAccess.None
+            || (dispatchAuthority.AuthorizedAccess
+                & ~terms.AuthorizedAircraftAccess) != 0
+            || (dispatchAuthority.AuthorizedAccess
+                & aircraft.Capabilities.Access
+                & terms.AircraftRequirements.AllowedAccess) == 0)
+        {
+            return Blocked(
+                CareerJobStartInputState.AircraftAccessUnauthorized,
+                offerId,
+                "The selected aircraft is not authorized by the persisted job access terms.");
+        }
 
         if (dispatchAuthority.Requirements.PayloadPounds + 1e-9
                 < creationRequest.PayloadPounds

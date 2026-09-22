@@ -64,7 +64,14 @@ public sealed class PersistedJobContractTermsSourceTests
                 WorldEventId:
                     "event:fixture",
                 GovernmentAuthorizationRequired:
-                    true);
+                    true,
+                RequiredPilotQualifications:
+                    new PilotQualificationState(
+                        PilotLicenseLevel.Private,
+                        System.Collections.Immutable.ImmutableHashSet.Create(
+                            PilotRating.AirplaneSingleEngineLand)),
+                AuthorizedAircraftAccess:
+                    AircraftAccess.Civilian);
 
         JobMarketOfferDraft offer =
             Offer(
@@ -126,6 +133,12 @@ public sealed class PersistedJobContractTermsSourceTests
             evidence.WorldEventId);
         Assert.True(
             evidence.GovernmentAuthorizationRequired);
+        Assert.Equal(
+            envelope.RequiredPilotQualifications,
+            evidence.RequiredPilotQualifications);
+        Assert.Equal(
+            envelope.AuthorizedAircraftAccess,
+            evidence.AuthorizedAircraftAccess);
     }
 
     [Fact]
@@ -149,7 +162,7 @@ public sealed class PersistedJobContractTermsSourceTests
             StandardEnvelope() with
             {
                 AuthorityId =
-                    "job-market:future-point-to-point-v2"
+                    "job-market:future-point-to-point-v3"
             };
 
         var source =
@@ -257,7 +270,11 @@ public sealed class PersistedJobContractTermsSourceTests
             Difficulty:
                 0,
             EstimatedPlayerOperatingCosts:
-                0m);
+                0m,
+            RequiredPilotQualifications:
+                PilotQualificationState.Entry,
+            AuthorizedAircraftAccess:
+                AircraftAccess.Civilian);
 
     private static PlayerCareerProfile Profile() =>
         PlayerCareerProfile.Start(

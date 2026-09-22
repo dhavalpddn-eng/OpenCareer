@@ -165,7 +165,9 @@ public sealed record JobMarketContractTermsEnvelope(
     double ReputationPenalty = 2.0,
     string? MarketId = null,
     string? WorldEventId = null,
-    bool GovernmentAuthorizationRequired = false)
+    bool GovernmentAuthorizationRequired = false,
+    PilotQualificationState? RequiredPilotQualifications = null,
+    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None)
 {
     public void ValidateForOffer(
         JobMarketOfferDraft offer)
@@ -175,6 +177,13 @@ public sealed record JobMarketContractTermsEnvelope(
         ArgumentNullException.ThrowIfNull(AircraftRequirements);
 
         AircraftRequirements.Validate();
+        RequiredPilotQualifications?.Validate();
+
+        if ((AuthorizedAircraftAccess & ~AircraftAccess.Any) != 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(AuthorizedAircraftAccess));
+        }
 
         if (!double.IsFinite(EstimatedFlightHours)
             || EstimatedFlightHours <= 0

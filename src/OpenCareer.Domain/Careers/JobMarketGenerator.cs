@@ -418,7 +418,7 @@ public static class JobMarketGenerator
 
         return new(
             AuthorityId:
-                "job-market:standard-civilian-point-to-point-v1",
+                "job-market:standard-civilian-point-to-point-v2",
             requirements,
             EstimatedFlightHours:
                 hours,
@@ -447,7 +447,11 @@ public static class JobMarketGenerator
             WorldEventId:
                 null,
             GovernmentAuthorizationRequired:
-                false);
+                false,
+            RequiredPilotQualifications:
+                PilotQualificationState.Entry,
+            AuthorizedAircraftAccess:
+                AircraftAccess.Civilian);
     }
 
     private static double DemandAttractiveness(

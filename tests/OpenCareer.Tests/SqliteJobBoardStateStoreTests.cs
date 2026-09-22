@@ -55,7 +55,7 @@ public sealed class SqliteJobBoardStateStoreTests : IAsyncLifetime
                     ContractKind.Ferry,
                 ContractTerms =
                     new JobMarketContractTermsEnvelope(
-                        "job-market:standard-civilian-point-to-point-v1",
+                        "job-market:standard-civilian-point-to-point-v2",
                         new AircraftMissionRequirements(
                             AllowedAccess:
                                 AircraftAccess.Civilian,
@@ -72,7 +72,11 @@ public sealed class SqliteJobBoardStateStoreTests : IAsyncLifetime
                         Urgency:
                             0,
                         Difficulty:
-                            0)
+                            0,
+                        RequiredPilotQualifications:
+                            PilotQualificationState.Entry,
+                        AuthorizedAircraftAccess:
+                            AircraftAccess.Civilian)
             };
 
         Guid retired =

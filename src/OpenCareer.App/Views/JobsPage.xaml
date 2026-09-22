@@ -10,17 +10,29 @@
             <StackPanel Spacing="4">
                 <TextBlock Text="JOBS"
                            Style="{StaticResource OpenCareerPageTitleStyle}" />
-                <TextBlock Text="Persisted local career offers from the authoritative job board."
+                <TextBlock Text="Persisted local career offers with authoritative aircraft and dispatch screening."
                            Style="{StaticResource OpenCareerPageSubtitleStyle}" />
             </StackPanel>
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="22">
-                <StackPanel Spacing="8">
+                <StackPanel Spacing="10">
                     <TextBlock Text="{Binding AirportText}"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                     <TextBlock Text="{Binding StatusText}"
                                Style="{StaticResource OpenCareerPaperTitleStyle}"
+                               TextWrapping="Wrap" />
+
+                    <TextBlock Text="SELECT INSTALLED AIRCRAFT"
+                               Margin="0,8,0,0"
+                               Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                    <ComboBox ItemsSource="{Binding AircraftOptions}"
+                              DisplayMemberPath="DisplayName"
+                              PlaceholderText="Choose aircraft for dispatch"
+                              SelectionChanged="AircraftSelection_Changed"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Text="{Binding AircraftStatus}"
+                               Style="{StaticResource OpenCareerInputHelpStyle}"
                                TextWrapping="Wrap" />
                     <TextBlock Text="{Binding AcceptanceStatus}"
                                Style="{StaticResource OpenCareerPaperBodyStyle}"
@@ -53,13 +65,10 @@
 
                                     <TextBlock Text="{Binding KindText}"
                                                Style="{StaticResource OpenCareerPaperValueStyle}" />
-
                                     <TextBlock Text="{Binding TrackText}"
                                                Style="{StaticResource OpenCareerPaperBodyStyle}" />
-
                                     <TextBlock Text="{Binding ScenarioText}"
                                                Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
-
                                     <TextBlock Text="{Binding ActionText}"
                                                Style="{StaticResource OpenCareerInputHelpStyle}"
                                                TextWrapping="Wrap" />
@@ -84,7 +93,8 @@
                                                TextWrapping="Wrap" />
 
                                     <Button Content="Accept &amp; Start Flight"
-                                            IsEnabled="False"
+                                            IsEnabled="{Binding CanStart}"
+                                            Click="AcceptStartFlight_Click"
                                             Style="{StaticResource OpenCareerPrimaryButtonStyle}"
                                             Margin="0,8,0,0" />
                                 </StackPanel>

@@ -1,6 +1,8 @@
 using System.Collections.Immutable;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Careers;
+using OpenCareer.Application.Planning;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 
 namespace OpenCareer.Tests;
@@ -153,6 +155,63 @@ public sealed class JobsViewModelTests
             StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task SelectedAircraftEnablesVerifiedStartAndDelegatesOnce()
+    {
+        JobMarketOfferDraft offer =
+            Offer(
+                "KRME",
+                "KSYR",
+                locked:
+                    false);
+
+        var action =
+            new FakeStartAction();
+
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        offer)),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                new CareerJobAircraftSelectionSource(
+                    new FakeDiscovery()),
+                action,
+                logger:
+                    null);
+
+        await viewModel.RefreshAsync();
+
+        CareerJobAircraftOption aircraft =
+            Assert.Single(
+                viewModel.AircraftOptions);
+
+        await viewModel.SelectAircraftAsync(
+            aircraft.AircraftId);
+
+        JobOfferItemViewModel projected =
+            Assert.Single(
+                viewModel.Offers);
+
+        Assert.True(
+            projected.CanStart);
+
+        await viewModel.StartOfferAsync(
+            projected.OfferId);
+
+        Assert.Equal(
+            1,
+            action.StartCount);
+        Assert.Equal(
+            projected.OfferId,
+            action.LastOfferId);
+        Assert.Equal(
+            aircraft.AircraftId,
+            action.LastAircraftId);
+    }
+
     private static PlayerCareerRuntimeState CareerRuntime(
         string airportIcao)
     {
@@ -215,6 +274,66 @@ public sealed class JobsViewModelTests
                 0.5,
             MarketSelectionWeight:
                 1);
+
+    private sealed class FakeDiscovery
+        : IInstalledAircraftDiscoverySource
+    {
+        public InstalledAircraftDiscoverySnapshot Current =>
+            new(
+                InstalledAircraftDiscoveryAvailability.Available,
+                [
+                    new AircraftRegistryObservation(
+                        "fixture-aircraft",
+                        ProviderId:
+                            "fixture",
+                        ProviderRecordId:
+                            "Fixture Aircraft",
+                        AircraftDataConfidence.Verified,
+                        IsInstalled:
+                            true,
+                        DisplayName:
+                            "Fixture Aircraft")
+                ]);
+    }
+
+    private sealed class FakeStartAction
+        : ICareerJobStartAction
+    {
+        public int StartCount { get; private set; }
+        public Guid? LastOfferId { get; private set; }
+        public string? LastAircraftId { get; private set; }
+
+        public Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
+            Guid offerId,
+            string aircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(
+                new CareerJobStartActionAvailability(
+                    CanStart:
+                        true,
+                    CareerJobStartInputState.Ready,
+                    "Authoritative start inputs are ready."));
+        }
+
+        public Task<CareerJobPlayableStartResult> StartAsync(
+            Guid offerId,
+            string aircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StartCount++;
+            LastOfferId =
+                offerId;
+            LastAircraftId =
+                aircraftId;
+
+            throw new InvalidOperationException(
+                "Synthetic start result intentionally stops after delegation.");
+        }
+    }
 
     private sealed class FakeBoardStore(
         params JobBoardState[] boards)
