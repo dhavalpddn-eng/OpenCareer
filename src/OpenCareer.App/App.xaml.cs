@@ -141,6 +141,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<FlightContinuityPolicy>();
         services.AddSingleton<FlightSessionRuntime>();
 
+        services.AddSingleton<IFlightStateEvidenceSource>(provider =>
+            provider.GetRequiredService<FlightSessionRuntime>());
+
         services.AddSingleton<SimConnectConnection>();
         services.AddSingleton<ISimulatorConnection>(provider =>
             provider.GetRequiredService<SimConnectConnection>());

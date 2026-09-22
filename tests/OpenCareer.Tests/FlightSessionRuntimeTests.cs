@@ -47,6 +47,63 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task SuccessfulRuntimeObservationPublishesAuthoritativeEvidence()
+    {
+        FlightSession active =
+            PreflightSession();
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(active);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = active
+            };
+
+        DateTimeOffset timestamp =
+            Epoch.AddMinutes(1);
+
+        var runtime =
+            CreateRuntime(
+                coordinator,
+                store,
+                Connected(),
+                new TestTelemetrySource
+                {
+                    Latest =
+                        Telemetry(
+                            timestamp,
+                            32,
+                            -97,
+                            onGround: true)
+                });
+
+        IFlightStateEvidenceSource source =
+            runtime;
+
+        FlightStateEvidence? published = null;
+        source.EvidenceChanged +=
+            evidence => published = evidence;
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightStateEvidence current =
+            Assert.IsType<FlightStateEvidence>(
+                source.Current);
+
+        Assert.Same(current, published);
+        Assert.Equal(timestamp, current.Timestamp);
+        Assert.True(current.Connected);
+        Assert.True(current.StableTelemetry);
+        Assert.True(current.ValidLoadedAircraft);
+        Assert.True(current.ContinuityPlausible);
+    }
+
+    [Fact]
     public async Task DisconnectSuspendsAndPersistsActiveSession()
     {
         var coordinator =
@@ -78,6 +135,13 @@ public sealed class FlightSessionRuntimeTests
                 new FixedTimeProvider(
                     Epoch.AddMinutes(1)));
 
+        IFlightStateEvidenceSource source =
+            runtime;
+
+        FlightStateEvidence? published = null;
+        source.EvidenceChanged +=
+            evidence => published = evidence;
+
         Assert.True(
             await runtime.RefreshAsync());
 
@@ -88,6 +152,216 @@ public sealed class FlightSessionRuntimeTests
         Assert.Equal(
             FlightSessionStatus.Suspended,
             store.Checkpoint?.Status);
+
+        FlightStateEvidence current =
+            Assert.IsType<FlightStateEvidence>(
+                source.Current);
+
+        Assert.Same(current, published);
+        Assert.Equal(
+            Epoch.AddMinutes(1),
+            current.Timestamp);
+        Assert.False(current.Connected);
+        Assert.False(current.ContinuityPlausible);
+    }
+
+    [Fact]
+    public async Task ReconnectPublishesFirstAcceptedEvidenceOnce()
+    {
+        FlightSession active =
+            PreflightSession();
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(active);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = active
+            };
+
+        var connection =
+            new TestConnection
+            {
+                Current =
+                    new SimulatorConnectionSnapshot(
+                        SimulatorConnectionState.Reconnecting)
+            };
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        Epoch.AddHours(1).AddSeconds(1),
+                        32,
+                        -97,
+                        onGround: true)
+            };
+
+        var runtime =
+            CreateRuntime(
+                coordinator,
+                store,
+                connection,
+                telemetry);
+
+        IFlightStateEvidenceSource source =
+            runtime;
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        source.EvidenceChanged +=
+            evidence => published.Add(evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightStateEvidence disconnected =
+            Assert.IsType<FlightStateEvidence>(
+                Assert.Single(published));
+
+        Assert.Same(
+            disconnected,
+            source.Current);
+        Assert.False(disconnected.Connected);
+        Assert.Equal(
+            FlightSessionStatus.Suspended,
+            coordinator.Current?.Status);
+
+        connection.Current =
+            new SimulatorConnectionSnapshot(
+                SimulatorConnectionState.Connected);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(2, published.Count);
+
+        FlightStateEvidence reconnected =
+            Assert.IsType<FlightStateEvidence>(
+                published[1]);
+
+        Assert.Same(
+            reconnected,
+            source.Current);
+        Assert.NotSame(
+            disconnected,
+            reconnected);
+        Assert.True(reconnected.Connected);
+        Assert.True(reconnected.StableTelemetry);
+        Assert.True(reconnected.ValidLoadedAircraft);
+        Assert.True(reconnected.ContinuityPlausible);
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current?.Status);
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(2, published.Count);
+        Assert.Same(
+            reconnected,
+            source.Current);
+    }
+
+    [Fact]
+    public async Task TerminalRuntimeResetClearsPublishedEvidenceOnce()
+    {
+        FlightSession active =
+            AirborneSession();
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(active);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = active
+            };
+
+        var runtime =
+            CreateRuntime(
+                coordinator,
+                store,
+                Connected(),
+                new TestTelemetrySource
+                {
+                    Latest =
+                        Telemetry(
+                            Epoch.AddSeconds(5),
+                            32,
+                            -97,
+                            onGround: false,
+                            altitudeMsl: 10_050,
+                            groundSpeed: 150)
+                });
+
+        IFlightStateEvidenceSource source =
+            runtime;
+
+        var changes =
+            new List<FlightStateEvidence?>();
+
+        source.EvidenceChanged +=
+            evidence => changes.Add(evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.IsType<FlightStateEvidence>(
+            source.Current);
+        Assert.Single(changes);
+
+        FlightSession current =
+            coordinator.Current!;
+
+        FlightSession suspended =
+            FlightSessionEngine.Advance(
+                current,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        current.UpdatedAt.AddSeconds(1),
+                        Connected: false,
+                        ContinuityPlausible: false)));
+
+        FlightSession interrupted =
+            FlightSessionEngine.Advance(
+                suspended,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        suspended.UpdatedAt.AddSeconds(1),
+                        Connected: true,
+                        StableTelemetry: true,
+                        ContinuityPlausible: false)));
+
+        Assert.True(interrupted.IsTerminal);
+
+        coordinator.CommitPersisted(interrupted);
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Null(source.Current);
+        Assert.Equal(2, changes.Count);
+        Assert.Null(changes[1]);
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(2, changes.Count);
+
+        coordinator.ClearTerminalSession();
+
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(2, changes.Count);
     }
 
     [Fact]
@@ -407,11 +681,24 @@ public sealed class FlightSessionRuntimeTests
                 Connected(),
                 telemetry);
 
+        IFlightStateEvidenceSource source =
+            runtime;
+
+        int publicationCount = 0;
+        source.EvidenceChanged +=
+            _ => publicationCount++;
+
         Assert.True(
             await runtime.RefreshAsync());
 
         DateTimeOffset updated =
             coordinator.Current!.UpdatedAt;
+
+        FlightStateEvidence first =
+            Assert.IsType<FlightStateEvidence>(
+                source.Current);
+
+        Assert.Equal(1, publicationCount);
 
         Assert.False(
             await runtime.RefreshAsync());
@@ -419,6 +706,8 @@ public sealed class FlightSessionRuntimeTests
         Assert.Equal(
             updated,
             coordinator.Current!.UpdatedAt);
+        Assert.Equal(1, publicationCount);
+        Assert.Same(first, source.Current);
     }
 
     private static FlightSessionRuntime CreateRuntime(
