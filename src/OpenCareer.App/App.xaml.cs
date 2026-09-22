@@ -128,6 +128,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<MilitaryCampaignTransitionService>();
 
         services.AddSingleton<LogbookCommitCoordinator>();
+        services.AddSingleton<SettledJobLogbookCoordinator>();
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
         services.AddSingleton<DiagnosticBundleService>();
