@@ -187,6 +187,8 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<CareerJobPlayableLoopReadinessSource>();
 
+        services.AddSingleton<CareerJobCompletionInputSource>();
+
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();
         services.AddSingleton<ITutorialStepEvidenceSource>(provider =>
