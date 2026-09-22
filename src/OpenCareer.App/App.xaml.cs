@@ -176,6 +176,10 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<AcceptedJobFlightSessionBridge>();
 
+        services.AddSingleton<CareerJobPreFlightSessionRecoveryService>();
+        services.AddSingleton<ICareerJobPreFlightSessionRecoveryService>(provider =>
+            provider.GetRequiredService<CareerJobPreFlightSessionRecoveryService>());
+
         services.AddSingleton<JobFlightCompletionEvidenceTracker>();
 
         services.AddSingleton<JobFlightSessionCompletionBridge>();
@@ -351,6 +355,37 @@ public partial class App : Microsoft.UI.Xaml.Application
             logger.LogError(
                 ex,
                 "FlightSession recovery failed. OpenCareer will continue without claiming a recovered active flight.");
+        }
+
+        try
+        {
+            JobContractRuntimeState contracts =
+                _services.GetRequiredService<JobContractRuntimeState>();
+
+            if (contracts.Current.Any(
+                    item =>
+                        item.Contract.Status
+                            == ContractStatus.InProgress)
+                && _services
+                    .GetRequiredService<FlightSessionCoordinator>()
+                    .Current is null)
+            {
+                CareerJobPreFlightSessionRecoveryResult recovery =
+                    await _services
+                        .GetRequiredService<ICareerJobPreFlightSessionRecoveryService>()
+                        .RecoverAsync();
+
+                logger.LogInformation(
+                    "Pre-FlightSession job recovery completed with state {RecoveryState} for contract {ContractId}.",
+                    recovery.State,
+                    recovery.ContractId);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Pre-FlightSession job recovery failed. The persisted contract and Fleet reservation were preserved for retry.");
         }
 
         try

@@ -12,6 +12,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private readonly PlayerCareerRuntimeState _career;
     private readonly TimeProvider _timeProvider;
     private readonly ICareerJobBoardRefillService? _boardRefill;
+    private readonly ICareerJobPreFlightSessionRecoveryService? _startRecovery;
     private readonly CareerJobAircraftSelectionSource? _aircraftSelection;
     private readonly ICareerJobStartAction? _startAction;
     private readonly ILogger<JobsViewModel>? _logger;
@@ -47,6 +48,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             logger:
                 null,
             boardRefill:
+                null,
+            startRecovery:
                 null)
     {
     }
@@ -58,7 +61,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         CareerJobAircraftSelectionSource? aircraftSelection,
         ICareerJobStartAction? startAction,
         ILogger<JobsViewModel>? logger,
-        ICareerJobBoardRefillService? boardRefill = null)
+        ICareerJobBoardRefillService? boardRefill = null,
+        ICareerJobPreFlightSessionRecoveryService? startRecovery = null)
     {
         _jobBoards =
             jobBoards
@@ -71,6 +75,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(timeProvider));
         _boardRefill =
             boardRefill;
+        _startRecovery =
+            startRecovery;
         _aircraftSelection =
             aircraftSelection;
         _startAction =
@@ -118,6 +124,23 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     "Complete career onboarding before local job offers can be shown.",
                     nameof(StatusText));
                 return;
+            }
+
+            if (_startRecovery is not null)
+            {
+                try
+                {
+                    await _startRecovery
+                        .RecoverAsync(
+                            cancellationToken)
+                        .ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(
+                        ex,
+                        "Pre-FlightSession career-job recovery failed during Jobs refresh; persisted recovery state was preserved.");
+                }
             }
 
             string currentAirport =
