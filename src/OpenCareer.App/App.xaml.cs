@@ -145,6 +145,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ISimulatorTelemetrySource>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
 
+        services.AddOpenCareerPlanningServices();
+
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();
         services.AddSingleton<ITutorialStepEvidenceSource>(provider =>
