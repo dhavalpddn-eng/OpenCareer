@@ -70,7 +70,7 @@ internal static class PlanningServiceRegistration
         services.AddSingleton<IAirportDataObservationSource>(provider =>
             provider.GetRequiredService<SimConnectAirportDataObservationSource>());
         services.AddSingleton<PlayableLoopReferenceAirportObservationSource>();
-        services.AddSingleton<IAirportDataObservationSource>(provider =>
+        services.AddSingleton<ICareerJobMarketAirportSource>(provider =>
             provider.GetRequiredService<PlayableLoopReferenceAirportObservationSource>());
 
         services.AddSingleton<CachedAirportDataSource>(provider =>

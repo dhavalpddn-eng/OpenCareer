@@ -352,7 +352,7 @@ public sealed class CareerJobBoardRefillServiceTests
 
     private sealed class FakeAirportSource(
         params AirportRecord[] airports)
-        : IAirportDataSource
+        : ICareerJobMarketAirportSource
     {
         private readonly IReadOnlyDictionary<string, AirportRecord> _airports =
             airports.ToDictionary(

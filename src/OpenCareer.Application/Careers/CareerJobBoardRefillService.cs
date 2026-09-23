@@ -11,6 +11,13 @@ public interface ICareerJobBoardRefillService
         CancellationToken cancellationToken = default);
 }
 
+public interface ICareerJobMarketAirportSource
+{
+    Task<AirportRecord?> FindAirportAsync(
+        string icao,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed class CareerJobBoardRefillService
     : ICareerJobBoardRefillService
 {
@@ -41,14 +48,14 @@ public sealed class CareerJobBoardRefillService
 
     private readonly JobBoardGenerationService _generation;
     private readonly IJobBoardStateStore _store;
-    private readonly IAirportDataSource _airports;
+    private readonly ICareerJobMarketAirportSource _airports;
     private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public CareerJobBoardRefillService(
         JobBoardGenerationService generation,
         IJobBoardStateStore store,
-        IAirportDataSource airports,
+        ICareerJobMarketAirportSource airports,
         TimeProvider timeProvider)
     {
         _generation =

@@ -1,3 +1,4 @@
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Airports;
 
@@ -5,7 +6,8 @@ namespace OpenCareer.Infrastructure.Airports;
 
 public sealed class PlayableLoopReferenceAirportObservationSource(
     TimeProvider? clock = null)
-    : IAirportDataObservationSource
+    : IAirportDataObservationSource,
+      ICareerJobMarketAirportSource
 {
     public const string ProviderId = "opencareer-playable-loop-airports";
 
@@ -39,6 +41,20 @@ public sealed class PlayableLoopReferenceAirportObservationSource(
     public string SourceId => ProviderId;
 
     public AirportDataAuthority Authority => AirportDataAuthority.Reference;
+
+    public Task<AirportRecord?> FindAirportAsync(
+        string icao,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(icao);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        Airports.TryGetValue(
+            icao.Trim().ToUpperInvariant(),
+            out AirportRecord? airport);
+
+        return Task.FromResult(airport);
+    }
 
     public Task<AirportDataObservation?> FindAirportObservationAsync(
         string icao,
