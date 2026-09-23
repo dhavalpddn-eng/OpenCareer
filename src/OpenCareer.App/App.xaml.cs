@@ -11,6 +11,7 @@ using OpenCareer.Application.Economy;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Military;
+using OpenCareer.Application.Ownership;
 using OpenCareer.Application.Planning;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
@@ -21,6 +22,7 @@ using OpenCareer.Domain.Military;
 using OpenCareer.Infrastructure.Ai;
 using OpenCareer.Infrastructure.Aircraft;
 using OpenCareer.Infrastructure.Flights;
+using OpenCareer.Infrastructure.Ownership;
 using OpenCareer.Infrastructure.Persistence;
 using OpenCareer.SimConnect;
 
@@ -60,6 +62,11 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton(provider =>
             new OpenCareerDatabaseOptions(
                 provider.GetRequiredService<OpenCareerDataPaths>().DatabaseFile));
+        services.AddSingleton(provider =>
+            new SqliteOwnershipStore(
+                provider.GetRequiredService<OpenCareerDatabaseOptions>().DatabasePath));
+        services.AddSingleton<IOwnershipStore>(provider =>
+            provider.GetRequiredService<SqliteOwnershipStore>());
 
         services.AddSingleton<IWorldSimulationStateStore, SqliteWorldSimulationStateStore>();
         services.AddSingleton<ICommodityMarketSnapshotStore, SqliteCommodityMarketSnapshotStore>();
@@ -279,6 +286,19 @@ public partial class App : Microsoft.UI.Xaml.Application
             logger.LogError(
                 ex,
                 "Pending OpenCareer database restore failed; existing local data was preserved.");
+        }
+
+        try
+        {
+            await _services
+                .GetRequiredService<IOwnershipStore>()
+                .InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Aircraft ownership persistence initialization failed; OpenCareer will continue without ownership data.");
         }
 
         try
