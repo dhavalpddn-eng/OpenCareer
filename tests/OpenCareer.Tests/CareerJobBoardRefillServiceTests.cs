@@ -203,6 +203,55 @@ public sealed class CareerJobBoardRefillServiceTests
     }
 
     [Fact]
+    public async Task PositionOnlyReferenceAirportsCanGenerateKjfkPlayableBoard()
+    {
+        var store =
+            new FakeBoardStore();
+
+        var airports =
+            new FakeAirportSource(
+                PositionOnlyAirport(
+                    "KJFK",
+                    40.6399,
+                    -73.7787),
+                PositionOnlyAirport(
+                    "KRME",
+                    43.2338,
+                    -75.4069),
+                PositionOnlyAirport(
+                    "KSYR",
+                    43.1112,
+                    -76.1063),
+                PositionOnlyAirport(
+                    "KALB",
+                    42.7483,
+                    -73.8017));
+
+        var service =
+            Service(
+                store,
+                airports,
+                new FixedTimeProvider(
+                    Epoch));
+
+        JobBoardState board =
+            await service.RefillAsync(
+                Profile("KJFK"));
+
+        Assert.Equal(
+            "KJFK",
+            board.AirportIcao);
+        Assert.NotEmpty(
+            board.Offers);
+        Assert.All(
+            board.Offers,
+            static offer =>
+                Assert.Equal(
+                    "KJFK",
+                    offer.OriginIcao));
+    }
+
+    [Fact]
     public async Task MissingSuitableDestinationPersistsValidEmptyBoard()
     {
         var store =
@@ -270,6 +319,17 @@ public sealed class CareerJobBoardRefillServiceTests
                 "KALB",
                 42.7483,
                 -73.8017));
+
+    private static AirportRecord PositionOnlyAirport(
+        string icao,
+        double latitude,
+        double longitude) =>
+        new(
+            icao,
+            $"{icao} Reference",
+            Array.Empty<RunwayRecord>(),
+            latitude,
+            longitude);
 
     private static AirportRecord Airport(
         string icao,

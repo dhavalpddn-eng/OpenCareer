@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Planning;
 using OpenCareer.Infrastructure.Aircraft;
+using OpenCareer.Infrastructure.Airports;
 using OpenCareer.Infrastructure.Weather;
 using OpenCareer.SimConnect;
 
@@ -68,6 +69,9 @@ internal static class PlanningServiceRegistration
         services.AddSingleton<SimConnectAirportDataObservationSource>();
         services.AddSingleton<IAirportDataObservationSource>(provider =>
             provider.GetRequiredService<SimConnectAirportDataObservationSource>());
+        services.AddSingleton<PlayableLoopReferenceAirportObservationSource>();
+        services.AddSingleton<IAirportDataObservationSource>(provider =>
+            provider.GetRequiredService<PlayableLoopReferenceAirportObservationSource>());
 
         services.AddSingleton<CachedAirportDataSource>(provider =>
             new CachedAirportDataSource(

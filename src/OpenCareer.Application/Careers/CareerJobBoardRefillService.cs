@@ -101,7 +101,7 @@ public sealed class CareerJobBoardRefillService
                         cancellationToken)
                     .ConfigureAwait(false);
 
-            if (!IsUsableAirport(origin)
+            if (!IsUsableMarketAirport(origin)
                 || !origin!.HasPosition)
             {
                 return await PreserveOrCreateValidBoardAsync(
@@ -206,7 +206,7 @@ public sealed class CareerJobBoardRefillService
                         cancellationToken)
                     .ConfigureAwait(false);
 
-            if (!IsUsableAirport(destination)
+            if (!IsUsableMarketAirport(destination)
                 || !destination!.HasPosition)
             {
                 continue;
@@ -351,7 +351,7 @@ public sealed class CareerJobBoardRefillService
                 required.Ratings);
     }
 
-    private static bool IsUsableAirport(
+    private static bool IsUsableMarketAirport(
         AirportRecord? airport)
     {
         if (airport is null)
@@ -359,10 +359,9 @@ public sealed class CareerJobBoardRefillService
 
         airport.Validate();
 
-        return airport.Runways.Any(
-            static runway =>
-                !runway.IsClosed
-                && runway.UsableLengthFeet is > 0);
+        // Market generation needs a real airport identity and position only.
+        // Runway feasibility remains an authoritative dispatch concern.
+        return true;
     }
 
     private static double GreatCircleDistanceNauticalMiles(
