@@ -81,10 +81,15 @@ public sealed class SqlitePlayerCareerProfileStore
                 "Stored player career profile identity does not match its payload.");
         }
 
+        DateTimeOffset persistedSavedAt =
+            RestoreSavedAtPrecision(
+                DateTimeOffset.FromUnixTimeMilliseconds(savedAtMs),
+                profile.CreatedAt);
+
         var record = new PlayerCareerProfileStoreRecord(
             revision,
             profile,
-            DateTimeOffset.FromUnixTimeMilliseconds(savedAtMs));
+            persistedSavedAt);
         record.Validate();
         return record;
     }
@@ -103,6 +108,11 @@ public sealed class SqlitePlayerCareerProfileStore
 
         if (expectedRevision is < 1)
             throw new ArgumentOutOfRangeException(nameof(expectedRevision));
+
+        DateTimeOffset persistedSavedAt =
+            NormalizeSavedAtForStorage(
+                savedAt,
+                profile.CreatedAt);
 
         await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -148,7 +158,7 @@ public sealed class SqlitePlayerCareerProfileStore
                     insert,
                     careerId,
                     newRevision,
-                    savedAt,
+                    persistedSavedAt,
                     payload);
 
                 int inserted = await insert
@@ -183,7 +193,7 @@ public sealed class SqlitePlayerCareerProfileStore
                     update,
                     careerId,
                     newRevision,
-                    savedAt,
+                    persistedSavedAt,
                     payload);
                 update.Parameters.AddWithValue(
                     "$expected_revision",
@@ -205,7 +215,7 @@ public sealed class SqlitePlayerCareerProfileStore
             var record = new PlayerCareerProfileStoreRecord(
                 newRevision,
                 profile,
-                savedAt);
+                persistedSavedAt);
             record.Validate();
 
             _logger.LogInformation(
@@ -308,6 +318,35 @@ public sealed class SqlitePlayerCareerProfileStore
         command.CommandText = sql;
         await command.ExecuteNonQueryAsync(cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private static DateTimeOffset NormalizeSavedAtForStorage(
+        DateTimeOffset savedAt,
+        DateTimeOffset createdAt)
+    {
+        DateTimeOffset persisted =
+            DateTimeOffset.FromUnixTimeMilliseconds(
+                savedAt.ToUnixTimeMilliseconds());
+
+        if (persisted < createdAt)
+            persisted = persisted.AddMilliseconds(1);
+
+        return persisted;
+    }
+
+    private static DateTimeOffset RestoreSavedAtPrecision(
+        DateTimeOffset persistedSavedAt,
+        DateTimeOffset createdAt)
+    {
+        if (persistedSavedAt >= createdAt)
+            return persistedSavedAt;
+
+        TimeSpan precisionLoss =
+            createdAt - persistedSavedAt;
+
+        return precisionLoss < TimeSpan.FromMilliseconds(1)
+            ? createdAt
+            : persistedSavedAt;
     }
 
     private static void AddParameters(

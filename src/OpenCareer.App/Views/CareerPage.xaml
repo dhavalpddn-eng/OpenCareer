@@ -42,7 +42,11 @@
                             IsEnabled="{Binding CanStartCareer}"
                             Click="StartCareer_Click"
                             HorizontalAlignment="Left"
-                            Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
+                            Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                            RequestedTheme="Light"
+                            Background="{StaticResource OpenCareerNavyBrush}"
+                            Foreground="{StaticResource OpenCareerShellTextBrush}"
+                            BorderBrush="{StaticResource OpenCareerSteelBorderBrush}" />
                 </StackPanel>
             </Border>
         </StackPanel>

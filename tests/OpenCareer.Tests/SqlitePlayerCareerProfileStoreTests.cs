@@ -76,6 +76,48 @@ public sealed class SqlitePlayerCareerProfileStoreTests
     }
 
     [Fact]
+    public async Task SubMillisecondCreateTimestampRoundTripsWithoutMovingSavedTimeBackwards()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            var options = new OpenCareerDatabaseOptions(
+                Path.Combine(directory, "opencareer.db"));
+            var store = CreateStore(options);
+
+            DateTimeOffset createdAt =
+                Epoch.AddTicks(4_321);
+
+            PlayerCareerProfile profile =
+                PlayerCareerProfile.Start(
+                    CareerId,
+                    "KDFW",
+                    createdAt);
+
+            PlayerCareerProfileStoreRecord saved =
+                await store.SaveAsync(
+                    profile,
+                    expectedRevision: null,
+                    savedAt: createdAt);
+
+            Assert.True(saved.SavedAt >= createdAt);
+            Assert.True(
+                saved.SavedAt - createdAt
+                    < TimeSpan.FromMilliseconds(1));
+
+            PlayerCareerProfileStoreRecord? recovered =
+                await CreateStore(options).LoadAsync();
+
+            AssertEquivalent(saved, recovered);
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
     public async Task UpdateUsesOptimisticRevisionAndPreservesCareerIdentity()
     {
         string directory = CreateTempDirectory();
