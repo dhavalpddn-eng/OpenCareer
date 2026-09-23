@@ -15,8 +15,13 @@ internal static class PlanningServiceRegistration
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<SimConnectInstalledAircraftObservationSource>();
+        services.AddSingleton<MsfsPackageInstalledAircraftDiscoverySource>(_ =>
+            new MsfsPackageInstalledAircraftDiscoverySource(
+                MsfsUserConfigLocator.FindPackageRoots()));
         services.AddSingleton<IInstalledAircraftDiscoverySource>(provider =>
-            provider.GetRequiredService<SimConnectInstalledAircraftObservationSource>());
+            new CompositeInstalledAircraftDiscoverySource(
+                provider.GetRequiredService<SimConnectInstalledAircraftObservationSource>(),
+                provider.GetRequiredService<MsfsPackageInstalledAircraftDiscoverySource>()));
 
         services.AddSingleton<IInstalledAircraftRegistryStore>(provider =>
             new SqliteInstalledAircraftRegistryStore(

@@ -18,6 +18,7 @@ using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Military;
 using OpenCareer.Infrastructure.Ai;
+using OpenCareer.Infrastructure.Aircraft;
 using OpenCareer.Infrastructure.Flights;
 using OpenCareer.Infrastructure.Persistence;
 using OpenCareer.SimConnect;
@@ -409,6 +410,28 @@ public partial class App : Microsoft.UI.Xaml.Application
             logger.LogError(
                 ex,
                 "Military conflict campaign recovery failed; the rest of OpenCareer will continue.");
+        }
+
+        try
+        {
+            MsfsPackageInstalledAircraftDiscoverySource installedAircraft =
+                _services.GetRequiredService<MsfsPackageInstalledAircraftDiscoverySource>();
+
+            await installedAircraft.InitializeAsync();
+
+            InstalledAircraftDiscoverySnapshot snapshot =
+                installedAircraft.Current;
+
+            logger.LogInformation(
+                "Local MSFS installed-aircraft discovery completed with availability {Availability} and {AircraftCount} observations.",
+                snapshot.Availability,
+                snapshot.Observations.Count);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Local MSFS installed-aircraft discovery failed; live SimConnect discovery remains available.");
         }
 
         _window = _services.GetRequiredService<MainWindow>();
