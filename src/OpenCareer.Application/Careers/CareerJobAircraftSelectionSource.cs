@@ -1,6 +1,7 @@
 using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Ownership;
 using OpenCareer.Domain.Aircraft;
+using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Ownership;
 
 namespace OpenCareer.Application.Careers;
