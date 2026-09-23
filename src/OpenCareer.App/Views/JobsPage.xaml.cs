@@ -9,8 +9,7 @@ namespace OpenCareer.App.Views;
 public sealed partial class JobsPage : Page
 {
     private CancellationTokenSource? _navigationCts;
-    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _refreshTimer;
-    private bool _refreshingAircraft;
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     public JobsPage()
     {
@@ -22,28 +21,33 @@ public sealed partial class JobsPage : Page
     {
         base.OnNavigatedTo(e);
 
+        StopAircraftRefresh();
+
         if (e.Parameter is not JobsViewModel viewModel)
             return;
 
-        _navigationCts?.Cancel();
-        _navigationCts?.Dispose();
-        _navigationCts =
-            new CancellationTokenSource();
-
-        DataContext =
-            viewModel;
+        _navigationCts = new CancellationTokenSource();
+        CancellationToken token = _navigationCts.Token;
+        DataContext = viewModel;
 
         try
         {
-            await viewModel
-                .RefreshAsync(
-                    _navigationCts.Token);
+            // Preserve the initial navigation refresh, even when options already exist.
+            await RefreshJobsAsync(viewModel, token);
 
-            StartAircraftRefreshTimer(
-                viewModel);
+            while (!token.IsCancellationRequested
+                && viewModel.AircraftOptions.Count == 0)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), token);
+                token.ThrowIfCancellationRequested();
+
+                if (viewModel.AircraftOptions.Count != 0)
+                    break;
+
+                await RefreshJobsAsync(viewModel, token);
+            }
         }
-        catch (OperationCanceledException)
-            when (_navigationCts.IsCancellationRequested)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
         }
     }
@@ -51,68 +55,32 @@ public sealed partial class JobsPage : Page
     protected override void OnNavigatedFrom(
         NavigationEventArgs e)
     {
-        StopAircraftRefreshTimer();
-
-        _navigationCts?.Cancel();
-        _navigationCts?.Dispose();
-        _navigationCts =
-            null;
-
+        StopAircraftRefresh();
         base.OnNavigatedFrom(e);
     }
 
-    private void StartAircraftRefreshTimer(
-        JobsViewModel viewModel)
+    private async Task RefreshJobsAsync(
+        JobsViewModel viewModel,
+        CancellationToken token)
     {
-        StopAircraftRefreshTimer();
-
-        _refreshTimer =
-            DispatcherQueue.CreateTimer();
-
-        _refreshTimer.Interval =
-            TimeSpan.FromSeconds(2);
-
-        _refreshTimer.Tick +=
-            async (_, _) =>
-            {
-                if (_refreshingAircraft
-                    || _navigationCts is null
-                    || _navigationCts.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                _refreshingAircraft = true;
-
-                try
-                {
-                    await viewModel
-                        .RefreshAircraftAndReadinessAsync(
-                            _navigationCts.Token);
-                }
-                catch (OperationCanceledException)
-                    when (_navigationCts.IsCancellationRequested)
-                {
-                }
-                finally
-                {
-                    _refreshingAircraft = false;
-                }
-            };
-
-        _refreshTimer.Start();
+        // Keep the gate across navigation: a cancelled refresh may still be unwinding.
+        await _refreshGate.WaitAsync(token);
+        try
+        {
+            token.ThrowIfCancellationRequested();
+            await viewModel.RefreshAsync(token);
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
     }
 
-    private void StopAircraftRefreshTimer()
+    private void StopAircraftRefresh()
     {
-        if (_refreshTimer is null)
-            return;
-
-        _refreshTimer.Stop();
-        _refreshTimer =
-            null;
-        _refreshingAircraft =
-            false;
+        _navigationCts?.Cancel();
+        _navigationCts?.Dispose();
+        _navigationCts = null;
     }
 
     private async void AircraftSelection_Changed(
