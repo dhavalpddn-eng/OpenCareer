@@ -1,5 +1,6 @@
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Events;
@@ -12,6 +13,10 @@ public sealed class AcceptedJobFlightSessionBridgeTests
 {
     private static readonly DateTimeOffset OfferedAt =
         new(2026, 9, 22, 12, 0, 0, TimeSpan.Zero);
+
+    private static readonly string SelectedAircraftId =
+        AircraftCanonicalIdentity.FromMsfsTitle(
+            "Fixture Aircraft");
 
     [Fact]
     public async Task SuccessfulContractStartCreatesPersistentContractLinkedSession()
@@ -73,17 +78,24 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             new MemorySessionStore();
         var coordinator =
             new FlightSessionCoordinator();
+        var liveAircraft =
+            new FakeLiveAircraftIdentitySource(
+                "Fixture Aircraft");
         AcceptedJobFlightSessionBridge bridge =
             CreateBridge(
                 contractStore,
                 sessionStore,
-                coordinator);
+                coordinator,
+                liveAircraft);
 
         StartedJobFlightSessionResult first =
             await bridge.StartAsync(
                 DispatchResult(accepted),
                 DispatchContext(
                     OfferedAt.AddMinutes(20)));
+
+        liveAircraft.CurrentAircraftTitle =
+            null;
 
         StartedJobFlightSessionResult replay =
             await bridge.StartAsync(
@@ -102,6 +114,174 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             replay.FlightSession.SessionId);
         Assert.Equal(1, contractStore.UpdateCount);
         Assert.Equal(1, sessionStore.SaveCount);
+    }
+
+    [Fact]
+    public async Task CorrectProviderAircraftPreservesProviderInstance()
+    {
+        ProviderAircraftAssignment provider =
+            ProviderAircraftAssignment.CreateForOffer(
+                Guid.Parse(
+                    "96000000-0000-0000-0000-000000000001"),
+                new ProviderAircraftType(
+                    SelectedAircraftId,
+                    "Fixture Aircraft"),
+                "KRME");
+
+        PersistedJobContract accepted =
+            AcceptedContract(provider);
+
+        StartedJobFlightSessionResult result =
+            await CreateBridge(
+                    new FakeContractStore(accepted),
+                    new MemorySessionStore(),
+                    new FlightSessionCoordinator())
+                .StartAsync(
+                    DispatchResult(accepted),
+                    DispatchContext(
+                        OfferedAt.AddMinutes(20)));
+
+        Assert.Equal(
+            provider,
+            result.Contract.Contract.ProviderAircraft);
+        Assert.Equal(
+            ContractStatus.InProgress,
+            result.Contract.Contract.Status);
+    }
+
+    [Fact]
+    public async Task WrongAircraftBlocksWithoutMutationAndCorrectRetryStartsOnce()
+    {
+        ProviderAircraftAssignment provider =
+            ProviderAircraftAssignment.CreateForOffer(
+                Guid.Parse(
+                    "96000000-0000-0000-0000-000000000001"),
+                new ProviderAircraftType(
+                    SelectedAircraftId,
+                    "Fixture Aircraft"),
+                "KRME");
+
+        PersistedJobContract accepted =
+            AcceptedContract(provider);
+        var contractStore =
+            new FakeContractStore(accepted);
+        var sessionStore =
+            new MemorySessionStore();
+        var liveAircraft =
+            new FakeLiveAircraftIdentitySource(
+                "Wrong Aircraft");
+
+        AcceptedJobDispatchResult dispatch =
+            DispatchResult(accepted);
+
+        AcceptedJobFlightSessionBridge bridge =
+            CreateBridge(
+                contractStore,
+                sessionStore,
+                new FlightSessionCoordinator(),
+                liveAircraft);
+
+        InvalidOperationException blocked =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => bridge.StartAsync(
+                    dispatch,
+                    DispatchContext(
+                        OfferedAt.AddMinutes(20))));
+
+        Assert.Contains(
+            "Load the selected aircraft in MSFS",
+            blocked.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(
+            ContractStatus.Accepted,
+            contractStore.Current.Contract.Status);
+        Assert.Equal(
+            provider,
+            contractStore.Current.Contract.ProviderAircraft);
+        Assert.Equal(0, contractStore.UpdateCount);
+        Assert.Equal(0, sessionStore.SaveCount);
+
+        liveAircraft.CurrentAircraftTitle =
+            "Fixture Aircraft";
+
+        StartedJobFlightSessionResult started =
+            await bridge.StartAsync(
+                dispatch,
+                DispatchContext(
+                    OfferedAt.AddMinutes(20)));
+
+        Assert.Equal(
+            ContractStatus.InProgress,
+            started.Contract.Contract.Status);
+        Assert.Equal(1, contractStore.UpdateCount);
+        Assert.Equal(1, sessionStore.SaveCount);
+        Assert.Equal(
+            JobAcceptanceFleetBridge.GetReservationId(
+                accepted.Contract.ContractId),
+            dispatch.FleetResult.ReservationId);
+    }
+
+    [Fact]
+    public async Task MissingLiveAircraftBlocksBeforeMutation()
+    {
+        PersistedJobContract accepted =
+            AcceptedContract();
+        var contractStore =
+            new FakeContractStore(accepted);
+        var sessionStore =
+            new MemorySessionStore();
+
+        InvalidOperationException blocked =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => CreateBridge(
+                        contractStore,
+                        sessionStore,
+                        new FlightSessionCoordinator(),
+                        new FakeLiveAircraftIdentitySource(
+                            currentAircraftTitle:
+                                null))
+                    .StartAsync(
+                        DispatchResult(accepted),
+                        DispatchContext(
+                            OfferedAt.AddMinutes(20))));
+
+        Assert.Contains(
+            "MSFS is not ready",
+            blocked.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, contractStore.UpdateCount);
+        Assert.Equal(0, sessionStore.SaveCount);
+    }
+
+    [Fact]
+    public async Task UnrecognizedLiveAircraftBlocksBeforeMutation()
+    {
+        PersistedJobContract accepted =
+            AcceptedContract();
+        var contractStore =
+            new FakeContractStore(accepted);
+        var sessionStore =
+            new MemorySessionStore();
+
+        InvalidOperationException blocked =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => CreateBridge(
+                        contractStore,
+                        sessionStore,
+                        new FlightSessionCoordinator(),
+                        new FakeLiveAircraftIdentitySource(
+                            "Unknown Aircraft"))
+                    .StartAsync(
+                        DispatchResult(accepted),
+                        DispatchContext(
+                            OfferedAt.AddMinutes(20))));
+
+        Assert.Contains(
+            "Load the selected aircraft in MSFS",
+            blocked.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, contractStore.UpdateCount);
+        Assert.Equal(0, sessionStore.SaveCount);
     }
 
     [Fact]
@@ -238,7 +418,10 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             await CreateBridge(
                     contractStore,
                     sessionStore,
-                    coordinator)
+                    coordinator,
+                    new FakeLiveAircraftIdentitySource(
+                        currentAircraftTitle:
+                            null))
                 .StartAsync(
                     DispatchResult(accepted),
                     DispatchContext(
@@ -257,7 +440,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
     private static AcceptedJobFlightSessionBridge CreateBridge(
         FakeContractStore contractStore,
         MemorySessionStore sessionStore,
-        FlightSessionCoordinator coordinator)
+        FlightSessionCoordinator coordinator,
+        ILiveAircraftIdentitySource? liveAircraft = null)
     {
         var lifecycle =
             new JobContractLifecycleService(
@@ -276,7 +460,10 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             contractStart,
             contractStore,
             persistence,
-            coordinator);
+            coordinator,
+            liveAircraft
+            ?? new FakeLiveAircraftIdentitySource(
+                "Fixture Aircraft"));
     }
 
     private static AcceptedJobDispatchResult DispatchResult(
@@ -288,7 +475,7 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 accepted,
                 JobAcceptanceFleetBridge.GetReservationId(
                     accepted.Contract.ContractId),
-                "canonical-aircraft");
+                SelectedAircraftId);
 
         DispatchFeasibilityResult dispatch =
             DispatchFeasibilityResult.Create(
@@ -302,7 +489,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             dispatch);
     }
 
-    private static PersistedJobContract AcceptedContract()
+    private static PersistedJobContract AcceptedContract(
+        ProviderAircraftAssignment? providerAircraft = null)
     {
         var contract =
             new JobContract(
@@ -348,7 +536,9 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 Status:
                     ContractStatus.Accepted,
                 AcceptedAt:
-                    OfferedAt.AddMinutes(10));
+                    OfferedAt.AddMinutes(10),
+                ProviderAircraft:
+                    providerAircraft);
 
         contract.Validate();
 
@@ -362,7 +552,7 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         new(
             time,
             new AircraftCapabilityProfile(
-                "provider-aircraft",
+                SelectedAircraftId,
                 "Cargo fixture",
                 AircraftCapability.Cargo,
                 AircraftAccess.Civilian,
@@ -380,6 +570,14 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 true,
             DispatchFeasibilityVerified:
                 false);
+
+    private sealed class FakeLiveAircraftIdentitySource(
+        string? currentAircraftTitle)
+        : ILiveAircraftIdentitySource
+    {
+        public string? CurrentAircraftTitle { get; set; } =
+            currentAircraftTitle;
+    }
 
     private sealed class FakeContractStore(
         PersistedJobContract initial)

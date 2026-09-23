@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.Application.Planning;
+using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.SimConnect;
 using OpenCareer.SimConnect.Native;
@@ -102,6 +103,8 @@ public sealed class SimConnectAircraftDiscoveryTests
 
         await using var connection = Create(api);
         var source = new SimConnectInstalledAircraftObservationSource(connection);
+        ILiveAircraftIdentitySource liveAircraft =
+            connection;
 
         connection.Start();
 
@@ -137,6 +140,9 @@ public sealed class SimConnectAircraftDiscoveryTests
         Assert.Equal(
             OpenCareer.Application.Simulator.SimulatorConnectionState.Connected,
             connection.Current.State);
+        Assert.Equal(
+            "Cessna 172 Skyhawk",
+            liveAircraft.CurrentAircraftTitle);
     }
 
     [Fact]

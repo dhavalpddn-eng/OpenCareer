@@ -1,4 +1,6 @@
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 
@@ -14,13 +16,15 @@ public sealed class AcceptedJobFlightSessionBridge
     private readonly IJobContractStore _contractStore;
     private readonly FlightSessionPersistenceService _flightSessionPersistence;
     private readonly FlightSessionCoordinator _flightSessionCoordinator;
+    private readonly ILiveAircraftIdentitySource _liveAircraft;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public AcceptedJobFlightSessionBridge(
         AcceptedJobStartBridge contractStart,
         IJobContractStore contractStore,
         FlightSessionPersistenceService flightSessionPersistence,
-        FlightSessionCoordinator flightSessionCoordinator)
+        FlightSessionCoordinator flightSessionCoordinator,
+        ILiveAircraftIdentitySource liveAircraft)
     {
         _contractStart =
             contractStart
@@ -34,6 +38,9 @@ public sealed class AcceptedJobFlightSessionBridge
         _flightSessionCoordinator =
             flightSessionCoordinator
             ?? throw new ArgumentNullException(nameof(flightSessionCoordinator));
+        _liveAircraft =
+            liveAircraft
+            ?? throw new ArgumentNullException(nameof(liveAircraft));
     }
 
     public async Task<StartedJobFlightSessionResult> StartAsync(
@@ -91,6 +98,17 @@ public sealed class AcceptedJobFlightSessionBridge
                     throw new InvalidOperationException(
                         "A different active FlightSession already owns the simulator operation.");
                 }
+            }
+
+            bool requiresLiveAircraftValidation =
+                authoritative.Contract.Status == ContractStatus.Accepted
+                || (authoritative.Contract.Status == ContractStatus.InProgress
+                    && current is null);
+
+            if (requiresLiveAircraftValidation)
+            {
+                ValidateLiveAircraft(
+                    acceptedDispatch);
             }
 
             PersistedJobContract started =
@@ -168,6 +186,44 @@ public sealed class AcceptedJobFlightSessionBridge
 
         // The current playable loop owns one FlightSession per JobContract.
         return contractId;
+    }
+
+    private void ValidateLiveAircraft(
+        AcceptedJobDispatchResult acceptedDispatch)
+    {
+        string? selectedAircraftId =
+            acceptedDispatch.FleetResult.CanonicalAircraftId;
+
+        if (string.IsNullOrWhiteSpace(selectedAircraftId))
+        {
+            throw new InvalidOperationException(
+                "The selected OpenCareer aircraft is missing canonical identity.");
+        }
+
+        selectedAircraftId =
+            selectedAircraftId.Trim();
+
+        string? liveTitle =
+            _liveAircraft.CurrentAircraftTitle;
+
+        if (string.IsNullOrWhiteSpace(liveTitle))
+        {
+            throw new InvalidOperationException(
+                "MSFS is not ready with a current aircraft. Load the selected aircraft in MSFS.");
+        }
+
+        string liveAircraftId =
+            AircraftCanonicalIdentity.FromMsfsTitle(
+                liveTitle);
+
+        if (!string.Equals(
+                liveAircraftId,
+                selectedAircraftId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Load the selected aircraft in MSFS. Selected='{selectedAircraftId}'; Loaded='{liveAircraftId}'.");
+        }
     }
 
     private static void ValidateSameAcceptedContract(

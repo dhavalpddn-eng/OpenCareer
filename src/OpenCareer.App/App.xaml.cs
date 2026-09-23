@@ -170,6 +170,8 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ISimulatorTelemetrySource>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
+        services.AddSingleton<ILiveAircraftIdentitySource>(provider =>
+            provider.GetRequiredService<SimConnectConnection>());
 
         services.AddOpenCareerPlanningServices();
 

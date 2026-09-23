@@ -6,7 +6,10 @@ using OpenCareer.SimConnect.Native;
 
 namespace OpenCareer.SimConnect;
 
-public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelemetrySource
+public sealed class SimConnectConnection
+    : ISimulatorConnection,
+      ISimulatorTelemetrySource,
+      ILiveAircraftIdentitySource
 {
     private readonly object _lifecycleGate = new();
     private readonly ISimConnectApi _api;
@@ -42,9 +45,12 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     public SimulatorConnectionSnapshot Current => Volatile.Read(ref _current);
     public AircraftTelemetrySnapshot? Latest => Volatile.Read(ref _latestTelemetry);
+    public string? CurrentAircraftTitle =>
+        Current.State == SimulatorConnectionState.Connected
+            ? Volatile.Read(ref _currentAircraftTitle)
+            : null;
     internal SimConnectLocalWeatherSnapshot? LocalWeather => Volatile.Read(ref _localWeather);
     internal SimConnectAircraftCatalogSnapshot AircraftCatalog => Volatile.Read(ref _aircraftCatalog);
-    internal string? CurrentAircraftTitle => Volatile.Read(ref _currentAircraftTitle);
 
     internal async Task<SimConnectAirportFacilitySnapshot?> RequestAirportFacilityAsync(
         string icao,

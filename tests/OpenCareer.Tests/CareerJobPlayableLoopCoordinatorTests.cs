@@ -4,6 +4,7 @@ using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Planning;
+using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
@@ -267,7 +268,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                     lifecycle),
                 contractStore,
                 flightPersistence,
-                sessions);
+                sessions,
+                new FixedLiveAircraftIdentitySource());
 
         var coordinator =
             new CareerJobPlayableLoopCoordinator(
@@ -929,5 +931,12 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                 null;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FixedLiveAircraftIdentitySource
+        : ILiveAircraftIdentitySource
+    {
+        public string? CurrentAircraftTitle =>
+            null;
     }
 }

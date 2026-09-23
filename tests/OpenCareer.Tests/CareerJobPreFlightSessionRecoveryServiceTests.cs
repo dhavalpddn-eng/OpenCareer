@@ -2,6 +2,7 @@ using OpenCareer.Application.Careers;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Planning;
+using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Careers;
@@ -19,6 +20,10 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
 
     private static readonly DateTimeOffset StartedAt =
         OfferedAt.AddMinutes(20);
+
+    private static readonly string FixtureAircraftId =
+        AircraftCanonicalIdentity.FromMsfsTitle(
+            "Fixture Aircraft");
 
     [Fact]
     public async Task AcceptedContractRecoversWithoutRetiredBoardOffer()
@@ -190,7 +195,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
             new FakeReservationLookup(
                 hasReservation
                     ? new AircraftReservationOwnership(
-                        "fixture-aircraft",
+                        FixtureAircraftId,
                         reservationId)
                     : null);
 
@@ -231,7 +236,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                 new FlightSessionPersistenceService(
                     sessions,
                     checkpoints),
-                sessions);
+                sessions,
+                new FixedLiveAircraftIdentitySource());
 
         var service =
             new CareerJobPreFlightSessionRecoveryService(
@@ -475,7 +481,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
 
             if (!string.Equals(
                     canonicalAircraftId,
-                    "fixture-aircraft",
+                    FixtureAircraftId,
                     StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult<IReadOnlyList<AircraftRegistryObservation>>(
@@ -485,11 +491,11 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
             return Task.FromResult<IReadOnlyList<AircraftRegistryObservation>>(
                 [
                     new AircraftRegistryObservation(
-                        "fixture-aircraft",
+                        FixtureAircraftId,
                         ProviderId:
                             "fixture",
                         ProviderRecordId:
-                            "fixture-aircraft",
+                            FixtureAircraftId,
                         AircraftDataConfidence.Verified,
                         IsInstalled:
                             true,
@@ -607,6 +613,13 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                 null;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FixedLiveAircraftIdentitySource
+        : ILiveAircraftIdentitySource
+    {
+        public string? CurrentAircraftTitle =>
+            "Fixture Aircraft";
     }
 
     private sealed class FixedTimeProvider(
