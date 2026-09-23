@@ -328,7 +328,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                         offerId,
                         aircraftId,
                         _selectedProviderAircraftInstanceId,
-                        cancellationToken);
+                        cancellationToken,
+                        _selectedAircraftSelectionId is { } selection
+                            && selection.StartsWith("ownership:", StringComparison.Ordinal)
+                            ? selection["ownership:".Length..]
+                            : null);
 
             await RefreshAsync(
                 cancellationToken);
@@ -478,7 +482,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                                 offer.OfferId,
                                 _selectedAircraftId,
                                 _selectedProviderAircraftInstanceId,
-                                cancellationToken)
+                                cancellationToken,
+                                _selectedAircraftSelectionId is { } selection
+                                    && selection.StartsWith("ownership:", StringComparison.Ordinal)
+                                    ? selection["ownership:".Length..]
+                                    : null)
                             .ConfigureAwait(true);
 
                     canStart =

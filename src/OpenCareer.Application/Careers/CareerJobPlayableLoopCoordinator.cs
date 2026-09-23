@@ -11,7 +11,8 @@ public sealed record CareerJobPlayableStartRequest(
     JobContractCreationRequest Contract,
     ContractDispatchContext DispatchContext,
     OperationDispatchRequirements DispatchRequirements,
-    Guid? SelectedProviderAircraftInstanceId = null);
+    Guid? SelectedProviderAircraftInstanceId = null,
+    string? SelectedOwnershipId = null);
 
 public sealed record CareerJobPlayableStartResult(
     AcceptedJobDispatchResult Dispatch,
@@ -95,7 +96,9 @@ public sealed class CareerJobPlayableLoopCoordinator
                 .StartAsync(
                     dispatch,
                     request.DispatchContext,
-                    cancellationToken)
+                    cancellationToken,
+                    request.SelectedOwnershipId,
+                    request.SelectedProviderAircraftInstanceId)
                 .ConfigureAwait(false);
 
         return new(

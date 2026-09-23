@@ -84,6 +84,24 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Fact]
+    public async Task CheckpointCannotSwitchSameModelAirframe()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+        FlightSession first = FlightSession.Start(DateTimeOffset.UtcNow,
+            aircraftIdentity: new FlightSessionAircraftIdentity(
+                FlightSessionAircraftKind.Owned, "O1", "A"));
+        await store.SaveAsync(first);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(
+            first with
+            {
+                AircraftIdentity = new FlightSessionAircraftIdentity(
+                    FlightSessionAircraftKind.Owned, "O2", "A")
+            }));
+        Assert.Equal(first.AircraftIdentity, (await store.LoadAsync())?.AircraftIdentity);
+    }
+
+    [Fact]
     public async Task ClearRemovesRecoverableCheckpoint()
     {
         string databasePath =

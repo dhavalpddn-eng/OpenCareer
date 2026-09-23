@@ -92,6 +92,28 @@ public sealed class FlightSessionCompletionService
                 cancellationToken)
             .ConfigureAwait(false);
     }
+
+    // Finalizes the physical operation even when the job cannot succeed.
+    public async Task<FlightSession> FinalizeWithoutContractSuccessAsync(
+        DateTimeOffset timestamp,
+        CancellationToken cancellationToken = default)
+    {
+        FlightSession current = _coordinator.Current
+            ?? throw new InvalidOperationException("No FlightSession exists.");
+        if (current.IsTerminal)
+            return current;
+        if (!current.Tracking.CrashReported
+            && (current.Tracking.State != FlightTrackingState.Parked
+                || current.OperationState != FlightOperationState.Shutdown))
+            throw new InvalidOperationException("A non-crash flight must be parked and shut down before finalization.");
+        if (timestamp < current.UpdatedAt)
+            throw new ArgumentOutOfRangeException(nameof(timestamp));
+
+        return await _persistence.AdvanceAsync(
+            new FlightSessionAdvance(
+                new FlightStateEvidence(timestamp, Connected: true),
+                CancelRequested: true), cancellationToken).ConfigureAwait(false);
+    }
 }
 
 public static class FlightSessionContractBridge

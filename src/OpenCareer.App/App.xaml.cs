@@ -67,6 +67,10 @@ public partial class App : Microsoft.UI.Xaml.Application
                 provider.GetRequiredService<OpenCareerDatabaseOptions>().DatabasePath));
         services.AddSingleton<IOwnershipStore>(provider =>
             provider.GetRequiredService<SqliteOwnershipStore>());
+        services.AddSingleton<IFlightAirframeConsequenceStore>(provider =>
+            provider.GetRequiredService<SqliteOwnershipStore>());
+        services.AddSingleton<IContractAirframeSelectionStore>(provider =>
+            provider.GetRequiredService<SqliteOwnershipStore>());
 
         services.AddSingleton<IWorldSimulationStateStore, SqliteWorldSimulationStateStore>();
         services.AddSingleton<ICommodityMarketSnapshotStore, SqliteCommodityMarketSnapshotStore>();

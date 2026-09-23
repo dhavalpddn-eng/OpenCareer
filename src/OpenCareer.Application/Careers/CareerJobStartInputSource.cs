@@ -1,8 +1,10 @@
 using OpenCareer.Application.Planning;
+using OpenCareer.Application.Ownership;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Events;
 using OpenCareer.Domain.Planning;
+using OpenCareer.Domain.Ownership;
 
 namespace OpenCareer.Application.Careers;
 
@@ -169,6 +171,7 @@ public sealed class CareerJobStartInputSource
     private readonly ICareerJobContractTermsSource[] _contractTermSources;
     private readonly ICareerJobDispatchAuthoritySource[] _dispatchAuthoritySources;
     private readonly TimeProvider _timeProvider;
+    private readonly IOwnershipStore? _ownership;
 
     public CareerJobStartInputSource(
         IJobBoardStateStore jobBoards,
@@ -178,7 +181,8 @@ public sealed class CareerJobStartInputSource
         OperationDispatchPlanningService dispatchPlanning,
         IEnumerable<ICareerJobContractTermsSource> contractTermSources,
         IEnumerable<ICareerJobDispatchAuthoritySource> dispatchAuthoritySources,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IOwnershipStore? ownership = null)
     {
         _jobBoards =
             jobBoards
@@ -204,6 +208,7 @@ public sealed class CareerJobStartInputSource
         _timeProvider =
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
+        _ownership = ownership;
 
         if (_contractTermSources.Any(static source => source is null))
         {
@@ -224,7 +229,8 @@ public sealed class CareerJobStartInputSource
         Guid offerId,
         string aircraftId,
         Guid? selectedProviderAircraftInstanceId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? selectedOwnershipId = null)
     {
         if (offerId == Guid.Empty)
             throw new ArgumentException("Offer ID is required.", nameof(offerId));
@@ -565,6 +571,26 @@ public sealed class CareerJobStartInputSource
                 ex.Message);
         }
 
+        if (providerAircraftSelected == (selectedOwnershipId is not null))
+            return Blocked(CareerJobStartInputState.AircraftUnavailable, offerId,
+                "Select exactly one individual owned or provider airframe.");
+
+        if (selectedOwnershipId is not null)
+        {
+            if (_ownership is null)
+                throw new InvalidOperationException("Ownership authority is unavailable.");
+
+            OwnershipSnapshot owned = await _ownership.LoadSnapshotAsync(
+                profile.CareerId.ToString("D"), cancellationToken).ConfigureAwait(false);
+            if (!owned.Aircraft.Any(item =>
+                    item.OwnershipId == selectedOwnershipId
+                    && item.CareerId == profile.CareerId.ToString("D")
+                    && item.Status == OwnedAircraftStatus.Active
+                    && string.Equals(item.AircraftId, aircraftId, StringComparison.OrdinalIgnoreCase)))
+                return Blocked(CareerJobStartInputState.AircraftUnavailable, offerId,
+                    "The selected owned airframe is not active for this career and aircraft model.");
+        }
+
         return new(
             CareerJobStartInputState.Ready,
             offerId,
@@ -572,7 +598,8 @@ public sealed class CareerJobStartInputSource
                 creationRequest,
                 context,
                 dispatchAuthority.Requirements,
-                selectedProviderAircraftInstanceId),
+                selectedProviderAircraftInstanceId,
+                selectedOwnershipId),
             "Authoritative contract terms, selected aircraft, dispatch authority, and physical preflight are ready.");
     }
 

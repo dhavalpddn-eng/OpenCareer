@@ -80,8 +80,25 @@ public sealed class SqliteFlightSessionCheckpointStore :
                     cancellationToken)
                 .ConfigureAwait(false);
 
+            using var transaction = connection.BeginTransaction();
+            await using (var previous = connection.CreateCommand())
+            {
+                previous.Transaction = transaction;
+                previous.CommandText = "SELECT payload_json FROM flight_session_checkpoint WHERE slot_id = $slotId;";
+                previous.Parameters.AddWithValue("$slotId", CurrentSlotId);
+                if (await previous.ExecuteScalarAsync(cancellationToken) is string previousPayload)
+                {
+                    FlightSession saved = JsonSerializer.Deserialize<FlightSession>(previousPayload, JsonOptions)
+                        ?? throw new InvalidDataException("Flight-session checkpoint payload is empty.");
+                    if (saved.SessionId != session.SessionId || saved.AircraftIdentity != session.AircraftIdentity)
+                        throw new InvalidOperationException("Flight-session checkpoint cannot replace its airframe identity.");
+                }
+            }
+
             await using var command =
                 connection.CreateCommand();
+
+            command.Transaction = transaction;
 
             command.CommandText =
                 """
@@ -138,6 +155,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
             await command
                 .ExecuteNonQueryAsync(cancellationToken)
                 .ConfigureAwait(false);
+            transaction.Commit();
         }
         finally
         {
@@ -360,6 +378,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
     private static void ValidateForPersistence(
         FlightSession session)
     {
+        session.AircraftIdentity?.Validate();
         if (session.SessionId == Guid.Empty)
         {
             throw new ArgumentException(

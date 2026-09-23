@@ -14,13 +14,15 @@ public sealed record FlightSession(
     FlightContinuityAnchor? ContinuityAnchor = null,
     FlightSessionPlan? Plan = null,
     FlightSessionStatistics? Statistics = null,
-    IReadOnlyList<FlightSessionLandingEpisode>? LandingEpisodes = null)
+    IReadOnlyList<FlightSessionLandingEpisode>? LandingEpisodes = null,
+    FlightSessionAircraftIdentity? AircraftIdentity = null)
 {
     public static FlightSession Start(
         DateTimeOffset timestamp,
         Guid? contractId = null,
         Guid? sessionId = null,
-        FlightSessionPlan? plan = null)
+        FlightSessionPlan? plan = null,
+        FlightSessionAircraftIdentity? aircraftIdentity = null)
     {
         Guid resolvedSessionId =
             sessionId ?? Guid.NewGuid();
@@ -29,6 +31,7 @@ public sealed record FlightSession(
             throw new ArgumentException("Flight session ID cannot be empty.", nameof(sessionId));
 
         plan?.Validate();
+        aircraftIdentity?.Validate();
 
         return new FlightSession(
             resolvedSessionId,
@@ -42,7 +45,8 @@ public sealed record FlightSession(
             FlightSessionMilestones.Empty,
             Plan: plan,
             Statistics: FlightSessionStatistics.Empty,
-            LandingEpisodes: Array.Empty<FlightSessionLandingEpisode>());
+            LandingEpisodes: Array.Empty<FlightSessionLandingEpisode>(),
+            AircraftIdentity: aircraftIdentity);
     }
 
     public FlightSessionStatistics EffectiveStatistics =>

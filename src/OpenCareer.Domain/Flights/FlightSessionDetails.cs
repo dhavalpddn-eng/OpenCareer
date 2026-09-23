@@ -62,7 +62,9 @@ public sealed record FlightSessionObservation(
     double GroundSpeedKnots,
     double FuelTotalPounds,
     double PayloadPounds,
-    bool CaptureTrackPoint)
+    bool CaptureTrackPoint,
+    double? NearGroundDescentFeetPerMinute = null,
+    bool TouchdownConfirmed = false)
 {
     public void Validate()
     {
@@ -88,6 +90,10 @@ public sealed record FlightSessionObservation(
         ValidateNonNegativeFinite(
             PayloadPounds,
             nameof(PayloadPounds));
+
+        if (NearGroundDescentFeetPerMinute is { } descent
+            && (!double.IsFinite(descent) || descent < 0))
+            throw new ArgumentOutOfRangeException(nameof(NearGroundDescentFeetPerMinute));
     }
 
     private static void ValidateNonNegativeFinite(
@@ -110,7 +116,11 @@ public sealed record FlightSessionStatistics(
     double FuelAddedPounds,
     double? StartPayloadPounds,
     double? LastPayloadPounds,
-    IReadOnlyList<FlightSessionTrackPoint> RouteTrack)
+    IReadOnlyList<FlightSessionTrackPoint> RouteTrack,
+    double MaximumNearGroundDescentFeetPerMinute = 0,
+    double MaximumTouchdownApproachDescentFeetPerMinute = 0,
+    DateTimeOffset? LastNearGroundDescentAt = null,
+    double LastNearGroundDescentFeetPerMinute = 0)
 {
     public const int MaximumTrackPoints = 500;
 
@@ -215,6 +225,20 @@ public sealed record FlightSessionStatistics(
                 ?? observation.PayloadPounds,
             LastPayloadPounds =
                 observation.PayloadPounds,
+            MaximumNearGroundDescentFeetPerMinute =
+                Math.Max(MaximumNearGroundDescentFeetPerMinute,
+                    observation.NearGroundDescentFeetPerMinute ?? 0),
+            MaximumTouchdownApproachDescentFeetPerMinute =
+                observation.TouchdownConfirmed
+                    && LastNearGroundDescentAt is { } lastApproach
+                    && observation.Timestamp - lastApproach <= TimeSpan.FromSeconds(20)
+                    ? Math.Max(MaximumTouchdownApproachDescentFeetPerMinute,
+                        LastNearGroundDescentFeetPerMinute)
+                    : MaximumTouchdownApproachDescentFeetPerMinute,
+            LastNearGroundDescentAt = observation.NearGroundDescentFeetPerMinute is not null
+                ? observation.Timestamp : LastNearGroundDescentAt,
+            LastNearGroundDescentFeetPerMinute = observation.NearGroundDescentFeetPerMinute
+                ?? LastNearGroundDescentFeetPerMinute,
             RouteTrack =
                 track
         };

@@ -61,7 +61,8 @@ public sealed record MaintenanceUsage(
     double EngineStressMinutes,
     double HardLandingSeverity,
     double MaximumPositiveG,
-    double ExcessGSeconds)
+    double ExcessGSeconds,
+    double AdditionalDamagePercent = 0)
 {
     public void Validate()
     {
@@ -72,7 +73,8 @@ public sealed record MaintenanceUsage(
             || !double.IsFinite(EngineStressMinutes) || EngineStressMinutes < 0
             || !double.IsFinite(HardLandingSeverity) || HardLandingSeverity is < 0 or > 1
             || !double.IsFinite(MaximumPositiveG) || MaximumPositiveG < 0
-            || !double.IsFinite(ExcessGSeconds) || ExcessGSeconds < 0)
+            || !double.IsFinite(ExcessGSeconds) || ExcessGSeconds < 0
+            || !double.IsFinite(AdditionalDamagePercent) || AdditionalDamagePercent is < 0 or > 100)
         {
             throw new ArgumentOutOfRangeException(nameof(MaintenanceUsage));
         }
@@ -203,7 +205,7 @@ public static class AircraftMaintenanceEngine
                 + usage.HardLandingSeverity * program.HardLandingGearWearAtSeverityOne),
             DamagePercent = Clamp(state.DamagePercent
                 + usage.HardLandingSeverity * program.HardLandingDamageAtSeverityOne
-                + gDamage),
+                + gDamage + usage.AdditionalDamagePercent),
             UpdatedAt = at
         };
         next.Validate();

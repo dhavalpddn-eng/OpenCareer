@@ -27,7 +27,8 @@ public sealed class CareerJobStartInputSourceTests
         CareerJobStartInputSnapshot snapshot =
             await fixture.Source.ReadAsync(
                 fixture.Offer.OfferId,
-                "fixture-aircraft");
+                "fixture-aircraft",
+                selectedOwnershipId: "ownership-one");
 
         Assert.Equal(
             CareerJobStartInputState.ContractTermsUnavailable,
@@ -49,7 +50,8 @@ public sealed class CareerJobStartInputSourceTests
         CareerJobStartInputSnapshot snapshot =
             await fixture.Source.ReadAsync(
                 fixture.Offer.OfferId,
-                "fixture-aircraft");
+                "fixture-aircraft",
+                selectedOwnershipId: "ownership-one");
 
         Assert.Equal(
             CareerJobStartInputState.DispatchAuthorityUnavailable,
@@ -71,7 +73,8 @@ public sealed class CareerJobStartInputSourceTests
         CareerJobStartInputSnapshot snapshot =
             await fixture.Source.ReadAsync(
                 fixture.Offer.OfferId,
-                "fixture-aircraft");
+                "fixture-aircraft",
+                selectedOwnershipId: "ownership-one");
 
         Assert.True(
             snapshot.IsReady);
@@ -116,7 +119,8 @@ public sealed class CareerJobStartInputSourceTests
         CareerJobStartInputSnapshot snapshot =
             await fixture.Source.ReadAsync(
                 fixture.Offer.OfferId,
-                "fixture-aircraft");
+                "fixture-aircraft",
+                selectedOwnershipId: "ownership-one");
 
         Assert.True(
             snapshot.IsReady);
@@ -153,7 +157,8 @@ public sealed class CareerJobStartInputSourceTests
         CareerJobStartInputSnapshot snapshot =
             await fixture.Source.ReadAsync(
                 fixture.Offer.OfferId,
-                "fixture-aircraft");
+                "fixture-aircraft",
+                selectedOwnershipId: "ownership-one");
 
         Assert.Equal(
             CareerJobStartInputState.PreflightInfeasible,
@@ -180,7 +185,8 @@ public sealed class CareerJobStartInputSourceTests
         CareerJobStartInputSnapshot snapshot =
             await fixture.Source.ReadAsync(
                 fixture.Offer.OfferId,
-                "fixture-aircraft");
+                "fixture-aircraft",
+                selectedOwnershipId: "ownership-one");
 
         CareerJobPlayableStartRequest request =
             Assert.IsType<CareerJobPlayableStartRequest>(
@@ -433,7 +439,12 @@ public sealed class CareerJobStartInputSourceTests
                 contractTerms,
                 dispatchAuthorities,
                 new FixedTimeProvider(
-                    Now));
+                    Now),
+                new TestOwnershipStore(
+                    CareerAircraftTestData.Snapshot(
+                        profile.CareerId,
+                        CareerAircraftTestData.Owned(
+                            profile.CareerId, "ownership-one", "fixture-aircraft", "Fixture"))));
 
         return new(
             source,

@@ -17,6 +17,7 @@ public sealed class AcceptedJobFlightSessionBridge
     private readonly FlightSessionPersistenceService _flightSessionPersistence;
     private readonly FlightSessionCoordinator _flightSessionCoordinator;
     private readonly ILiveAircraftIdentitySource _liveAircraft;
+    private readonly IContractAirframeSelectionStore? _airframeSelections;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public AcceptedJobFlightSessionBridge(
@@ -24,7 +25,8 @@ public sealed class AcceptedJobFlightSessionBridge
         IJobContractStore contractStore,
         FlightSessionPersistenceService flightSessionPersistence,
         FlightSessionCoordinator flightSessionCoordinator,
-        ILiveAircraftIdentitySource liveAircraft)
+        ILiveAircraftIdentitySource liveAircraft,
+        IContractAirframeSelectionStore? airframeSelections = null)
     {
         _contractStart =
             contractStart
@@ -41,12 +43,15 @@ public sealed class AcceptedJobFlightSessionBridge
         _liveAircraft =
             liveAircraft
             ?? throw new ArgumentNullException(nameof(liveAircraft));
+        _airframeSelections = airframeSelections;
     }
 
     public async Task<StartedJobFlightSessionResult> StartAsync(
         AcceptedJobDispatchResult acceptedDispatch,
         ContractDispatchContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? selectedOwnershipId = null,
+        Guid? selectedProviderAircraftInstanceId = null)
     {
         ArgumentNullException.ThrowIfNull(acceptedDispatch);
         ArgumentNullException.ThrowIfNull(context);
@@ -58,6 +63,17 @@ public sealed class AcceptedJobFlightSessionBridge
 
         retainedAccepted.Validate();
 
+        string aircraftId = acceptedDispatch.FleetResult.CanonicalAircraftId
+            ?? throw new InvalidOperationException("Selected canonical aircraft identity is missing.");
+        FlightSessionAircraftIdentity? requestedIdentity = selectedOwnershipId is { Length: > 0 }
+            && selectedProviderAircraftInstanceId is null
+            ? new(FlightSessionAircraftKind.Owned, selectedOwnershipId, aircraftId)
+            : selectedOwnershipId is null && selectedProviderAircraftInstanceId is { } providerId
+                && retainedAccepted.Contract.ProviderAircraft?.ProviderAircraftInstanceId == providerId
+                ? new(FlightSessionAircraftKind.Provider, providerId.ToString("D"), aircraftId)
+                : null;
+        requestedIdentity?.Validate();
+
         Guid contractId =
             retainedAccepted.Contract.ContractId;
 
@@ -67,6 +83,14 @@ public sealed class AcceptedJobFlightSessionBridge
 
         try
         {
+            FlightSessionAircraftIdentity identity = requestedIdentity
+                ?? (await (_airframeSelections?.ReadAsync(contractId, cancellationToken)
+                    ?? Task.FromResult<FlightSessionAircraftIdentity?>(null)).ConfigureAwait(false))
+                ?? throw new InvalidOperationException("No durable individual airframe selection exists for this contract.");
+            identity.Validate();
+            if (!string.Equals(identity.AircraftId, aircraftId, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The selected airframe does not match the contract aircraft model.");
+
             PersistedJobContract authoritative =
                 await _contractStore
                     .ReadJobContractAsync(
@@ -86,6 +110,8 @@ public sealed class AcceptedJobFlightSessionBridge
 
             if (current is not null)
             {
+                if (current.AircraftIdentity != identity)
+                    throw new InvalidOperationException("A replay cannot switch the FlightSession airframe.");
                 if (current.IsTerminal)
                 {
                     throw new InvalidOperationException(
@@ -110,6 +136,10 @@ public sealed class AcceptedJobFlightSessionBridge
                 ValidateLiveAircraft(
                     acceptedDispatch);
             }
+
+            if (_airframeSelections is not null)
+                await _airframeSelections.SaveAsync(contractId, identity, cancellationToken)
+                    .ConfigureAwait(false);
 
             PersistedJobContract started =
                 authoritative.Contract.Status switch
@@ -161,7 +191,8 @@ public sealed class AcceptedJobFlightSessionBridge
                         sessionId:
                             GetFlightSessionId(contractId),
                         plan,
-                        cancellationToken)
+                        cancellationToken,
+                        identity)
                     .ConfigureAwait(false);
 
             return new(

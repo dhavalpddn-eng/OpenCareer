@@ -603,7 +603,8 @@ public sealed class JobsViewModelTests
             Guid offerId,
             string aircraftId,
             Guid? selectedProviderAircraftInstanceId = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? selectedOwnershipId = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -626,7 +627,8 @@ public sealed class JobsViewModelTests
             Guid offerId,
             string aircraftId,
             Guid? selectedProviderAircraftInstanceId = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? selectedOwnershipId = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             StartCount++;

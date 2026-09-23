@@ -11,13 +11,15 @@ public interface ICareerJobStartAction
         Guid offerId,
         string aircraftId,
         Guid? selectedProviderAircraftInstanceId = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? selectedOwnershipId = null);
 
     Task<CareerJobPlayableStartResult> StartAsync(
         Guid offerId,
         string aircraftId,
         Guid? selectedProviderAircraftInstanceId = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? selectedOwnershipId = null);
 }
 
 public sealed class CareerJobStartActionService
@@ -42,7 +44,8 @@ public sealed class CareerJobStartActionService
         Guid offerId,
         string aircraftId,
         Guid? selectedProviderAircraftInstanceId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? selectedOwnershipId = null)
     {
         CareerJobStartInputSnapshot snapshot =
             await _inputs
@@ -50,7 +53,8 @@ public sealed class CareerJobStartActionService
                     offerId,
                     aircraftId,
                     selectedProviderAircraftInstanceId,
-                    cancellationToken)
+                    cancellationToken,
+                    selectedOwnershipId)
                 .ConfigureAwait(false);
 
         return new(
@@ -63,7 +67,8 @@ public sealed class CareerJobStartActionService
         Guid offerId,
         string aircraftId,
         Guid? selectedProviderAircraftInstanceId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? selectedOwnershipId = null)
     {
         CareerJobStartInputSnapshot snapshot =
             await _inputs
@@ -71,7 +76,8 @@ public sealed class CareerJobStartActionService
                     offerId,
                     aircraftId,
                     selectedProviderAircraftInstanceId,
-                    cancellationToken)
+                    cancellationToken,
+                    selectedOwnershipId)
                 .ConfigureAwait(false);
 
         if (!snapshot.IsReady

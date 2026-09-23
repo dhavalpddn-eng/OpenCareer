@@ -237,7 +237,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                     sessions,
                     checkpoints),
                 sessions,
-                new FixedLiveAircraftIdentitySource());
+                new FixedLiveAircraftIdentitySource(),
+                new FixedAirframeSelectionStore(FixtureAircraftId));
 
         var service =
             new CareerJobPreFlightSessionRecoveryService(
@@ -613,6 +614,24 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                 null;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FixedAirframeSelectionStore(string aircraftId)
+        : IContractAirframeSelectionStore
+    {
+        private FlightSessionAircraftIdentity? _selected =
+            new(FlightSessionAircraftKind.Owned, "fixture-ownership", aircraftId);
+
+        public Task SaveAsync(Guid contractId, FlightSessionAircraftIdentity identity,
+            CancellationToken cancellationToken = default)
+        {
+            if (_selected != identity)
+                throw new InvalidOperationException("Recovery cannot switch aircraft.");
+            return Task.CompletedTask;
+        }
+
+        public Task<FlightSessionAircraftIdentity?> ReadAsync(Guid contractId,
+            CancellationToken cancellationToken = default) => Task.FromResult(_selected);
     }
 
     private sealed class FixedLiveAircraftIdentitySource

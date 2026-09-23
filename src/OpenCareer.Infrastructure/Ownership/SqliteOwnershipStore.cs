@@ -1,14 +1,18 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using OpenCareer.Application.Careers;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Ownership;
 using OpenCareer.Domain.Dealers;
+using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Maintenance;
 using OpenCareer.Domain.Ownership;
 
 namespace OpenCareer.Infrastructure.Ownership;
 
-public sealed class SqliteOwnershipStore : IOwnershipStore
+public sealed class SqliteOwnershipStore : IOwnershipStore, IFlightAirframeConsequenceStore, IContractAirframeSelectionStore
 {
     private readonly string _databasePath;
     private readonly string _connectionString;
@@ -171,6 +175,24 @@ public sealed class SqliteOwnershipStore : IOwnershipStore
                 cost_cents INTEGER NOT NULL,
                 recorded_at TEXT NOT NULL,
                 FOREIGN KEY(ownership_id) REFERENCES owned_aircraft(ownership_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS flight_airframe_consequences (
+                session_id TEXT PRIMARY KEY,
+                aircraft_kind INTEGER NOT NULL,
+                instance_id TEXT NOT NULL,
+                aircraft_id TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_flight_airframe_consequences_instance
+                ON flight_airframe_consequences (aircraft_kind, instance_id);
+
+            CREATE TABLE IF NOT EXISTS contract_airframe_selections (
+                contract_id TEXT PRIMARY KEY,
+                aircraft_kind INTEGER NOT NULL,
+                instance_id TEXT NOT NULL,
+                aircraft_id TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS purchase_operations (
@@ -527,6 +549,141 @@ public sealed class SqliteOwnershipStore : IOwnershipStore
         await InsertMaintenanceEventAsync(connection, transaction, operationId, ownershipId, "usage", 0m, at, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return next;
+    }
+
+    public async Task<FlightAirframeConsequence?> ReadAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT payload_json FROM flight_airframe_consequences WHERE session_id = $session;";
+        command.Parameters.AddWithValue("$session", sessionId.ToString("D"));
+        string? payload = (string?)await command.ExecuteScalarAsync(cancellationToken);
+        return payload is null ? null : JsonSerializer.Deserialize<FlightAirframeConsequence>(payload)
+            ?? throw new InvalidDataException("Airframe consequence payload is empty.");
+    }
+
+    async Task IContractAirframeSelectionStore.SaveAsync(
+        Guid contractId, FlightSessionAircraftIdentity identity,
+        CancellationToken cancellationToken)
+    {
+        if (contractId == Guid.Empty) throw new ArgumentException("Contract ID is required.", nameof(contractId));
+        ArgumentNullException.ThrowIfNull(identity);
+        identity.Validate();
+        await using var connection = await OpenAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction();
+        await using (var existing = connection.CreateCommand())
+        {
+            existing.Transaction = transaction;
+            existing.CommandText = "SELECT aircraft_kind, instance_id, aircraft_id FROM contract_airframe_selections WHERE contract_id = $contract;";
+            existing.Parameters.AddWithValue("$contract", contractId.ToString("D"));
+            await using var reader = await existing.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var saved = new FlightSessionAircraftIdentity(
+                    (FlightSessionAircraftKind)reader.GetInt32(0), reader.GetString(1), reader.GetString(2));
+                saved.Validate();
+                if (saved != identity)
+                    throw new InvalidOperationException("Contract airframe selection cannot change on replay.");
+                await reader.DisposeAsync();
+                transaction.Commit();
+                return;
+            }
+        }
+        await using var insert = connection.CreateCommand();
+        insert.Transaction = transaction;
+        insert.CommandText = """
+            INSERT INTO contract_airframe_selections(contract_id, aircraft_kind, instance_id, aircraft_id)
+            VALUES ($contract, $kind, $instance, $aircraft);
+            """;
+        insert.Parameters.AddWithValue("$contract", contractId.ToString("D"));
+        insert.Parameters.AddWithValue("$kind", (int)identity.Kind);
+        insert.Parameters.AddWithValue("$instance", identity.InstanceId);
+        insert.Parameters.AddWithValue("$aircraft", identity.AircraftId);
+        await insert.ExecuteNonQueryAsync(cancellationToken);
+        transaction.Commit();
+    }
+
+    async Task<FlightSessionAircraftIdentity?> IContractAirframeSelectionStore.ReadAsync(
+        Guid contractId, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT aircraft_kind, instance_id, aircraft_id FROM contract_airframe_selections WHERE contract_id = $contract;";
+        command.Parameters.AddWithValue("$contract", contractId.ToString("D"));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+        var identity = new FlightSessionAircraftIdentity(
+            (FlightSessionAircraftKind)reader.GetInt32(0), reader.GetString(1), reader.GetString(2));
+        identity.Validate();
+        return identity;
+    }
+
+    public async Task ApplyAsync(
+        FlightAirframeConsequence consequence,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(consequence);
+        consequence.Summary.Aircraft.Validate();
+        consequence.Usage.Validate();
+        string payload = JsonSerializer.Serialize(consequence);
+        string operationId = $"flight:{consequence.Summary.SessionId:D}";
+
+        await using var connection = await OpenAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction();
+        await using (var existing = connection.CreateCommand())
+        {
+            existing.Transaction = transaction;
+            existing.CommandText = "SELECT payload_json FROM flight_airframe_consequences WHERE session_id = $session;";
+            existing.Parameters.AddWithValue("$session", consequence.Summary.SessionId.ToString("D"));
+            if (await existing.ExecuteScalarAsync(cancellationToken) is string saved)
+            {
+                if (saved != payload)
+                    throw new InvalidOperationException("A finalized session cannot change its airframe consequence.");
+                transaction.Commit();
+                return;
+            }
+        }
+
+        if (consequence.Summary.Aircraft.Kind == FlightSessionAircraftKind.Owned)
+        {
+            string ownershipId = consequence.Summary.Aircraft.InstanceId;
+            await using var identity = connection.CreateCommand();
+            identity.Transaction = transaction;
+            identity.CommandText = "SELECT aircraft_id FROM owned_aircraft WHERE ownership_id = $ownership;";
+            identity.Parameters.AddWithValue("$ownership", ownershipId);
+            if (await identity.ExecuteScalarAsync(cancellationToken) is not string aircraftId
+                || !string.Equals(aircraftId, consequence.Summary.Aircraft.AircraftId,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The flight airframe does not match the owned aircraft record.");
+
+            if (await MaintenanceOperationExistsAsync(connection, transaction, operationId, cancellationToken))
+                throw new InvalidOperationException("Maintenance operation exists without its flight consequence record.");
+            AircraftMaintenanceState current = await ReadMaintenanceStateAsync(
+                connection, transaction, ownershipId, cancellationToken);
+            AircraftMaintenanceState next = AircraftMaintenanceEngine.ApplyUsage(
+                current, InitialMaintenancePrograms.LightAircraftFallback,
+                consequence.Usage, consequence.Summary.EndedAt);
+            await UpdateMaintenanceStateAsync(connection, transaction, next, cancellationToken);
+            await InsertMaintenanceEventAsync(connection, transaction, operationId,
+                ownershipId, "flight", 0m, consequence.Summary.EndedAt, cancellationToken);
+        }
+
+        await using var insert = connection.CreateCommand();
+        insert.Transaction = transaction;
+        insert.CommandText = """
+            INSERT INTO flight_airframe_consequences
+                (session_id, aircraft_kind, instance_id, aircraft_id, payload_json)
+            VALUES ($session, $kind, $instance, $aircraft, $payload);
+            """;
+        insert.Parameters.AddWithValue("$session", consequence.Summary.SessionId.ToString("D"));
+        insert.Parameters.AddWithValue("$kind", (int)consequence.Summary.Aircraft.Kind);
+        insert.Parameters.AddWithValue("$instance", consequence.Summary.Aircraft.InstanceId);
+        insert.Parameters.AddWithValue("$aircraft", consequence.Summary.Aircraft.AircraftId);
+        insert.Parameters.AddWithValue("$payload", payload);
+        await insert.ExecuteNonQueryAsync(cancellationToken);
+        transaction.Commit();
     }
 
     public async Task<AircraftMaintenanceState> CompleteMaintenanceServiceAsync(

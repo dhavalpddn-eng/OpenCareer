@@ -80,6 +80,9 @@ public sealed class FlightSessionCoordinator
                 "Cannot replace the current flight session with a different session identity.");
         }
 
+        if (Current.AircraftIdentity != session.AircraftIdentity)
+            throw new InvalidOperationException("FlightSession airframe identity cannot change after start.");
+
         if (session.UpdatedAt < Current.UpdatedAt)
         {
             throw new InvalidOperationException(

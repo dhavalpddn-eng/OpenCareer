@@ -175,6 +175,7 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
             bool trustworthyObservation =
                 evidence.StableTelemetry
                 && continuityPlausible
+                && !telemetry.Paused
                 && !telemetry.SlewActive;
 
             FlightContinuityAnchor? anchor =
@@ -197,7 +198,11 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
                         ShouldCaptureTrackPoint(
                             current,
                             evidence,
-                            telemetry.Timestamp))
+                            telemetry.Timestamp),
+                        !telemetry.OnGround && telemetry.AltitudeAglFeet is >= 0 and <= 100
+                            ? Math.Max(0, -telemetry.VerticalSpeedFeetPerMinute)
+                            : null,
+                        evidence.TouchdownConfirmed)
                     : null;
 
             FlightTimeInterval? timeInterval =

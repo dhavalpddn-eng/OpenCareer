@@ -40,7 +40,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             await bridge.StartAsync(
                 DispatchResult(accepted),
                 DispatchContext(
-                    OfferedAt.AddMinutes(20)));
+                    OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one");
 
         Assert.Equal(
             ContractStatus.InProgress,
@@ -92,7 +93,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             await bridge.StartAsync(
                 DispatchResult(accepted),
                 DispatchContext(
-                    OfferedAt.AddMinutes(20)));
+                    OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one");
 
         liveAircraft.CurrentAircraftTitle =
             null;
@@ -101,7 +103,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             await bridge.StartAsync(
                 DispatchResult(accepted),
                 DispatchContext(
-                    OfferedAt.AddMinutes(20)));
+                    OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one");
 
         Assert.Equal(
             first.Contract,
@@ -139,7 +142,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 .StartAsync(
                     DispatchResult(accepted),
                     DispatchContext(
-                        OfferedAt.AddMinutes(20)));
+                        OfferedAt.AddMinutes(20)),
+                    selectedProviderAircraftInstanceId: provider.ProviderAircraftInstanceId);
 
         Assert.Equal(
             provider,
@@ -147,6 +151,26 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         Assert.Equal(
             ContractStatus.InProgress,
             result.Contract.Contract.Status);
+    }
+
+    [Fact]
+    public async Task ReplayCannotSwitchBetweenTwoOwnedInstancesOfSameModel()
+    {
+        PersistedJobContract accepted = AcceptedContract();
+        var contractStore = new FakeContractStore(accepted);
+        var checkpoint = new MemorySessionStore();
+        var bridge = CreateBridge(contractStore, checkpoint, new FlightSessionCoordinator());
+        StartedJobFlightSessionResult first = await bridge.StartAsync(
+            DispatchResult(accepted), DispatchContext(OfferedAt.AddMinutes(20)),
+            selectedOwnershipId: "O1");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => bridge.StartAsync(
+            DispatchResult(accepted), DispatchContext(OfferedAt.AddMinutes(20)),
+            selectedOwnershipId: "O2"));
+        Assert.Equal("O1", checkpoint.Checkpoint?.AircraftIdentity?.InstanceId);
+        Assert.Equal(first.FlightSession.SessionId, checkpoint.Checkpoint?.SessionId);
+        Assert.Equal(1, checkpoint.SaveCount);
+        Assert.Equal(1, contractStore.UpdateCount);
     }
 
     [Fact]
@@ -186,7 +210,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 () => bridge.StartAsync(
                     dispatch,
                     DispatchContext(
-                        OfferedAt.AddMinutes(20))));
+                        OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one"));
 
         Assert.Contains(
             "Load the selected aircraft in MSFS",
@@ -208,7 +233,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             await bridge.StartAsync(
                 dispatch,
                 DispatchContext(
-                    OfferedAt.AddMinutes(20)));
+                    OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one");
 
         Assert.Equal(
             ContractStatus.InProgress,
@@ -243,7 +269,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                     .StartAsync(
                         DispatchResult(accepted),
                         DispatchContext(
-                            OfferedAt.AddMinutes(20))));
+                            OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one"));
 
         Assert.Contains(
             "MSFS is not ready",
@@ -274,7 +301,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                     .StartAsync(
                         DispatchResult(accepted),
                         DispatchContext(
-                            OfferedAt.AddMinutes(20))));
+                            OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one"));
 
         Assert.Contains(
             "Load the selected aircraft in MSFS",
@@ -308,7 +336,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             () => bridge.StartAsync(
                 DispatchResult(accepted),
                 DispatchContext(
-                    OfferedAt.AddMinutes(20))));
+                    OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one"));
 
         Assert.Equal(
             ContractStatus.InProgress,
@@ -321,7 +350,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             await bridge.StartAsync(
                 DispatchResult(accepted),
                 DispatchContext(
-                    OfferedAt.AddMinutes(20)));
+                    OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one");
 
         Assert.Equal(
             ContractStatus.InProgress,
@@ -365,7 +395,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             () => bridge.StartAsync(
                 DispatchResult(accepted),
                 DispatchContext(
-                    OfferedAt.AddMinutes(20))));
+                    OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one"));
 
         Assert.Equal(
             ContractStatus.Accepted,
@@ -401,7 +432,9 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 accepted.Contract.ContractId,
                 sessionId:
                     Guid.Parse(
-                        "96000000-0000-0000-0000-000000000010"));
+                        "96000000-0000-0000-0000-000000000010"),
+                aircraftIdentity: new FlightSessionAircraftIdentity(
+                    FlightSessionAircraftKind.Owned, "ownership-one", SelectedAircraftId));
 
         var coordinator =
             new FlightSessionCoordinator();
@@ -425,7 +458,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 .StartAsync(
                     DispatchResult(accepted),
                     DispatchContext(
-                        OfferedAt.AddMinutes(20)));
+                        OfferedAt.AddMinutes(20)),
+                    selectedOwnershipId: "ownership-one");
 
         Assert.Equal(
             ContractStatus.InProgress,

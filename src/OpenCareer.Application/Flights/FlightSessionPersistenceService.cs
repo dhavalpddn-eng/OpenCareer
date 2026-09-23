@@ -7,6 +7,7 @@ public sealed class FlightSessionPersistenceService
     private readonly FlightSessionCoordinator _coordinator;
     private readonly IFlightSessionCheckpointStore _store;
     private readonly FlightSessionCheckpointPolicy _checkpointPolicy;
+    private readonly IFlightAirframeConsequenceStore? _consequences;
     private FlightSession? _lastPersisted;
 
     public bool RecoveryAttempted { get; private set; }
@@ -16,7 +17,8 @@ public sealed class FlightSessionPersistenceService
     public FlightSessionPersistenceService(
         FlightSessionCoordinator coordinator,
         IFlightSessionCheckpointStore store,
-        FlightSessionCheckpointPolicy? checkpointPolicy = null)
+        FlightSessionCheckpointPolicy? checkpointPolicy = null,
+        IFlightAirframeConsequenceStore? consequences = null)
     {
         _coordinator =
             coordinator
@@ -31,6 +33,7 @@ public sealed class FlightSessionPersistenceService
             ?? FlightSessionCheckpointPolicy.Default;
 
         _checkpointPolicy.Validate();
+        _consequences = consequences;
     }
 
     public async Task<FlightSession> StartAsync(
@@ -38,7 +41,8 @@ public sealed class FlightSessionPersistenceService
         Guid? contractId = null,
         Guid? sessionId = null,
         FlightSessionPlan? plan = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        FlightSessionAircraftIdentity? aircraftIdentity = null)
     {
         if (_coordinator.Current is { IsTerminal: false })
         {
@@ -51,7 +55,8 @@ public sealed class FlightSessionPersistenceService
                 timestamp,
                 contractId,
                 sessionId,
-                plan);
+                plan,
+                aircraftIdentity);
 
         await _store
             .SaveAsync(session, cancellationToken)
@@ -88,6 +93,9 @@ public sealed class FlightSessionPersistenceService
 
             _lastPersisted = next;
         }
+
+        await ApplyFinalizedConsequenceAsync(next, cancellationToken)
+            .ConfigureAwait(false);
 
         _coordinator.CommitPersisted(next);
         return next;
@@ -128,6 +136,9 @@ public sealed class FlightSessionPersistenceService
                 .SaveAsync(checkpoint, cancellationToken)
                 .ConfigureAwait(false);
         }
+
+        await ApplyFinalizedConsequenceAsync(checkpoint, cancellationToken)
+            .ConfigureAwait(false);
 
         _lastPersisted = checkpoint;
         LastRecoveredSessionId = checkpoint.SessionId;
@@ -174,6 +185,9 @@ public sealed class FlightSessionPersistenceService
                 "An active flight session cannot be cleared.");
         }
 
+        await ApplyFinalizedConsequenceAsync(current, cancellationToken)
+            .ConfigureAwait(false);
+
         await _store
             .ClearAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -182,4 +196,12 @@ public sealed class FlightSessionPersistenceService
         LastRecoveredSessionId = null;
         _coordinator.ClearTerminalSession();
     }
+
+    private Task ApplyFinalizedConsequenceAsync(
+        FlightSession session,
+        CancellationToken cancellationToken) =>
+        session.IsTerminal && session.AircraftIdentity is not null && _consequences is not null
+            ? _consequences.ApplyAsync(
+                FlightAirframeConsequenceCalculator.Calculate(session), cancellationToken)
+            : Task.CompletedTask;
 }
