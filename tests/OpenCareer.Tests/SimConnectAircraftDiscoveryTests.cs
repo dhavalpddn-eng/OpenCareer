@@ -43,7 +43,7 @@ public sealed class SimConnectAircraftDiscoveryTests
     }
 
     [Fact]
-    public async Task ConnectionEnumeratesUserSelectableAircraftOnItsOwnedWorker()
+    public async Task ConnectionEnumeratesFullAircraftCatalogOnItsOwnedWorker()
     {
         var api = new SimConnectTestTransport();
         api.Enqueue(SimConnectPackets.Open());
@@ -57,7 +57,7 @@ public sealed class SimConnectAircraftDiscoveryTests
 
         var request = Assert.Single(api.AircraftEnumerations);
         Assert.Equal(SimConnectAircraftCatalog.RequestId, request.RequestId);
-        Assert.Equal(SimConnectSimObjectType.User, request.Type);
+        Assert.Equal(SimConnectSimObjectType.Aircraft, request.Type);
         Assert.Equal(InstalledAircraftDiscoveryAvailability.Unavailable, source.Current.Availability);
 
         api.Enqueue(SimConnectPackets.EnumeratedSimObjects(
@@ -65,7 +65,7 @@ public sealed class SimConnectAircraftDiscoveryTests
             entryNumber: 1,
             outOf: 2,
             ("DA62 Asobo", "Red"),
-            ("Cabri G2", "Default")));
+            ("A320neo", "Default")));
 
         api.Enqueue(SimConnectPackets.EnumeratedSimObjects(
             request.RequestId,
@@ -79,8 +79,8 @@ public sealed class SimConnectAircraftDiscoveryTests
             source.Current.Observations,
             observation =>
             {
-                Assert.Equal("msfs-title:Cabri G2", observation.CanonicalAircraftId);
-                Assert.Equal("Cabri G2", observation.DisplayName);
+                Assert.Equal("msfs-title:A320neo", observation.CanonicalAircraftId);
+                Assert.Equal("A320neo", observation.DisplayName);
                 Assert.True(observation.IsInstalled);
                 Assert.Equal(AircraftDataConfidence.Verified, observation.Confidence);
             },

@@ -696,7 +696,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         int result = _api.EnumerateSimObjectsAndLiveries(
             handle,
             requestId,
-            SimConnectSimObjectType.User);
+            SimConnectSimObjectType.Aircraft);
 
         if (result < 0)
         {

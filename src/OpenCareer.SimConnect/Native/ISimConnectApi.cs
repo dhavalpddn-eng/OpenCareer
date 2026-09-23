@@ -16,7 +16,9 @@ internal enum SimConnectPeriod : uint
 
 internal enum SimConnectSimObjectType : uint
 {
-    User = 0
+    User = 0,
+    All = 1,
+    Aircraft = 2
 }
 
 // Every call, including subscriptions and Close, belongs to the connection's single worker thread.
