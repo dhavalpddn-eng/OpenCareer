@@ -11,6 +11,7 @@ using OpenCareer.Application.Economy;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Military;
+using OpenCareer.Application.Planning;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
