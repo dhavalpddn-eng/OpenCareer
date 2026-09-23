@@ -36,6 +36,7 @@ public sealed class OperationDispatchPlanningService(
             destinationIcao,
             requirements,
             reservationId: null,
+            requireInstalled: true,
             cancellationToken);
 
     public Task<DispatchFeasibilityResult> EvaluateAsync(
@@ -54,8 +55,27 @@ public sealed class OperationDispatchPlanningService(
             destinationIcao,
             requirements,
             reservationId.Trim(),
+            requireInstalled: true,
             cancellationToken);
     }
+
+    internal Task<DispatchFeasibilityResult> EvaluateRegisteredAircraftAsync(
+        string aircraftId,
+        string originIcao,
+        string destinationIcao,
+        OperationDispatchRequirements requirements,
+        string? reservationId,
+        CancellationToken cancellationToken = default) =>
+        EvaluateCoreAsync(
+            aircraftId,
+            originIcao,
+            destinationIcao,
+            requirements,
+            string.IsNullOrWhiteSpace(reservationId)
+                ? null
+                : reservationId.Trim(),
+            requireInstalled: false,
+            cancellationToken);
 
     private async Task<DispatchFeasibilityResult> EvaluateCoreAsync(
         string aircraftId,
@@ -63,6 +83,7 @@ public sealed class OperationDispatchPlanningService(
         string destinationIcao,
         OperationDispatchRequirements requirements,
         string? reservationId,
+        bool requireInstalled,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftId);
@@ -75,7 +96,8 @@ public sealed class OperationDispatchPlanningService(
             .FindAircraftAsync(aircraftId, cancellationToken)
             .ConfigureAwait(false);
 
-        if (aircraft is not null
+        if (requireInstalled
+            && aircraft is not null
             && aircraft.InstallationStatus != AircraftInstallationStatus.Installed)
         {
             return DispatchFeasibilityResult.Create(

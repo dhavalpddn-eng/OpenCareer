@@ -10,7 +10,8 @@ namespace OpenCareer.Application.Careers;
 public sealed record CareerJobPlayableStartRequest(
     JobContractCreationRequest Contract,
     ContractDispatchContext DispatchContext,
-    OperationDispatchRequirements DispatchRequirements);
+    OperationDispatchRequirements DispatchRequirements,
+    Guid? SelectedProviderAircraftInstanceId = null);
 
 public sealed record CareerJobPlayableStartResult(
     AcceptedJobDispatchResult Dispatch,
@@ -85,6 +86,7 @@ public sealed class CareerJobPlayableLoopCoordinator
                     request.Contract,
                     request.DispatchContext,
                     request.DispatchRequirements,
+                    request.SelectedProviderAircraftInstanceId,
                     cancellationToken)
                 .ConfigureAwait(false);
 

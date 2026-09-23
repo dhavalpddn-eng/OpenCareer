@@ -37,7 +37,30 @@ public sealed class AircraftReservationCoordinator(
     public async Task<AircraftReservationRequestResult> ReserveAsync(
         string aircraftId,
         string reservationId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await ReserveCoreAsync(
+                aircraftId,
+                reservationId,
+                requireInstalled: true,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+    internal async Task<AircraftReservationRequestResult> ReserveRegisteredAircraftAsync(
+        string aircraftId,
+        string reservationId,
+        CancellationToken cancellationToken = default) =>
+        await ReserveCoreAsync(
+                aircraftId,
+                reservationId,
+                requireInstalled: false,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+    private async Task<AircraftReservationRequestResult> ReserveCoreAsync(
+        string aircraftId,
+        string reservationId,
+        bool requireInstalled,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftId);
         ArgumentException.ThrowIfNullOrWhiteSpace(reservationId);
@@ -53,7 +76,8 @@ public sealed class AircraftReservationCoordinator(
                 null);
         }
 
-        if (resolution.InstallationStatus != AircraftInstallationStatus.Installed)
+        if (requireInstalled
+            && resolution.InstallationStatus != AircraftInstallationStatus.Installed)
         {
             return new(
                 AircraftReservationRequestStatus.AircraftNotInstalled,

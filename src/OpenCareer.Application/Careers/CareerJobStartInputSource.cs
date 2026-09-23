@@ -223,6 +223,7 @@ public sealed class CareerJobStartInputSource
     public async Task<CareerJobStartInputSnapshot> ReadAsync(
         Guid offerId,
         string aircraftId,
+        Guid? selectedProviderAircraftInstanceId = null,
         CancellationToken cancellationToken = default)
     {
         if (offerId == Guid.Empty)
@@ -360,6 +361,24 @@ public sealed class CareerJobStartInputSource
 
         terms.ValidateIdentity(offer);
 
+        bool providerAircraftSelected =
+            selectedProviderAircraftInstanceId is not null;
+
+        if (providerAircraftSelected
+            && (terms.ProviderAircraft is not { } providerAircraft
+                || providerAircraft.ProviderAircraftInstanceId
+                    != selectedProviderAircraftInstanceId
+                || !string.Equals(
+                    providerAircraft.AircraftId,
+                    aircraftId,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            return Blocked(
+                CareerJobStartInputState.AircraftUnavailable,
+                offerId,
+                "The selected provider-aircraft instance does not belong to this contract and canonical aircraft identity.");
+        }
+
         var creationRequest =
             new JobContractCreationRequest(
                 offer,
@@ -391,8 +410,9 @@ public sealed class CareerJobStartInputSource
                 .ConfigureAwait(false);
 
         if (resolution is null
-            || resolution.InstallationStatus
-                != AircraftInstallationStatus.Installed)
+            || (!providerAircraftSelected
+                && resolution.InstallationStatus
+                    != AircraftInstallationStatus.Installed))
         {
             return Blocked(
                 CareerJobStartInputState.AircraftUnavailable,
@@ -405,7 +425,9 @@ public sealed class CareerJobStartInputSource
         AircraftRegistryRecord? aircraft =
             resolution.TryCreateRegistryRecord()
             ?? TryCreateConservativeJobRecord(
-                resolution);
+                resolution,
+                requireInstalled:
+                    !providerAircraftSelected);
 
         if (aircraft is null)
         {
@@ -476,14 +498,25 @@ public sealed class CareerJobStartInputSource
         }
 
         DispatchFeasibilityResult preflight =
-            await _dispatchPlanning
-                .EvaluateAsync(
-                    aircraft.AircraftId,
-                    offer.OriginIcao,
-                    offer.DestinationIcao,
-                    dispatchAuthority.Requirements,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            providerAircraftSelected
+                ? await _dispatchPlanning
+                    .EvaluateRegisteredAircraftAsync(
+                        aircraft.AircraftId,
+                        offer.OriginIcao,
+                        offer.DestinationIcao,
+                        dispatchAuthority.Requirements,
+                        reservationId:
+                            null,
+                        cancellationToken)
+                    .ConfigureAwait(false)
+                : await _dispatchPlanning
+                    .EvaluateAsync(
+                        aircraft.AircraftId,
+                        offer.OriginIcao,
+                        offer.DestinationIcao,
+                        dispatchAuthority.Requirements,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
         if (preflight.Status
             == DispatchFeasibilityStatus.Infeasible)
@@ -538,17 +571,20 @@ public sealed class CareerJobStartInputSource
             new CareerJobPlayableStartRequest(
                 creationRequest,
                 context,
-                dispatchAuthority.Requirements),
+                dispatchAuthority.Requirements,
+                selectedProviderAircraftInstanceId),
             "Authoritative contract terms, selected aircraft, dispatch authority, and physical preflight are ready.");
     }
 
     private static AircraftRegistryRecord? TryCreateConservativeJobRecord(
-        AircraftRegistryResolution resolution)
+        AircraftRegistryResolution resolution,
+        bool requireInstalled)
     {
         ArgumentNullException.ThrowIfNull(resolution);
 
-        if (resolution.InstallationStatus
-                != AircraftInstallationStatus.Installed
+        if ((requireInstalled
+                && resolution.InstallationStatus
+                    != AircraftInstallationStatus.Installed)
             || resolution.CapabilityValues.Access is not { } access
             || access == AircraftAccess.None)
         {
@@ -588,7 +624,8 @@ public sealed class CareerJobStartInputSource
             new AircraftRegistryRecord(
                 profile,
                 IsInstalled:
-                    true,
+                    resolution.InstallationStatus
+                    == AircraftInstallationStatus.Installed,
                 resolution.RunwayPerformance);
 
         record.Validate();

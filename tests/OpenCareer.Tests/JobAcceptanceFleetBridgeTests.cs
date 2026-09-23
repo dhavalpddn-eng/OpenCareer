@@ -365,10 +365,128 @@ public sealed class JobAcceptanceFleetBridgeTests
                 new OperationDispatchRequirements(500, 149)));
     }
 
+    [Fact]
+    public async Task ContractProviderUsesSharedReservationAndDispatchForKnownAircraft()
+    {
+        JobContractCreationRequest baseRequest =
+            Request();
+
+        ProviderAircraftAssignment provider =
+            ProviderAircraftAssignment.CreateForOffer(
+                baseRequest.Offer.OfferId,
+                new ProviderAircraftType(
+                    "canonical-aircraft",
+                    "Contract Provider Aircraft"),
+                baseRequest.Offer.OriginIcao);
+
+        JobContractCreationRequest request =
+            baseRequest with
+            {
+                Offer =
+                    baseRequest.Offer with
+                    {
+                        Kind =
+                            ContractKind.Ferry
+                    },
+                AircraftRequirements =
+                    new AircraftMissionRequirements(
+                        AllowedAccess:
+                            AircraftAccess.Civilian,
+                        MinimumRangeNauticalMiles:
+                            baseRequest.Offer.DistanceNm),
+                PayloadPounds =
+                    0,
+                ProviderAircraft =
+                    provider
+            };
+
+        var contractStore =
+            new FakeContractStore();
+        var reservationStore =
+            new StatefulReservationStore();
+
+        AcceptedJobDispatchResult result =
+            await CreateDispatchBridge(
+                    contractStore,
+                    new FakeBoardStore(
+                        BoardWithOffer(request.Offer)),
+                    reservationStore,
+                    StandardAirports(),
+                    isInstalled:
+                        false)
+                .AcceptReserveAndEvaluateAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime),
+                    new OperationDispatchRequirements(0, 150),
+                    provider.ProviderAircraftInstanceId);
+
+        Assert.Equal(
+            JobAcceptanceFleetStatus.AcceptedAndReserved,
+            result.FleetResult.Status);
+        Assert.Equal(
+            DispatchFeasibilityStatus.Feasible,
+            result.DispatchResult?.Status);
+        Assert.Equal(
+            provider,
+            result.FleetResult.AcceptedContract?.Contract.ProviderAircraft);
+        Assert.Equal(
+            "canonical-aircraft",
+            result.FleetResult.CanonicalAircraftId);
+        Assert.Equal(
+            result.FleetResult.ReservationId,
+            reservationStore.State?.ReservationId);
+        Assert.Equal(
+            provider.AircraftId,
+            reservationStore.State?.CanonicalAircraftId);
+        Assert.Equal(
+            baseRequest.Offer.OriginIcao,
+            provider.OriginIcao);
+        Assert.NotEqual(
+            baseRequest.Offer.OfferId,
+            provider.ProviderAircraftInstanceId);
+    }
+
+    [Fact]
+    public async Task KnownAircraftWithoutProviderInstanceKeepsInstalledGate()
+    {
+        JobContractCreationRequest request =
+            Request();
+
+        var contractStore =
+            new FakeContractStore();
+        var reservationStore =
+            new StatefulReservationStore();
+
+        JobAcceptanceFleetResult result =
+            await CreateBridge(
+                    contractStore,
+                    new FakeBoardStore(
+                        BoardWithOffer(request.Offer)),
+                    reservationStore,
+                    isInstalled:
+                        false)
+                .AcceptAndReserveAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime));
+
+        Assert.Equal(
+            JobAcceptanceFleetStatus.AircraftNotInstalled,
+            result.Status);
+        Assert.Null(
+            result.AcceptedContract);
+        Assert.Equal(
+            0,
+            reservationStore.TryReserveCount);
+        Assert.Null(
+            await contractStore.ReadJobContractAsync(
+                request.Offer.OfferId));
+    }
+
     private static JobAcceptanceFleetBridge CreateBridge(
         FakeContractStore contractStore,
         FakeBoardStore boardStore,
-        StatefulReservationStore reservationStore)
+        StatefulReservationStore reservationStore,
+        bool isInstalled = true)
     {
         JobContractRuntimeState runtimeState =
             new(
@@ -400,7 +518,7 @@ public sealed class JobAcceptanceFleetBridgeTests
                             Confidence:
                                 AircraftDataConfidence.Verified,
                             IsInstalled:
-                                true)
+                                isInstalled)
                     ])),
                 reservationStore);
 
@@ -414,15 +532,18 @@ public sealed class JobAcceptanceFleetBridgeTests
         FakeContractStore contractStore,
         FakeBoardStore boardStore,
         StatefulReservationStore reservationStore,
-        IReadOnlyList<AirportRecord> airports) =>
+        IReadOnlyList<AirportRecord> airports,
+        bool isInstalled = true) =>
         new(
             CreateBridge(
                 contractStore,
                 boardStore,
-                reservationStore),
+                reservationStore,
+                isInstalled),
             new OperationDispatchPlanningService(
                 new StubAircraftRegistrySource(
-                    DispatchResolution()),
+                    DispatchResolution(
+                        isInstalled)),
                 new StubAirportDataSource(
                     airports.ToDictionary(
                         airport => airport.Icao,
@@ -430,7 +551,8 @@ public sealed class JobAcceptanceFleetBridgeTests
                 weatherSource: null,
                 reservationStore));
 
-    private static AircraftRegistryResolution DispatchResolution() =>
+    private static AircraftRegistryResolution DispatchResolution(
+        bool isInstalled = true) =>
         AircraftRegistryResolver.Resolve(
         [
             new AircraftRegistryObservation(
@@ -443,7 +565,7 @@ public sealed class JobAcceptanceFleetBridgeTests
                 Confidence:
                     AircraftDataConfidence.Verified,
                 IsInstalled:
-                    true,
+                    isInstalled,
                 MaximumPayloadPounds:
                     2_000,
                 MaximumRangeNauticalMiles:
@@ -548,7 +670,7 @@ public sealed class JobAcceptanceFleetBridgeTests
         new(
             time,
             new AircraftCapabilityProfile(
-                "provider-aircraft",
+                "canonical-aircraft",
                 "Cargo fixture",
                 AircraftCapability.Cargo,
                 AircraftAccess.Civilian,

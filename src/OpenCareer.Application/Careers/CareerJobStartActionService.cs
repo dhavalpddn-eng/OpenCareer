@@ -10,11 +10,13 @@ public interface ICareerJobStartAction
     Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
         Guid offerId,
         string aircraftId,
+        Guid? selectedProviderAircraftInstanceId = null,
         CancellationToken cancellationToken = default);
 
     Task<CareerJobPlayableStartResult> StartAsync(
         Guid offerId,
         string aircraftId,
+        Guid? selectedProviderAircraftInstanceId = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -39,6 +41,7 @@ public sealed class CareerJobStartActionService
     public async Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
         Guid offerId,
         string aircraftId,
+        Guid? selectedProviderAircraftInstanceId = null,
         CancellationToken cancellationToken = default)
     {
         CareerJobStartInputSnapshot snapshot =
@@ -46,6 +49,7 @@ public sealed class CareerJobStartActionService
                 .ReadAsync(
                     offerId,
                     aircraftId,
+                    selectedProviderAircraftInstanceId,
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -58,6 +62,7 @@ public sealed class CareerJobStartActionService
     public async Task<CareerJobPlayableStartResult> StartAsync(
         Guid offerId,
         string aircraftId,
+        Guid? selectedProviderAircraftInstanceId = null,
         CancellationToken cancellationToken = default)
     {
         CareerJobStartInputSnapshot snapshot =
@@ -65,6 +70,7 @@ public sealed class CareerJobStartActionService
                 .ReadAsync(
                     offerId,
                     aircraftId,
+                    selectedProviderAircraftInstanceId,
                     cancellationToken)
                 .ConfigureAwait(false);
 

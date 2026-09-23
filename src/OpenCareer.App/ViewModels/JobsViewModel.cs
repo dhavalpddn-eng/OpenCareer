@@ -27,6 +27,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         Array.Empty<CareerJobAircraftOption>();
     private string? _selectedAircraftSelectionId;
     private string? _selectedAircraftId;
+    private Guid? _selectedProviderAircraftInstanceId;
     private Guid? _selectedProviderOfferId;
     private string _airportText = "Career location unavailable";
     private string _statusText = "Jobs have not been loaded yet.";
@@ -326,6 +327,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     .StartAsync(
                         offerId,
                         aircraftId,
+                        _selectedProviderAircraftInstanceId,
                         cancellationToken);
 
             await RefreshAsync(
@@ -475,6 +477,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                             .ReadAvailabilityAsync(
                                 offer.OfferId,
                                 _selectedAircraftId,
+                                _selectedProviderAircraftInstanceId,
                                 cancellationToken)
                             .ConfigureAwait(true);
 
@@ -557,6 +560,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             selected?.AircraftId;
         Guid? providerOfferId =
             selected?.ProviderOfferId;
+        Guid? providerAircraftInstanceId =
+            selected?.ProviderAircraftInstanceId;
 
         if (!string.Equals(
                 _selectedAircraftSelectionId,
@@ -582,6 +587,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         _selectedProviderOfferId =
             providerOfferId;
+        _selectedProviderAircraftInstanceId =
+            providerAircraftInstanceId;
     }
 
     private void SetField(

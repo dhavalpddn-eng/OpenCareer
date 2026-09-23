@@ -24,6 +24,7 @@ public sealed class AcceptedJobDispatchBridge(
         JobContractCreationRequest request,
         ContractDispatchContext context,
         OperationDispatchRequirements requirements,
+        Guid? selectedProviderAircraftInstanceId = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -54,6 +55,7 @@ public sealed class AcceptedJobDispatchBridge(
                 .AcceptAndReserveAsync(
                     request,
                     context,
+                    selectedProviderAircraftInstanceId,
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -72,15 +74,25 @@ public sealed class AcceptedJobDispatchBridge(
                 "Successful Fleet association did not retain the authoritative accepted contract.");
 
         DispatchFeasibilityResult dispatchResult =
-            await _dispatchPlanning
-                .EvaluateAsync(
-                    context.Aircraft.AircraftId,
-                    accepted.Contract.OriginIcao,
-                    accepted.Contract.DestinationIcao,
-                    requirements,
-                    fleetResult.ReservationId,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            selectedProviderAircraftInstanceId is not null
+                ? await _dispatchPlanning
+                    .EvaluateRegisteredAircraftAsync(
+                        context.Aircraft.AircraftId,
+                        accepted.Contract.OriginIcao,
+                        accepted.Contract.DestinationIcao,
+                        requirements,
+                        fleetResult.ReservationId,
+                        cancellationToken)
+                    .ConfigureAwait(false)
+                : await _dispatchPlanning
+                    .EvaluateAsync(
+                        context.Aircraft.AircraftId,
+                        accepted.Contract.OriginIcao,
+                        accepted.Contract.DestinationIcao,
+                        requirements,
+                        fleetResult.ReservationId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
         return new(
             fleetResult,

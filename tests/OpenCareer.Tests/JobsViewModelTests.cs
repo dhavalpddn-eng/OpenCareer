@@ -314,9 +314,20 @@ public sealed class JobsViewModelTests
                 .CanStart);
 
         Assert.Equal(
-            (assignedOffer.OfferId, assignedAircraft.AircraftId),
+            (
+                assignedOffer.OfferId,
+                assignedAircraft.AircraftId,
+                assignedAircraft.ProviderAircraftInstanceId
+            ),
             Assert.Single(
                 action.AvailabilityRequests));
+
+        await viewModel.StartOfferAsync(
+            assignedOffer.OfferId);
+
+        Assert.Equal(
+            assignedAircraft.ProviderAircraftInstanceId,
+            action.LastProviderAircraftInstanceId);
     }
 
     [Fact]
@@ -585,17 +596,23 @@ public sealed class JobsViewModelTests
         public int StartCount { get; private set; }
         public Guid? LastOfferId { get; private set; }
         public string? LastAircraftId { get; private set; }
-        public List<(Guid OfferId, string AircraftId)> AvailabilityRequests { get; } = [];
+        public Guid? LastProviderAircraftInstanceId { get; private set; }
+        public List<(Guid OfferId, string AircraftId, Guid? ProviderAircraftInstanceId)> AvailabilityRequests { get; } = [];
 
         public Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
             Guid offerId,
             string aircraftId,
+            Guid? selectedProviderAircraftInstanceId = null,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             AvailabilityRequests.Add(
-                (offerId, aircraftId));
+                (
+                    offerId,
+                    aircraftId,
+                    selectedProviderAircraftInstanceId
+                ));
 
             return Task.FromResult(
                 new CareerJobStartActionAvailability(
@@ -608,6 +625,7 @@ public sealed class JobsViewModelTests
         public Task<CareerJobPlayableStartResult> StartAsync(
             Guid offerId,
             string aircraftId,
+            Guid? selectedProviderAircraftInstanceId = null,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -616,6 +634,8 @@ public sealed class JobsViewModelTests
                 offerId;
             LastAircraftId =
                 aircraftId;
+            LastProviderAircraftInstanceId =
+                selectedProviderAircraftInstanceId;
 
             throw new InvalidOperationException(
                 "Synthetic start result intentionally stops after delegation.");
