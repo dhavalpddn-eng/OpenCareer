@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenCareer.Application.Fleet;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Planning;
 using OpenCareer.Infrastructure.Aircraft;
 using OpenCareer.Infrastructure.Airports;
