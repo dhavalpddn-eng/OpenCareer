@@ -24,6 +24,7 @@ public sealed partial class MainWindow : Window
         DashboardViewModel dashboard,
         LogbookViewModel logbook,
         JobsViewModel jobs,
+        CareerViewModel career,
         MilitaryGovernmentViewModel militaryGovernment,
         TutorialViewModel tutorial,
         SettingsViewModel settings,
@@ -34,6 +35,7 @@ public sealed partial class MainWindow : Window
         Dashboard = dashboard;
         Logbook = logbook;
         Jobs = jobs;
+        Career = career;
         MilitaryGovernment = militaryGovernment;
         Tutorial = tutorial;
         Settings = settings;
@@ -66,6 +68,7 @@ public sealed partial class MainWindow : Window
     public DashboardViewModel Dashboard { get; }
     public LogbookViewModel Logbook { get; }
     public JobsViewModel Jobs { get; }
+    public CareerViewModel Career { get; }
     public MilitaryGovernmentViewModel MilitaryGovernment { get; }
     public TutorialViewModel Tutorial { get; }
     public SettingsViewModel Settings { get; }
@@ -162,6 +165,9 @@ public sealed partial class MainWindow : Window
                 break;
             case "logbook":
                 Navigate(typeof(LogbookPage), Logbook);
+                break;
+            case "career":
+                Navigate(typeof(CareerPage), Career);
                 break;
             case "settings":
                 Navigate(
