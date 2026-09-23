@@ -62,8 +62,19 @@ public sealed class MsfsAircraftCfgObservationSource(
             || metadata.EngineType is not null
             || metadata.PassengerCapacity is not null;
 
+        MsfsFlightModelDispatchFacts? flightModel =
+            TryReadFlightModelFacts(match.AircraftCfgPath);
+
         AircraftDispatchPerformanceProfile? dispatchPerformance =
-            TryReadDispatchPerformance(match.AircraftCfgPath);
+            TryReadDispatchPerformance(
+                match.AircraftCfgPath,
+                flightModel);
+
+        double? maximumPayload =
+            ResolveMaximumPayload(flightModel);
+
+        AircraftAccess? access =
+            InferAccess(variation);
 
         var observation = new AircraftRegistryObservation(
             canonicalAircraftId,
@@ -71,7 +82,11 @@ public sealed class MsfsAircraftCfgObservationSource(
             match.ProviderRecordId,
             AircraftDataConfidence.Reference,
             IsInstalled: false,
+            DisplayName: variation.Title,
+            Access: access,
+            MaximumPayloadPounds: maximumPayload,
             MaximumRangeNauticalMiles: variation.MaximumRangeNauticalMiles,
+            TypicalCruiseKnots: flightModel?.TypicalCruiseKnots,
             EngineCount: document.EngineCount,
             ReferenceMetadata: hasMetadata ? metadata : null,
             DispatchPerformance: dispatchPerformance);
@@ -160,14 +175,12 @@ public sealed class MsfsAircraftCfgObservationSource(
     }
 
     private static AircraftDispatchPerformanceProfile? TryReadDispatchPerformance(
-        string aircraftCfgPath)
+        string aircraftCfgPath,
+        MsfsFlightModelDispatchFacts? flightModel)
     {
         string? directory = Path.GetDirectoryName(aircraftCfgPath);
         if (string.IsNullOrWhiteSpace(directory))
             return null;
-
-        MsfsFlightModelDispatchFacts? flightModel =
-            TryReadFlightModel(FindUniqueSibling(directory, "flight_model.cfg"));
 
         MsfsFlightPerformanceDispatchFacts? flightPerformance =
             TryReadFlightPerformance(
@@ -222,6 +235,19 @@ public sealed class MsfsAircraftCfgObservationSource(
         }
     }
 
+    private static MsfsFlightModelDispatchFacts? TryReadFlightModelFacts(
+        string aircraftCfgPath)
+    {
+        string? directory = Path.GetDirectoryName(aircraftCfgPath);
+        if (string.IsNullOrWhiteSpace(directory))
+            return null;
+
+        return TryReadFlightModel(
+            FindUniqueSibling(
+                directory,
+                "flight_model.cfg"));
+    }
+
     private static MsfsFlightModelDispatchFacts? TryReadFlightModel(string? path)
     {
         if (path is null)
@@ -242,6 +268,50 @@ public sealed class MsfsAircraftCfgObservationSource(
         {
             return null;
         }
+    }
+
+    private static double? ResolveMaximumPayload(
+        MsfsFlightModelDispatchFacts? flightModel)
+    {
+        if (flightModel?.ConfiguredEmptyWeightPounds is not { } empty
+            || flightModel.MaximumZeroFuelWeightPounds is not { } zeroFuel
+            || zeroFuel < empty)
+        {
+            return null;
+        }
+
+        return zeroFuel - empty;
+    }
+
+    private static AircraftAccess? InferAccess(
+        AircraftCfgVariation variation)
+    {
+        if (variation.IsUserSelectable == false
+            || variation.IsAirTraffic == true)
+        {
+            return null;
+        }
+
+        if (variation.AtcParkingTypes.Any(
+                static type =>
+                    type is "MIL_COMBAT" or "MIL_CARGO"))
+        {
+            return AircraftAccess.Military;
+        }
+
+        if (variation.IsUserSelectable == true
+            || variation.AtcParkingTypes.Any(
+                static type =>
+                    type is "ANY"
+                        or "RAMP"
+                        or "CARGO"
+                        or "GATE"
+                        or "DOCK"))
+        {
+            return AircraftAccess.Civilian;
+        }
+
+        return null;
     }
 
     private static MsfsFlightPerformanceDispatchFacts? TryReadFlightPerformance(

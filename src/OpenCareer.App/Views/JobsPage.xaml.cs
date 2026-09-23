@@ -9,6 +9,8 @@ namespace OpenCareer.App.Views;
 public sealed partial class JobsPage : Page
 {
     private CancellationTokenSource? _navigationCts;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _refreshTimer;
+    private bool _refreshingAircraft;
 
     public JobsPage()
     {
@@ -36,6 +38,9 @@ public sealed partial class JobsPage : Page
             await viewModel
                 .RefreshAsync(
                     _navigationCts.Token);
+
+            StartAircraftRefreshTimer(
+                viewModel);
         }
         catch (OperationCanceledException)
             when (_navigationCts.IsCancellationRequested)
@@ -46,12 +51,68 @@ public sealed partial class JobsPage : Page
     protected override void OnNavigatedFrom(
         NavigationEventArgs e)
     {
+        StopAircraftRefreshTimer();
+
         _navigationCts?.Cancel();
         _navigationCts?.Dispose();
         _navigationCts =
             null;
 
         base.OnNavigatedFrom(e);
+    }
+
+    private void StartAircraftRefreshTimer(
+        JobsViewModel viewModel)
+    {
+        StopAircraftRefreshTimer();
+
+        _refreshTimer =
+            DispatcherQueue.CreateTimer();
+
+        _refreshTimer.Interval =
+            TimeSpan.FromSeconds(2);
+
+        _refreshTimer.Tick +=
+            async (_, _) =>
+            {
+                if (_refreshingAircraft
+                    || _navigationCts is null
+                    || _navigationCts.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                _refreshingAircraft = true;
+
+                try
+                {
+                    await viewModel
+                        .RefreshAircraftAndReadinessAsync(
+                            _navigationCts.Token);
+                }
+                catch (OperationCanceledException)
+                    when (_navigationCts.IsCancellationRequested)
+                {
+                }
+                finally
+                {
+                    _refreshingAircraft = false;
+                }
+            };
+
+        _refreshTimer.Start();
+    }
+
+    private void StopAircraftRefreshTimer()
+    {
+        if (_refreshTimer is null)
+            return;
+
+        _refreshTimer.Stop();
+        _refreshTimer =
+            null;
+        _refreshingAircraft =
+            false;
     }
 
     private async void AircraftSelection_Changed(

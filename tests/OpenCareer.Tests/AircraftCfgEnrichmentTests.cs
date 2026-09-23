@@ -533,6 +533,93 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
     }
 
     [Fact]
+    public async Task UserSelectableCivilianCfgProvidesDispatchCriticalReferenceFacts()
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "civilian-fixture",
+            """
+            [GENERAL]
+            icao_engine_count = 1
+
+            [FLTSIM.0]
+            title = "Civilian Fixture"
+            isUserSelectable = 1
+            isAirTraffic = 0
+            atc_parking_types = RAMP
+            ui_max_range = 750
+            """);
+
+        WriteAircraftFile(
+            root,
+            "civilian-fixture",
+            "flight_model.cfg",
+            """
+            [WEIGHT_AND_BALANCE]
+            empty_weight = 3000
+            max_zero_fuel_weight = 4200
+            max_takeoff_weight = 5000
+
+            [REFERENCE SPEEDS]
+            cruise_speed = 210
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftRegistryObservation observation =
+            Assert.Single(
+                await source.FindAircraftObservationsAsync(
+                    AircraftCanonicalIdentity.FromMsfsTitle(
+                        "Civilian Fixture")));
+
+        Assert.Equal(
+            AircraftAccess.Civilian,
+            observation.Access);
+        Assert.Equal(
+            1200,
+            observation.MaximumPayloadPounds);
+        Assert.Equal(
+            750,
+            observation.MaximumRangeNauticalMiles);
+        Assert.Equal(
+            210,
+            observation.TypicalCruiseKnots);
+        Assert.Equal(
+            "Civilian Fixture",
+            observation.DisplayName);
+    }
+
+    [Fact]
+    public async Task MilitaryParkingMetadataDoesNotGetCivilianAccess()
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "military-fixture",
+            """
+            [FLTSIM.0]
+            title = "Military Fixture"
+            isUserSelectable = 1
+            atc_parking_types = MIL_COMBAT
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftRegistryObservation observation =
+            Assert.Single(
+                await source.FindAircraftObservationsAsync(
+                    AircraftCanonicalIdentity.FromMsfsTitle(
+                        "Military Fixture")));
+
+        Assert.Equal(
+            AircraftAccess.Military,
+            observation.Access);
+    }
+
+    [Fact]
     public void UserCfgUsesInstalledPackagesPathAndOnlyExistingDocumentedRoots()
     {
         string packages = Path.Combine(_tempRoot, "Packages");

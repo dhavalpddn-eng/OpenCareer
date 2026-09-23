@@ -7,7 +7,10 @@ internal sealed record AircraftCfgVariation(
     string SectionName,
     string Title,
     double? MaximumRangeNauticalMiles,
-    int? PassengerCapacity);
+    int? PassengerCapacity,
+    bool? IsUserSelectable,
+    bool? IsAirTraffic,
+    IReadOnlyList<string> AtcParkingTypes);
 
 internal sealed record AircraftCfgDocument(
     string? IcaoTypeDesignator,
@@ -61,7 +64,10 @@ internal static class AircraftCfgParser
             sectionName,
             title,
             ParseNonNegativeDouble(ReadOptionalText(values, "ui_max_range")),
-            ParseNonNegativeInt(ReadOptionalText(values, "capacity")));
+            ParseNonNegativeInt(ReadOptionalText(values, "capacity")),
+            ParseOptionalBool(ReadOptionalText(values, "isUserSelectable")),
+            ParseOptionalBool(ReadOptionalText(values, "isAirTraffic")),
+            ParseCsv(ReadOptionalText(values, "atc_parking_types")));
     }
 
     private static Dictionary<string, Dictionary<string, string>> ParseSections(string content)
@@ -171,6 +177,32 @@ internal static class AircraftCfgParser
 
         return parsed;
     }
+
+    private static bool? ParseOptionalBool(string? value)
+    {
+        if (value is null)
+            return null;
+
+        return value.Trim().ToUpperInvariant() switch
+        {
+            "1" or "TRUE" => true,
+            "0" or "FALSE" => false,
+            _ => null
+        };
+    }
+
+    private static IReadOnlyList<string> ParseCsv(string? value) =>
+        value is null
+            ? Array.Empty<string>()
+            : value
+                .Split(
+                    ',',
+                    StringSplitOptions.TrimEntries
+                    | StringSplitOptions.RemoveEmptyEntries)
+                .Select(static item => item.ToUpperInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(static item => item, StringComparer.Ordinal)
+                .ToArray();
 
     private static AircraftEngineType? ParseEngineType(string? value)
     {

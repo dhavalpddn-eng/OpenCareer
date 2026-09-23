@@ -102,6 +102,43 @@ public sealed class CareerJobStartInputSourceTests
     }
 
     [Fact]
+    public async Task MissingIrrelevantCapabilityFieldsUseFailClosedFerryProjection()
+    {
+        TestFixture fixture =
+            CreateFixture(
+                contractTerms:
+                    [new FixedContractTermsSource()],
+                dispatchAuthorities:
+                    [new FixedDispatchAuthoritySource()],
+                registry:
+                    new PartialAircraftRegistrySource());
+
+        CareerJobStartInputSnapshot snapshot =
+            await fixture.Source.ReadAsync(
+                fixture.Offer.OfferId,
+                "fixture-aircraft");
+
+        Assert.True(
+            snapshot.IsReady);
+
+        CareerJobPlayableStartRequest request =
+            Assert.IsType<CareerJobPlayableStartRequest>(
+                snapshot.Request);
+
+        Assert.Equal(
+            AircraftAccess.Civilian,
+            request.DispatchContext.Aircraft.Access);
+        Assert.Equal(
+            0,
+            request.DispatchContext.Aircraft.Seats);
+        Assert.False(
+            request.DispatchContext.Aircraft.IfrCapable);
+        Assert.Equal(
+            500,
+            request.DispatchContext.Aircraft.MaximumRangeNauticalMiles);
+    }
+
+    [Fact]
     public async Task PhysicalPreflightFailureCannotSetDispatchVerified()
     {
         TestFixture fixture =
@@ -179,7 +216,8 @@ public sealed class CareerJobStartInputSourceTests
     private static TestFixture CreateFixture(
         IReadOnlyList<ICareerJobContractTermsSource> contractTerms,
         IReadOnlyList<ICareerJobDispatchAuthoritySource> dispatchAuthorities,
-        DateTimeOffset? acceptedAt = null)
+        DateTimeOffset? acceptedAt = null,
+        IAircraftRegistrySource? registry = null)
     {
         JobMarketOfferDraft offer =
             Offer();
@@ -208,7 +246,7 @@ public sealed class CareerJobStartInputSourceTests
                     accepted)
                 : null;
 
-        var registry =
+        registry ??=
             new FakeAircraftRegistrySource();
 
         var source =
@@ -395,6 +433,72 @@ public sealed class CareerJobStartInputSourceTests
                         true,
                     NavigationPlanVerified:
                         true));
+        }
+    }
+
+    private sealed class PartialAircraftRegistrySource
+        : IAircraftRegistrySource
+    {
+        public Task<AircraftRegistryResolution?> FindAircraftAsync(
+            string aircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!string.Equals(
+                    aircraftId,
+                    "fixture-aircraft",
+                    StringComparison.Ordinal))
+            {
+                return Task.FromResult<AircraftRegistryResolution?>(
+                    null);
+            }
+
+            var runway =
+                new AircraftRunwayPerformanceProfile(
+                    MinimumTakeoffRunwayFeet:
+                        1_000,
+                    MinimumLandingRunwayFeet:
+                        1_000,
+                    MinimumRunwayWidthFeet:
+                        40,
+                    SupportedSurfaces:
+                        RunwaySurfaceSupport.Asphalt
+                        | RunwaySurfaceSupport.Concrete,
+                    AircraftDataConfidence.Verified,
+                    Source:
+                        "fixture");
+
+            AircraftRegistryResolution resolution =
+                AircraftRegistryResolver.Resolve(
+                [
+                    new AircraftRegistryObservation(
+                        "fixture-aircraft",
+                        ProviderId:
+                            "partial-fixture",
+                        ProviderRecordId:
+                            "fixture-aircraft",
+                        AircraftDataConfidence.Verified,
+                        IsInstalled:
+                            true,
+                        DisplayName:
+                            "Fixture Aircraft",
+                        Access:
+                            AircraftAccess.Civilian,
+                        MaximumPayloadPounds:
+                            1_000,
+                        MaximumRangeNauticalMiles:
+                            500,
+                        RunwayPerformance:
+                            runway)
+                ]);
+
+            Assert.Contains(
+                AircraftRegistryField.Seats,
+                resolution.UnresolvedCapabilityFields);
+
+            return Task.FromResult<AircraftRegistryResolution?>(
+                resolution);
         }
     }
 

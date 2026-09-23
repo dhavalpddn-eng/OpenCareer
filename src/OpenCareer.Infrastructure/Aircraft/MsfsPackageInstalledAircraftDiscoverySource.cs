@@ -130,6 +130,13 @@ public sealed class MsfsPackageInstalledAircraftDiscoverySource
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
+                if (!HasInstalledPackageEvidence(
+                        root,
+                        path))
+                {
+                    continue;
+                }
+
                 AircraftCfgDocument? document =
                     TryRead(path);
 
@@ -152,6 +159,12 @@ public sealed class MsfsPackageInstalledAircraftDiscoverySource
                     in document.Variations)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
+                    if (variation.IsUserSelectable == false
+                        || variation.IsAirTraffic == true)
+                    {
+                        continue;
+                    }
 
                     string title =
                         variation.Title.Trim();
@@ -181,26 +194,57 @@ public sealed class MsfsPackageInstalledAircraftDiscoverySource
             observations
                 .GroupBy(
                     static observation =>
-                        (
-                            observation.ProviderId,
-                            observation.ProviderRecordId
-                        ))
+                        observation.CanonicalAircraftId,
+                    StringComparer.OrdinalIgnoreCase)
+                .Where(
+                    static group =>
+                        group.Count() == 1)
                 .Select(
                     static group =>
-                        group.First())
+                        group.Single())
                 .OrderBy(
                     static observation =>
                         observation.CanonicalAircraftId,
                     StringComparer.OrdinalIgnoreCase)
-                .ThenBy(
-                    static observation =>
-                        observation.ProviderRecordId,
-                    StringComparer.Ordinal)
                 .ToArray();
 
         return new(
             InstalledAircraftDiscoveryAvailability.Available,
             stable);
+    }
+
+    private static bool HasInstalledPackageEvidence(
+        string packageRoot,
+        string aircraftCfgPath)
+    {
+        string relative =
+            Path.GetRelativePath(
+                packageRoot,
+                aircraftCfgPath);
+
+        string? packageName =
+            relative
+                .Split(
+                    [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                    StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(packageName))
+            return false;
+
+        string packageDirectory =
+            Path.Combine(
+                packageRoot,
+                packageName);
+
+        return File.Exists(
+                Path.Combine(
+                    packageDirectory,
+                    "manifest.json"))
+            && File.Exists(
+                Path.Combine(
+                    packageDirectory,
+                    "layout.json"));
     }
 
     private static AircraftCfgDocument? TryRead(

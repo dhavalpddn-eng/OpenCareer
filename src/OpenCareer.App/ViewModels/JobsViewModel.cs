@@ -224,6 +224,27 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         }
     }
 
+    public async Task RefreshAircraftAndReadinessAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await _refreshGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(true);
+
+        try
+        {
+            await RefreshAircraftLockedAsync(
+                cancellationToken);
+
+            await RebuildOffersLockedAsync(
+                cancellationToken);
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
+    }
+
     public async Task SelectAircraftAsync(
         string? aircraftId,
         CancellationToken cancellationToken = default)
@@ -415,6 +436,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             bool canStart =
                 false;
 
+            CareerJobStartInputState? startState =
+                null;
+
             string actionText =
                 locked
                     ? "Career access is not yet unlocked for this preview."
@@ -442,8 +466,12 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
                     canStart =
                         availability.CanStart;
+                    startState =
+                        availability.State;
                     actionText =
-                        availability.Detail;
+                        availability.State == CareerJobStartInputState.Ready
+                            ? availability.Detail
+                            : $"{availability.State} — {availability.Detail}";
                 }
                 catch (Exception ex)
                 {
@@ -462,11 +490,19 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     offer,
                     now,
                     canStart,
-                    actionText));
+                    actionText,
+                    startState));
         }
 
         SetOffers(
             projected);
+
+        JobOfferItemViewModel? firstBlocked =
+            projected.FirstOrDefault(
+                static offer =>
+                    offer.IsActive
+                    && !offer.CanStart
+                    && offer.StartInputState is not null);
 
         SetField(
             ref _acceptanceStatus,
@@ -474,7 +510,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 ? "Select an installed aircraft to verify an active offer for dispatch."
                 : projected.Any(static offer => offer.CanStart)
                     ? "Selected aircraft has at least one verified startable career offer."
-                    : "No active offer is currently startable with the selected aircraft.",
+                    : firstBlocked is not null
+                        ? $"Blocked: {firstBlocked.ActionText}"
+                        : "No active offer is currently startable with the selected aircraft.",
             nameof(AcceptanceStatus));
     }
 
@@ -529,7 +567,8 @@ public sealed class JobOfferItemViewModel
         JobMarketOfferDraft offer,
         DateTimeOffset now,
         bool canStart = false,
-        string? actionText = null)
+        string? actionText = null,
+        CareerJobStartInputState? startInputState = null)
     {
         Offer =
             offer
@@ -550,6 +589,9 @@ public sealed class JobOfferItemViewModel
             IsActive
             && canStart;
 
+        StartInputState =
+            startInputState;
+
         ActionText =
             actionText
             ?? (IsLockedPreview
@@ -565,6 +607,7 @@ public sealed class JobOfferItemViewModel
     public bool IsExpired { get; }
     public bool IsActive { get; }
     public bool CanStart { get; }
+    public CareerJobStartInputState? StartInputState { get; }
     public string ActionText { get; }
 
     public string Route =>

@@ -213,6 +213,66 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task AircraftOnlyRefreshConsumesLateDiscoveryWithoutRefillingBoard()
+    {
+        JobBoardState board =
+            Board(
+                "KRME",
+                Offer(
+                    "KRME",
+                    "KSYR",
+                    locked:
+                        false));
+
+        var refill =
+            new FakeBoardRefill(
+                board);
+
+        var discovery =
+            new FakeDiscovery();
+
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    board),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                new CareerJobAircraftSelectionSource(
+                    discovery),
+                new FakeStartAction(),
+                logger:
+                    null,
+                boardRefill:
+                    refill);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Single(
+            viewModel.AircraftOptions);
+
+        discovery.Current =
+            new InstalledAircraftDiscoverySnapshot(
+                InstalledAircraftDiscoveryAvailability.Available,
+                [
+                    Installed(
+                        "fixture-aircraft",
+                        "Fixture Aircraft"),
+                    Installed(
+                        "late-aircraft",
+                        "Late Aircraft")
+                ]);
+
+        await viewModel.RefreshAircraftAndReadinessAsync();
+
+        Assert.Equal(
+            2,
+            viewModel.AircraftOptions.Count);
+        Assert.Equal(
+            1,
+            refill.CallCount);
+    }
+
+    [Fact]
     public async Task ProductionRefreshBoundaryInvokesBoardRefillExactlyOnce()
     {
         JobBoardState board =
@@ -341,23 +401,30 @@ public sealed class JobsViewModelTests
     private sealed class FakeDiscovery
         : IInstalledAircraftDiscoverySource
     {
-        public InstalledAircraftDiscoverySnapshot Current =>
+        public InstalledAircraftDiscoverySnapshot Current { get; set; } =
             new(
                 InstalledAircraftDiscoveryAvailability.Available,
                 [
-                    new AircraftRegistryObservation(
+                    Installed(
                         "fixture-aircraft",
-                        ProviderId:
-                            "fixture",
-                        ProviderRecordId:
-                            "Fixture Aircraft",
-                        AircraftDataConfidence.Verified,
-                        IsInstalled:
-                            true,
-                        DisplayName:
-                            "Fixture Aircraft")
+                        "Fixture Aircraft")
                 ]);
     }
+
+    private static AircraftRegistryObservation Installed(
+        string aircraftId,
+        string displayName) =>
+        new(
+            aircraftId,
+            ProviderId:
+                "fixture",
+            ProviderRecordId:
+                displayName,
+            AircraftDataConfidence.Verified,
+            IsInstalled:
+                true,
+            DisplayName:
+                displayName);
 
     private sealed class FakeStartAction
         : ICareerJobStartAction

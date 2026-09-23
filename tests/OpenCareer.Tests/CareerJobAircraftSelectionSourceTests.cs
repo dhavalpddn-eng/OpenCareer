@@ -43,6 +43,73 @@ public sealed class CareerJobAircraftSelectionSourceTests
     }
 
     [Fact]
+    public async Task SimConnectAndLocalDuplicateCollapseToOneCanonicalPickerOption()
+    {
+        AircraftRegistryObservation live =
+            Observation(
+                "msfs-title:fixture",
+                "Fixture Live",
+                "msfs-simconnect");
+
+        AircraftRegistryObservation local =
+            Observation(
+                "msfs-title:fixture",
+                "Fixture Local",
+                "msfs-package-cfg");
+
+        var source =
+            new CareerJobAircraftSelectionSource(
+                new CompositeInstalledAircraftDiscoverySource(
+                    new FakeDiscovery(
+                        new(
+                            InstalledAircraftDiscoveryAvailability.Available,
+                            [live])),
+                    new FakeDiscovery(
+                        new(
+                            InstalledAircraftDiscoveryAvailability.Available,
+                            [local]))));
+
+        CareerJobAircraftSelectionSnapshot snapshot =
+            await source.ReadAsync();
+
+        CareerJobAircraftOption option =
+            Assert.Single(
+                snapshot.Aircraft);
+
+        Assert.Equal(
+            "msfs-title:fixture",
+            option.AircraftId);
+    }
+
+    [Fact]
+    public async Task LocalInstalledAircraftRemainVisibleWhenSimConnectIsUnavailable()
+    {
+        AircraftRegistryObservation local =
+            Observation(
+                "msfs-title:local",
+                "Local Aircraft",
+                "msfs-package-cfg");
+
+        var source =
+            new CareerJobAircraftSelectionSource(
+                new CompositeInstalledAircraftDiscoverySource(
+                    new FakeDiscovery(
+                        InstalledAircraftDiscoverySnapshot.Unavailable),
+                    new FakeDiscovery(
+                        new(
+                            InstalledAircraftDiscoveryAvailability.Available,
+                            [local]))));
+
+        CareerJobAircraftSelectionSnapshot snapshot =
+            await source.ReadAsync();
+
+        Assert.True(snapshot.IsAvailable);
+        Assert.Equal(
+            "msfs-title:local",
+            Assert.Single(snapshot.Aircraft).AircraftId);
+    }
+
+    [Fact]
     public async Task UnavailableCatalogFailsClosed()
     {
         var source =
@@ -61,11 +128,12 @@ public sealed class CareerJobAircraftSelectionSourceTests
 
     private static AircraftRegistryObservation Observation(
         string aircraftId,
-        string displayName) =>
+        string displayName,
+        string providerId = "fixture") =>
         new(
             aircraftId,
             ProviderId:
-                "fixture",
+                providerId,
             ProviderRecordId:
                 displayName,
             AircraftDataConfidence.Verified,

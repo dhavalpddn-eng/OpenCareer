@@ -386,18 +386,27 @@ public sealed class CareerJobStartInputSource
             return Blocked(
                 CareerJobStartInputState.AircraftUnavailable,
                 offerId,
-                "The selected aircraft is not available as an installed registry aircraft.");
+                resolution is null
+                    ? $"Selected aircraft '{aircraftId}' has no registry resolution."
+                    : $"Selected aircraft '{aircraftId}' resolved with installation status {resolution.InstallationStatus}, not Installed.");
         }
 
         AircraftRegistryRecord? aircraft =
-            resolution.TryCreateRegistryRecord();
+            resolution.TryCreateRegistryRecord()
+            ?? TryCreateConservativeJobRecord(
+                resolution);
 
         if (aircraft is null)
         {
+            string unresolved =
+                string.Join(
+                    ", ",
+                    resolution.UnresolvedCapabilityFields);
+
             return Blocked(
                 CareerJobStartInputState.AircraftCapabilityDataIncomplete,
                 offerId,
-                "The selected aircraft does not have a complete authoritative capability profile.");
+                $"Selected aircraft '{resolution.CanonicalAircraftId}' resolved as {resolution.InstallationStatus}, but no safe job capability projection can be created. TryCreateRegistryRecord=false. Unresolved capability fields: {unresolved}.");
         }
 
         aircraft.Validate();
@@ -428,7 +437,7 @@ public sealed class CareerJobStartInputSource
             return Blocked(
                 CareerJobStartInputState.QualificationsNotMet,
                 offerId,
-                "The current Career/Profile qualifications do not satisfy this job.");
+                $"Career qualifications do not satisfy the job. Current={profile.Qualifications}; Required={terms.RequiredPilotQualifications?.ToString() ?? "unspecified"}.");
         }
 
         if (terms.AuthorizedAircraftAccess == AircraftAccess.None
@@ -441,7 +450,7 @@ public sealed class CareerJobStartInputSource
             return Blocked(
                 CareerJobStartInputState.AircraftAccessUnauthorized,
                 offerId,
-                "The selected aircraft is not authorized by the persisted job access terms.");
+                $"Aircraft access is unauthorized. Aircraft={aircraft.Capabilities.Access}; Authorized={dispatchAuthority.AuthorizedAccess}; ContractAuthorized={terms.AuthorizedAircraftAccess}; Allowed={terms.AircraftRequirements.AllowedAccess}.");
         }
 
         if (dispatchAuthority.Requirements.PayloadPounds + 1e-9
@@ -471,7 +480,7 @@ public sealed class CareerJobStartInputSource
             return Blocked(
                 CareerJobStartInputState.PreflightInfeasible,
                 offerId,
-                "Authoritative preflight dispatch evaluation found the selected aircraft infeasible for this job.");
+                $"Authoritative preflight status={preflight.Status}; issues={FormatPreflightIssues(preflight)}.");
         }
 
         if (preflight.Status
@@ -480,7 +489,7 @@ public sealed class CareerJobStartInputSource
             return Blocked(
                 CareerJobStartInputState.PreflightDataInsufficient,
                 offerId,
-                "Authoritative preflight dispatch data is insufficient to start this job.");
+                $"Authoritative preflight status={preflight.Status}; issues={FormatPreflightIssues(preflight)}.");
         }
 
         var context =
@@ -521,6 +530,77 @@ public sealed class CareerJobStartInputSource
                 dispatchAuthority.Requirements),
             "Authoritative contract terms, selected aircraft, dispatch authority, and physical preflight are ready.");
     }
+
+    private static AircraftRegistryRecord? TryCreateConservativeJobRecord(
+        AircraftRegistryResolution resolution)
+    {
+        ArgumentNullException.ThrowIfNull(resolution);
+
+        if (resolution.InstallationStatus
+                != AircraftInstallationStatus.Installed
+            || resolution.CapabilityValues.Access is not { } access
+            || access == AircraftAccess.None)
+        {
+            return null;
+        }
+
+        ResolvedAircraftCapabilities values =
+            resolution.CapabilityValues;
+
+        var profile =
+            new AircraftCapabilityProfile(
+                resolution.CanonicalAircraftId,
+                string.IsNullOrWhiteSpace(values.DisplayName)
+                    ? resolution.CanonicalAircraftId
+                    : values.DisplayName,
+                values.Capabilities
+                    ?? AircraftCapability.None,
+                access,
+                values.MaximumPayloadPounds
+                    ?? 0,
+                values.MaximumRangeNauticalMiles
+                    ?? 0,
+                values.TypicalCruiseKnots
+                    ?? 0,
+                values.Seats
+                    ?? 0,
+                values.EngineCount
+                    ?? 0,
+                values.IfrCapable
+                    ?? false,
+                values.Pressurized
+                    ?? false,
+                values.RetractableGear
+                    ?? false);
+
+        var record =
+            new AircraftRegistryRecord(
+                profile,
+                IsInstalled:
+                    true,
+                resolution.RunwayPerformance);
+
+        record.Validate();
+        return record;
+    }
+
+    private static string FormatPreflightIssues(
+        DispatchFeasibilityResult preflight) =>
+        preflight.Issues.Count == 0
+            ? "none"
+            : string.Join(
+                ", ",
+                preflight.Issues
+                    .Select(
+                        static issue =>
+                            issue.AircraftField is { } field
+                                ? $"{issue.Reason}[{field}]"
+                                : issue.Reason.ToString())
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(
+                        static value =>
+                            value,
+                        StringComparer.Ordinal));
 
     private async Task<CareerJobContractTermsEvidence?> ReadSingleContractTermsAsync(
         JobMarketOfferDraft offer,

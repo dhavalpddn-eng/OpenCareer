@@ -101,19 +101,21 @@ public static class OperationDispatchPhysicalEvaluator
         double? maximumPayload = aircraft.CapabilityValues.MaximumPayloadPounds;
         ValidateResolvedNonNegative(maximumPayload, AircraftRegistryField.MaximumPayloadPounds);
 
-        if (maximumPayload is null)
+        if (maximumPayload is null
+            && requirements.PayloadPounds > 0)
         {
             capabilityIssues.Add(new(
                 DispatchFeasibilityReason.AircraftPayloadCapacityUnknown,
                 AircraftField: AircraftRegistryField.MaximumPayloadPounds));
         }
-        else if (requirements.PayloadPounds > maximumPayload.Value)
+        else if (maximumPayload is { } knownPayload
+            && requirements.PayloadPounds > knownPayload)
         {
             capabilityIssues.Add(new(
                 DispatchFeasibilityReason.PayloadExceedsAircraftMaximum,
                 AircraftField: AircraftRegistryField.MaximumPayloadPounds,
                 RequiredPounds: requirements.PayloadPounds,
-                AvailablePounds: maximumPayload.Value));
+                AvailablePounds: knownPayload));
             hasDefiniteCapabilityFailure = true;
         }
 

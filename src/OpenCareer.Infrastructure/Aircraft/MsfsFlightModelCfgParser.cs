@@ -6,13 +6,15 @@ internal sealed record MsfsFlightModelDispatchFacts(
     double? ConfiguredEmptyWeightPounds,
     double? MaximumTakeoffWeightPounds,
     double? MaximumLandingWeightPounds,
-    double? MaximumZeroFuelWeightPounds)
+    double? MaximumZeroFuelWeightPounds,
+    double? TypicalCruiseKnots)
 {
     internal bool HasAny =>
         ConfiguredEmptyWeightPounds is not null
         || MaximumTakeoffWeightPounds is not null
         || MaximumLandingWeightPounds is not null
-        || MaximumZeroFuelWeightPounds is not null;
+        || MaximumZeroFuelWeightPounds is not null
+        || TypicalCruiseKnots is not null;
 }
 
 internal static class MsfsFlightModelCfgParser
@@ -21,8 +23,14 @@ internal static class MsfsFlightModelCfgParser
     {
         ArgumentNullException.ThrowIfNull(content);
 
+        Dictionary<string, Dictionary<string, string>> sections =
+            ParseSections(content);
+
         Dictionary<string, string>? weightAndBalance =
-            ParseSections(content).GetValueOrDefault("WEIGHT_AND_BALANCE");
+            sections.GetValueOrDefault("WEIGHT_AND_BALANCE");
+
+        Dictionary<string, string>? referenceSpeeds =
+            sections.GetValueOrDefault("REFERENCE SPEEDS");
 
         double? maximumGrossWeight =
             ReadPositive(weightAndBalance, "max_gross_weight");
@@ -49,7 +57,8 @@ internal static class MsfsFlightModelCfgParser
             ReadPositive(weightAndBalance, "empty_weight"),
             maximumTakeoffWeight,
             maximumLandingWeight,
-            maximumZeroFuelWeight);
+            maximumZeroFuelWeight,
+            ReadPositive(referenceSpeeds, "cruise_speed"));
     }
 
     private static double? ReadWithDocumentedFallback(

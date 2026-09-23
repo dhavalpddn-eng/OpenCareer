@@ -24,6 +24,23 @@ public sealed class InstalledAircraftDiscoveryFallbackTests
         Directory.CreateDirectory(
             aircraftDirectory);
 
+        string packageDirectory =
+            Path.Combine(
+                root,
+                "Community",
+                "fixture-aircraft");
+
+        File.WriteAllText(
+            Path.Combine(
+                packageDirectory,
+                "manifest.json"),
+            "{}");
+        File.WriteAllText(
+            Path.Combine(
+                packageDirectory,
+                "layout.json"),
+            "{}");
+
         string cfg =
             """
             [GENERAL]
@@ -33,9 +50,13 @@ public sealed class InstalledAircraftDiscoveryFallbackTests
 
             [FLTSIM.0]
             title = Cessna 172 Fixture
+            isUserSelectable = 1
+            atc_parking_types = RAMP
 
             [FLTSIM.1]
             title = Cessna 172 Fixture Blue
+            isUserSelectable = 1
+            atc_parking_types = RAMP
             """;
 
         File.WriteAllText(
@@ -77,6 +98,87 @@ public sealed class InstalledAircraftDiscoveryFallbackTests
                         observation.CanonicalAircraftId,
                         StringComparison.Ordinal);
                 });
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LocalDiscoveryRejectsNonSelectableAndUnpackagedCfgFiles()
+    {
+        string root =
+            Path.Combine(
+                Path.GetTempPath(),
+                "OpenCareer.Tests",
+                Guid.NewGuid().ToString("N"));
+
+        string packageRoot =
+            Path.Combine(
+                root,
+                "Community");
+
+        string unpackaged =
+            Path.Combine(
+                packageRoot,
+                "loose-aircraft");
+
+        string aiPackage =
+            Path.Combine(
+                packageRoot,
+                "ai-aircraft");
+
+        Directory.CreateDirectory(
+            unpackaged);
+        Directory.CreateDirectory(
+            aiPackage);
+
+        File.WriteAllText(
+            Path.Combine(
+                unpackaged,
+                "aircraft.cfg"),
+            """
+            [FLTSIM.0]
+            title = Loose Aircraft
+            isUserSelectable = 1
+            """);
+
+        File.WriteAllText(
+            Path.Combine(
+                aiPackage,
+                "manifest.json"),
+            "{}");
+        File.WriteAllText(
+            Path.Combine(
+                aiPackage,
+                "layout.json"),
+            "{}");
+        File.WriteAllText(
+            Path.Combine(
+                aiPackage,
+                "aircraft.cfg"),
+            """
+            [FLTSIM.0]
+            title = AI Only Aircraft
+            isUserSelectable = 0
+            isAirTraffic = 1
+            """);
+
+        try
+        {
+            var source =
+                new MsfsPackageInstalledAircraftDiscoverySource(
+                    [packageRoot]);
+
+            await source.InitializeAsync();
+
+            Assert.Equal(
+                InstalledAircraftDiscoveryAvailability.Available,
+                source.Current.Availability);
+            Assert.Empty(
+                source.Current.Observations);
         }
         finally
         {
