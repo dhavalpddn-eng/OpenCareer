@@ -10,5 +10,7 @@ internal sealed record SimConnectAircraftCatalogSnapshot(
 
 internal static class SimConnectAircraftCatalog
 {
-    internal const uint RequestId = 0x4F430010;
+    internal const uint FirstRequestId = 0x4F430010;
+    internal static readonly TimeSpan ResponseTimeout = TimeSpan.FromSeconds(5);
+    internal static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
 }

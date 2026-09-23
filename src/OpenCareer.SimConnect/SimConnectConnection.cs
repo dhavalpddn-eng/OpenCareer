@@ -206,6 +206,9 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             bool localWeatherConfigured = false;
             bool airportFacilityConfigured = false;
             uint nextAirportFacilityRequestId = SimConnectAirportFacilityDefinition.FirstRequestId;
+            uint nextAircraftCatalogRequestId = SimConnectAircraftCatalog.FirstRequestId;
+            uint? activeAircraftCatalogRequestId = null;
+            long lastAircraftCatalogAttemptAt = openedAt;
             uint? aircraftCatalogPageCount = null;
             var aircraftCatalogPages = new Dictionary<uint, IReadOnlyList<SimConnectObjectLivery>>();
             var messages = new List<SimConnectMessage>();
@@ -251,7 +254,13 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             failures = 0;
                             lastHeartbeatAt = _clock.GetTimestamp();
                             Publish(new(SimulatorConnectionState.Connected, Simulator: message.Simulator));
-                            RequestAircraftCatalog(handle);
+                            StartAircraftCatalogRequest(
+                                handle,
+                                ref nextAircraftCatalogRequestId,
+                                ref activeAircraftCatalogRequestId,
+                                ref lastAircraftCatalogAttemptAt,
+                                ref aircraftCatalogPageCount,
+                                aircraftCatalogPages);
                             break;
                         case SimConnectMessageKind.Quit:
                             return SimulatorConnectionIssue.ConnectionLost;
@@ -295,13 +304,27 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             pendingHeartbeat = null;
                             break;
                         case SimConnectMessageKind.EnumerateSimObjectAndLiveryList
-                            when acknowledged && message.RequestId == SimConnectAircraftCatalog.RequestId:
+                            when acknowledged
+                                && activeAircraftCatalogRequestId.HasValue
+                                && message.RequestId == activeAircraftCatalogRequestId.Value:
                             if (!AcceptAircraftCatalogPage(
                                     message,
                                     ref aircraftCatalogPageCount,
                                     aircraftCatalogPages))
                             {
-                                return SimulatorConnectionIssue.InvalidResponse;
+                                _logger.LogWarning(
+                                    "Discarded inconsistent installed-aircraft enumeration response; the catalog will be retried.");
+                                ResetAircraftCatalogAttempt(
+                                    ref activeAircraftCatalogRequestId,
+                                    ref aircraftCatalogPageCount,
+                                    aircraftCatalogPages);
+                            }
+                            else if (AircraftCatalog.IsAvailable)
+                            {
+                                ResetAircraftCatalogAttempt(
+                                    ref activeAircraftCatalogRequestId,
+                                    ref aircraftCatalogPageCount,
+                                    aircraftCatalogPages);
                             }
                             break;
                         case SimConnectMessageKind.FacilityData
@@ -347,6 +370,34 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
                 if (!acknowledged && _clock.GetElapsedTime(openedAt) >= _options.HandshakeTimeout)
                     return SimulatorConnectionIssue.HandshakeTimeout;
+
+                if (acknowledged && !AircraftCatalog.IsAvailable)
+                {
+                    if (activeAircraftCatalogRequestId.HasValue
+                        && _clock.GetElapsedTime(lastAircraftCatalogAttemptAt)
+                            >= SimConnectAircraftCatalog.ResponseTimeout)
+                    {
+                        _logger.LogWarning(
+                            "Timed out waiting for installed-aircraft enumeration; retrying without reconnecting SimConnect.");
+                        ResetAircraftCatalogAttempt(
+                            ref activeAircraftCatalogRequestId,
+                            ref aircraftCatalogPageCount,
+                            aircraftCatalogPages);
+                    }
+
+                    if (!activeAircraftCatalogRequestId.HasValue
+                        && _clock.GetElapsedTime(lastAircraftCatalogAttemptAt)
+                            >= SimConnectAircraftCatalog.RetryDelay)
+                    {
+                        StartAircraftCatalogRequest(
+                            handle,
+                            ref nextAircraftCatalogRequestId,
+                            ref activeAircraftCatalogRequestId,
+                            ref lastAircraftCatalogAttemptAt,
+                            ref aircraftCatalogPageCount,
+                            aircraftCatalogPages);
+                    }
+                }
 
                 if (activeAirportFacilityRequest is not null)
                 {
@@ -580,19 +631,51 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         return true;
     }
 
-    private void RequestAircraftCatalog(nint handle)
+    private void StartAircraftCatalogRequest(
+        nint handle,
+        ref uint nextRequestId,
+        ref uint? activeRequestId,
+        ref long lastAttemptAt,
+        ref uint? expectedPageCount,
+        IDictionary<uint, IReadOnlyList<SimConnectObjectLivery>> pages)
     {
+        ResetAircraftCatalogAttempt(
+            ref activeRequestId,
+            ref expectedPageCount,
+            pages);
+
+        uint requestId = nextRequestId;
+        nextRequestId =
+            nextRequestId == uint.MaxValue
+                ? SimConnectAircraftCatalog.FirstRequestId
+                : nextRequestId + 1;
+
+        lastAttemptAt = _clock.GetTimestamp();
+
         int result = _api.EnumerateSimObjectsAndLiveries(
             handle,
-            SimConnectAircraftCatalog.RequestId,
+            requestId,
             SimConnectSimObjectType.User);
 
         if (result < 0)
         {
             _logger.LogWarning(
-                "SimConnect rejected installed-aircraft enumeration with HRESULT {HResult:X8}.",
+                "SimConnect rejected installed-aircraft enumeration with HRESULT {HResult:X8}; the catalog will be retried.",
                 result);
+            return;
         }
+
+        activeRequestId = requestId;
+    }
+
+    private static void ResetAircraftCatalogAttempt(
+        ref uint? activeRequestId,
+        ref uint? expectedPageCount,
+        IDictionary<uint, IReadOnlyList<SimConnectObjectLivery>> pages)
+    {
+        activeRequestId = null;
+        expectedPageCount = null;
+        pages.Clear();
     }
 
     private bool AcceptAircraftCatalogPage(

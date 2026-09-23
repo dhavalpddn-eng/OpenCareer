@@ -159,6 +159,93 @@ public sealed class SimConnectConnectionTests
     }
 
     [Fact]
+    public async Task MissingAircraftCatalogResponseRetriesWithoutDisconnecting()
+    {
+        var api = new SimConnectTestTransport();
+        var clock = new TestClock();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api, clock: clock);
+        connection.Start();
+
+        await Until(() =>
+            connection.Current.State
+                == SimulatorConnectionState.Connected
+            && api.AircraftEnumerations.Count == 1);
+
+        uint firstRequest =
+            api.AircraftEnumerations.Single().RequestId;
+
+        api.Enqueue(action: () =>
+            clock.Advance(
+                SimConnectAircraftCatalog.ResponseTimeout
+                + SimConnectAircraftCatalog.RetryDelay));
+
+        await Until(() =>
+            api.AircraftEnumerations.Count >= 2);
+
+        uint[] requests =
+            api.AircraftEnumerations
+                .Select(static item => item.RequestId)
+                .ToArray();
+
+        Assert.NotEqual(
+            firstRequest,
+            requests[^1]);
+        Assert.Equal(
+            SimulatorConnectionState.Connected,
+            connection.Current.State);
+        Assert.Equal(1, api.Attempts);
+    }
+
+    [Fact]
+    public async Task SuccessfulAircraftCatalogStopsRetrying()
+    {
+        var api = new SimConnectTestTransport();
+        var clock = new TestClock();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api, clock: clock);
+        connection.Start();
+
+        await Until(() =>
+            api.AircraftEnumerations.Count == 1);
+
+        uint requestId =
+            api.AircraftEnumerations.Single().RequestId;
+
+        api.Enqueue(
+            SimConnectPackets.EnumeratedSimObjects(
+                requestId,
+                entryNumber:
+                    0,
+                outOf:
+                    1,
+                ("Cessna 172", "Default")));
+
+        await Until(() =>
+            connection.AircraftCatalog.IsAvailable);
+
+        Assert.Equal(
+            ["Cessna 172"],
+            connection.AircraftCatalog.AircraftTitles);
+
+        api.Enqueue(action: () =>
+            clock.Advance(
+                SimConnectAircraftCatalog.ResponseTimeout
+                + SimConnectAircraftCatalog.RetryDelay
+                + TimeSpan.FromSeconds(1)));
+
+        await Task.Delay(50);
+
+        Assert.Single(
+            api.AircraftEnumerations);
+        Assert.Equal(
+            SimulatorConnectionState.Connected,
+            connection.Current.State);
+    }
+
+    [Fact]
     public async Task VersionMismatchClosesAndReportsUnavailable()
     {
         var api = new SimConnectTestTransport();
