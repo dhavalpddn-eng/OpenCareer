@@ -58,6 +58,7 @@ internal sealed record SimConnectMessage(
     uint EventData = 0,
     uint DefinitionId = 0,
     double[]? Data = null,
+    string? StringData = null,
     uint ListEntryNumber = 0,
     uint ListOutOf = 0,
     IReadOnlyList<SimConnectObjectLivery>? ObjectLiveries = null,

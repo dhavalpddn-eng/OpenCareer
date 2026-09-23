@@ -25,6 +25,7 @@ internal interface ISimConnectApi
     int Open(out nint handle, nint notificationEvent);
     int CallDispatch(nint handle, DispatchCallback callback);
     int AddToDataDefinition(nint handle, uint definitionId, string datumName, string unitsName);
+    int AddStringToDataDefinition(nint handle, uint definitionId, string datumName);
     int RequestDataOnUserAircraft(nint handle, uint requestId, uint definitionId, SimConnectPeriod period);
     int SubscribeToSystemEvent(nint handle, uint eventId, string eventName);
     int RequestSystemState(nint handle, uint requestId);

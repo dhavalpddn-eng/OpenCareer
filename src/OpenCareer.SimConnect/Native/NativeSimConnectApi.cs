@@ -7,6 +7,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
     private const string SimConnectLibraryName = "SimConnect.dll";
     private const uint SimConnectObjectIdUser = 0;
     private const uint SimConnectDataTypeFloat64 = 4;
+    private const uint SimConnectDataTypeString128 = 8;
     private const uint SimConnectUnused = uint.MaxValue;
 
     static NativeSimConnectApi()
@@ -50,6 +51,19 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
     public int AddToDataDefinition(nint handle, uint definitionId, string datumName, string unitsName) =>
         SimConnect_AddToDataDefinition(handle, definitionId, datumName, unitsName,
             SimConnectDataTypeFloat64, 0, SimConnectUnused);
+
+    public int AddStringToDataDefinition(
+        nint handle,
+        uint definitionId,
+        string datumName) =>
+        SimConnect_AddToDataDefinition(
+            handle,
+            definitionId,
+            datumName,
+            null,
+            SimConnectDataTypeString128,
+            0,
+            SimConnectUnused);
 
     public int RequestDataOnUserAircraft(
         nint handle,
@@ -117,7 +131,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         nint handle,
         uint definitionId,
         string datumName,
-        string unitsName,
+        string? unitsName,
         uint datumType,
         float epsilon,
         uint datumId);

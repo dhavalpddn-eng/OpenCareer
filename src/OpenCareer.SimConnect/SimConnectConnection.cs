@@ -17,6 +17,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     private AircraftTelemetrySnapshot? _latestTelemetry;
     private SimConnectLocalWeatherSnapshot? _localWeather;
     private SimConnectAircraftCatalogSnapshot _aircraftCatalog = SimConnectAircraftCatalogSnapshot.Unavailable;
+    private string? _currentAircraftTitle;
     private readonly ConcurrentQueue<SimConnectAirportFacilityQuery> _airportFacilityQueries = new();
     private CancellationTokenSource? _stop;
     private Task _worker = Task.CompletedTask;
@@ -43,6 +44,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     public AircraftTelemetrySnapshot? Latest => Volatile.Read(ref _latestTelemetry);
     internal SimConnectLocalWeatherSnapshot? LocalWeather => Volatile.Read(ref _localWeather);
     internal SimConnectAircraftCatalogSnapshot AircraftCatalog => Volatile.Read(ref _aircraftCatalog);
+    internal string? CurrentAircraftTitle => Volatile.Read(ref _currentAircraftTitle);
 
     internal async Task<SimConnectAirportFacilitySnapshot?> RequestAirportFacilityAsync(
         string icao,
@@ -117,6 +119,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         PublishTelemetry(null);
         PublishLocalWeather(null);
         PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+        PublishCurrentAircraftTitle(null);
         Publish(new(SimulatorConnectionState.WaitingForSimulator));
         try
         {
@@ -129,6 +132,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                     PublishTelemetry(null);
                     PublishLocalWeather(null);
                     PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+                    PublishCurrentAircraftTitle(null);
                     if (token.IsCancellationRequested)
                         break;
 
@@ -144,6 +148,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                     PublishTelemetry(null);
                     PublishLocalWeather(null);
                     PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+                    PublishCurrentAircraftTitle(null);
                     var issue = ex switch
                     {
                         DllNotFoundException => SimulatorConnectionIssue.RuntimeMissing,
@@ -165,6 +170,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             PublishTelemetry(null);
             PublishLocalWeather(null);
             PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+            PublishCurrentAircraftTitle(null);
             _logger.LogError(ex, "SimConnect connection worker stopped unexpectedly.");
             Publish(new(SimulatorConnectionState.Faulted, SimulatorConnectionIssue.UnexpectedError));
         }
@@ -173,6 +179,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             PublishTelemetry(null);
             PublishLocalWeather(null);
             PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+            PublishCurrentAircraftTitle(null);
             if (token.IsCancellationRequested)
                 Publish(new(SimulatorConnectionState.Disconnected));
         }
@@ -247,6 +254,12 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             if (!ConfigureTelemetry(handle))
                                 return SimulatorConnectionIssue.SimulatorError;
 
+                            if (!ConfigureCurrentAircraftTitle(handle))
+                            {
+                                _logger.LogWarning(
+                                    "Current-aircraft TITLE SimVar is unavailable; installed-aircraft discovery will rely on catalog/package sources.");
+                            }
+
                             localWeatherConfigured = ConfigureLocalWeather(handle);
                             airportFacilityConfigured = ConfigureAirportFacilities(handle);
                             acknowledged = true;
@@ -286,6 +299,13 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 PublishTelemetry(telemetry);
                             else
                                 _logger.LogDebug("Ignored invalid aircraft telemetry packet.");
+                            break;
+                        case SimConnectMessageKind.SimObjectData
+                            when acknowledged
+                                && message.RequestId == SimConnectCurrentAircraftDefinition.RequestId
+                                && message.DefinitionId == SimConnectCurrentAircraftDefinition.DefinitionId:
+                            if (!string.IsNullOrWhiteSpace(message.StringData))
+                                PublishCurrentAircraftTitle(message.StringData.Trim());
                             break;
                         case SimConnectMessageKind.SimObjectData
                             when acknowledged
@@ -592,6 +612,27 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         return true;
     }
 
+    private bool ConfigureCurrentAircraftTitle(nint handle)
+    {
+        int definitionResult =
+            _api.AddStringToDataDefinition(
+                handle,
+                SimConnectCurrentAircraftDefinition.DefinitionId,
+                SimConnectCurrentAircraftDefinition.TitleSimVar);
+
+        if (definitionResult < 0)
+            return false;
+
+        int requestResult =
+            _api.RequestDataOnUserAircraft(
+                handle,
+                SimConnectCurrentAircraftDefinition.RequestId,
+                SimConnectCurrentAircraftDefinition.DefinitionId,
+                SimConnectPeriod.Second);
+
+        return requestResult >= 0;
+    }
+
     private bool ConfigureLocalWeather(nint handle)
     {
         // MSFS 2024 ambient wind SimVars report weather at the user-aircraft
@@ -741,4 +782,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     private void PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot snapshot) =>
         Volatile.Write(ref _aircraftCatalog, snapshot);
+
+    private void PublishCurrentAircraftTitle(string? title) =>
+        Volatile.Write(ref _currentAircraftTitle, title);
 }

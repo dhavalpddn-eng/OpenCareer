@@ -95,6 +95,51 @@ public sealed class SimConnectAircraftDiscoveryTests
     }
 
     [Fact]
+    public async Task CurrentAircraftTitleMakesDiscoveryAvailableWhenCatalogNeverResponds()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api);
+        var source = new SimConnectInstalledAircraftObservationSource(connection);
+
+        connection.Start();
+
+        await Until(() =>
+            api.StringDataDefinitions.Any(
+                static item =>
+                    item.DefinitionId == SimConnectCurrentAircraftDefinition.DefinitionId
+                    && item.DatumName == SimConnectCurrentAircraftDefinition.TitleSimVar));
+
+        api.Enqueue(
+            SimConnectPackets.StringSimObjectData(
+                SimConnectCurrentAircraftDefinition.RequestId,
+                SimConnectCurrentAircraftDefinition.DefinitionId,
+                "Cessna 172 Skyhawk"));
+
+        await Until(() =>
+            source.Current.Availability
+                == InstalledAircraftDiscoveryAvailability.Available);
+
+        AircraftRegistryObservation aircraft =
+            Assert.Single(source.Current.Observations);
+
+        Assert.Equal(
+            "msfs-title:Cessna 172 Skyhawk",
+            aircraft.CanonicalAircraftId);
+        Assert.Equal(
+            "Cessna 172 Skyhawk",
+            aircraft.DisplayName);
+        Assert.True(aircraft.IsInstalled);
+        Assert.Equal(
+            AircraftDataConfidence.Verified,
+            aircraft.Confidence);
+        Assert.Equal(
+            OpenCareer.Application.Simulator.SimulatorConnectionState.Connected,
+            connection.Current.State);
+    }
+
+    [Fact]
     public async Task LiveriesDoNotCreateDuplicateAircraftRegistryEntries()
     {
         var api = new SimConnectTestTransport();

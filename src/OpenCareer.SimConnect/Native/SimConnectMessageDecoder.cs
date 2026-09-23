@@ -11,6 +11,7 @@ internal static class SimConnectMessageDecoder
     private const int ExceptionSize = HeaderSize + 3 * sizeof(uint);
     private const int EventSize = HeaderSize + 3 * sizeof(uint);
     private const int SimObjectDataHeaderSize = HeaderSize + 7 * sizeof(uint);
+    private const int CurrentAircraftTitleSize = 128;
     private const int ListHeaderSize = HeaderSize + 4 * sizeof(uint);
     private const int SimObjectLiverySize = 512;
     // The native C++ layout pads after the 1-byte IsListItem field so ItemIndex,
@@ -82,6 +83,28 @@ internal static class SimConnectMessageDecoder
         uint requestId = unchecked((uint)Marshal.ReadInt32(data, 12));
         uint definitionId = unchecked((uint)Marshal.ReadInt32(data, 20));
         uint defineCount = unchecked((uint)Marshal.ReadInt32(data, 36));
+
+        if (definitionId == SimConnectCurrentAircraftDefinition.DefinitionId)
+        {
+            if (defineCount != 1)
+                throw new InvalidDataException("Invalid current-aircraft title payload count.");
+
+            RequireSize(
+                size,
+                SimObjectDataHeaderSize + CurrentAircraftTitleSize);
+
+            string title =
+                ReadFixedAnsi(
+                    data + SimObjectDataHeaderSize,
+                    CurrentAircraftTitleSize)
+                .Trim();
+
+            return new(
+                SimConnectMessageKind.SimObjectData,
+                RequestId: requestId,
+                DefinitionId: definitionId,
+                StringData: title);
+        }
 
         long requiredSize = SimObjectDataHeaderSize + (long)defineCount * sizeof(double);
         if (requiredSize > size || defineCount > int.MaxValue)

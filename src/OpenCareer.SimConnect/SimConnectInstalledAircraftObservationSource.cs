@@ -14,11 +14,24 @@ public sealed class SimConnectInstalledAircraftObservationSource(
         get
         {
             SimConnectAircraftCatalogSnapshot snapshot = connection.AircraftCatalog;
+            string? currentAircraftTitle = connection.CurrentAircraftTitle;
 
-            if (!snapshot.IsAvailable)
+            string[] titles =
+                snapshot.AircraftTitles
+                    .Concat(
+                        string.IsNullOrWhiteSpace(currentAircraftTitle)
+                            ? Array.Empty<string>()
+                            : [currentAircraftTitle])
+                    .Where(static title => !string.IsNullOrWhiteSpace(title))
+                    .Select(static title => title.Trim())
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static title => title, StringComparer.Ordinal)
+                    .ToArray();
+
+            if (titles.Length == 0)
                 return InstalledAircraftDiscoverySnapshot.Unavailable;
 
-            AircraftRegistryObservation[] observations = snapshot.AircraftTitles
+            AircraftRegistryObservation[] observations = titles
                 .Select(CreateObservation)
                 .ToArray();
 

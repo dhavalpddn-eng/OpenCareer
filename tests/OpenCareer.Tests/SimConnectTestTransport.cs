@@ -28,7 +28,9 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
     internal ConcurrentQueue<uint> Heartbeats { get; } = new();
     internal int HeartbeatResult { get; set; }
     internal ConcurrentQueue<(uint DefinitionId, string DatumName, string Units)> DataDefinitions { get; } = new();
+    internal ConcurrentQueue<(uint DefinitionId, string DatumName)> StringDataDefinitions { get; } = new();
     internal int AddDefinitionResult { get; set; }
+    internal int AddStringDefinitionResult { get; set; }
     internal HashSet<uint> FailedDataDefinitionIds { get; } = [];
     internal ConcurrentQueue<(uint RequestId, uint DefinitionId, SimConnectPeriod Period)> TelemetryRequests { get; } = new();
     internal int TelemetryRequestResult { get; set; }
@@ -94,6 +96,20 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
             return FailedDataDefinitionIds.Contains(definitionId)
                 ? Failure
                 : AddDefinitionResult;
+        }
+        finally { Exit(); }
+    }
+
+    public int AddStringToDataDefinition(
+        nint handle,
+        uint definitionId,
+        string datumName)
+    {
+        Enter();
+        try
+        {
+            StringDataDefinitions.Enqueue((definitionId, datumName));
+            return AddStringDefinitionResult;
         }
         finally { Exit(); }
     }
@@ -260,6 +276,25 @@ internal static class SimConnectPackets
         BitConverter.GetBytes((uint)values.Count).CopyTo(bytes, 36);
         for (int i = 0; i < values.Count; i++)
             BitConverter.GetBytes(values[i]).CopyTo(bytes, 40 + i * sizeof(double));
+        return bytes;
+    }
+
+    internal static byte[] StringSimObjectData(
+        uint requestId,
+        uint definitionId,
+        string value)
+    {
+        const int headerSize = 40;
+        const int stringSize = 128;
+        byte[] bytes =
+            Header(
+                8,
+                headerSize + stringSize);
+
+        BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
+        BitConverter.GetBytes(definitionId).CopyTo(bytes, 20);
+        BitConverter.GetBytes(1u).CopyTo(bytes, 36);
+        WriteFixedString(bytes, headerSize, value, stringSize);
         return bytes;
     }
 
