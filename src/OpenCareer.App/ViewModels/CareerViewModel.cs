@@ -86,7 +86,7 @@ public sealed class CareerViewModel : INotifyPropertyChanged
                 hasCareer:
                     false,
                 status:
-                    "Choose the airport where your civilian career will begin.",
+                    "Choose your starting airport where your civilian career will begin.",
                 location:
                     "No career profile exists yet.");
             return;
