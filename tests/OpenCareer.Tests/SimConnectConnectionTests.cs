@@ -179,7 +179,15 @@ public sealed class SimConnectConnectionTests
         api.Enqueue(action: () =>
             clock.Advance(
                 SimConnectAircraftCatalog.ResponseTimeout
-                + SimConnectAircraftCatalog.RetryDelay));
+                - TimeSpan.FromSeconds(1)));
+
+        await Task.Delay(50);
+        Assert.Single(api.AircraftEnumerations);
+
+        api.Enqueue(action: () =>
+            clock.Advance(
+                SimConnectAircraftCatalog.RetryDelay
+                + TimeSpan.FromSeconds(2)));
 
         await Until(() =>
             api.AircraftEnumerations.Count >= 2);

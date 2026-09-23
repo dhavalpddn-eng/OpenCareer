@@ -288,7 +288,7 @@ public sealed class CareerJobBoardRefillServiceTests
 
     private static CareerJobBoardRefillService Service(
         IJobBoardStateStore store,
-        IAirportDataSource airports,
+        ICareerJobMarketAirportSource airports,
         TimeProvider timeProvider) =>
         new(
             new JobBoardGenerationService(

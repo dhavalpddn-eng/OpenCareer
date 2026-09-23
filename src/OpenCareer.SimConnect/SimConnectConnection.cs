@@ -398,7 +398,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             >= SimConnectAircraftCatalog.ResponseTimeout)
                     {
                         _logger.LogWarning(
-                            "Timed out waiting for installed-aircraft enumeration; retrying without reconnecting SimConnect.");
+                            "Timed out waiting for the user-selectable aircraft catalog; retrying without reconnecting SimConnect.");
                         ResetAircraftCatalogAttempt(
                             ref activeAircraftCatalogRequestId,
                             ref aircraftCatalogPageCount,
@@ -696,7 +696,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         int result = _api.EnumerateSimObjectsAndLiveries(
             handle,
             requestId,
-            SimConnectSimObjectType.Aircraft);
+            SimConnectSimObjectType.User);
 
         if (result < 0)
         {

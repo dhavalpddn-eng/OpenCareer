@@ -43,7 +43,7 @@ public sealed class SimConnectAircraftDiscoveryTests
     }
 
     [Fact]
-    public async Task ConnectionEnumeratesFullAircraftCatalogOnItsOwnedWorker()
+    public async Task ConnectionEnumeratesUserSelectableAircraftOnItsOwnedWorker()
     {
         var api = new SimConnectTestTransport();
         api.Enqueue(SimConnectPackets.Open());
@@ -57,7 +57,7 @@ public sealed class SimConnectAircraftDiscoveryTests
 
         var request = Assert.Single(api.AircraftEnumerations);
         Assert.Equal(SimConnectAircraftCatalog.RequestId, request.RequestId);
-        Assert.Equal(SimConnectSimObjectType.Aircraft, request.Type);
+        Assert.Equal(SimConnectSimObjectType.User, request.Type);
         Assert.Equal(InstalledAircraftDiscoveryAvailability.Unavailable, source.Current.Availability);
 
         api.Enqueue(SimConnectPackets.EnumeratedSimObjects(
