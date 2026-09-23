@@ -25,7 +25,7 @@
                                Style="{StaticResource OpenCareerPaperTitleStyle}"
                                TextWrapping="Wrap" />
 
-                    <TextBlock Text="SELECT INSTALLED AIRCRAFT"
+                    <TextBlock Text="SELECT CAREER AIRCRAFT"
                                Margin="0,8,0,0"
                                Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                     <ComboBox ItemsSource="{Binding AircraftOptions}"

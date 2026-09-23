@@ -25,13 +25,14 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         Array.Empty<JobOfferItemViewModel>();
     private IReadOnlyList<CareerJobAircraftOption> _aircraftOptions =
         Array.Empty<CareerJobAircraftOption>();
+    private string? _selectedAircraftSelectionId;
     private string? _selectedAircraftId;
     private string _airportText = "Career location unavailable";
     private string _statusText = "Jobs have not been loaded yet.";
     private string _aircraftStatus =
-        "Installed-aircraft catalog has not been checked yet.";
+        "Career aircraft have not been checked yet.";
     private string _acceptanceStatus =
-        "Select an installed aircraft to verify an active offer for dispatch.";
+        "Select a career aircraft to verify an active offer for dispatch.";
 
     public JobsViewModel(
         IJobBoardStateStore jobBoards,
@@ -89,6 +90,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
     public IReadOnlyList<JobOfferItemViewModel> Offers => _offers;
     public IReadOnlyList<CareerJobAircraftOption> AircraftOptions => _aircraftOptions;
+    public string? SelectedAircraftSelectionId => _selectedAircraftSelectionId;
     public string? SelectedAircraftId => _selectedAircraftId;
     public string AirportText => _airportText;
     public string StatusText => _statusText;
@@ -246,7 +248,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     }
 
     public async Task SelectAircraftAsync(
-        string? aircraftId,
+        string? selectionId,
         CancellationToken cancellationToken = default)
     {
         await _refreshGate
@@ -256,31 +258,28 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         try
         {
             string? normalized =
-                string.IsNullOrWhiteSpace(aircraftId)
+                string.IsNullOrWhiteSpace(selectionId)
                     ? null
-                    : aircraftId.Trim();
+                    : selectionId.Trim();
+
+            CareerJobAircraftOption? selected =
+                normalized is null
+                    ? null
+                    : _aircraftOptions.SingleOrDefault(
+                        item => string.Equals(
+                            item.SelectionId,
+                            normalized,
+                            StringComparison.Ordinal));
 
             if (normalized is not null
-                && !_aircraftOptions.Any(
-                    item => string.Equals(
-                        item.AircraftId,
-                        normalized,
-                        StringComparison.OrdinalIgnoreCase)))
+                && selected is null)
             {
                 throw new InvalidOperationException(
-                    "Selected aircraft is not present in the authoritative installed-aircraft catalog.");
+                    "Selected aircraft is not present in the authoritative career aircraft list.");
             }
 
-            if (!string.Equals(
-                    _selectedAircraftId,
-                    normalized,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                _selectedAircraftId =
-                    normalized;
-                OnPropertyChanged(
-                    nameof(SelectedAircraftId));
-            }
+            SetSelectedAircraft(
+                selected);
 
             await RebuildOffersLockedAsync(
                 cancellationToken);
@@ -301,7 +300,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         string aircraftId =
             _selectedAircraftId
             ?? throw new InvalidOperationException(
-                "Select an installed aircraft before starting a career flight.");
+                "Select a career aircraft before starting a career flight.");
 
         await _startGate
             .WaitAsync(cancellationToken)
@@ -392,17 +391,17 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             snapshot.Detail,
             nameof(AircraftStatus));
 
-        if (_selectedAircraftId is not null
-            && !_aircraftOptions.Any(
-                item => string.Equals(
-                    item.AircraftId,
-                    _selectedAircraftId,
-                    StringComparison.OrdinalIgnoreCase)))
+        if (_selectedAircraftSelectionId is not null)
         {
-            _selectedAircraftId =
-                null;
-            OnPropertyChanged(
-                nameof(SelectedAircraftId));
+            CareerJobAircraftOption? selected =
+                _aircraftOptions.SingleOrDefault(
+                    item => string.Equals(
+                        item.SelectionId,
+                        _selectedAircraftSelectionId,
+                        StringComparison.Ordinal));
+
+            SetSelectedAircraft(
+                selected);
         }
     }
 
@@ -445,7 +444,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     : expired
                         ? "This persisted offer is no longer active."
                         : _selectedAircraftId is null
-                            ? "Select an installed aircraft to verify this offer."
+                            ? "Select a career aircraft to verify this offer."
                             : _startAction is null
                                 ? "Accept & Start is not connected to the playable-loop action."
                                 : "Checking authoritative dispatch readiness…";
@@ -507,7 +506,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         SetField(
             ref _acceptanceStatus,
             _selectedAircraftId is null
-                ? "Select an installed aircraft to verify an active offer for dispatch."
+                ? "Select a career aircraft to verify an active offer for dispatch."
                 : projected.Any(static offer => offer.CanStart)
                     ? "Selected aircraft has at least one verified startable career offer."
                     : firstBlocked is not null
@@ -532,6 +531,37 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             aircraft;
         OnPropertyChanged(
             nameof(AircraftOptions));
+    }
+
+    private void SetSelectedAircraft(
+        CareerJobAircraftOption? selected)
+    {
+        string? selectionId =
+            selected?.SelectionId;
+        string? aircraftId =
+            selected?.AircraftId;
+
+        if (!string.Equals(
+                _selectedAircraftSelectionId,
+                selectionId,
+                StringComparison.Ordinal))
+        {
+            _selectedAircraftSelectionId =
+                selectionId;
+            OnPropertyChanged(
+                nameof(SelectedAircraftSelectionId));
+        }
+
+        if (!string.Equals(
+                _selectedAircraftId,
+                aircraftId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedAircraftId =
+                aircraftId;
+            OnPropertyChanged(
+                nameof(SelectedAircraftId));
+        }
     }
 
     private void SetField(

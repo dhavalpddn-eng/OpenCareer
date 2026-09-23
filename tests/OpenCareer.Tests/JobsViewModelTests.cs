@@ -1,14 +1,16 @@
 using System.Collections.Immutable;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Careers;
-using OpenCareer.Application.Planning;
-using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 
 namespace OpenCareer.Tests;
 
 public sealed class JobsViewModelTests
 {
+    private static readonly Guid CareerId =
+        Guid.Parse(
+            "a6000000-0000-0000-0000-000000000001");
+
     private static readonly DateTimeOffset Now =
         new(2026, 9, 22, 17, 0, 0, TimeSpan.Zero);
 
@@ -168,16 +170,28 @@ public sealed class JobsViewModelTests
         var action =
             new FakeStartAction();
 
+        PlayerCareerRuntimeState career =
+            CareerRuntime("KRME");
+
         var viewModel =
             new JobsViewModel(
                 new FakeBoardStore(
                     Board(
                         "KRME",
                         offer)),
-                CareerRuntime("KRME"),
+                career,
                 new FixedTimeProvider(Now),
                 new CareerJobAircraftSelectionSource(
-                    new FakeDiscovery()),
+                    career,
+                    new TestOwnershipStore(
+                        CareerAircraftTestData.Snapshot(
+                            CareerId,
+                            CareerAircraftTestData.Owned(
+                                CareerId,
+                                "owned-fixture",
+                                "fixture-aircraft",
+                                "Fixture Aircraft"))),
+                    new TestAircraftAvailabilityStore()),
                 action,
                 logger:
                     null);
@@ -189,7 +203,14 @@ public sealed class JobsViewModelTests
                 viewModel.AircraftOptions);
 
         await viewModel.SelectAircraftAsync(
-            aircraft.AircraftId);
+            aircraft.SelectionId);
+
+        Assert.Equal(
+            aircraft.SelectionId,
+            viewModel.SelectedAircraftSelectionId);
+        Assert.Equal(
+            aircraft.AircraftId,
+            viewModel.SelectedAircraftId);
 
         JobOfferItemViewModel projected =
             Assert.Single(
@@ -213,7 +234,7 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
-    public async Task AircraftOnlyRefreshConsumesLateDiscoveryWithoutRefillingBoard()
+    public async Task AircraftOnlyRefreshConsumesUpdatedOwnershipWithoutRefillingBoard()
     {
         JobBoardState board =
             Board(
@@ -228,17 +249,29 @@ public sealed class JobsViewModelTests
             new FakeBoardRefill(
                 board);
 
-        var discovery =
-            new FakeDiscovery();
+        PlayerCareerRuntimeState career =
+            CareerRuntime("KRME");
+
+        var ownership =
+            new TestOwnershipStore(
+                CareerAircraftTestData.Snapshot(
+                    CareerId,
+                    CareerAircraftTestData.Owned(
+                        CareerId,
+                        "owned-fixture",
+                        "fixture-aircraft",
+                        "Fixture Aircraft")));
 
         var viewModel =
             new JobsViewModel(
                 new FakeBoardStore(
                     board),
-                CareerRuntime("KRME"),
+                career,
                 new FixedTimeProvider(Now),
                 new CareerJobAircraftSelectionSource(
-                    discovery),
+                    career,
+                    ownership,
+                    new TestAircraftAvailabilityStore()),
                 new FakeStartAction(),
                 logger:
                     null,
@@ -250,17 +283,19 @@ public sealed class JobsViewModelTests
         Assert.Single(
             viewModel.AircraftOptions);
 
-        discovery.Current =
-            new InstalledAircraftDiscoverySnapshot(
-                InstalledAircraftDiscoveryAvailability.Available,
-                [
-                    Installed(
-                        "fixture-aircraft",
-                        "Fixture Aircraft"),
-                    Installed(
-                        "late-aircraft",
-                        "Late Aircraft")
-                ]);
+        ownership.Snapshot =
+            CareerAircraftTestData.Snapshot(
+                CareerId,
+                CareerAircraftTestData.Owned(
+                    CareerId,
+                    "owned-fixture",
+                    "fixture-aircraft",
+                    "Fixture Aircraft"),
+                CareerAircraftTestData.Owned(
+                    CareerId,
+                    "owned-late",
+                    "late-aircraft",
+                    "Late Aircraft"));
 
         await viewModel.RefreshAircraftAndReadinessAsync();
 
@@ -317,8 +352,7 @@ public sealed class JobsViewModelTests
     {
         PlayerCareerProfile profile =
             PlayerCareerProfile.Start(
-                Guid.Parse(
-                    "a6000000-0000-0000-0000-000000000001"),
+                CareerId,
                 airportIcao,
                 Now.AddDays(-10));
 
@@ -397,34 +431,6 @@ public sealed class JobsViewModelTests
                 board);
         }
     }
-
-    private sealed class FakeDiscovery
-        : IInstalledAircraftDiscoverySource
-    {
-        public InstalledAircraftDiscoverySnapshot Current { get; set; } =
-            new(
-                InstalledAircraftDiscoveryAvailability.Available,
-                [
-                    Installed(
-                        "fixture-aircraft",
-                        "Fixture Aircraft")
-                ]);
-    }
-
-    private static AircraftRegistryObservation Installed(
-        string aircraftId,
-        string displayName) =>
-        new(
-            aircraftId,
-            ProviderId:
-                "fixture",
-            ProviderRecordId:
-                displayName,
-            AircraftDataConfidence.Verified,
-            IsInstalled:
-                true,
-            DisplayName:
-                displayName);
 
     private sealed class FakeStartAction
         : ICareerJobStartAction

@@ -1,73 +1,43 @@
 using OpenCareer.Application.Careers;
-using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
+using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Ownership;
 
 namespace OpenCareer.Tests;
 
 public sealed class CareerJobAircraftSelectionSourceTests
 {
-    [Fact]
-    public async Task AvailableInstalledCatalogProducesDeterministicPlayerOptions()
-    {
-        var source =
-            new CareerJobAircraftSelectionSource(
-                new FakeDiscovery(
-                    new InstalledAircraftDiscoverySnapshot(
-                        InstalledAircraftDiscoveryAvailability.Available,
-                        [
-                            Observation(
-                                "msfs-title:zulu",
-                                "Zulu"),
-                            Observation(
-                                "msfs-title:alpha",
-                                "Alpha"),
-                            Observation(
-                                "msfs-title:alpha",
-                                "Alpha Duplicate")
-                        ])));
+    private static readonly Guid CareerId =
+        Guid.Parse(
+            "a6000000-0000-0000-0000-000000000001");
 
-        CareerJobAircraftSelectionSnapshot snapshot =
-            await source.ReadAsync();
-
-        Assert.True(
-            snapshot.IsAvailable);
-        Assert.Equal(
-            2,
-            snapshot.Aircraft.Count);
-        Assert.Equal(
-            "Alpha",
-            snapshot.Aircraft[0].DisplayName);
-        Assert.Equal(
-            "Zulu",
-            snapshot.Aircraft[1].DisplayName);
-    }
+    private static readonly DateTimeOffset Now =
+        new(2026, 9, 23, 15, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task SimConnectAndLocalDuplicateCollapseToOneCanonicalPickerOption()
+    public async Task OwnedAircraftAppearsWithoutInstalledAircraftDiscovery()
     {
-        AircraftRegistryObservation live =
-            Observation(
-                "msfs-title:fixture",
-                "Fixture Live",
-                "msfs-simconnect");
+        OwnedAircraft owned =
+            CareerAircraftTestData.Owned(
+                CareerId,
+                "owned-instance-1",
+                "canonical-aircraft-1",
+                "Career Aircraft");
 
-        AircraftRegistryObservation local =
-            Observation(
-                "msfs-title:fixture",
-                "Fixture Local",
-                "msfs-package-cfg");
+        var ownership =
+            new TestOwnershipStore(
+                CareerAircraftTestData.Snapshot(
+                    CareerId,
+                    owned));
+
+        var availability =
+            new TestAircraftAvailabilityStore();
 
         var source =
             new CareerJobAircraftSelectionSource(
-                new CompositeInstalledAircraftDiscoverySource(
-                    new FakeDiscovery(
-                        new(
-                            InstalledAircraftDiscoveryAvailability.Available,
-                            [live])),
-                    new FakeDiscovery(
-                        new(
-                            InstalledAircraftDiscoveryAvailability.Available,
-                            [local]))));
+                CareerRuntime(),
+                ownership,
+                availability);
 
         CareerJobAircraftSelectionSnapshot snapshot =
             await source.ReadAsync();
@@ -76,77 +46,212 @@ public sealed class CareerJobAircraftSelectionSourceTests
             Assert.Single(
                 snapshot.Aircraft);
 
+        Assert.True(snapshot.IsAvailable);
         Assert.Equal(
-            "msfs-title:fixture",
+            "ownership:owned-instance-1",
+            option.SelectionId);
+        Assert.Equal(
+            "owned-instance-1",
+            option.OwnershipId);
+        Assert.Equal(
+            "canonical-aircraft-1",
             option.AircraftId);
+        Assert.Equal(
+            "canonical-aircraft-1",
+            Assert.Single(
+                availability.RequestedAircraftIds));
     }
 
     [Fact]
-    public async Task LocalInstalledAircraftRemainVisibleWhenSimConnectIsUnavailable()
+    public async Task ZeroOwnershipIsValidEmptyStateWithoutStarterAircraft()
     {
-        AircraftRegistryObservation local =
-            Observation(
-                "msfs-title:local",
-                "Local Aircraft",
-                "msfs-package-cfg");
+        var ownership =
+            new TestOwnershipStore(
+                CareerAircraftTestData.Snapshot(
+                    CareerId));
 
         var source =
             new CareerJobAircraftSelectionSource(
-                new CompositeInstalledAircraftDiscoverySource(
-                    new FakeDiscovery(
-                        InstalledAircraftDiscoverySnapshot.Unavailable),
-                    new FakeDiscovery(
-                        new(
-                            InstalledAircraftDiscoveryAvailability.Available,
-                            [local]))));
+                CareerRuntime(),
+                ownership,
+                new TestAircraftAvailabilityStore());
 
         CareerJobAircraftSelectionSnapshot snapshot =
             await source.ReadAsync();
 
         Assert.True(snapshot.IsAvailable);
-        Assert.Equal(
-            "msfs-title:local",
-            Assert.Single(snapshot.Aircraft).AircraftId);
+        Assert.Empty(snapshot.Aircraft);
+        Assert.Contains(
+            "No available career-owned aircraft",
+            snapshot.Detail,
+            StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task UnavailableCatalogFailsClosed()
+    public async Task OnlyActiveLocalAvailableOwnedAircraftAreSurfaced()
     {
+        OwnedAircraft available =
+            CareerAircraftTestData.Owned(
+                CareerId,
+                "owned-available",
+                "canonical-available",
+                "Available");
+
+        OwnedAircraft unavailable =
+            CareerAircraftTestData.Owned(
+                CareerId,
+                "owned-unavailable",
+                "canonical-unavailable",
+                "Unavailable");
+
+        OwnedAircraft remote =
+            CareerAircraftTestData.Owned(
+                CareerId,
+                "owned-remote",
+                "canonical-remote",
+                "Remote",
+                airportIcao:
+                    "KDFW");
+
+        OwnedAircraft sold =
+            CareerAircraftTestData.Owned(
+                CareerId,
+                "owned-sold",
+                "canonical-sold",
+                "Sold",
+                status:
+                    OwnedAircraftStatus.Sold);
+
         var source =
             new CareerJobAircraftSelectionSource(
-                new FakeDiscovery(
-                    InstalledAircraftDiscoverySnapshot.Unavailable));
+                CareerRuntime(),
+                new TestOwnershipStore(
+                    CareerAircraftTestData.Snapshot(
+                        CareerId,
+                        available,
+                        unavailable,
+                        remote,
+                        sold)),
+                new TestAircraftAvailabilityStore(
+                    new AircraftAvailabilityState(
+                        "canonical-unavailable",
+                        AircraftAvailabilityStatus.Unavailable)));
 
         CareerJobAircraftSelectionSnapshot snapshot =
             await source.ReadAsync();
 
-        Assert.False(
-            snapshot.IsAvailable);
-        Assert.Empty(
-            snapshot.Aircraft);
+        Assert.Equal(
+            "owned-available",
+            Assert.Single(snapshot.Aircraft).OwnershipId);
     }
 
-    private static AircraftRegistryObservation Observation(
-        string aircraftId,
-        string displayName,
-        string providerId = "fixture") =>
-        new(
-            aircraftId,
-            ProviderId:
-                providerId,
-            ProviderRecordId:
-                displayName,
-            AircraftDataConfidence.Verified,
-            IsInstalled:
-                true,
-            DisplayName:
-                displayName);
-
-    private sealed class FakeDiscovery(
-        InstalledAircraftDiscoverySnapshot snapshot)
-        : IInstalledAircraftDiscoverySource
+    [Fact]
+    public async Task OwnedInstancesRemainDistinctWhileAvailabilityUsesCanonicalIdentity()
     {
-        public InstalledAircraftDiscoverySnapshot Current =>
-            snapshot;
+        var availability =
+            new TestAircraftAvailabilityStore();
+
+        var source =
+            new CareerJobAircraftSelectionSource(
+                CareerRuntime(),
+                new TestOwnershipStore(
+                    CareerAircraftTestData.Snapshot(
+                        CareerId,
+                        CareerAircraftTestData.Owned(
+                            CareerId,
+                            "owned-instance-a",
+                            "canonical-shared",
+                            "Shared Type A"),
+                        CareerAircraftTestData.Owned(
+                            CareerId,
+                            "owned-instance-b",
+                            "canonical-shared",
+                            "Shared Type B"))),
+                availability);
+
+        CareerJobAircraftSelectionSnapshot snapshot =
+            await source.ReadAsync();
+
+        Assert.Equal(
+            2,
+            snapshot.Aircraft.Count);
+        Assert.Equal(
+            2,
+            snapshot.Aircraft
+                .Select(static option => option.OwnershipId)
+                .Distinct(StringComparer.Ordinal)
+                .Count());
+        Assert.All(
+            snapshot.Aircraft,
+            static option => Assert.Equal(
+                "canonical-shared",
+                option.AircraftId));
+        Assert.Equal(
+            "canonical-shared",
+            Assert.Single(
+                availability.RequestedAircraftIds));
+    }
+
+    [Fact]
+    public async Task MissingActiveCareerDoesNotReadOwnership()
+    {
+        var ownership =
+            new TestOwnershipStore(
+                CareerAircraftTestData.Snapshot(
+                    CareerId));
+
+        var source =
+            new CareerJobAircraftSelectionSource(
+                new PlayerCareerRuntimeState(
+                    new FakeProfileStore(
+                        record:
+                            null)),
+                ownership,
+                new TestAircraftAvailabilityStore());
+
+        CareerJobAircraftSelectionSnapshot snapshot =
+            await source.ReadAsync();
+
+        Assert.False(snapshot.IsAvailable);
+        Assert.Empty(snapshot.Aircraft);
+        Assert.Empty(ownership.LoadedCareerIds);
+    }
+
+    private static PlayerCareerRuntimeState CareerRuntime()
+    {
+        PlayerCareerProfile profile =
+            PlayerCareerProfile.Start(
+                CareerId,
+                "KRME",
+                Now.AddDays(-10));
+
+        return new PlayerCareerRuntimeState(
+            new FakeProfileStore(
+                new PlayerCareerProfileStoreRecord(
+                    Revision:
+                        1,
+                    profile,
+                    SavedAt:
+                        Now.AddDays(-1))));
+    }
+
+    private sealed class FakeProfileStore(
+        PlayerCareerProfileStoreRecord? record)
+        : IPlayerCareerProfileStore
+    {
+        public Task<PlayerCareerProfileStoreRecord?> LoadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                record);
+        }
+
+        public Task<PlayerCareerProfileStoreRecord> SaveAsync(
+            PlayerCareerProfile profile,
+            long? expectedRevision,
+            DateTimeOffset savedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

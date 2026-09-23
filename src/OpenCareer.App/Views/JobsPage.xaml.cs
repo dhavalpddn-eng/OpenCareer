@@ -21,7 +21,7 @@ public sealed partial class JobsPage : Page
     {
         base.OnNavigatedTo(e);
 
-        StopAircraftRefresh();
+        StopNavigationLifetime();
 
         if (e.Parameter is not JobsViewModel viewModel)
             return;
@@ -32,20 +32,7 @@ public sealed partial class JobsPage : Page
 
         try
         {
-            // Preserve the initial navigation refresh, even when options already exist.
             await RefreshJobsAsync(viewModel, token);
-
-            while (!token.IsCancellationRequested
-                && viewModel.AircraftOptions.Count == 0)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(2), token);
-                token.ThrowIfCancellationRequested();
-
-                if (viewModel.AircraftOptions.Count != 0)
-                    break;
-
-                await RefreshJobsAsync(viewModel, token);
-            }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -55,7 +42,7 @@ public sealed partial class JobsPage : Page
     protected override void OnNavigatedFrom(
         NavigationEventArgs e)
     {
-        StopAircraftRefresh();
+        StopNavigationLifetime();
         base.OnNavigatedFrom(e);
     }
 
@@ -76,7 +63,7 @@ public sealed partial class JobsPage : Page
         }
     }
 
-    private void StopAircraftRefresh()
+    private void StopNavigationLifetime()
     {
         _navigationCts?.Cancel();
         _navigationCts?.Dispose();
@@ -93,13 +80,13 @@ public sealed partial class JobsPage : Page
             return;
         }
 
-        string? aircraftId =
+        string? selectionId =
             (comboBox.SelectedItem as CareerJobAircraftOption)
-                ?.AircraftId;
+                ?.SelectionId;
 
         await viewModel
             .SelectAircraftAsync(
-                aircraftId,
+                selectionId,
                 _navigationCts?.Token
                     ?? CancellationToken.None);
     }

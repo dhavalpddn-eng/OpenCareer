@@ -397,7 +397,19 @@ public sealed class SqliteOwnershipStore : IOwnershipStore
         ArgumentException.ThrowIfNullOrWhiteSpace(careerId);
 
         await using var connection = await OpenAsync(cancellationToken);
-        var account = await ReadAccountAsync(connection, null, careerId, cancellationToken);
+        var account = await TryReadAccountAsync(connection, null, careerId, cancellationToken);
+
+        if (account is null)
+        {
+            return new OwnershipSnapshot(
+                new CareerAccountSnapshot(careerId, 0m, 0m),
+                [],
+                [],
+                [],
+                [],
+                []);
+        }
+
         var aircraft = await ReadOwnedAircraftAsync(connection, careerId, cancellationToken);
         var loans = await ReadLoansAsync(connection, careerId, cancellationToken);
         var insurance = await ReadInsuranceAsync(connection, careerId, cancellationToken);
@@ -579,13 +591,30 @@ public sealed class SqliteOwnershipStore : IOwnershipStore
         string careerId,
         CancellationToken cancellationToken)
     {
+        CareerAccountSnapshot? account =
+            await TryReadAccountAsync(
+                connection,
+                transaction,
+                careerId,
+                cancellationToken);
+
+        return account
+            ?? throw new InvalidOperationException("Career account does not exist.");
+    }
+
+    private static async Task<CareerAccountSnapshot?> TryReadAccountAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
+        string careerId,
+        CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = "SELECT cash_cents, reserve_cents FROM career_accounts WHERE career_id = $career;";
         command.Parameters.AddWithValue("$career", careerId);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
-            throw new InvalidOperationException("Career account does not exist.");
+            return null;
         return new CareerAccountSnapshot(careerId, FromCents(reader.GetInt64(0)), FromCents(reader.GetInt64(1)));
     }
 
