@@ -246,5 +246,12 @@ public sealed class SqliteJobContractStoreTests : IAsyncLifetime
                     MinimumSeats: 0),
             ReputationReward: 1.25,
             ReputationPenalty: 2.5,
-            MarketId: "KRME:general-cargo");
+            MarketId: "KRME:general-cargo",
+            ProviderAircraft:
+                new ProviderAircraftAssignment(
+                    Guid.Parse(
+                        "70000000-0000-0000-0000-000000000003"),
+                    "provider-canonical-aircraft",
+                    "Provider Aircraft",
+                    "KRME"));
 }

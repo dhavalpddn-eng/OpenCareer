@@ -155,9 +155,12 @@ public static class JobMarketGenerator
                     JobScenarioKind.Standard,
                     random);
 
+            Guid offerId =
+                CreateGuid(random);
+
             offers.Add(
                 new JobMarketOfferDraft(
-                    CreateGuid(random),
+                    offerId,
                     track.Value,
                     kind.Value,
                     JobScenarioKind.Standard,
@@ -177,7 +180,10 @@ public static class JobMarketGenerator
                         track.Value,
                         kind.Value,
                         JobScenarioKind.Standard,
-                        destination)));
+                        destination,
+                        offerId,
+                        request.Origin.Icao,
+                        request.ProviderAircraft)));
 
             added++;
         }
@@ -405,7 +411,10 @@ public static class JobMarketGenerator
         ServiceTrack track,
         ContractKind kind,
         JobScenarioKind scenario,
-        DestinationChoice destination)
+        DestinationChoice destination,
+        Guid offerId,
+        string originIcao,
+        ProviderAircraftType? providerAircraft)
     {
         if (track != ServiceTrack.CivilianEmployment
             || kind is not (
@@ -426,6 +435,14 @@ public static class JobMarketGenerator
                     destination.DistanceNm,
                 MinimumSeats:
                     0);
+
+        ProviderAircraftAssignment? assignment =
+            providerAircraft is null
+                ? null
+                : ProviderAircraftAssignment.CreateForOffer(
+                    offerId,
+                    providerAircraft,
+                    originIcao);
 
         return new(
             AuthorityId:
@@ -462,7 +479,9 @@ public static class JobMarketGenerator
             RequiredPilotQualifications:
                 PilotQualificationState.Entry,
             AuthorizedAircraftAccess:
-                AircraftAccess.Civilian);
+                AircraftAccess.Civilian,
+            ProviderAircraft:
+                assignment);
     }
 
     private static double DemandAttractiveness(

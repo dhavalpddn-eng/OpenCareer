@@ -94,7 +94,8 @@ public sealed record JobContract(
     bool GovernmentAuthorizationRequired = false,
     DateTimeOffset? AcceptedAt = null,
     DateTimeOffset? StartedAt = null,
-    DateTimeOffset? CompletedAt = null)
+    DateTimeOffset? CompletedAt = null,
+    ProviderAircraftAssignment? ProviderAircraft = null)
 {
     public JobContract Accept(ContractDispatchContext context)
     {
@@ -143,6 +144,14 @@ public sealed record JobContract(
         ArgumentNullException.ThrowIfNull(Compensation);
         ArgumentNullException.ThrowIfNull(AircraftRequirements);
         AircraftRequirements.Validate();
+        ProviderAircraft?.Validate(
+            OriginIcao);
+        if (ProviderAircraft?.ProviderAircraftInstanceId
+            == ContractId)
+        {
+            throw new ArgumentException(
+                "Provider-aircraft instance identity must be distinct from the contract identity.");
+        }
         if ((AcceptedAt is { } accepted && accepted < OfferedAt)
             || (StartedAt is { } started && (AcceptedAt is not { } a || started < a))
             || (CompletedAt is { } completed && (StartedAt is not { } s || completed < s))

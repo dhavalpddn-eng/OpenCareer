@@ -15,6 +15,120 @@ public sealed class CareerJobAircraftSelectionSourceTests
         new(2026, 9, 23, 15, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task ZeroOwnershipCareerReceivesPersistedProviderAircraftWithoutSimulatorDiscovery()
+    {
+        ProviderAircraftAssignment provider =
+            ProviderAircraft(
+                "provider-aircraft-1",
+                "Provider Aircraft");
+
+        var ownership =
+            new TestOwnershipStore(
+                CareerAircraftTestData.Snapshot(
+                    CareerId));
+
+        var availability =
+            new TestAircraftAvailabilityStore();
+
+        var source =
+            new CareerJobAircraftSelectionSource(
+                CareerRuntime(),
+                ownership,
+                availability,
+                new FakeBoardStore(
+                    BoardWithProvider(
+                        provider)),
+                new FixedTimeProvider(
+                    Now));
+
+        CareerJobAircraftSelectionSnapshot snapshot =
+            await source.ReadAsync();
+
+        CareerJobAircraftOption option =
+            Assert.Single(
+                snapshot.Aircraft);
+
+        Assert.Null(option.OwnershipId);
+        Assert.Equal(
+            provider.ProviderAircraftInstanceId,
+            option.ProviderAircraftInstanceId);
+        Assert.Equal(
+            ProviderOfferId,
+            option.ProviderOfferId);
+        Assert.Equal(
+            provider.AircraftId,
+            option.AircraftId);
+        Assert.Equal(
+            "KRME",
+            option.ProviderOriginIcao);
+        Assert.Equal(
+            provider.AircraftId,
+            Assert.Single(
+                availability.RequestedAircraftIds));
+        Assert.Empty(
+            ownership.Snapshot.Aircraft);
+    }
+
+    [Fact]
+    public async Task ProviderAircraftPrecedesDistinctOwnedAlternative()
+    {
+        ProviderAircraftAssignment provider =
+            ProviderAircraft(
+                "provider-aircraft-a",
+                "Provider Aircraft A");
+
+        OwnedAircraft owned =
+            CareerAircraftTestData.Owned(
+                CareerId,
+                "owned-instance-b",
+                "owned-aircraft-b",
+                "Owned Aircraft B");
+
+        var source =
+            new CareerJobAircraftSelectionSource(
+                CareerRuntime(),
+                new TestOwnershipStore(
+                    CareerAircraftTestData.Snapshot(
+                        CareerId,
+                        owned)),
+                new TestAircraftAvailabilityStore(),
+                new FakeBoardStore(
+                    BoardWithProvider(
+                        provider)),
+                new FixedTimeProvider(
+                    Now));
+
+        CareerJobAircraftSelectionSnapshot snapshot =
+            await source.ReadAsync();
+
+        Assert.Equal(
+            2,
+            snapshot.Aircraft.Count);
+
+        CareerJobAircraftOption supplied =
+            snapshot.Aircraft[0];
+
+        CareerJobAircraftOption alternative =
+            snapshot.Aircraft[1];
+
+        Assert.Equal(
+            provider.ProviderAircraftInstanceId,
+            supplied.ProviderAircraftInstanceId);
+        Assert.Null(supplied.OwnershipId);
+        Assert.Equal(
+            "owned-instance-b",
+            alternative.OwnershipId);
+        Assert.Null(
+            alternative.ProviderAircraftInstanceId);
+        Assert.NotEqual(
+            provider.ProviderAircraftInstanceId.ToString("D"),
+            owned.OwnershipId);
+        Assert.NotEqual(
+            provider.AircraftId,
+            owned.AircraftId);
+    }
+
+    [Fact]
     public async Task OwnedAircraftAppearsWithoutInstalledAircraftDiscovery()
     {
         OwnedAircraft owned =
@@ -82,7 +196,7 @@ public sealed class CareerJobAircraftSelectionSourceTests
         Assert.True(snapshot.IsAvailable);
         Assert.Empty(snapshot.Aircraft);
         Assert.Contains(
-            "No available career-owned aircraft",
+            "No contract-supplied or available career-owned aircraft",
             snapshot.Detail,
             StringComparison.Ordinal);
     }
@@ -233,6 +347,117 @@ public sealed class CareerJobAircraftSelectionSourceTests
                     profile,
                     SavedAt:
                         Now.AddDays(-1))));
+    }
+
+    private static readonly Guid ProviderOfferId =
+        Guid.Parse(
+            "a6000000-0000-0000-0000-000000000002");
+
+    private static ProviderAircraftAssignment ProviderAircraft(
+        string aircraftId,
+        string displayName) =>
+        new(
+            Guid.Parse(
+                "a6000000-0000-0000-0000-000000000003"),
+            aircraftId,
+            displayName,
+            "KRME");
+
+    private static JobBoardState BoardWithProvider(
+        ProviderAircraftAssignment provider)
+    {
+        DateTimeOffset offeredAt =
+            Now.AddHours(-1);
+
+        var requirements =
+            new AircraftMissionRequirements(
+                AllowedAccess:
+                    AircraftAccess.Civilian,
+                MinimumRangeNauticalMiles:
+                    45);
+
+        var offer =
+            new JobMarketOfferDraft(
+                ProviderOfferId,
+                ServiceTrack.CivilianEmployment,
+                ContractKind.Ferry,
+                JobScenarioKind.Standard,
+                "KRME",
+                "KSYR",
+                DistanceNm:
+                    45,
+                EstimatedFlightHours:
+                    0.5,
+                offeredAt,
+                Now.AddHours(1),
+                IsLockedPreview:
+                    false,
+                RouteStrength:
+                    0,
+                RelationshipStrength:
+                    0,
+                MarketSelectionWeight:
+                    1,
+                ContractTerms:
+                    new JobMarketContractTermsEnvelope(
+                        PersistedJobContractTermsSource.AuthorityId,
+                        requirements,
+                        EstimatedFlightHours:
+                            0.5,
+                        PayloadPounds:
+                            0,
+                        DemandAttractiveness:
+                            1,
+                        Urgency:
+                            0,
+                        Difficulty:
+                            0,
+                        RequiredPilotQualifications:
+                            PilotQualificationState.Entry,
+                        AuthorizedAircraftAccess:
+                            AircraftAccess.Civilian,
+                        ProviderAircraft:
+                            provider));
+
+        return JobBoardState
+            .Empty(
+                "KRME",
+                offeredAt)
+            .Reconcile(
+                Now,
+                1,
+                [offer]);
+    }
+
+    private sealed class FakeBoardStore(
+        JobBoardState? state)
+        : IJobBoardStateStore
+    {
+        public Task SaveAsync(
+            JobBoardState state,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<JobBoardState?> GetAsync(
+            string airportIcao,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                state);
+        }
+
+        public Task<IReadOnlyList<JobBoardState>> LoadAllAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class FixedTimeProvider(
+        DateTimeOffset now)
+        : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() =>
+            now;
     }
 
     private sealed class FakeProfileStore(

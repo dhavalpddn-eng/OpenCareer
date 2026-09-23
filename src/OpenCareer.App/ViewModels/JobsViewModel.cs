@@ -27,6 +27,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         Array.Empty<CareerJobAircraftOption>();
     private string? _selectedAircraftSelectionId;
     private string? _selectedAircraftId;
+    private Guid? _selectedProviderOfferId;
     private string _airportText = "Career location unavailable";
     private string _statusText = "Jobs have not been loaded yet.";
     private string _aircraftStatus =
@@ -302,6 +303,13 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             ?? throw new InvalidOperationException(
                 "Select a career aircraft before starting a career flight.");
 
+        if (_selectedProviderOfferId is { } providerOfferId
+            && providerOfferId != offerId)
+        {
+            throw new InvalidOperationException(
+                "The selected contract-supplied aircraft belongs to a different job offer.");
+        }
+
         await _startGate
             .WaitAsync(cancellationToken)
             .ConfigureAwait(true);
@@ -432,6 +440,10 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 !locked
                 && !expired;
 
+            bool providerMatchesOffer =
+                _selectedProviderOfferId is not { } providerOfferId
+                || providerOfferId == offer.OfferId;
+
             bool canStart =
                 false;
 
@@ -445,12 +457,15 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                         ? "This persisted offer is no longer active."
                         : _selectedAircraftId is null
                             ? "Select a career aircraft to verify this offer."
-                            : _startAction is null
-                                ? "Accept & Start is not connected to the playable-loop action."
-                                : "Checking authoritative dispatch readiness…";
+                            : !providerMatchesOffer
+                                ? "Select this offer's contract-supplied aircraft or a qualifying owned aircraft."
+                                : _startAction is null
+                                    ? "Accept & Start is not connected to the playable-loop action."
+                                    : "Checking authoritative dispatch readiness…";
 
             if (active
                 && _selectedAircraftId is not null
+                && providerMatchesOffer
                 && _startAction is not null)
             {
                 try
@@ -540,6 +555,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             selected?.SelectionId;
         string? aircraftId =
             selected?.AircraftId;
+        Guid? providerOfferId =
+            selected?.ProviderOfferId;
 
         if (!string.Equals(
                 _selectedAircraftSelectionId,
@@ -562,6 +579,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             OnPropertyChanged(
                 nameof(SelectedAircraftId));
         }
+
+        _selectedProviderOfferId =
+            providerOfferId;
     }
 
     private void SetField(

@@ -234,6 +234,92 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task ContractSuppliedAircraftOnlyEnablesItsAssignedOffer()
+    {
+        JobMarketOfferDraft assignedOffer =
+            ProviderOffer(
+                Guid.Parse(
+                    "89000000-0000-0000-0000-000000000001"),
+                Guid.Parse(
+                    "89000000-0000-0000-0000-000000000011"),
+                "KSYR");
+
+        JobMarketOfferDraft otherOffer =
+            ProviderOffer(
+                Guid.Parse(
+                    "89000000-0000-0000-0000-000000000002"),
+                Guid.Parse(
+                    "89000000-0000-0000-0000-000000000012"),
+                "KALB");
+
+        JobBoardState board =
+            Board(
+                "KRME",
+                assignedOffer,
+                otherOffer);
+
+        var boardStore =
+            new FakeBoardStore(
+                board);
+
+        PlayerCareerRuntimeState career =
+            CareerRuntime("KRME");
+
+        var action =
+            new FakeStartAction();
+
+        var viewModel =
+            new JobsViewModel(
+                boardStore,
+                career,
+                new FixedTimeProvider(Now),
+                new CareerJobAircraftSelectionSource(
+                    career,
+                    new TestOwnershipStore(
+                        CareerAircraftTestData.Snapshot(
+                            CareerId)),
+                    new TestAircraftAvailabilityStore(),
+                    boardStore,
+                    new FixedTimeProvider(Now)),
+                action,
+                logger:
+                    null);
+
+        await viewModel.RefreshAsync();
+
+        CareerJobAircraftOption assignedAircraft =
+            Assert.Single(
+                viewModel.AircraftOptions,
+                option =>
+                    option.ProviderOfferId
+                    == assignedOffer.OfferId);
+
+        await viewModel.SelectAircraftAsync(
+            assignedAircraft.SelectionId);
+
+        Assert.True(
+            Assert.Single(
+                viewModel.Offers,
+                offer =>
+                    offer.OfferId
+                    == assignedOffer.OfferId)
+                .CanStart);
+
+        Assert.False(
+            Assert.Single(
+                viewModel.Offers,
+                offer =>
+                    offer.OfferId
+                    == otherOffer.OfferId)
+                .CanStart);
+
+        Assert.Equal(
+            (assignedOffer.OfferId, assignedAircraft.AircraftId),
+            Assert.Single(
+                action.AvailabilityRequests));
+    }
+
+    [Fact]
     public async Task AircraftOnlyRefreshConsumesUpdatedOwnershipWithoutRefillingBoard()
     {
         JobBoardState board =
@@ -409,6 +495,67 @@ public sealed class JobsViewModelTests
             MarketSelectionWeight:
                 1);
 
+    private static JobMarketOfferDraft ProviderOffer(
+        Guid offerId,
+        Guid providerInstanceId,
+        string destination)
+    {
+        var requirements =
+            new AircraftMissionRequirements(
+                AllowedAccess:
+                    AircraftAccess.Civilian,
+                MinimumRangeNauticalMiles:
+                    100);
+
+        return new(
+            offerId,
+            ServiceTrack.CivilianEmployment,
+            ContractKind.Ferry,
+            JobScenarioKind.Standard,
+            "KRME",
+            destination,
+            DistanceNm:
+                100,
+            EstimatedFlightHours:
+                1,
+            OfferedAt:
+                Now.AddHours(-1),
+            ExpiresAt:
+                Now.AddHours(2),
+            IsLockedPreview:
+                false,
+            RouteStrength:
+                0.5,
+            RelationshipStrength:
+                0.5,
+            MarketSelectionWeight:
+                1,
+            ContractTerms:
+                new JobMarketContractTermsEnvelope(
+                    PersistedJobContractTermsSource.AuthorityId,
+                    requirements,
+                    EstimatedFlightHours:
+                        1,
+                    PayloadPounds:
+                        0,
+                    DemandAttractiveness:
+                        1,
+                    Urgency:
+                        0,
+                    Difficulty:
+                        0,
+                    RequiredPilotQualifications:
+                        PilotQualificationState.Entry,
+                    AuthorizedAircraftAccess:
+                        AircraftAccess.Civilian,
+                    ProviderAircraft:
+                        new ProviderAircraftAssignment(
+                            providerInstanceId,
+                            "provider-aircraft",
+                            "Provider Aircraft",
+                            "KRME")));
+    }
+
     private sealed class FakeBoardRefill(
         JobBoardState board)
         : ICareerJobBoardRefillService
@@ -438,6 +585,7 @@ public sealed class JobsViewModelTests
         public int StartCount { get; private set; }
         public Guid? LastOfferId { get; private set; }
         public string? LastAircraftId { get; private set; }
+        public List<(Guid OfferId, string AircraftId)> AvailabilityRequests { get; } = [];
 
         public Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
             Guid offerId,
@@ -445,6 +593,9 @@ public sealed class JobsViewModelTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            AvailabilityRequests.Add(
+                (offerId, aircraftId));
 
             return Task.FromResult(
                 new CareerJobStartActionAvailability(

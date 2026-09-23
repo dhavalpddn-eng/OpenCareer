@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Economy;
 
@@ -87,7 +89,8 @@ public sealed record JobMarketGenerationRequest(
     int CareerLevel = 1,
     JobMarketPolicy? Policy = null,
     AirportMarketCapacity? Capacity = null,
-    IReadOnlySet<ContractKind>? AllowedContractKinds = null)
+    IReadOnlySet<ContractKind>? AllowedContractKinds = null,
+    ProviderAircraftType? ProviderAircraft = null)
 {
     public JobMarketPolicy EffectivePolicy =>
         Policy ?? JobMarketPolicy.Default;
@@ -105,6 +108,7 @@ public sealed record JobMarketGenerationRequest(
         Origin.Validate();
         EffectivePolicy.Validate();
         EffectiveCapacity.Validate();
+        ProviderAircraft?.Validate();
 
         if ((Access & ~JobMarketAccess.All) != 0)
             throw new ArgumentOutOfRangeException(nameof(Access));
@@ -158,6 +162,88 @@ public sealed record JobMarketGenerationRequest(
     }
 }
 
+public sealed record ProviderAircraftType(
+    string AircraftId,
+    string DisplayName)
+{
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(AircraftId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(DisplayName);
+    }
+}
+
+public sealed record ProviderAircraftAssignment(
+    Guid ProviderAircraftInstanceId,
+    string AircraftId,
+    string DisplayName,
+    string OriginIcao)
+{
+    public static ProviderAircraftAssignment CreateForOffer(
+        Guid offerId,
+        ProviderAircraftType aircraft,
+        string originIcao)
+    {
+        if (offerId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Offer identity is required.",
+                nameof(offerId));
+        }
+
+        ArgumentNullException.ThrowIfNull(aircraft);
+        aircraft.Validate();
+
+        byte[] identityBytes =
+            SHA256.HashData(
+                Encoding.UTF8.GetBytes(
+                    $"opencareer:provider-aircraft:v1:{offerId:D}"));
+
+        Guid instanceId =
+            new(identityBytes.AsSpan(0, 16));
+
+        if (instanceId == Guid.Empty
+            || instanceId == offerId)
+        {
+            throw new InvalidOperationException(
+                "Deterministic provider-aircraft identity collided with the contract identity.");
+        }
+
+        return new(
+            instanceId,
+            aircraft.AircraftId.Trim(),
+            aircraft.DisplayName.Trim(),
+            JobMarketIcao.Normalize(originIcao));
+    }
+
+    public void Validate(
+        string expectedOriginIcao)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(AircraftId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(DisplayName);
+
+        string origin =
+            JobMarketIcao.Normalize(OriginIcao);
+
+        string expectedOrigin =
+            JobMarketIcao.Normalize(expectedOriginIcao);
+
+        if (ProviderAircraftInstanceId == Guid.Empty
+            || !string.Equals(
+                origin,
+                OriginIcao,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                origin,
+                expectedOrigin,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "Provider-aircraft assignment identity or origin is invalid.");
+        }
+    }
+}
+
 public sealed record JobMarketContractTermsEnvelope(
     string AuthorityId,
     AircraftMissionRequirements AircraftRequirements,
@@ -176,7 +262,8 @@ public sealed record JobMarketContractTermsEnvelope(
     string? WorldEventId = null,
     bool GovernmentAuthorizationRequired = false,
     PilotQualificationState? RequiredPilotQualifications = null,
-    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None)
+    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None,
+    ProviderAircraftAssignment? ProviderAircraft = null)
 {
     public void ValidateForOffer(
         JobMarketOfferDraft offer)
@@ -187,6 +274,15 @@ public sealed record JobMarketContractTermsEnvelope(
 
         AircraftRequirements.Validate();
         RequiredPilotQualifications?.Validate();
+        ProviderAircraft?.Validate(
+            offer.OriginIcao);
+
+        if (ProviderAircraft?.ProviderAircraftInstanceId
+            == offer.OfferId)
+        {
+            throw new ArgumentException(
+                "Provider-aircraft instance identity must be distinct from the offer identity.");
+        }
 
         if ((AuthorizedAircraftAccess & ~AircraftAccess.Any) != 0)
         {

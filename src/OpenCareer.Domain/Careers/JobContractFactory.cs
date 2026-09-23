@@ -20,7 +20,8 @@ public sealed record JobContractCreationRequest(
     double ReputationPenalty = 2.0,
     string? MarketId = null,
     string? WorldEventId = null,
-    bool GovernmentAuthorizationRequired = false)
+    bool GovernmentAuthorizationRequired = false,
+    ProviderAircraftAssignment? ProviderAircraft = null)
 {
     public void Validate()
     {
@@ -29,6 +30,15 @@ public sealed record JobContractCreationRequest(
 
         ValidateOffer(Offer);
         AircraftRequirements.Validate();
+        ProviderAircraft?.Validate(
+            Offer.OriginIcao);
+
+        if (Offer.ContractTerms?.ProviderAircraft
+            != ProviderAircraft)
+        {
+            throw new InvalidOperationException(
+                "Accepted provider-aircraft terms must match the persisted offer.");
+        }
 
         if (Offer.IsLockedPreview)
         {
@@ -220,7 +230,9 @@ public static class JobContractFactory
                 WorldEventId:
                     request.WorldEventId,
                 GovernmentAuthorizationRequired:
-                    request.GovernmentAuthorizationRequired);
+                    request.GovernmentAuthorizationRequired,
+                ProviderAircraft:
+                    request.ProviderAircraft);
 
         contract.Validate();
         return contract;

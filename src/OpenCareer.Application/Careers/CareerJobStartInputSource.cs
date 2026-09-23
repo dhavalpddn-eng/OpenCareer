@@ -24,7 +24,8 @@ public sealed record CareerJobContractTermsEvidence(
     string? WorldEventId = null,
     bool GovernmentAuthorizationRequired = false,
     PilotQualificationState? RequiredPilotQualifications = null,
-    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None)
+    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None,
+    ProviderAircraftAssignment? ProviderAircraft = null)
 {
     public void ValidateIdentity(
         JobMarketOfferDraft offer)
@@ -41,6 +42,15 @@ public sealed record CareerJobContractTermsEvidence(
 
         AircraftRequirements.Validate();
         RequiredPilotQualifications?.Validate();
+        ProviderAircraft?.Validate(
+            offer.OriginIcao);
+
+        if (offer.ContractTerms?.ProviderAircraft
+            != ProviderAircraft)
+        {
+            throw new InvalidOperationException(
+                "Contract-term provider aircraft does not match the persisted offer.");
+        }
 
         if ((AuthorizedAircraftAccess & ~AircraftAccess.Any) != 0)
         {
@@ -368,7 +378,8 @@ public sealed class CareerJobStartInputSource
                 terms.ReputationPenalty,
                 terms.MarketId,
                 terms.WorldEventId,
-                terms.GovernmentAuthorizationRequired);
+                terms.GovernmentAuthorizationRequired,
+                terms.ProviderAircraft);
 
         creationRequest.Validate();
 

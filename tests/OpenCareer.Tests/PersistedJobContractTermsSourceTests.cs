@@ -31,6 +31,14 @@ public sealed class PersistedJobContractTermsSourceTests
                 RequiresIfr:
                     true);
 
+        var providerAircraft =
+            new ProviderAircraftAssignment(
+                Guid.Parse(
+                    "a8000000-0000-0000-0000-000000000003"),
+                "provider-aircraft",
+                "Provider Aircraft",
+                "KRME");
+
         var envelope =
             new JobMarketContractTermsEnvelope(
                 PersistedJobContractTermsSource.AuthorityId,
@@ -69,7 +77,9 @@ public sealed class PersistedJobContractTermsSourceTests
                         System.Collections.Immutable.ImmutableHashSet.Create(
                             PilotRating.AirplaneSingleEngineLand)),
                 AuthorizedAircraftAccess:
-                    AircraftAccess.Civilian);
+                    AircraftAccess.Civilian,
+                ProviderAircraft:
+                    providerAircraft);
 
         JobMarketOfferDraft offer =
             Offer(
@@ -137,6 +147,35 @@ public sealed class PersistedJobContractTermsSourceTests
         Assert.Equal(
             envelope.AuthorizedAircraftAccess,
             evidence.AuthorizedAircraftAccess);
+        Assert.Equal(
+            providerAircraft,
+            evidence.ProviderAircraft);
+
+        JobContract acceptedTerms =
+            JobContractFactory.Create(
+                new JobContractCreationRequest(
+                    offer,
+                    OfferedAt.AddMinutes(10),
+                    evidence.AircraftRequirements,
+                    evidence.EstimatedFlightHours,
+                    evidence.PayloadPounds,
+                    evidence.DemandAttractiveness,
+                    evidence.Urgency,
+                    evidence.Difficulty,
+                    evidence.EstimatedPlayerOperatingCosts,
+                    evidence.EmployerId,
+                    evidence.MustStartBy,
+                    evidence.MustCompleteBy,
+                    evidence.ReputationReward,
+                    evidence.ReputationPenalty,
+                    evidence.MarketId,
+                    evidence.WorldEventId,
+                    evidence.GovernmentAuthorizationRequired,
+                    evidence.ProviderAircraft));
+
+        Assert.Equal(
+            providerAircraft,
+            acceptedTerms.ProviderAircraft);
     }
 
     [Fact]

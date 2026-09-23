@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Planning;
@@ -92,6 +93,21 @@ public sealed class CareerJobBoardRefillServiceTests
                     Assert.Equal(
                         OpenCareer.Domain.Aircraft.AircraftAccess.Civilian,
                         terms.AuthorizedAircraftAccess);
+
+                    ProviderAircraftAssignment provider =
+                        Assert.IsType<ProviderAircraftAssignment>(
+                            terms.ProviderAircraft);
+
+                    Assert.NotEqual(
+                        offer.OfferId,
+                        provider.ProviderAircraftInstanceId);
+                    Assert.Equal(
+                        OpenCareer.Domain.Aircraft.AircraftCanonicalIdentity.FromMsfsTitle(
+                            "Cessna 172 Skyhawk"),
+                        provider.AircraftId);
+                    Assert.Equal(
+                        offer.OriginIcao,
+                        provider.OriginIcao);
                 });
 
             var reopened =
@@ -161,6 +177,23 @@ public sealed class CareerJobBoardRefillServiceTests
                     offer.OfferId));
 
         Assert.Equal(
+            first.Offers.Select(
+                static offer =>
+                    offer.ContractTerms!
+                        .ProviderAircraft),
+            second.Offers.Select(
+                static offer =>
+                    offer.ContractTerms!
+                        .ProviderAircraft));
+
+        Assert.All(
+            second.Offers,
+            static offer =>
+                Assert.NotNull(
+                    offer.ContractTerms!
+                        .ProviderAircraft));
+
+        Assert.Equal(
             second.Offers.Length,
             second.Offers
                 .Select(
@@ -172,6 +205,73 @@ public sealed class CareerJobBoardRefillServiceTests
         Assert.Equal(
             2,
             store.SaveCount);
+    }
+
+    [Fact]
+    public async Task PersistedLegacyPlayableOfferGetsOneDeterministicProviderAssignment()
+    {
+        var store =
+            new FakeBoardStore();
+
+        var service =
+            Service(
+                store,
+                Airports(),
+                new FixedTimeProvider(
+                    Epoch));
+
+        PlayerCareerProfile profile =
+            Profile("KRME");
+
+        JobBoardState generated =
+            await service.RefillAsync(
+                profile);
+
+        JobBoardState legacy =
+            generated with
+            {
+                Offers =
+                    generated.Offers
+                        .Select(
+                            static offer =>
+                                offer with
+                                {
+                                    ContractTerms =
+                                        offer.ContractTerms! with
+                                        {
+                                            ProviderAircraft =
+                                                null
+                                        }
+                                })
+                        .ToImmutableArray()
+            };
+
+        await store.SaveAsync(
+            legacy);
+
+        JobBoardState upgraded =
+            await service.RefillAsync(
+                profile);
+
+        Assert.All(
+            upgraded.Offers,
+            static offer =>
+            {
+                ProviderAircraftAssignment provider =
+                    Assert.IsType<ProviderAircraftAssignment>(
+                        offer.ContractTerms!
+                            .ProviderAircraft);
+
+                Assert.Equal(
+                    ProviderAircraftAssignment.CreateForOffer(
+                        offer.OfferId,
+                        new ProviderAircraftType(
+                            OpenCareer.Domain.Aircraft.AircraftCanonicalIdentity.FromMsfsTitle(
+                                "Cessna 172 Skyhawk"),
+                            "Cessna 172 Skyhawk"),
+                        offer.OriginIcao),
+                    provider);
+            });
     }
 
     [Fact]

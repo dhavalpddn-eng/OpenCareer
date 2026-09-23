@@ -474,6 +474,8 @@ public sealed class SqliteJobContractStore : IJobContractStore
             left.WorldEventId,
             right.WorldEventId,
             StringComparison.Ordinal)
+        && left.ProviderAircraft
+            == right.ProviderAircraft
         && left.GovernmentAuthorizationRequired
             == right.GovernmentAuthorizationRequired;
 
