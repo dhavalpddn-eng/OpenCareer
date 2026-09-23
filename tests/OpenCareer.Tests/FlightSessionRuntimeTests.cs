@@ -47,6 +47,124 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task PersistentlyStartedContractSessionAutomaticallyConsumesTelemetry()
+    {
+        Guid contractId =
+            Guid.Parse(
+                "96000000-0000-0000-0000-000000000001");
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore();
+
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        FlightSession started =
+            await persistence.StartAsync(
+                Epoch,
+                contractId,
+                sessionId:
+                    contractId,
+                plan:
+                    new FlightSessionPlan(
+                        PlannedOrigin:
+                            "KRME",
+                        PlannedDestination:
+                            "KSYR",
+                        SourceProvider:
+                            "OpenCareer.JobContract",
+                        SourceReference:
+                            contractId.ToString("D")));
+
+        DateTimeOffset firstTimestamp =
+            Epoch.AddSeconds(1);
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        firstTimestamp,
+                        43.2338,
+                        -75.4069,
+                        onGround: true)
+            };
+
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                persistence,
+                Processor(),
+                new FlightContinuityPolicy(),
+                Connected(),
+                telemetry,
+                new FixedTimeProvider(
+                    Epoch.AddMinutes(1)));
+
+        IFlightStateEvidenceSource source =
+            runtime;
+
+        var published =
+            new List<FlightStateEvidence?>();
+
+        source.EvidenceChanged +=
+            evidence => published.Add(evidence);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightSession afterFirst =
+            Assert.IsType<FlightSession>(
+                coordinator.Current);
+
+        FlightStateEvidence firstEvidence =
+            Assert.IsType<FlightStateEvidence>(
+                source.Current);
+
+        Assert.Equal(started.SessionId, afterFirst.SessionId);
+        Assert.Equal(contractId, afterFirst.ContractId);
+        Assert.Equal(contractId, store.Checkpoint?.ContractId);
+        Assert.Equal(
+            firstTimestamp,
+            Assert.Single(
+                    afterFirst.EffectiveStatistics.RouteTrack)
+                .Timestamp);
+        Assert.Same(firstEvidence, Assert.Single(published));
+        Assert.Equal(
+            firstTimestamp,
+            firstEvidence.Timestamp);
+
+        DateTimeOffset secondTimestamp =
+            Epoch.AddSeconds(2);
+
+        telemetry.Latest =
+            Telemetry(
+                secondTimestamp,
+                43.2339,
+                -75.4070,
+                onGround: true);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        FlightSession afterSecond =
+            Assert.IsType<FlightSession>(
+                coordinator.Current);
+
+        Assert.Equal(started.SessionId, afterSecond.SessionId);
+        Assert.Equal(contractId, afterSecond.ContractId);
+        Assert.Equal(2, published.Count);
+        Assert.Equal(
+            secondTimestamp,
+            source.Current?.Timestamp);
+    }
+
+    [Fact]
     public async Task SuccessfulRuntimeObservationPublishesAuthoritativeEvidence()
     {
         FlightSession active =
