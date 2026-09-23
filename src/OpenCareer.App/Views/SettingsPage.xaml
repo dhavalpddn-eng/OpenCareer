@@ -200,6 +200,18 @@
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
                 <StackPanel Spacing="12">
+                    <TextBlock Text="LATEST FLIGHT CONSEQUENCE"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="Airframe decision"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="{Binding LatestAirframeConsequence}"
+                               TextWrapping="Wrap"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+                <StackPanel Spacing="12">
                     <TextBlock Text="DATA, BACKUP &amp; RECOVERY"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                     <TextBlock Text="Local OpenCareer data"

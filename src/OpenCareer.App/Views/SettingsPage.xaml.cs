@@ -18,7 +18,7 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
     }
 
-    protected override void OnNavigatedTo(NavigationEventArgs e)
+    protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
 
@@ -36,6 +36,7 @@ public sealed partial class SettingsPage : Page
         _diagnosticTimer.Interval = TimeSpan.FromSeconds(1);
         _diagnosticTimer.Tick += OnDiagnosticTimerTick;
         _diagnosticTimer.Start();
+        await _settings.RefreshLatestAirframeConsequenceAsync();
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -130,8 +131,12 @@ public sealed partial class SettingsPage : Page
         await _settings.SetAllowOptionalOnlineServicesAsync(OnlineServicesToggle.IsOn);
     }
 
-    private void RefreshDiagnostics_Click(object sender, RoutedEventArgs e) =>
+    private async void RefreshDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
         _settings?.RefreshDiagnostics();
+        if (_settings is not null)
+            await _settings.RefreshLatestAirframeConsequenceAsync();
+    }
 
     private async void CreateBackup_Click(object sender, RoutedEventArgs e)
     {

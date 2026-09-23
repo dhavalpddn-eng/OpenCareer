@@ -64,7 +64,8 @@ public sealed record FlightSessionObservation(
     double PayloadPounds,
     bool CaptureTrackPoint,
     double? NearGroundDescentFeetPerMinute = null,
-    bool TouchdownConfirmed = false)
+    bool TouchdownConfirmed = false,
+    bool BounceRecontact = false)
 {
     public void Validate()
     {
@@ -120,7 +121,13 @@ public sealed record FlightSessionStatistics(
     double MaximumNearGroundDescentFeetPerMinute = 0,
     double MaximumTouchdownApproachDescentFeetPerMinute = 0,
     DateTimeOffset? LastNearGroundDescentAt = null,
-    double LastNearGroundDescentFeetPerMinute = 0)
+    double LastNearGroundDescentFeetPerMinute = 0,
+    DateTimeOffset? TouchdownDescentSampleAt = null,
+    DateTimeOffset? CorrelatedTouchdownAt = null,
+    DateTimeOffset? PeakNearGroundDescentAt = null,
+    double PeakNearGroundDescentFeetPerMinute = 0,
+    DateTimeOffset? LastAcceptedObservationAt = null,
+    int AcceptedObservationCount = 0)
 {
     public const int MaximumTrackPoints = 500;
 
@@ -144,6 +151,29 @@ public sealed record FlightSessionStatistics(
     {
         ArgumentNullException.ThrowIfNull(observation);
         observation.Validate();
+        if (LastAcceptedObservationAt is { } lastAccepted
+            && observation.Timestamp <= lastAccepted)
+            throw new ArgumentOutOfRangeException(nameof(observation),
+                "Accepted flight observations must advance in time.");
+
+        TimeSpan correlationWindow = FlightAirframeCalibration.TouchdownCorrelationWindow;
+        double? newDescent = observation.NearGroundDescentFeetPerMinute;
+        bool peakRecent = PeakNearGroundDescentAt is { } peakAt
+            && observation.Timestamp >= peakAt
+            && observation.Timestamp - peakAt <= correlationWindow;
+        bool replacePeak = newDescent is { } descent
+            && (!peakRecent || descent >= PeakNearGroundDescentFeetPerMinute);
+        DateTimeOffset? candidateAt = replacePeak ? observation.Timestamp
+            : peakRecent ? PeakNearGroundDescentAt : null;
+        double candidateDescent = replacePeak ? newDescent!.Value
+            : peakRecent ? PeakNearGroundDescentFeetPerMinute : 0;
+        bool contact = observation.TouchdownConfirmed || observation.BounceRecontact;
+        bool correlated = contact && candidateAt is { } sampledAt
+            && observation.Timestamp >= sampledAt
+            && observation.Timestamp - sampledAt <= correlationWindow;
+        bool stronger = correlated
+            && (CorrelatedTouchdownAt is null
+                || candidateDescent > MaximumTouchdownApproachDescentFeetPerMinute);
 
         double distanceDelta = 0;
 
@@ -229,12 +259,13 @@ public sealed record FlightSessionStatistics(
                 Math.Max(MaximumNearGroundDescentFeetPerMinute,
                     observation.NearGroundDescentFeetPerMinute ?? 0),
             MaximumTouchdownApproachDescentFeetPerMinute =
-                observation.TouchdownConfirmed
-                    && LastNearGroundDescentAt is { } lastApproach
-                    && observation.Timestamp - lastApproach <= TimeSpan.FromSeconds(20)
-                    ? Math.Max(MaximumTouchdownApproachDescentFeetPerMinute,
-                        LastNearGroundDescentFeetPerMinute)
-                    : MaximumTouchdownApproachDescentFeetPerMinute,
+                stronger ? candidateDescent : MaximumTouchdownApproachDescentFeetPerMinute,
+            TouchdownDescentSampleAt = stronger ? candidateAt : TouchdownDescentSampleAt,
+            CorrelatedTouchdownAt = stronger ? observation.Timestamp : CorrelatedTouchdownAt,
+            PeakNearGroundDescentAt = candidateAt,
+            PeakNearGroundDescentFeetPerMinute = candidateDescent,
+            LastAcceptedObservationAt = observation.Timestamp,
+            AcceptedObservationCount = AcceptedObservationCount + 1,
             LastNearGroundDescentAt = observation.NearGroundDescentFeetPerMinute is not null
                 ? observation.Timestamp : LastNearGroundDescentAt,
             LastNearGroundDescentFeetPerMinute = observation.NearGroundDescentFeetPerMinute

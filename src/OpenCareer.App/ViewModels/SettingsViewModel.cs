@@ -2,9 +2,11 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using OpenCareer.App.Services;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Telemetry;
+using OpenCareer.Domain.Flights;
 
 namespace OpenCareer.App.ViewModels;
 
@@ -17,6 +19,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private readonly AppDataBackupService _backup;
     private readonly ShellOpenService _shell;
     private readonly OpenCareerDataPaths _paths;
+    private readonly IFlightAirframeConsequenceStore _airframeConsequences;
+    private readonly FlightSessionCoordinator _flightSessions;
 
     private string _actionStatus = "Ready.";
     private bool _isBusy;
@@ -28,6 +32,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private string _telemetryState = "No telemetry";
     private string _lastTelemetry = "—";
     private string _aircraftRuntimeState = "—";
+    private string _latestAirframeConsequence = "No finalized flight consequence yet.";
 
     public SettingsViewModel(
         IAppSettingsService settings,
@@ -36,7 +41,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         DiagnosticBundleService diagnostics,
         AppDataBackupService backup,
         ShellOpenService shell,
-        OpenCareerDataPaths paths)
+        OpenCareerDataPaths paths,
+        IFlightAirframeConsequenceStore airframeConsequences,
+        FlightSessionCoordinator flightSessions)
     {
         _settings = settings;
         _connection = connection;
@@ -45,6 +52,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _backup = backup;
         _shell = shell;
         _paths = paths;
+        _airframeConsequences = airframeConsequences;
+        _flightSessions = flightSessions;
 
         _settings.Changed += OnSettingsChanged;
         RefreshDiagnostics();
@@ -87,6 +96,78 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public string TelemetryState => _telemetryState;
     public string LastTelemetry => _lastTelemetry;
     public string AircraftRuntimeState => _aircraftRuntimeState;
+    public string LatestAirframeConsequence => _latestAirframeConsequence;
+
+    public async Task RefreshLatestAirframeConsequenceAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            FlightSession? current = _flightSessions.Current;
+            FlightAirframeConsequence? currentResult = null;
+            if (current?.IsTerminal == true)
+            {
+                if (current.AircraftIdentity is null)
+                {
+                    SetField(ref _latestAirframeConsequence,
+                        $"Session {current.SessionId:D} finalized without individual airframe identity (legacy). No ownership consequence applied.",
+                        nameof(LatestAirframeConsequence));
+                    return;
+                }
+
+                currentResult = await _airframeConsequences
+                    .ReadAsync(current.SessionId, cancellationToken);
+                if (currentResult is null)
+                {
+                    SetField(ref _latestAirframeConsequence,
+                        $"Session {current.SessionId:D} finalized for {current.AircraftIdentity.Kind} {current.AircraftIdentity.InstanceId}; consequence pending. Recovery retries from the terminal checkpoint.",
+                        nameof(LatestAirframeConsequence));
+                    return;
+                }
+            }
+
+            FlightAirframeConsequence? latest = currentResult
+                ?? await _airframeConsequences.ReadLatestAsync(cancellationToken);
+            SetField(ref _latestAirframeConsequence,
+                latest is null ? "No finalized flight consequence yet."
+                    : DescribeConsequence(latest), nameof(LatestAirframeConsequence));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            SetField(ref _latestAirframeConsequence,
+                $"Flight consequence history unavailable: {ex.Message}",
+                nameof(LatestAirframeConsequence));
+        }
+    }
+
+    private static string DescribeConsequence(FlightAirframeConsequence result)
+    {
+        FlightAirframeSummary s = result.Summary;
+        FlightAirframeDecision? d = result.Decision;
+        FlightAirframeApplication? a = result.Application;
+        string source = s.Aircraft.Kind == FlightSessionAircraftKind.Owned
+            ? "OwnershipId" : "ProviderAircraftInstanceId";
+        string evidence = d?.DescentSampleAt is { } sample
+            ? $"sample {sample:u} · contact {d.CorrelatedTouchdownAt:u} · {s.MaximumTouchdownApproachDescentFeetPerMinute:0} ft/min · {d.CorrelationAgeSeconds:0.#}s before contact · within {d.CorrelationWindowSeconds:0}s window: {d.DescentWithinCorrelationWindow}"
+            : "No descent sample correlated with touchdown";
+        string maintenance = a?.Before is { } before && a.After is { } after
+            ? $"Airframe wear {before.AirframeWearPercent:0.###} → {after.AirframeWearPercent:0.###}% · engine wear {before.EngineWearPercent:0.###} → {after.EngineWearPercent:0.###}% · gear wear {before.GearWearPercent:0.###} → {after.GearWearPercent:0.###}% · damage {before.DamagePercent:0.###} → {after.DamagePercent:0.###}% · cycles {before.LandingCycles} → {after.LandingCycles}"
+            : s.Aircraft.Kind == FlightSessionAircraftKind.Provider
+                ? "Provider history recorded; no player ownership changed."
+                : "Maintenance state delta unavailable for this legacy record.";
+        return $"Session {s.SessionId:D} · Contract {s.ContractId?.ToString("D") ?? "none"}\n"
+            + $"{source} {s.Aircraft.InstanceId} · AircraftId {s.Aircraft.AircraftId}\n"
+            + $"{s.StartedAt:u} → {s.EndedAt:u} · block {s.BlockHours:0.##}h · airborne {s.AirborneHours:0.##}h · takeoffs {s.TakeoffCount} · landings {s.LandingCycles} · bounces {s.BounceCount}\n"
+            + $"Accepted telemetry samples {s.AcceptedObservationCount} · last accepted {s.LastAcceptedObservationAt?.ToString("u") ?? "none"}\n"
+            + $"Fuel {s.StartFuelPounds?.ToString("0.#") ?? "?"} → {s.EndFuelPounds?.ToString("0.#") ?? "?"} lb · used {s.FuelBurnedPounds:0.#} lb · max IAS {s.MaximumIndicatedAirspeedKnots:0.#} kt · max altitude {s.MaximumAltitudeFeet:0} ft\n"
+            + $"Touchdown {s.TouchdownAt?.ToString("u") ?? "unobserved"} · descent: {evidence}\n"
+            + $"Flight finalized: {s.FinalizationStatus?.ToString() ?? "legacy status unavailable"} · classification {result.Severity} · {d?.EvidenceReason ?? "Legacy decision detail unavailable"} · MSFS crash reported: {s.CrashReported}\n"
+            + $"Thresholds elevated/minor/major {d?.ElevatedThresholdFpm:0}/{d?.MinorDamageThresholdFpm:0}/{d?.MajorDamageThresholdFpm:0} ft/min\n"
+            + $"Estimated wear: airframe {d?.RoutineAirframeWearPercent:0.###}% · engine {d?.RoutineEngineWearPercent:0.###}% · landing cycle {d?.LandingCycleWearPercent:0.###}% · additional gear {d?.AdditionalLandingGearWearPercent:0.###}%\n"
+            + $"Estimated damage: touchdown {d?.TouchdownDamagePercent:0.###}% · crash {d?.CrashDamagePercent:0.###}% · persisted once {a is not null}\n"
+            + maintenance;
+    }
 
     public string AppVersion =>
         typeof(SettingsViewModel).Assembly.GetName().Version?.ToString() ?? "unknown";

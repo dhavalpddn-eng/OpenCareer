@@ -230,6 +230,114 @@ public sealed class FlightTelemetryEvidenceProcessorTests
     }
 
     [Fact]
+    public void ShortBounceIsOneLandingWithOneRecontact()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor(new FlightEvidenceProcessorOptions(
+            StableTelemetrySamples: 1, AirborneConfirmationSamples: 1,
+            GroundConfirmationSamples: 2));
+
+        _ = processor.Process(Observation(Telemetry(0, onGround: false,
+            altitudeAgl: 50, enginesRunning: 1)));
+        _ = processor.Process(Observation(Telemetry(1, groundSpeed: 50,
+            enginesRunning: 1)));
+        FlightStateEvidence first = processor.Process(Observation(Telemetry(2,
+            groundSpeed: 45, enginesRunning: 1)));
+        _ = processor.Process(Observation(Telemetry(3, onGround: false,
+            altitudeAgl: 5, groundSpeed: 45, enginesRunning: 1)));
+        _ = processor.Process(Observation(Telemetry(4, groundSpeed: 42,
+            enginesRunning: 1)));
+        FlightStateEvidence bounce = processor.Process(Observation(Telemetry(5,
+            groundSpeed: 38, enginesRunning: 1)));
+        FlightStateEvidence taxi = processor.Process(Observation(Telemetry(6,
+            groundSpeed: 12, enginesRunning: 1)));
+        FlightStateEvidence laterTaxi = processor.Process(Observation(Telemetry(7,
+            groundSpeed: 10, enginesRunning: 1)));
+
+        Assert.True(first.TouchdownConfirmed);
+        Assert.False(first.BounceRecontact);
+        Assert.True(bounce.BounceRecontact);
+        Assert.False(bounce.TouchdownConfirmed);
+        Assert.True(taxi.LandingRolloutConfirmed);
+        Assert.False(laterTaxi.TouchdownConfirmed);
+        Assert.False(laterTaxi.BounceRecontact);
+    }
+
+    [Fact]
+    public void DuplicateSampleCannotConfirmTouchdown()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor(new FlightEvidenceProcessorOptions(
+            StableTelemetrySamples: 1, AirborneConfirmationSamples: 1,
+            GroundConfirmationSamples: 2));
+        _ = processor.Process(Observation(Telemetry(0, onGround: false,
+            altitudeAgl: 30, enginesRunning: 1)));
+        AircraftTelemetrySnapshot firstGround = Telemetry(1,
+            groundSpeed: 45, enginesRunning: 1);
+        Assert.False(processor.Process(Observation(firstGround)).TouchdownConfirmed);
+        Assert.Throws<ArgumentOutOfRangeException>(() => processor.Process(Observation(firstGround)));
+        Assert.True(processor.Process(Observation(Telemetry(2,
+            groundSpeed: 44, enginesRunning: 1))).TouchdownConfirmed);
+    }
+
+    [Fact]
+    public void ReconnectNearLandingDoesNotCreateSecondTouchdown()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor(new FlightEvidenceProcessorOptions(
+            StableTelemetrySamples: 1, AirborneConfirmationSamples: 1,
+            GroundConfirmationSamples: 2));
+        FlightSession active = FlightSession.Start(Epoch);
+        processor.RestoreContext(active with
+        {
+            Tracking = active.Tracking with
+            {
+                State = FlightTrackingState.Suspended,
+                SuspendedFrom = FlightTrackingState.Approach
+            }
+        });
+        Assert.False(processor.Process(Observation(Telemetry(1,
+            groundSpeed: 45, enginesRunning: 1))).TouchdownConfirmed);
+        Assert.True(processor.Process(Observation(Telemetry(2,
+            groundSpeed: 42, enginesRunning: 1))).TouchdownConfirmed);
+
+        processor.RestoreContext(active with
+        {
+            Tracking = active.Tracking with
+            {
+                State = FlightTrackingState.Suspended,
+                SuspendedFrom = FlightTrackingState.LandingEpisode
+            },
+            LandingEpisodes = [new FlightSessionLandingEpisode(1,
+                Epoch.AddSeconds(2), FlightSessionLandingKind.Unknown, 0)]
+        });
+        Assert.False(processor.Process(Observation(Telemetry(3,
+            groundSpeed: 40, enginesRunning: 1))).TouchdownConfirmed);
+        Assert.False(processor.Process(Observation(Telemetry(4,
+            groundSpeed: 38, enginesRunning: 1))).TouchdownConfirmed);
+    }
+
+    [Fact]
+    public void RecoveredApproachWaitsForStableTelemetryBeforeRecordingTouchdown()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor();
+        FlightSession session = FlightSession.Start(Epoch);
+        processor.RestoreContext(session with
+        {
+            Tracking = session.Tracking with
+            {
+                State = FlightTrackingState.Suspended,
+                SuspendedFrom = FlightTrackingState.Approach
+            }
+        });
+        Assert.False(processor.Process(Observation(Telemetry(1,
+            groundSpeed: 45, enginesRunning: 1))).TouchdownConfirmed);
+        Assert.False(processor.Process(Observation(Telemetry(2,
+            groundSpeed: 42, enginesRunning: 1))).TouchdownConfirmed);
+        FlightStateEvidence stable = processor.Process(Observation(Telemetry(3,
+            groundSpeed: 40, enginesRunning: 1)));
+        Assert.True(stable.StableTelemetry);
+        Assert.True(stable.TouchdownConfirmed);
+    }
+
+    [Fact]
     public void RejectedTakeoffRequiresPriorTakeoffCandidate()
     {
         var processor =

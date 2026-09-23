@@ -828,6 +828,33 @@ public sealed class FlightSessionRuntimeTests
         Assert.Same(first, source.Current);
     }
 
+    [Fact]
+    public async Task RecoveredRuntimeRejectsAlreadyAcceptedObservationTimestamp()
+    {
+        FlightSession active = PreflightSession();
+        var store = new MemoryStore { Checkpoint = active };
+        var firstCoordinator = new FlightSessionCoordinator();
+        firstCoordinator.Restore(active);
+        DateTimeOffset observedAt = Epoch.AddMinutes(1);
+        var telemetry = new TestTelemetrySource
+        {
+            Latest = Telemetry(observedAt, 32, -97, onGround: true)
+        };
+        Assert.True(await CreateRuntime(firstCoordinator, store, Connected(), telemetry).RefreshAsync());
+        FlightSession checkpoint = firstCoordinator.Current!;
+        Assert.Equal(observedAt, checkpoint.EffectiveStatistics.LastAcceptedObservationAt);
+
+        var recovered = new FlightSessionCoordinator();
+        recovered.Restore(checkpoint);
+        FlightSessionRuntime runtime = CreateRuntime(recovered, store, Connected(), telemetry);
+        Assert.False(await runtime.RefreshAsync());
+        Assert.Equal(checkpoint, recovered.Current);
+
+        telemetry.Latest = Telemetry(observedAt.AddSeconds(1), 32, -97, onGround: true);
+        Assert.True(await runtime.RefreshAsync());
+        Assert.Equal(observedAt.AddSeconds(1), recovered.Current?.EffectiveStatistics.LastAcceptedObservationAt);
+    }
+
     private static FlightSessionRuntime CreateRuntime(
         FlightSessionCoordinator coordinator,
         MemoryStore store,

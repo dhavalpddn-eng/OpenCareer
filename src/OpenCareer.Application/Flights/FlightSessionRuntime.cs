@@ -134,6 +134,10 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
                 return false;
             }
 
+            if (current.EffectiveStatistics.LastAcceptedObservationAt is { } persisted
+                && telemetry.Timestamp <= persisted)
+                return false;
+
             if (telemetry.Timestamp < current.UpdatedAt)
                 return false;
 
@@ -199,10 +203,12 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
                             current,
                             evidence,
                             telemetry.Timestamp),
-                        !telemetry.OnGround && telemetry.AltitudeAglFeet is >= 0 and <= 100
+                        !telemetry.OnGround && telemetry.AltitudeAglFeet >= 0
+                            && telemetry.AltitudeAglFeet <= FlightAirframeCalibration.NearGroundCeilingFeet
                             ? Math.Max(0, -telemetry.VerticalSpeedFeetPerMinute)
                             : null,
-                        evidence.TouchdownConfirmed)
+                        evidence.TouchdownConfirmed,
+                        evidence.BounceRecontact)
                     : null;
 
             FlightTimeInterval? timeInterval =

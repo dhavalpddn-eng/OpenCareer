@@ -51,6 +51,102 @@ public sealed class FlightAirframeConsequenceTests
     }
 
     [Fact]
+    public void StrongestRecentSampleAndBounceRecontactStayOneLandingCycle()
+    {
+        static FlightSessionObservation Sample(int second, double? descent = null,
+            bool touchdown = false, bool bounce = false) => new(
+                Start.AddSeconds(second), 43, -76, 100, 90, 80, 90, 0, false,
+                descent, touchdown, bounce);
+
+        FlightSessionStatistics statistics = FlightSessionStatistics.Empty
+            .Observe(Sample(0, 1450), null)
+            .Observe(Sample(5, 550), null)
+            .Observe(Sample(12, touchdown: true), null)
+            .Observe(Sample(14, 1800), null)
+            .Observe(Sample(19, bounce: true), null);
+        Assert.Equal(1800, statistics.MaximumTouchdownApproachDescentFeetPerMinute);
+        Assert.Equal(Start.AddSeconds(14), statistics.TouchdownDescentSampleAt);
+        Assert.Equal(Start.AddSeconds(19), statistics.CorrelatedTouchdownAt);
+
+        FlightSession session = Finalized(Owned("O1"), 0) with { Statistics = statistics };
+        FlightAirframeConsequence consequence = FlightAirframeConsequenceCalculator.Calculate(session);
+        Assert.Equal(FlightDamageSeverity.MajorDamage, consequence.Severity);
+        Assert.Equal(1, consequence.Usage.LandingCycles);
+        Assert.Equal(5d, consequence.Decision?.CorrelationAgeSeconds);
+        Assert.True(consequence.Decision!.DescentWithinCorrelationWindow);
+    }
+
+    [Fact]
+    public void LowFrequencyTouchdownSampleWithinWindowCorrelatesButLaterOneDoesNot()
+    {
+        FlightSessionObservation approach = new(Start, 43, -76, 100, 90, 80, 90, 0,
+            false, NearGroundDescentFeetPerMinute: 1400);
+        FlightSessionStatistics within = FlightSessionStatistics.Empty.Observe(approach, null)
+            .Observe(new FlightSessionObservation(Start.AddSeconds(20), 43, -76, 100,
+                40, 30, 90, 0, false, TouchdownConfirmed: true), null);
+        FlightSessionStatistics outside = FlightSessionStatistics.Empty.Observe(approach, null)
+            .Observe(new FlightSessionObservation(Start.AddSeconds(21), 43, -76, 100,
+                40, 30, 90, 0, false, TouchdownConfirmed: true), null);
+        Assert.Equal(1400, within.MaximumTouchdownApproachDescentFeetPerMinute);
+        Assert.Equal(Start, within.TouchdownDescentSampleAt);
+        Assert.Null(outside.CorrelatedTouchdownAt);
+        Assert.Equal(0, outside.MaximumTouchdownApproachDescentFeetPerMinute);
+    }
+
+    [Fact]
+    public void DuplicateAcceptedObservationCannotChangeSummaryOrCorrelation()
+    {
+        var approach = new FlightSessionObservation(Start, 43, -76, 100, 90,
+            80, 90, 0, false, NearGroundDescentFeetPerMinute: 1300);
+        FlightSessionStatistics once = FlightSessionStatistics.Empty.Observe(approach, null);
+        Assert.Equal(Start, once.LastAcceptedObservationAt);
+        Assert.Equal(1, once.AcceptedObservationCount);
+        Assert.Throws<ArgumentOutOfRangeException>(() => once.Observe(approach, null));
+        Assert.Equal(1, once.AcceptedObservationCount);
+        Assert.Equal(1300, once.MaximumNearGroundDescentFeetPerMinute);
+    }
+
+    [Fact]
+    public void IncreasingDescentHasMonotoneSeverityAndForgivingFirmWear()
+    {
+        double[] rates = [450, 1050, 1450, 2000];
+        FlightAirframeConsequence[] results = rates.Select(rate =>
+            FlightAirframeConsequenceCalculator.Calculate(Finalized(Owned("O1"), rate)))
+            .ToArray();
+        Assert.Equal(FlightDamageSeverity.Normal, results[0].Severity);
+        Assert.Equal(FlightDamageSeverity.ElevatedWear, results[1].Severity);
+        Assert.Equal(FlightDamageSeverity.MinorDamage, results[2].Severity);
+        Assert.Equal(FlightDamageSeverity.MajorDamage, results[3].Severity);
+        for (int i = 1; i < results.Length; i++)
+        {
+            Assert.True((int)results[i].Severity >= (int)results[i - 1].Severity);
+            Assert.True(results[i].Decision!.AdditionalLandingGearWearPercent
+                >= results[i - 1].Decision!.AdditionalLandingGearWearPercent);
+        }
+        Assert.Equal(0, results[1].Decision?.CrashDamagePercent);
+        Assert.Equal(0, results[1].Decision!.TouchdownDamagePercent);
+        Assert.True(results[1].Decision.AdditionalLandingGearWearPercent > 0);
+    }
+
+    [Fact]
+    public void FutureAircraftCalibrationCanBeSuppliedWithoutChangingSessionHistory()
+    {
+        FlightSession session = Finalized(Owned("O1"), 1000);
+        FlightAirframeConsequence baseline = FlightAirframeConsequenceCalculator.Calculate(session);
+        FlightAirframeConsequence adjusted = FlightAirframeConsequenceCalculator.Calculate(
+            session, FlightAirframeCalibration.Conservative with
+            {
+                ElevatedDescentFpm = 1100,
+                MinorDamageDescentFpm = 1500,
+                MajorDamageDescentFpm = 2000
+            });
+        Assert.Equal(FlightDamageSeverity.ElevatedWear, baseline.Severity);
+        Assert.Equal(FlightDamageSeverity.Normal, adjusted.Severity);
+        Assert.Equal(session.SessionId, adjusted.Summary.SessionId);
+        Assert.Equal(1100, adjusted.Decision?.ElevatedThresholdFpm);
+    }
+
+    [Fact]
     public async Task OwnedSameModelAppliesOnceToExactOwnershipAndRecoversSummary()
     {
         string path = TemporaryPath();
@@ -81,6 +177,13 @@ public sealed class FlightAirframeConsequenceTests
             Assert.Equal(0, o2.LandingCycles);
             Assert.Equal(0, o2.DamagePercent);
             Assert.Equal(session.SessionId, (await store.ReadAsync(session.SessionId))?.Summary.SessionId);
+            FlightAirframeConsequence saved = (await store.ReadLatestAsync())!;
+            Assert.Equal(FlightSessionStatus.Completed, saved.Summary.FinalizationStatus);
+            Assert.Equal(session.EffectiveStatistics.AcceptedObservationCount,
+                saved.Summary.AcceptedObservationCount);
+            Assert.Equal(o1, saved.Application?.After);
+            Assert.Equal("O1", saved.Summary.Aircraft.InstanceId);
+            Assert.Equal(0, saved.Application?.Before?.DamagePercent);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => store.ApplyAsync(
                 FlightAirframeConsequenceCalculator.Calculate(session with { AircraftIdentity = Owned("O2") })));
@@ -135,6 +238,7 @@ public sealed class FlightAirframeConsequenceTests
             var completed = await new FlightSessionCompletionService(coordinator, persistence)
                 .CompleteAsync(new FlightSessionCompletionRequest(Start.AddSeconds(3609), true, true));
             Assert.Equal(FlightSessionStatus.Completed, completed.Status);
+            Assert.Equal(2, (await ownership.ReadAsync(completed.SessionId))?.Summary.AcceptedObservationCount);
             var before = Assert.Single((await ownership.LoadSnapshotAsync("career")).MaintenanceStates,
                 state => state.OwnershipId == "O1");
             Assert.True(before.AirframeWearPercent > 0);
@@ -147,6 +251,8 @@ public sealed class FlightAirframeConsequenceTests
             var after = Assert.Single((await ownership.LoadSnapshotAsync("career")).MaintenanceStates,
                 state => state.OwnershipId == "O1");
             Assert.Equal(before, after);
+            Assert.Equal(1, await CountRowsAsync(path, "flight_airframe_consequences"));
+            Assert.Equal(1, await CountRowsAsync(path, "maintenance_events"));
         }
         finally { Cleanup(path); }
     }
@@ -169,6 +275,10 @@ public sealed class FlightAirframeConsequenceTests
             var state = Assert.Single((await reloaded.LoadSnapshotAsync("career")).MaintenanceStates,
                 x => x.OwnershipId == "O1");
             Assert.True(state.DamagePercent > 0);
+            if (!crashed)
+                Assert.InRange(state.DamagePercent, 0.01, 1.0);
+            else
+                Assert.True(state.DamagePercent >= 40);
             Assert.Equal(0, Assert.Single((await reloaded.LoadSnapshotAsync("career")).MaintenanceStates,
                 x => x.OwnershipId == "O2").DamagePercent);
         }
@@ -190,7 +300,10 @@ public sealed class FlightAirframeConsequenceTests
             await store.ApplyAsync(consequence);
             var reopened = new SqliteOwnershipStore(path);
             Assert.Equal(provider, (await reopened.ReadAsync(consequence.Summary.SessionId))?.Summary.Aircraft);
+            Assert.NotNull((await reopened.ReadLatestAsync())?.Decision);
+            Assert.Null((await reopened.ReadLatestAsync())?.Application?.After);
             Assert.Empty((await reopened.LoadSnapshotAsync("career")).Aircraft);
+            Assert.Equal(1, await CountRowsAsync(path, "flight_airframe_consequences"));
         }
         finally { Cleanup(path); }
     }
@@ -241,6 +354,7 @@ public sealed class FlightAirframeConsequenceTests
                 consequences: new SqliteOwnershipStore(path));
             Assert.Equal(Owned("O1"), (await restarted.RecoverAsync())?.AircraftIdentity);
             Assert.Equal(FlightDamageSeverity.Severe, (await ownership.ReadAsync(started.SessionId))?.Severity);
+            Assert.Equal(started.SessionId, (await ownership.ReadLatestAsync())?.Summary.SessionId);
             Assert.True(Assert.Single((await ownership.LoadSnapshotAsync("career")).MaintenanceStates,
                 state => state.OwnershipId == "O1").DamagePercent > 0);
         }
@@ -277,6 +391,8 @@ public sealed class FlightAirframeConsequenceTests
 
         public Task<FlightAirframeConsequence?> ReadAsync(Guid sessionId,
             CancellationToken cancellationToken = default) => Task.FromResult<FlightAirframeConsequence?>(null);
+        public Task<FlightAirframeConsequence?> ReadLatestAsync(
+            CancellationToken cancellationToken = default) => Task.FromResult<FlightAirframeConsequence?>(null);
     }
 
     private static FlightSession Finalized(
@@ -297,9 +413,13 @@ public sealed class FlightAirframeConsequenceTests
             {
                 MaximumNearGroundDescentFeetPerMinute = descent,
                 MaximumTouchdownApproachDescentFeetPerMinute = descent,
+                TouchdownDescentSampleAt = Start.AddHours(1).AddSeconds(-2),
+                CorrelatedTouchdownAt = Start.AddHours(1),
                 FuelBurnedPounds = 15,
                 MaximumIndicatedAirspeedKnots = 110
-            }
+            },
+            LandingEpisodes = [new FlightSessionLandingEpisode(1,
+                Start.AddHours(1), FlightSessionLandingKind.FullStop, 0)]
         };
     }
 
@@ -332,6 +452,18 @@ public sealed class FlightAirframeConsequenceTests
 
     private static string TemporaryPath() =>
         Path.Combine(Path.GetTempPath(), $"opencareer-consequence-{Guid.NewGuid():N}.db");
+
+    private static async Task<long> CountRowsAsync(string path, string table)
+    {
+        // Table names are fixed test constants, never user input.
+        if (table is not ("flight_airframe_consequences" or "maintenance_events"))
+            throw new ArgumentException("Unsupported test table.", nameof(table));
+        await using var connection = new SqliteConnection($"Data Source={path}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM {table};";
+        return (long)(await command.ExecuteScalarAsync())!;
+    }
 
     private static void Cleanup(string path)
     {

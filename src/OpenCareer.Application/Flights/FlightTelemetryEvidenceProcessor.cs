@@ -15,6 +15,8 @@ public sealed class FlightTelemetryEvidenceProcessor
     private bool _airborneConfirmedPreviously;
     private bool _takeoffCandidateActive;
     private bool _landingEpisodeActive;
+    private bool _bounceAirborneObserved;
+    private DateTimeOffset? _touchdownAt;
 
     public FlightTelemetryEvidenceProcessor(
         FlightEvidenceProcessorOptions? options = null)
@@ -149,19 +151,44 @@ public sealed class FlightTelemetryEvidenceProcessor
             _takeoffCandidateActive = false;
         }
 
+        if (operationalSample && _landingEpisodeActive && !telemetry.OnGround
+            && telemetry.AltitudeAglFeet <= FlightAirframeCalibration.NearGroundCeilingFeet
+            && _touchdownAt is { } touchdownAt
+            && telemetry.Timestamp - touchdownAt <= FlightAirframeCalibration.TouchdownCorrelationWindow)
+            _bounceAirborneObserved = true;
+
         bool touchdownConfirmed =
             operationalSample
+            && stableTelemetry
             && _airborneConfirmedPreviously
+            && !_landingEpisodeActive
             && telemetry.OnGround
             && _groundSampleCount
-                == _options.GroundConfirmationSamples;
+                >= _options.GroundConfirmationSamples;
 
         if (touchdownConfirmed)
+        {
             _landingEpisodeActive = true;
+            _airborneConfirmedPreviously = false;
+            _touchdownAt = telemetry.Timestamp;
+        }
+
+        bool bounceRecontact = operationalSample && stableTelemetry && _landingEpisodeActive
+            && _bounceAirborneObserved && telemetry.OnGround
+            && _groundSampleCount >= _options.GroundConfirmationSamples;
+        if (bounceRecontact)
+        {
+            _bounceAirborneObserved = false;
+            _airborneConfirmedPreviously = false;
+            _touchdownAt = telemetry.Timestamp;
+        }
 
         bool landingRolloutConfirmed =
             operationalSample
             && _landingEpisodeActive
+            && !_bounceAirborneObserved
+            && !touchdownConfirmed
+            && !bounceRecontact
             && telemetry.OnGround
             && _groundSampleCount
                 >= _options.GroundConfirmationSamples
@@ -169,7 +196,11 @@ public sealed class FlightTelemetryEvidenceProcessor
                 <= _options.LandingRolloutMaximumGroundSpeedKnots;
 
         if (landingRolloutConfirmed)
+        {
             _landingEpisodeActive = false;
+            _airborneConfirmedPreviously = false;
+            _touchdownAt = null;
+        }
 
         bool approachConfirmed =
             operationalSample
@@ -220,6 +251,8 @@ public sealed class FlightTelemetryEvidenceProcessor
                     approachConfirmed,
                 TouchdownConfirmed:
                     touchdownConfirmed,
+                BounceRecontact:
+                    bounceRecontact,
                 LandingRolloutConfirmed:
                     landingRolloutConfirmed,
                 ParkingConfirmed:
@@ -251,14 +284,16 @@ public sealed class FlightTelemetryEvidenceProcessor
         _airborneConfirmedPreviously =
             state
                 is FlightTrackingState.Airborne
-                    or FlightTrackingState.Approach
-                    or FlightTrackingState.LandingEpisode;
+                    or FlightTrackingState.Approach;
 
         _takeoffCandidateActive =
             state == FlightTrackingState.TakeoffRoll;
 
         _landingEpisodeActive =
             state == FlightTrackingState.LandingEpisode;
+        _touchdownAt = _landingEpisodeActive
+            ? session.EffectiveLandingEpisodes.LastOrDefault()?.TouchdownAt
+            : null;
     }
 
     public void Reset()
@@ -270,6 +305,8 @@ public sealed class FlightTelemetryEvidenceProcessor
         _airborneConfirmedPreviously = false;
         _takeoffCandidateActive = false;
         _landingEpisodeActive = false;
+        _bounceAirborneObserved = false;
+        _touchdownAt = null;
     }
 
     private void ResetTransientEvidence()
@@ -278,17 +315,18 @@ public sealed class FlightTelemetryEvidenceProcessor
         _airborneSampleCount = 0;
         _groundSampleCount = 0;
         _takeoffCandidateActive = false;
+        _bounceAirborneObserved = false;
     }
 
     private void ValidateTimestamp(
         AircraftTelemetrySnapshot telemetry)
     {
         if (_previous is not null
-            && telemetry.Timestamp < _previous.Timestamp)
+            && telemetry.Timestamp <= _previous.Timestamp)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(telemetry),
-                "Telemetry cannot move backward in time.");
+                "Telemetry must advance beyond the previous accepted sample.");
         }
     }
 

@@ -564,6 +564,17 @@ public sealed class SqliteOwnershipStore : IOwnershipStore, IFlightAirframeConse
             ?? throw new InvalidDataException("Airframe consequence payload is empty.");
     }
 
+    public async Task<FlightAirframeConsequence?> ReadLatestAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT payload_json FROM flight_airframe_consequences ORDER BY rowid DESC LIMIT 1;";
+        string? payload = (string?)await command.ExecuteScalarAsync(cancellationToken);
+        return payload is null ? null : JsonSerializer.Deserialize<FlightAirframeConsequence>(payload)
+            ?? throw new InvalidDataException("Latest airframe consequence payload is empty.");
+    }
+
     async Task IContractAirframeSelectionStore.SaveAsync(
         Guid contractId, FlightSessionAircraftIdentity identity,
         CancellationToken cancellationToken)
@@ -627,7 +638,6 @@ public sealed class SqliteOwnershipStore : IOwnershipStore, IFlightAirframeConse
         ArgumentNullException.ThrowIfNull(consequence);
         consequence.Summary.Aircraft.Validate();
         consequence.Usage.Validate();
-        string payload = JsonSerializer.Serialize(consequence);
         string operationId = $"flight:{consequence.Summary.SessionId:D}";
 
         await using var connection = await OpenAsync(cancellationToken);
@@ -639,13 +649,17 @@ public sealed class SqliteOwnershipStore : IOwnershipStore, IFlightAirframeConse
             existing.Parameters.AddWithValue("$session", consequence.Summary.SessionId.ToString("D"));
             if (await existing.ExecuteScalarAsync(cancellationToken) is string saved)
             {
-                if (saved != payload)
-                    throw new InvalidOperationException("A finalized session cannot change its airframe consequence.");
+                FlightAirframeConsequence recorded = JsonSerializer.Deserialize<FlightAirframeConsequence>(saved)
+                    ?? throw new InvalidDataException("Airframe consequence payload is empty.");
+                if (recorded.Summary.Aircraft != consequence.Summary.Aircraft)
+                    throw new InvalidOperationException("A finalized session cannot switch its airframe.");
                 transaction.Commit();
                 return;
             }
         }
 
+        AircraftMaintenanceState? before = null;
+        AircraftMaintenanceState? after = null;
         if (consequence.Summary.Aircraft.Kind == FlightSessionAircraftKind.Owned)
         {
             string ownershipId = consequence.Summary.Aircraft.InstanceId;
@@ -660,15 +674,20 @@ public sealed class SqliteOwnershipStore : IOwnershipStore, IFlightAirframeConse
 
             if (await MaintenanceOperationExistsAsync(connection, transaction, operationId, cancellationToken))
                 throw new InvalidOperationException("Maintenance operation exists without its flight consequence record.");
-            AircraftMaintenanceState current = await ReadMaintenanceStateAsync(
+            before = await ReadMaintenanceStateAsync(
                 connection, transaction, ownershipId, cancellationToken);
-            AircraftMaintenanceState next = AircraftMaintenanceEngine.ApplyUsage(
-                current, InitialMaintenancePrograms.LightAircraftFallback,
+            after = AircraftMaintenanceEngine.ApplyUsage(
+                before, InitialMaintenancePrograms.LightAircraftFallback,
                 consequence.Usage, consequence.Summary.EndedAt);
-            await UpdateMaintenanceStateAsync(connection, transaction, next, cancellationToken);
+            await UpdateMaintenanceStateAsync(connection, transaction, after, cancellationToken);
             await InsertMaintenanceEventAsync(connection, transaction, operationId,
                 ownershipId, "flight", 0m, consequence.Summary.EndedAt, cancellationToken);
         }
+
+        string payload = JsonSerializer.Serialize(consequence with
+        {
+            Application = new FlightAirframeApplication(DateTimeOffset.UtcNow, before, after)
+        });
 
         await using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
