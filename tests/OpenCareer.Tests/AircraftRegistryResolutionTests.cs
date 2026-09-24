@@ -11,9 +11,15 @@ public class AircraftRegistryResolutionTests
         Assert.Equal(PlayableLoopAircraftRegistrySource.AircraftId,
             AircraftCanonicalIdentity.FromMsfsTitle(
                 "Cessna 172 Skyhawk - Asobo Studio Basic"));
+        Assert.Equal(PlayableLoopAircraftRegistrySource.AircraftId,
+            AircraftCanonicalIdentity.FromMsfsTitle(
+                "C172SP Classic Passengers"));
         Assert.NotEqual(PlayableLoopAircraftRegistrySource.AircraftId,
             AircraftCanonicalIdentity.FromMsfsTitle(
                 "Cessna 172 Skyhawk - Asobo Studio G1000 Cargo"));
+        Assert.NotEqual(PlayableLoopAircraftRegistrySource.AircraftId,
+            AircraftCanonicalIdentity.FromMsfsTitle(
+                "C172SP Classic Cargo"));
     }
 
     [Fact]

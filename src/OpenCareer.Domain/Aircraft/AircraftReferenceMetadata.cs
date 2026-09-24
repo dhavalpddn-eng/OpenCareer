@@ -46,10 +46,13 @@ public static class AircraftCanonicalIdentity
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftTitle);
         string title = aircraftTitle.Trim();
 
-        // Explicitly recognize the Basic variant seen in the live simulator picker.
-        // Other variants, including Cargo, retain distinct identities. The live
-        // SimConnect TITLE is still logged so this mapping can be verified in MSFS.
+        // The MSFS 2024 Basic variant displays as "Cessna 172 Skyhawk - Asobo
+        // Studio Basic" in the picker but reports "C172SP Classic Passengers"
+        // through SimConnect TITLE. Both observations were verified in the same
+        // live session. Other variants, including Cargo, remain distinct.
         if (string.Equals(title, "Cessna 172 Skyhawk - Asobo Studio Basic",
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(title, "C172SP Classic Passengers",
                 StringComparison.OrdinalIgnoreCase))
         {
             title = "Cessna 172 Skyhawk";
