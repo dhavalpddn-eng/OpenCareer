@@ -1,10 +1,12 @@
 using System.Collections.Immutable;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Logbook;
+using OpenCareer.Infrastructure.Persistence;
 
 namespace OpenCareer.Tests;
 
@@ -56,6 +58,99 @@ public sealed class CareerFlightReservationReleaseCoordinatorTests
             fleet.ReleaseCount);
         Assert.Null(
             fleet.Ownership);
+    }
+
+    [Fact]
+    public async Task SubMillisecondLogbookCommitCannotMakePersistedAppliedProfilePredateReleaseAuthority()
+    {
+        string directory =
+            Path.Combine(
+                Path.GetTempPath(),
+                "OpenCareer.Tests",
+                Guid.NewGuid().ToString("N"));
+
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            LogbookEntry baseEntry =
+                CareerEntry();
+
+            LogbookEntry entry =
+                baseEntry with
+                {
+                    CommittedAt =
+                        baseEntry.CommittedAt.AddTicks(4_321)
+                };
+
+            var profileStore =
+                new SqlitePlayerCareerProfileStore(
+                    new OpenCareerDatabaseOptions(
+                        Path.Combine(directory, "opencareer.db")),
+                    NullLogger<SqlitePlayerCareerProfileStore>.Instance);
+
+            PlayerCareerProfile initial =
+                PlayerCareerProfile.Start(
+                    Guid.Parse("9d000000-0000-0000-0000-000000000099"),
+                    "KRME",
+                    Epoch.AddHours(-1));
+
+            await profileStore.SaveAsync(
+                initial,
+                expectedRevision: null,
+                savedAt: Epoch);
+
+            var runtime =
+                new PlayerCareerRuntimeState(
+                    profileStore);
+
+            PlayerCareerProfileStoreRecord applied =
+                await new PlayerCareerExperienceCoordinator(
+                        profileStore,
+                        runtime)
+                    .ApplyCommittedAsync(
+                        entry,
+                        savedAt: entry.CommittedAt);
+
+            string reservationId =
+                JobAcceptanceFleetBridge.GetReservationId(
+                    entry.Debrief.ContractId!.Value);
+
+            var fleet =
+                new FakeFleetReservationStore(
+                    new AircraftReservationOwnership(
+                        "canonical-aircraft",
+                        reservationId));
+
+            CareerFlightReservationReleaseResult released =
+                await new CareerFlightReservationReleaseCoordinator(
+                        fleet,
+                        fleet)
+                    .ReleaseAsync(
+                        new LogbookAppendResult(
+                            LogbookAppendDisposition.Appended,
+                            entry),
+                        applied);
+
+            Assert.True(
+                applied.SavedAt >= entry.CommittedAt);
+            Assert.Equal(
+                CareerFlightReservationReleaseStatus.Released,
+                released.Status);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(
+                    directory,
+                    recursive: true);
+            }
+            catch
+            {
+                // Cleanup must not make a passing SQLite assertion platform-specific.
+            }
+        }
     }
 
     [Fact]
@@ -129,6 +224,47 @@ public sealed class CareerFlightReservationReleaseCoordinatorTests
                     LogbookAppendDisposition.Appended,
                     entry),
                 profile));
+
+        Assert.Equal(
+            0,
+            fleet.ReleaseCount);
+        Assert.NotNull(
+            fleet.Ownership);
+    }
+
+    [Fact]
+    public async Task AppliedProfileTimestampBeforeLogbookCommitCannotReleaseFleet()
+    {
+        LogbookEntry entry =
+            CareerEntry();
+
+        string reservationId =
+            JobAcceptanceFleetBridge.GetReservationId(
+                entry.Debrief.ContractId!.Value);
+
+        var fleet =
+            new FakeFleetReservationStore(
+                new AircraftReservationOwnership(
+                    "canonical-aircraft",
+                    reservationId));
+
+        PlayerCareerProfileStoreRecord stale =
+            AppliedProfile(
+                entry) with
+            {
+                SavedAt =
+                    entry.CommittedAt.AddTicks(-1)
+            };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new CareerFlightReservationReleaseCoordinator(
+                    fleet,
+                    fleet)
+                .ReleaseAsync(
+                    new LogbookAppendResult(
+                        LogbookAppendDisposition.Appended,
+                        entry),
+                    stale));
 
         Assert.Equal(
             0,

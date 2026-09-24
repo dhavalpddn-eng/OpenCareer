@@ -86,6 +86,71 @@ public sealed class PlayerCareerExperienceCoordinatorTests
     }
 
     [Fact]
+    public async Task ReapplyingMarkerWithLegacyTruncatedTimeRepairsAuthorityWithoutDuplicateExperience()
+    {
+        LogbookEntry entry =
+            CreateCommittedEntry(
+                Guid.Parse("3331eb77-d749-43d3-a1d4-5c9c8140e5cc"));
+
+        var firstStore =
+            new FakeStore(
+                ExistingRecord(revision: 2));
+
+        PlayerCareerProfileStoreRecord applied =
+            await new PlayerCareerExperienceCoordinator(
+                    firstStore,
+                    new PlayerCareerRuntimeState(firstStore))
+                .ApplyCommittedAsync(
+                    entry,
+                    savedAt: entry.CommittedAt);
+
+        PlayerCareerProfileStoreRecord legacyTruncated =
+            applied with
+            {
+                SavedAt =
+                    entry.CommittedAt.AddTicks(-1)
+            };
+
+        var recoveryStore =
+            new FakeStore(
+                legacyTruncated);
+
+        var runtime =
+            new PlayerCareerRuntimeState(
+                recoveryStore);
+
+        var coordinator =
+            new PlayerCareerExperienceCoordinator(
+                recoveryStore,
+                runtime);
+
+        PlayerCareerProfileStoreRecord repaired =
+            await coordinator.ApplyCommittedAsync(
+                entry,
+                savedAt: entry.CommittedAt);
+
+        PlayerCareerProfileStoreRecord replay =
+            await coordinator.ApplyCommittedAsync(
+                entry,
+                savedAt: entry.CommittedAt.AddMinutes(1));
+
+        Assert.Equal(
+            1,
+            repaired.Profile.Experience.FlightCount);
+        Assert.Equal(
+            legacyTruncated.Revision + 1,
+            repaired.Revision);
+        Assert.True(
+            repaired.SavedAt >= entry.CommittedAt);
+        Assert.Equal(
+            1,
+            recoveryStore.SaveCount);
+        Assert.Same(
+            repaired,
+            replay);
+    }
+
+    [Fact]
     public async Task FailedOptimisticWriteDoesNotApplyExperienceIdentity()
     {
         PlayerCareerProfileStoreRecord existing =

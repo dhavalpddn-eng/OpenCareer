@@ -328,8 +328,14 @@ public sealed class SqlitePlayerCareerProfileStore
             DateTimeOffset.FromUnixTimeMilliseconds(
                 savedAt.ToUnixTimeMilliseconds());
 
-        if (persisted < createdAt)
+        // SQLite stores this authority marker at millisecond precision.
+        // Ceiling preserves the invariant that durable state never predates
+        // the exact source commit it claims to have applied.
+        if (persisted < savedAt)
             persisted = persisted.AddMilliseconds(1);
+
+        if (persisted < createdAt)
+            persisted = createdAt;
 
         return persisted;
     }

@@ -110,6 +110,54 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
     }
 
     [Fact]
+    public async Task FiveCompletionAttemptsConvergeWithoutDuplicateMutations()
+    {
+        TestContext context =
+            CreateContext();
+
+        CareerFlightTerminalWorkflowResult[] results =
+            new CareerFlightTerminalWorkflowResult[5];
+
+        for (int index = 0; index < results.Length; index++)
+        {
+            results[index] =
+                await context.Workflow.CompleteAsync(
+                    context.Request);
+        }
+
+        Assert.True(
+            results[0].Settlement.WasNewlyPosted);
+        Assert.All(
+            results.Skip(1),
+            result =>
+            {
+                Assert.False(
+                    result.Settlement.WasNewlyPosted);
+                Assert.Equal(
+                    LogbookAppendDisposition.AlreadyExists,
+                    result.Logbook.Disposition);
+                Assert.Equal(
+                    CareerFlightFinalizationStatus.AlreadyFinalized,
+                    result.Finalization.Status);
+            });
+
+        Assert.Equal(
+            1,
+            context.Ledger.UniquePostCount);
+        Assert.Single(
+            context.Logbook.Entries);
+        Assert.Equal(
+            2,
+            context.ProfileStore.SaveCount);
+        Assert.Equal(
+            1,
+            context.Fleet.ReleaseCount);
+        Assert.Equal(
+            1,
+            context.CheckpointStore.ClearCount);
+    }
+
+    [Fact]
     public async Task RetryAfterLogbookFailureReusesSettlementAndCompletes()
     {
         TestContext context =
@@ -155,6 +203,170 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
             context.ProfileStore.SaveCount);
         Assert.Null(
             context.Sessions.Current);
+    }
+
+    [Fact]
+    public async Task RestartAfterSettlementResumesWithoutDuplicatePayment()
+    {
+        TestContext context =
+            CreateContext();
+
+        context.Logbook.FailNextAppend =
+            true;
+
+        await Assert.ThrowsAsync<IOException>(
+            () => context.Workflow.CompleteAsync(
+                context.Request));
+
+        CareerFlightTerminalWorkflowCoordinator restarted =
+            RebuildWorkflow(
+                context,
+                out FlightSessionCoordinator restartedSessions);
+
+        CareerFlightTerminalWorkflowResult result =
+            await restarted.CompleteAsync(
+                context.Request);
+
+        Assert.False(
+            result.Settlement.WasNewlyPosted);
+        Assert.Equal(
+            1,
+            context.Ledger.UniquePostCount);
+        Assert.Single(
+            context.Logbook.Entries);
+        Assert.Equal(
+            2,
+            context.ProfileStore.SaveCount);
+        Assert.Equal(
+            1,
+            context.Fleet.ReleaseCount);
+        Assert.Null(
+            restartedSessions.Current);
+    }
+
+    [Fact]
+    public async Task RestartAfterLogbookResumesAtProfileWithoutSecondEntry()
+    {
+        TestContext context =
+            CreateContext();
+
+        context.ProfileStore.FailOnSaveAttempt =
+            1;
+
+        await Assert.ThrowsAsync<IOException>(
+            () => context.Workflow.CompleteAsync(
+                context.Request));
+
+        Assert.Single(
+            context.Logbook.Entries);
+        Assert.Equal(
+            0,
+            context.ProfileStore.SaveCount);
+
+        CareerFlightTerminalWorkflowCoordinator restarted =
+            RebuildWorkflow(
+                context,
+                out FlightSessionCoordinator restartedSessions);
+
+        await restarted.CompleteAsync(
+            context.Request);
+
+        Assert.Equal(
+            1,
+            context.Ledger.UniquePostCount);
+        Assert.Single(
+            context.Logbook.Entries);
+        Assert.Equal(
+            2,
+            context.ProfileStore.SaveCount);
+        Assert.Equal(
+            1,
+            context.Fleet.ReleaseCount);
+        Assert.Null(
+            restartedSessions.Current);
+    }
+
+    [Fact]
+    public async Task RestartAfterProfileResumesWithoutDuplicateProgression()
+    {
+        TestContext context =
+            CreateContext();
+
+        context.ProfileStore.FailOnSaveAttempt =
+            2;
+
+        await Assert.ThrowsAsync<IOException>(
+            () => context.Workflow.CompleteAsync(
+                context.Request));
+
+        Assert.Equal(
+            1,
+            context.ProfileStore.SaveCount);
+        Assert.Equal(
+            1,
+            context.ProfileStore.Current.Profile.Experience.FlightCount);
+
+        CareerFlightTerminalWorkflowCoordinator restarted =
+            RebuildWorkflow(
+                context,
+                out FlightSessionCoordinator restartedSessions);
+
+        await restarted.CompleteAsync(
+            context.Request);
+
+        Assert.Equal(
+            1,
+            context.ProfileStore.Current.Profile.Experience.FlightCount);
+        Assert.Equal(
+            2,
+            context.ProfileStore.SaveCount);
+        Assert.Single(
+            context.Logbook.Entries);
+        Assert.Equal(
+            1,
+            context.Fleet.ReleaseCount);
+        Assert.Null(
+            restartedSessions.Current);
+    }
+
+    [Fact]
+    public async Task RestartBeforeCleanupToleratesAlreadyReleasedFleet()
+    {
+        TestContext context =
+            CreateContext();
+
+        context.CheckpointStore.FailNextClear =
+            true;
+
+        await Assert.ThrowsAsync<IOException>(
+            () => context.Workflow.CompleteAsync(
+                context.Request));
+
+        Assert.Null(
+            context.Fleet.Ownership);
+        Assert.NotNull(
+            context.CheckpointStore.Checkpoint);
+
+        CareerFlightTerminalWorkflowCoordinator restarted =
+            RebuildWorkflow(
+                context,
+                out FlightSessionCoordinator restartedSessions);
+
+        CareerFlightTerminalWorkflowResult result =
+            await restarted.CompleteAsync(
+                context.Request);
+
+        Assert.Equal(
+            CareerFlightReservationReleaseStatus.AlreadyReleased,
+            result.Finalization.ReservationRelease.Status);
+        Assert.Equal(
+            1,
+            context.Fleet.ReleaseCount);
+        Assert.Equal(
+            1,
+            context.CheckpointStore.ClearCount);
+        Assert.Null(
+            restartedSessions.Current);
     }
 
     private static TestContext CreateContext()
@@ -322,12 +534,57 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
         return new(
             workflow,
             request,
+            contractStore,
             ledger,
             logbookStore,
             profileStore,
             fleet,
             checkpointStore,
             sessions);
+    }
+
+    private static CareerFlightTerminalWorkflowCoordinator RebuildWorkflow(
+        TestContext context,
+        out FlightSessionCoordinator sessions)
+    {
+        sessions =
+            new FlightSessionCoordinator();
+
+        if (context.CheckpointStore.Checkpoint is { } checkpoint)
+            sessions.Restore(checkpoint);
+
+        var flightPersistence =
+            new FlightSessionPersistenceService(
+                sessions,
+                context.CheckpointStore);
+
+        var profileRuntime =
+            new PlayerCareerRuntimeState(
+                context.ProfileStore);
+
+        return new CareerFlightTerminalWorkflowCoordinator(
+            new SettlementPendingContractCoordinator(
+                new EconomySettlementService(
+                    context.ContractStore,
+                    context.Ledger)),
+            new SettledJobLogbookCoordinator(
+                sessions,
+                new LogbookCommitCoordinator(
+                    context.Logbook)),
+            context.Logbook,
+            new CareerLogbookExperienceCoordinator(
+                new PlayerCareerExperienceCoordinator(
+                    context.ProfileStore,
+                    profileRuntime)),
+            new PlayerCareerLocationCoordinator(
+                context.ProfileStore,
+                profileRuntime),
+            new CareerFlightFinalizationCoordinator(
+                new CareerFlightReservationReleaseCoordinator(
+                    context.Fleet,
+                    context.Fleet),
+                flightPersistence,
+                sessions));
     }
 
     private static PersistedJobContract CompletedContract(
@@ -534,6 +791,7 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
     private sealed record TestContext(
         CareerFlightTerminalWorkflowCoordinator Workflow,
         CareerFlightTerminalWorkflowRequest Request,
+        FakeContractStore ContractStore,
         FakeLedgerStore Ledger,
         FakeLogbookStore Logbook,
         FakeProfileStore ProfileStore,
@@ -746,6 +1004,13 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
 
         public int SaveCount { get; private set; }
 
+        public int? FailOnSaveAttempt { get; set; }
+
+        public PlayerCareerProfileStoreRecord Current =>
+            _current;
+
+        private int _saveAttemptCount;
+
         public Task<PlayerCareerProfileStoreRecord?> LoadAsync(
             CancellationToken cancellationToken = default)
         {
@@ -762,7 +1027,15 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            SaveCount++;
+            _saveAttemptCount++;
+
+            if (FailOnSaveAttempt == _saveAttemptCount)
+            {
+                FailOnSaveAttempt =
+                    null;
+                throw new IOException(
+                    "Synthetic Career/Profile persistence failure.");
+            }
 
             if (expectedRevision
                 != _current.Revision)
@@ -770,6 +1043,8 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
                 throw new PlayerCareerProfileConcurrencyException(
                     "Synthetic stale career profile revision.");
             }
+
+            SaveCount++;
 
             _current =
                 new PlayerCareerProfileStoreRecord(
@@ -845,6 +1120,8 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
 
         public int ClearCount { get; private set; }
 
+        public bool FailNextClear { get; set; }
+
         public Task SaveAsync(
             FlightSession session,
             CancellationToken cancellationToken = default)
@@ -868,6 +1145,15 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (FailNextClear)
+            {
+                FailNextClear =
+                    false;
+                throw new IOException(
+                    "Synthetic checkpoint cleanup failure.");
+            }
+
             ClearCount++;
             Checkpoint =
                 null;

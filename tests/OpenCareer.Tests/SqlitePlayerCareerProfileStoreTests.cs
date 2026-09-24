@@ -118,6 +118,55 @@ public sealed class SqlitePlayerCareerProfileStoreTests
     }
 
     [Fact]
+    public async Task SubMillisecondUpdateNeverPersistsBeforeRequestedAuthorityTime()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            var options = new OpenCareerDatabaseOptions(
+                Path.Combine(directory, "opencareer.db"));
+            var store = CreateStore(options);
+
+            PlayerCareerProfile profile =
+                PlayerCareerProfile.Start(
+                    CareerId,
+                    "KRME",
+                    Epoch);
+
+            PlayerCareerProfileStoreRecord initial =
+                await store.SaveAsync(
+                    profile,
+                    expectedRevision: null,
+                    savedAt: Epoch.AddMinutes(1));
+
+            DateTimeOffset authoritativeTime =
+                Epoch.AddHours(1).AddTicks(4_321);
+
+            PlayerCareerProfileStoreRecord saved =
+                await store.SaveAsync(
+                    profile,
+                    expectedRevision: initial.Revision,
+                    savedAt: authoritativeTime);
+
+            Assert.True(
+                saved.SavedAt >= authoritativeTime);
+            Assert.True(
+                saved.SavedAt - authoritativeTime
+                    < TimeSpan.FromMilliseconds(1));
+
+            PlayerCareerProfileStoreRecord? recovered =
+                await CreateStore(options).LoadAsync();
+
+            AssertEquivalent(saved, recovered);
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
     public async Task UpdateUsesOptimisticRevisionAndPreservesCareerIdentity()
     {
         string directory = CreateTempDirectory();

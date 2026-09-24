@@ -51,7 +51,33 @@ public sealed class PlayerCareerExperienceCoordinator
 
             Guid debriefId = entry.Debrief.DebriefId;
             if (current.Profile.AppliedExperienceDebriefIds.Contains(debriefId))
-                return current;
+            {
+                if (current.SavedAt >= entry.CommittedAt)
+                    return current;
+
+                DateTimeOffset reconciledSavedAt =
+                    savedAt < entry.CommittedAt
+                        ? entry.CommittedAt
+                        : savedAt;
+
+                PlayerCareerProfileStoreRecord reconciled =
+                    await _store
+                        .SaveAsync(
+                            current.Profile,
+                            expectedRevision: current.Revision,
+                            reconciledSavedAt,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                if (reconciled.SavedAt < entry.CommittedAt)
+                {
+                    throw new InvalidOperationException(
+                        "Persisted Career/Profile application marker predates its authoritative logbook commit.");
+                }
+
+                _runtime.Replace(reconciled);
+                return reconciled;
+            }
 
             PilotExperienceTotals existing =
                 current.Profile.Experience;
@@ -94,6 +120,12 @@ public sealed class PlayerCareerExperienceCoordinator
                         savedAt,
                         cancellationToken)
                     .ConfigureAwait(false);
+
+            if (saved.SavedAt < entry.CommittedAt)
+            {
+                throw new InvalidOperationException(
+                    "Persisted Career/Profile application marker predates its authoritative logbook commit.");
+            }
 
             _runtime.Replace(saved);
             return saved;
