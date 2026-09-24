@@ -1,4 +1,5 @@
 using OpenCareer.Application.Careers;
+using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Ownership;
@@ -72,16 +73,17 @@ public sealed class CareerJobAircraftSelectionSourceTests
     [Fact]
     public async Task ProviderAircraftPrecedesDistinctOwnedAlternative()
     {
-        ProviderAircraftAssignment provider =
-            ProviderAircraft(
-                "provider-aircraft-a",
-                "Provider Aircraft A");
+        ProviderAircraftAssignment provider = ProviderAircraftAssignment.CreateForOffer(
+            ProviderOfferId,
+            new ProviderAircraftType(PlayableLoopAircraftRegistrySource.AircraftId,
+                PlayableLoopAircraftRegistrySource.AircraftTitle),
+            "KRME");
 
         OwnedAircraft owned =
             CareerAircraftTestData.Owned(
                 CareerId,
                 "owned-instance-b",
-                "owned-aircraft-b",
+                PlayableLoopAircraftRegistrySource.AircraftId,
                 "Owned Aircraft B");
 
         var source =
@@ -94,7 +96,7 @@ public sealed class CareerJobAircraftSelectionSourceTests
                 new TestAircraftAvailabilityStore(),
                 new FakeBoardStore(
                     BoardWithProvider(
-                        provider)),
+                        provider: null)),
                 new FixedTimeProvider(
                     Now));
 
@@ -123,9 +125,56 @@ public sealed class CareerJobAircraftSelectionSourceTests
         Assert.NotEqual(
             provider.ProviderAircraftInstanceId.ToString("D"),
             owned.OwnershipId);
-        Assert.NotEqual(
-            provider.AircraftId,
-            owned.AircraftId);
+    }
+
+    [Fact]
+    public async Task RequirementOnlyOfferPreviewsStableProviderAndEligibleOwnedAirframe()
+    {
+        OwnedAircraft owned = CareerAircraftTestData.Owned(
+            CareerId, "owned-c172", PlayableLoopAircraftRegistrySource.AircraftId, "Owned C172");
+
+        JobBoardState board = BoardWithProvider(provider: null);
+        var store = new FakeBoardStore(board);
+        var source = new CareerJobAircraftSelectionSource(
+            CareerRuntime(),
+            new TestOwnershipStore(CareerAircraftTestData.Snapshot(CareerId, owned)),
+            new TestAircraftAvailabilityStore(),
+            store,
+            new FixedTimeProvider(Now));
+
+        CareerJobAircraftSelectionSnapshot first = await source.ReadAsync();
+        CareerJobAircraftSelectionSnapshot again = await source.ReadAsync();
+
+        Assert.Null(Assert.Single(board.Offers).ContractTerms!.ProviderAircraft);
+        Assert.Equal(2, first.Aircraft.Count);
+        CareerJobAircraftOption provider = Assert.Single(first.Aircraft,
+            static item => item.ProviderAircraftInstanceId is not null);
+        Assert.Equal(ProviderAircraftAssignment.CreateForOffer(
+            ProviderOfferId,
+            new ProviderAircraftType(PlayableLoopAircraftRegistrySource.AircraftId,
+                PlayableLoopAircraftRegistrySource.AircraftTitle),
+            "KRME").ProviderAircraftInstanceId, provider.ProviderAircraftInstanceId);
+        Assert.Equal(provider.ProviderAircraftInstanceId,
+            Assert.Single(again.Aircraft,
+                static item => item.ProviderAircraftInstanceId is not null).ProviderAircraftInstanceId);
+        Assert.Equal("owned-c172", Assert.Single(first.Aircraft,
+            static item => item.OwnershipId is not null).OwnershipId);
+    }
+
+    [Fact]
+    public async Task RequirementOnlyOfferHidesIneligibleOwnedAircraft()
+    {
+        OwnedAircraft unsupported = CareerAircraftTestData.Owned(
+            CareerId, "owned-unsupported", "other-aircraft", "Other aircraft");
+        var source = new CareerJobAircraftSelectionSource(
+            CareerRuntime(),
+            new TestOwnershipStore(CareerAircraftTestData.Snapshot(CareerId, unsupported)),
+            new TestAircraftAvailabilityStore(),
+            new FakeBoardStore(BoardWithProvider(provider: null)),
+            new FixedTimeProvider(Now));
+
+        CareerJobAircraftSelectionSnapshot snapshot = await source.ReadAsync();
+        Assert.Null(Assert.Single(snapshot.Aircraft).OwnershipId);
     }
 
     [Fact]
@@ -364,7 +413,7 @@ public sealed class CareerJobAircraftSelectionSourceTests
             "KRME");
 
     private static JobBoardState BoardWithProvider(
-        ProviderAircraftAssignment provider)
+        ProviderAircraftAssignment? provider)
     {
         DateTimeOffset offeredAt =
             Now.AddHours(-1);

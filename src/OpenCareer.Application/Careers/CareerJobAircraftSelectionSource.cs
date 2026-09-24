@@ -32,13 +32,15 @@ public sealed class CareerJobAircraftSelectionSource
     private readonly IAircraftAvailabilityStore _availability;
     private readonly IJobBoardStateStore? _jobBoards;
     private readonly TimeProvider _timeProvider;
+    private readonly ProviderAircraftAssignmentResolver _providerResolver;
 
     public CareerJobAircraftSelectionSource(
         PlayerCareerRuntimeState career,
         IOwnershipStore ownership,
         IAircraftAvailabilityStore availability,
         IJobBoardStateStore? jobBoards = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ProviderAircraftAssignmentResolver? providerResolver = null)
     {
         _career =
             career
@@ -54,6 +56,7 @@ public sealed class CareerJobAircraftSelectionSource
         _timeProvider =
             timeProvider
             ?? TimeProvider.System;
+        _providerResolver = providerResolver ?? new ProviderAircraftAssignmentResolver();
     }
 
     public async Task<CareerJobAircraftSelectionSnapshot> ReadAsync(
@@ -92,6 +95,7 @@ public sealed class CareerJobAircraftSelectionSource
 
         int providerCount = 0;
         int ownedCount = 0;
+        var activeRequirements = new List<AircraftMissionRequirements>();
 
         if (_jobBoards is not null)
         {
@@ -126,11 +130,24 @@ public sealed class CareerJobAircraftSelectionSource
                     if (offer.IsLockedPreview
                         || now < offer.OfferedAt
                         || now >= offer.ExpiresAt
-                        || offer.ContractTerms?.ProviderAircraft
-                            is not { } provider)
+                        || offer.ContractTerms is not { } terms)
                     {
                         continue;
                     }
+
+                    // A legacy offer with an explicit provider is already bound.
+                    if (terms.ProviderAircraft is null)
+                        activeRequirements.Add(terms.AircraftRequirements);
+
+                    ProviderAircraftAssignment? provider =
+                        await _providerResolver.ResolveAsync(
+                                offer,
+                                terms.AircraftRequirements,
+                                cancellationToken)
+                            .ConfigureAwait(false);
+
+                    if (provider is null)
+                        continue;
 
                     provider.Validate(
                         offer.OriginIcao);
@@ -225,6 +242,13 @@ public sealed class CareerJobAircraftSelectionSource
             string aircraftId =
                 owned.AircraftId.Trim();
 
+            if (_jobBoards is not null
+                && !await MatchesAnyActiveOfferAsync(aircraftId)
+                    .ConfigureAwait(false))
+            {
+                continue;
+            }
+
             if (!await IsAircraftAvailableAsync(
                     aircraftId)
                 .ConfigureAwait(false))
@@ -271,6 +295,22 @@ public sealed class CareerJobAircraftSelectionSource
                 true,
             ordered,
             detail);
+
+        async Task<bool> MatchesAnyActiveOfferAsync(string aircraftId)
+        {
+            foreach (AircraftMissionRequirements requirements in activeRequirements)
+            {
+                if (await _providerResolver.IsEligibleAsync(
+                        aircraftId,
+                        requirements,
+                        cancellationToken).ConfigureAwait(false))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         async Task<bool> IsAircraftAvailableAsync(
             string aircraftId)

@@ -172,6 +172,7 @@ public sealed class CareerJobStartInputSource
     private readonly ICareerJobDispatchAuthoritySource[] _dispatchAuthoritySources;
     private readonly TimeProvider _timeProvider;
     private readonly IOwnershipStore? _ownership;
+    private readonly ProviderAircraftAssignmentResolver _providerResolver;
 
     public CareerJobStartInputSource(
         IJobBoardStateStore jobBoards,
@@ -182,7 +183,8 @@ public sealed class CareerJobStartInputSource
         IEnumerable<ICareerJobContractTermsSource> contractTermSources,
         IEnumerable<ICareerJobDispatchAuthoritySource> dispatchAuthoritySources,
         TimeProvider timeProvider,
-        IOwnershipStore? ownership = null)
+        IOwnershipStore? ownership = null,
+        ProviderAircraftAssignmentResolver? providerResolver = null)
     {
         _jobBoards =
             jobBoards
@@ -209,6 +211,7 @@ public sealed class CareerJobStartInputSource
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
         _ownership = ownership;
+        _providerResolver = providerResolver ?? new ProviderAircraftAssignmentResolver();
 
         if (_contractTermSources.Any(static source => source is null))
         {
@@ -370,8 +373,33 @@ public sealed class CareerJobStartInputSource
         bool providerAircraftSelected =
             selectedProviderAircraftInstanceId is not null;
 
+        if (!providerAircraftSelected
+            && (terms.ProviderAircraft is not null
+                || existing?.Contract.ProviderAircraft is not null))
+        {
+            return Blocked(CareerJobStartInputState.AircraftUnavailable, offerId,
+                "This operation already has a provider-aircraft assignment.");
+        }
+
+        ProviderAircraftAssignment? providerAircraft =
+            providerAircraftSelected
+                ? existing?.Contract.ProviderAircraft
+                    ?? await _providerResolver.ResolveAsync(
+                            offer,
+                            terms.AircraftRequirements,
+                            cancellationToken)
+                        .ConfigureAwait(false)
+                : null;
+
+        if (terms.ProviderAircraft is { } legacyAssignment
+            && providerAircraft != legacyAssignment)
+        {
+            return Blocked(CareerJobStartInputState.AircraftUnavailable, offerId,
+                "The persisted offer and accepted contract disagree on the provider airframe.");
+        }
+
         if (providerAircraftSelected
-            && (terms.ProviderAircraft is not { } providerAircraft
+            && (providerAircraft is null
                 || providerAircraft.ProviderAircraftInstanceId
                     != selectedProviderAircraftInstanceId
                 || !string.Equals(
@@ -404,7 +432,7 @@ public sealed class CareerJobStartInputSource
                 terms.MarketId,
                 terms.WorldEventId,
                 terms.GovernmentAuthorizationRequired,
-                terms.ProviderAircraft);
+                providerAircraft);
 
         creationRequest.Validate();
 
@@ -415,17 +443,12 @@ public sealed class CareerJobStartInputSource
                     cancellationToken)
                 .ConfigureAwait(false);
 
-        if (resolution is null
-            || (!providerAircraftSelected
-                && resolution.InstallationStatus
-                    != AircraftInstallationStatus.Installed))
+        if (resolution is null)
         {
             return Blocked(
                 CareerJobStartInputState.AircraftUnavailable,
                 offerId,
-                resolution is null
-                    ? $"Selected aircraft '{aircraftId}' has no registry resolution."
-                    : $"Selected aircraft '{aircraftId}' resolved with installation status {resolution.InstallationStatus}, not Installed.");
+                $"Selected aircraft '{aircraftId}' has no registry resolution.");
         }
 
         AircraftRegistryRecord? aircraft =
@@ -433,7 +456,7 @@ public sealed class CareerJobStartInputSource
             ?? TryCreateConservativeJobRecord(
                 resolution,
                 requireInstalled:
-                    !providerAircraftSelected);
+                    false);
 
         if (aircraft is null)
         {
@@ -504,25 +527,15 @@ public sealed class CareerJobStartInputSource
         }
 
         DispatchFeasibilityResult preflight =
-            providerAircraftSelected
-                ? await _dispatchPlanning
-                    .EvaluateRegisteredAircraftAsync(
-                        aircraft.AircraftId,
-                        offer.OriginIcao,
-                        offer.DestinationIcao,
-                        dispatchAuthority.Requirements,
-                        reservationId:
-                            null,
-                        cancellationToken)
-                    .ConfigureAwait(false)
-                : await _dispatchPlanning
-                    .EvaluateAsync(
-                        aircraft.AircraftId,
-                        offer.OriginIcao,
-                        offer.DestinationIcao,
-                        dispatchAuthority.Requirements,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+            await _dispatchPlanning
+                .EvaluateRegisteredAircraftAsync(
+                    aircraft.AircraftId,
+                    offer.OriginIcao,
+                    offer.DestinationIcao,
+                    dispatchAuthority.Requirements,
+                    reservationId: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         if (preflight.Status
             == DispatchFeasibilityStatus.Infeasible)
@@ -580,15 +593,27 @@ public sealed class CareerJobStartInputSource
             if (_ownership is null)
                 throw new InvalidOperationException("Ownership authority is unavailable.");
 
+            if (offer.ContractTerms is not null
+                && !await _providerResolver.IsEligibleAsync(
+                        aircraftId,
+                        terms.AircraftRequirements,
+                        cancellationToken)
+                    .ConfigureAwait(false))
+            {
+                return Blocked(CareerJobStartInputState.AircraftUnavailable, offerId,
+                    "The selected owned aircraft is not a supported aircraft satisfying this offer's requirements.");
+            }
+
             OwnershipSnapshot owned = await _ownership.LoadSnapshotAsync(
                 profile.CareerId.ToString("D"), cancellationToken).ConfigureAwait(false);
             if (!owned.Aircraft.Any(item =>
                     item.OwnershipId == selectedOwnershipId
                     && item.CareerId == profile.CareerId.ToString("D")
                     && item.Status == OwnedAircraftStatus.Active
+                    && string.Equals(item.CurrentAirportIcao, offer.OriginIcao, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(item.AircraftId, aircraftId, StringComparison.OrdinalIgnoreCase)))
                 return Blocked(CareerJobStartInputState.AircraftUnavailable, offerId,
-                    "The selected owned airframe is not active for this career and aircraft model.");
+                    "The selected owned airframe is not active at the offer origin for this career and aircraft model.");
         }
 
         return new(

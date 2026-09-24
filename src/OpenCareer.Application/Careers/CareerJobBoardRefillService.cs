@@ -1,6 +1,3 @@
-using System.Collections.Immutable;
-using OpenCareer.Application.Planning;
-using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Careers;
 
@@ -47,11 +44,6 @@ public sealed class CareerJobBoardRefillService
             MaximumOffers = 2,
             ShowLockedPreviews = false
         };
-
-    private static readonly ProviderAircraftType PlayableLoopProviderAircraft =
-        new(
-            PlayableLoopAircraftRegistrySource.AircraftId,
-            PlayableLoopAircraftRegistrySource.AircraftTitle);
 
     private readonly JobBoardGenerationService _generation;
     private readonly IJobBoardStateStore _store;
@@ -167,18 +159,12 @@ public sealed class CareerJobBoardRefillService
                     AllowedContractKinds:
                         SupportedKinds,
                     ProviderAircraft:
-                        PlayableLoopProviderAircraft);
+                        null);
 
             JobBoardState board =
                 await _generation
                     .RefreshAsync(
                         request,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-            board =
-                await EnsureProviderAssignmentsAsync(
-                        board,
                         cancellationToken)
                     .ConfigureAwait(false);
 
@@ -199,84 +185,6 @@ public sealed class CareerJobBoardRefillService
         {
             _gate.Release();
         }
-    }
-
-    private async Task<JobBoardState> EnsureProviderAssignmentsAsync(
-        JobBoardState board,
-        CancellationToken cancellationToken)
-    {
-        bool changed = false;
-
-        ImmutableArray<JobMarketOfferDraft> offers =
-            board.Offers
-                .Select(
-                    offer =>
-                    {
-                        JobMarketContractTermsEnvelope? terms =
-                            offer.ContractTerms;
-
-                        if (terms is null
-                            || terms.ProviderAircraft is not null
-                            || !string.Equals(
-                                terms.AuthorityId,
-                                PersistedJobContractTermsSource.AuthorityId,
-                                StringComparison.Ordinal)
-                            || offer.ServiceTrack
-                                != ServiceTrack.CivilianEmployment
-                            || offer.Kind is not (
-                                ContractKind.Ferry
-                                or ContractKind.Reposition)
-                            || offer.Scenario
-                                != JobScenarioKind.Standard)
-                        {
-                            return offer;
-                        }
-
-                        changed = true;
-
-                        return offer with
-                        {
-                            ContractTerms =
-                                terms with
-                                {
-                                    ProviderAircraft =
-                                        ProviderAircraftAssignment.CreateForOffer(
-                                            offer.OfferId,
-                                            PlayableLoopProviderAircraft,
-                                            offer.OriginIcao)
-                                }
-                        };
-                    })
-                .ToImmutableArray();
-
-        if (!changed)
-            return board;
-
-        JobBoardState upgraded =
-            board with
-            {
-                Offers = offers
-            };
-
-        upgraded.Validate();
-
-        await _store
-            .SaveAsync(
-                upgraded,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        JobBoardState authoritative =
-            await _store
-                .GetAsync(
-                    board.AirportIcao,
-                    cancellationToken)
-                .ConfigureAwait(false)
-            ?? throw new InvalidOperationException(
-                "Provider-aircraft assignment was not readable after persistence.");
-
-        authoritative.Validate();
-        return authoritative;
     }
 
     private async Task<IReadOnlyList<JobMarketDestination>> BuildDestinationsAsync(
@@ -385,10 +293,7 @@ public sealed class CareerJobBoardRefillService
                     "Job-board store returned a different airport than the authoritative career location.");
             }
 
-            return await EnsureProviderAssignmentsAsync(
-                    existing,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            return existing;
         }
 
         JobBoardState empty =

@@ -273,6 +273,65 @@ public sealed class CareerJobStartInputSourceTests
     }
 
     [Fact]
+    public async Task RequirementOnlyOfferAssignsSupportedProviderWithoutSimulatorOrInstalledCatalog()
+    {
+        JobMarketOfferDraft offer = OfferWithProvider(ProviderAssignment());
+        offer = offer with
+        {
+            ContractTerms = offer.ContractTerms! with { ProviderAircraft = null }
+        };
+
+        var registry = new AircraftRegistryCatalogService(
+            [new PlayableLoopAircraftRegistrySource()]);
+        TestFixture fixture = CreateFixture(
+            [new PersistedJobContractTermsSource()],
+            [new StandardCivilianPointToPointDispatchAuthoritySource()],
+            registry: registry,
+            offer: offer);
+
+        ProviderAircraftAssignment expected = Assert.IsType<ProviderAircraftAssignment>(
+            await new ProviderAircraftAssignmentResolver().ResolveAsync(
+                offer, offer.ContractTerms!.AircraftRequirements));
+
+        CareerJobStartInputSnapshot first = await fixture.Source.ReadAsync(
+            offer.OfferId, expected.AircraftId, expected.ProviderAircraftInstanceId);
+        CareerJobStartInputSnapshot retry = await fixture.Source.ReadAsync(
+            offer.OfferId, expected.AircraftId, expected.ProviderAircraftInstanceId);
+
+        Assert.True(first.IsReady, first.Detail);
+        Assert.Equal(expected, first.Request!.Contract.ProviderAircraft);
+        Assert.Equal(expected, retry.Request!.Contract.ProviderAircraft);
+        Assert.Null(offer.ContractTerms.ProviderAircraft);
+        Assert.Equal(AircraftInstallationStatus.KnownOnly,
+            (await registry.FindAircraftAsync(expected.AircraftId))!.InstallationStatus);
+    }
+
+    [Fact]
+    public async Task RequirementOnlyOfferAcceptsEligibleLocalOwnedAircraftWithoutInstalledCatalog()
+    {
+        JobMarketOfferDraft offer = OfferWithProvider(ProviderAssignment());
+        offer = offer with
+        {
+            ContractTerms = offer.ContractTerms! with { ProviderAircraft = null }
+        };
+        TestFixture fixture = CreateFixture(
+            [new PersistedJobContractTermsSource()],
+            [new StandardCivilianPointToPointDispatchAuthoritySource()],
+            registry: new AircraftRegistryCatalogService([new PlayableLoopAircraftRegistrySource()]),
+            offer: offer,
+            ownedAircraftId: PlayableLoopAircraftRegistrySource.AircraftId);
+
+        CareerJobStartInputSnapshot result = await fixture.Source.ReadAsync(
+            offer.OfferId,
+            PlayableLoopAircraftRegistrySource.AircraftId,
+            selectedOwnershipId: "ownership-one");
+
+        Assert.True(result.IsReady, result.Detail);
+        Assert.Null(result.Request!.Contract.ProviderAircraft);
+        Assert.Equal("ownership-one", result.Request.SelectedOwnershipId);
+    }
+
+    [Fact]
     public async Task ProviderAircraftDoesNotBypassQualificationFailure()
     {
         ProviderAircraftAssignment provider =
@@ -381,7 +440,8 @@ public sealed class CareerJobStartInputSourceTests
         DateTimeOffset? acceptedAt = null,
         IAircraftRegistrySource? registry = null,
         JobMarketOfferDraft? offer = null,
-        PilotQualificationState? profileQualifications = null)
+        PilotQualificationState? profileQualifications = null,
+        string ownedAircraftId = "fixture-aircraft")
     {
         offer ??=
             Offer();
@@ -444,7 +504,7 @@ public sealed class CareerJobStartInputSourceTests
                     CareerAircraftTestData.Snapshot(
                         profile.CareerId,
                         CareerAircraftTestData.Owned(
-                            profile.CareerId, "ownership-one", "fixture-aircraft", "Fixture"))));
+                            profile.CareerId, "ownership-one", ownedAircraftId, "Fixture"))));
 
         return new(
             source,

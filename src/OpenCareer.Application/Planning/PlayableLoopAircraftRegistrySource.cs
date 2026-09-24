@@ -37,7 +37,14 @@ public sealed class PlayableLoopAircraftRegistrySource : IAircraftRegistryObserv
                     EngineCount: 1,
                     IfrCapable: false,
                     Pressurized: false,
-                    RetractableGear: false)]
+                    RetractableGear: false,
+                    RunwayPerformance: new AircraftRunwayPerformanceProfile(
+                        MinimumTakeoffRunwayFeet: 2_500,
+                        MinimumLandingRunwayFeet: 2_000,
+                        MinimumRunwayWidthFeet: 50,
+                        SupportedSurfaces: RunwaySurfaceSupport.Asphalt | RunwaySurfaceSupport.Concrete,
+                        Confidence: AircraftDataConfidence.Reference,
+                        Source: "opencareer-c172-conservative-dispatch-baseline"))]
                 : [];
 
         return Task.FromResult(observations);

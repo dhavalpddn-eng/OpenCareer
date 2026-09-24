@@ -94,20 +94,9 @@ public sealed class CareerJobBoardRefillServiceTests
                         OpenCareer.Domain.Aircraft.AircraftAccess.Civilian,
                         terms.AuthorizedAircraftAccess);
 
-                    ProviderAircraftAssignment provider =
-                        Assert.IsType<ProviderAircraftAssignment>(
-                            terms.ProviderAircraft);
-
-                    Assert.NotEqual(
-                        offer.OfferId,
-                        provider.ProviderAircraftInstanceId);
-                    Assert.Equal(
-                        OpenCareer.Domain.Aircraft.AircraftCanonicalIdentity.FromMsfsTitle(
-                            "Cessna 172 Skyhawk"),
-                        provider.AircraftId);
-                    Assert.Equal(
-                        offer.OriginIcao,
-                        provider.OriginIcao);
+                    Assert.Null(terms.ProviderAircraft);
+                    Assert.Equal(offer.DistanceNm,
+                        terms.AircraftRequirements.MinimumRangeNauticalMiles);
                 });
 
             var reopened =
@@ -189,7 +178,7 @@ public sealed class CareerJobBoardRefillServiceTests
         Assert.All(
             second.Offers,
             static offer =>
-                Assert.NotNull(
+                Assert.Null(
                     offer.ContractTerms!
                         .ProviderAircraft));
 
@@ -208,7 +197,7 @@ public sealed class CareerJobBoardRefillServiceTests
     }
 
     [Fact]
-    public async Task PersistedLegacyPlayableOfferGetsOneDeterministicProviderAssignment()
+    public async Task PersistedRequirementOnlyOfferRemainsUnassignedOnRefresh()
     {
         var store =
             new FakeBoardStore();
@@ -249,29 +238,46 @@ public sealed class CareerJobBoardRefillServiceTests
         await store.SaveAsync(
             legacy);
 
-        JobBoardState upgraded =
+        JobBoardState refreshed =
             await service.RefillAsync(
                 profile);
 
         Assert.All(
-            upgraded.Offers,
+            refreshed.Offers,
             static offer =>
-            {
-                ProviderAircraftAssignment provider =
-                    Assert.IsType<ProviderAircraftAssignment>(
-                        offer.ContractTerms!
-                            .ProviderAircraft);
+                Assert.Null(offer.ContractTerms!.ProviderAircraft));
 
-                Assert.Equal(
-                    ProviderAircraftAssignment.CreateForOffer(
+        Assert.Equal(legacy.Offers.ToArray(), refreshed.Offers.ToArray());
+    }
+
+    [Fact]
+    public async Task PersistedLegacyProviderOfferKeepsExactAssignedInstanceOnRefresh()
+    {
+        var store = new FakeBoardStore();
+        var service = Service(store, Airports(), new FixedTimeProvider(Epoch));
+        PlayerCareerProfile profile = Profile("KRME");
+        JobBoardState initial = await service.RefillAsync(profile);
+        JobBoardState legacy = initial with
+        {
+            Offers = initial.Offers.Select(offer => offer with
+            {
+                ContractTerms = offer.ContractTerms! with
+                {
+                    ProviderAircraft = ProviderAircraftAssignment.CreateForOffer(
                         offer.OfferId,
-                        new ProviderAircraftType(
-                            OpenCareer.Domain.Aircraft.AircraftCanonicalIdentity.FromMsfsTitle(
-                                "Cessna 172 Skyhawk"),
-                            "Cessna 172 Skyhawk"),
-                        offer.OriginIcao),
-                    provider);
-            });
+                        new ProviderAircraftType(PlayableLoopAircraftRegistrySource.AircraftId,
+                            PlayableLoopAircraftRegistrySource.AircraftTitle),
+                        offer.OriginIcao)
+                }
+            }).ToImmutableArray()
+        };
+        await store.SaveAsync(legacy);
+
+        JobBoardState refreshed = await service.RefillAsync(profile);
+
+        Assert.Equal(legacy.Offers.ToArray(), refreshed.Offers.ToArray());
+        Assert.All(refreshed.Offers,
+            static offer => Assert.NotNull(offer.ContractTerms!.ProviderAircraft));
     }
 
     [Fact]

@@ -444,10 +444,31 @@ public sealed class JobAcceptanceFleetBridgeTests
         Assert.NotEqual(
             baseRequest.Offer.OfferId,
             provider.ProviderAircraftInstanceId);
+
+        // The offer itself has no airframe; a new bridge reuses the contract's
+        // exact assignment and the existing reservation after recovery.
+        Assert.Null(request.Offer.ContractTerms?.ProviderAircraft);
+        AcceptedJobDispatchResult replay =
+            await CreateDispatchBridge(
+                    contractStore,
+                    new FakeBoardStore(BoardWithOffer(request.Offer)),
+                    reservationStore,
+                    StandardAirports(),
+                    isInstalled: false)
+                .AcceptReserveAndEvaluateAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime),
+                    new OperationDispatchRequirements(0, 150),
+                    provider.ProviderAircraftInstanceId);
+
+        Assert.Equal(provider,
+            replay.FleetResult.AcceptedContract?.Contract.ProviderAircraft);
+        Assert.Equal(JobAcceptanceFleetStatus.AcceptedAndReservationReused,
+            replay.FleetResult.Status);
     }
 
     [Fact]
-    public async Task KnownAircraftWithoutProviderInstanceKeepsInstalledGate()
+    public async Task KnownAircraftWithoutProviderInstanceCanBeReservedWithoutInstalledCatalog()
     {
         JobContractCreationRequest request =
             Request();
@@ -470,14 +491,14 @@ public sealed class JobAcceptanceFleetBridgeTests
                     DispatchContext(request.AcceptanceTime));
 
         Assert.Equal(
-            JobAcceptanceFleetStatus.AircraftNotInstalled,
+            JobAcceptanceFleetStatus.AcceptedAndReserved,
             result.Status);
-        Assert.Null(
+        Assert.NotNull(
             result.AcceptedContract);
         Assert.Equal(
-            0,
+            1,
             reservationStore.TryReserveCount);
-        Assert.Null(
+        Assert.NotNull(
             await contractStore.ReadJobContractAsync(
                 request.Offer.OfferId));
     }

@@ -74,25 +74,15 @@ public sealed class AcceptedJobDispatchBridge(
                 "Successful Fleet association did not retain the authoritative accepted contract.");
 
         DispatchFeasibilityResult dispatchResult =
-            selectedProviderAircraftInstanceId is not null
-                ? await _dispatchPlanning
-                    .EvaluateRegisteredAircraftAsync(
-                        context.Aircraft.AircraftId,
-                        accepted.Contract.OriginIcao,
-                        accepted.Contract.DestinationIcao,
-                        requirements,
-                        fleetResult.ReservationId,
-                        cancellationToken)
-                    .ConfigureAwait(false)
-                : await _dispatchPlanning
-                    .EvaluateAsync(
-                        context.Aircraft.AircraftId,
-                        accepted.Contract.OriginIcao,
-                        accepted.Contract.DestinationIcao,
-                        requirements,
-                        fleetResult.ReservationId,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+            await _dispatchPlanning
+                .EvaluateRegisteredAircraftAsync(
+                    context.Aircraft.AircraftId,
+                    accepted.Contract.OriginIcao,
+                    accepted.Contract.DestinationIcao,
+                    requirements,
+                    fleetResult.ReservationId,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         return new(
             fleetResult,

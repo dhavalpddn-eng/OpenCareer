@@ -18,22 +18,26 @@ public sealed class PlayableLoopReferenceAirportObservationSource(
                 "KJFK",
                 "John F Kennedy International",
                 40.6399,
-                -73.7787),
+                -73.7787,
+                "04L/22R", 12_079, 200, RunwaySurface.Concrete),
             ["KRME"] = Airport(
                 "KRME",
                 "Griffiss International",
                 43.2338,
-                -75.4069),
+                -75.4069,
+                "15/33", 11_820, 200, RunwaySurface.Asphalt),
             ["KSYR"] = Airport(
                 "KSYR",
                 "Syracuse Hancock International",
                 43.1112,
-                -76.1063),
+                -76.1063,
+                "10/28", 9_013, 150, RunwaySurface.Asphalt),
             ["KALB"] = Airport(
                 "KALB",
                 "Albany International",
                 42.7483,
-                -73.8017)
+                -73.8017,
+                "01/19", 8_500, 150, RunwaySurface.Asphalt)
         };
 
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
@@ -80,7 +84,7 @@ public sealed class PlayableLoopReferenceAirportObservationSource(
                     ProviderId,
                     AirportDataAuthority.Reference,
                     _clock.GetUtcNow(),
-                    Revision: "faa-reference-2026-09"));
+                    Revision: "faa-chart-supplement-2026-01"));
 
         observation.Validate();
         return Task.FromResult<AirportDataObservation?>(observation);
@@ -90,11 +94,24 @@ public sealed class PlayableLoopReferenceAirportObservationSource(
         string icao,
         string name,
         double latitude,
-        double longitude) =>
+        double longitude,
+        string runwayDesignation,
+        double runwayLengthFeet,
+        double runwayWidthFeet,
+        RunwaySurface runwaySurface) =>
         new(
             icao,
             name,
-            Array.Empty<RunwayRecord>(),
+            // FAA Northeast Chart Supplement, 22 Jan–19 Mar 2026:
+            // aeronav.faa.gov/afd/22JAN2026/NE_225_22JAN2026.pdf (KJFK)
+            // aeronav.faa.gov/afd/22JAN2026/NE_240_22JAN2026.pdf (KRME)
+            // aeronav.faa.gov/afd/22JAN2026/NE_249_22JAN2026.pdf (KSYR)
+            // aeronav.faa.gov/afd/22JAN2026/NE_187_22JAN2026.pdf (KALB)
+            [new RunwayRecord(
+                runwayDesignation,
+                runwayLengthFeet,
+                runwayWidthFeet,
+                runwaySurface)],
             latitude,
             longitude);
 }

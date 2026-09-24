@@ -55,11 +55,10 @@ public sealed class JobAcceptanceFleetBridge
         ArgumentNullException.ThrowIfNull(context.Aircraft);
         context.Aircraft.Validate();
 
-        bool providerAircraftSelected =
-            ValidateProviderAircraftSelection(
-                request,
-                context.Aircraft.AircraftId,
-                selectedProviderAircraftInstanceId);
+        ValidateProviderAircraftSelection(
+            request,
+            context.Aircraft.AircraftId,
+            selectedProviderAircraftInstanceId);
 
         if (context.Time != request.AcceptanceTime)
         {
@@ -106,7 +105,6 @@ public sealed class JobAcceptanceFleetBridge
                     await ReserveAsync(
                             context.Aircraft.AircraftId,
                             reservationId,
-                            providerAircraftSelected,
                             cancellationToken)
                         .ConfigureAwait(false);
 
@@ -120,7 +118,6 @@ public sealed class JobAcceptanceFleetBridge
                 await ReserveAsync(
                         context.Aircraft.AircraftId,
                         reservationId,
-                        providerAircraftSelected,
                         cancellationToken)
                     .ConfigureAwait(false);
 
@@ -197,27 +194,29 @@ public sealed class JobAcceptanceFleetBridge
     private Task<AircraftReservationRequestResult> ReserveAsync(
         string aircraftId,
         string reservationId,
-        bool providerAircraftSelected,
         CancellationToken cancellationToken) =>
-        providerAircraftSelected
-            ? _reservationCoordinator
-                .ReserveRegisteredAircraftAsync(
-                    aircraftId,
-                    reservationId,
-                    cancellationToken)
-            : _reservationCoordinator
-                .ReserveAsync(
-                    aircraftId,
-                    reservationId,
-                    cancellationToken);
+        _reservationCoordinator
+            .ReserveRegisteredAircraftAsync(
+                aircraftId,
+                reservationId,
+                cancellationToken);
 
-    private static bool ValidateProviderAircraftSelection(
+    private static void ValidateProviderAircraftSelection(
         JobContractCreationRequest request,
         string selectedAircraftId,
         Guid? selectedProviderAircraftInstanceId)
     {
         if (selectedProviderAircraftInstanceId is null)
-            return false;
+        {
+            if (request.ProviderAircraft is not null)
+            {
+                throw new ArgumentException(
+                    "A provider-aircraft assignment requires selection of its exact instance.",
+                    nameof(selectedProviderAircraftInstanceId));
+            }
+
+            return;
+        }
 
         if (request.ProviderAircraft is not { } providerAircraft
             || providerAircraft.ProviderAircraftInstanceId
@@ -231,8 +230,6 @@ public sealed class JobAcceptanceFleetBridge
                 "The selected provider-aircraft instance does not belong to the accepted contract and canonical aircraft identity.",
                 nameof(selectedProviderAircraftInstanceId));
         }
-
-        return true;
     }
 
     private async Task ReleaseIfAcceptanceDidNotPersistAsync(

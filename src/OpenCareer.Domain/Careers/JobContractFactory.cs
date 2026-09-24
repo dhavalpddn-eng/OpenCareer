@@ -33,8 +33,8 @@ public sealed record JobContractCreationRequest(
         ProviderAircraft?.Validate(
             Offer.OriginIcao);
 
-        if (Offer.ContractTerms?.ProviderAircraft
-            != ProviderAircraft)
+        if (Offer.ContractTerms?.ProviderAircraft is { } offerAssignment
+            && offerAssignment != ProviderAircraft)
         {
             throw new InvalidOperationException(
                 "Accepted provider-aircraft terms must match the persisted offer.");

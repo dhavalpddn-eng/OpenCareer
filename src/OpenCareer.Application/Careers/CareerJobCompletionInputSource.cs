@@ -268,13 +268,12 @@ public sealed class CareerJobCompletionInputSource
             aircraft?.CapabilityValues.DisplayName;
 
         if (aircraft is null
-            || aircraft.InstallationStatus != AircraftInstallationStatus.Installed
             || string.IsNullOrWhiteSpace(displayName))
         {
             return Blocked(
                 CareerJobCompletionInputState.AircraftDebriefUnavailable,
                 contractId,
-                "Installed-aircraft registry identity is insufficient to create the authoritative debrief.");
+                "Canonical aircraft registry identity is insufficient to create the authoritative debrief.");
         }
 
         CareerJobMissionCompletionEvidence? mission =
