@@ -101,6 +101,51 @@ public sealed class FlightSessionOperationsTests
     }
 
     [Fact]
+    public async Task CompletionUsesLatestSessionTimeWhenRequestedTimestampIsStale()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore();
+
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        await persistence.StartAsync(Epoch);
+
+        await AdvanceToShutdownAsync(persistence);
+
+        FlightSession shutdown =
+            Assert.IsType<FlightSession>(
+                coordinator.Current);
+
+        var service =
+            new FlightSessionCompletionService(
+                coordinator,
+                persistence);
+
+        FlightSession completed =
+            await service.CompleteAsync(
+                new FlightSessionCompletionRequest(
+                    Epoch.AddSeconds(6),
+                    MissionConditionsVerified: true,
+                    PostFlightTasksVerified: true));
+
+        Assert.Equal(
+            FlightSessionStatus.Completed,
+            completed.Status);
+        Assert.Equal(
+            shutdown.UpdatedAt,
+            completed.Milestones.CompletedAt);
+        Assert.Equal(
+            shutdown.UpdatedAt,
+            completed.UpdatedAt);
+    }
+
+    [Fact]
     public void ContractBridgeCreatesProviderNeutralPlanAndCompletesOnlyMatchingSession()
     {
         JobContract contract =
