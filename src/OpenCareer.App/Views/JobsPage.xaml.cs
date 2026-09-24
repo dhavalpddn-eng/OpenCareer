@@ -109,4 +109,15 @@ public sealed partial class JobsPage : Page
                 _navigationCts?.Token
                     ?? CancellationToken.None);
     }
+
+    private async void GenerateDevelopmentFlight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not JobsViewModel viewModel) return;
+        try
+        {
+            await viewModel.GenerateDevelopmentFlightAsync(PositionTestPilot.IsChecked == true,
+                _navigationCts?.Token ?? CancellationToken.None);
+        }
+        catch (OperationCanceledException) { }
+    }
 }

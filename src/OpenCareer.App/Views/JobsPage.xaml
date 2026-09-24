@@ -39,6 +39,15 @@
                     <TextBlock Text="{Binding AcceptanceStatus}"
                                Style="{StaticResource OpenCareerPaperBodyStyle}"
                                TextWrapping="Wrap" />
+                    <Expander Header="TEST / DEVELOPMENT" HorizontalAlignment="Stretch">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="KJFK local circuit. Zero pay or career experience. Real logbook, provider wear and damage. No active flight. Optional positioning changes the pilot's career location only."
+                                       TextWrapping="Wrap" Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                            <CheckBox x:Name="PositionTestPilot" Content="Move career pilot to KJFK for testing (no aircraft moved)" />
+                            <Button Content="Generate KJFK test flight" Click="GenerateDevelopmentFlight_Click"
+                                    Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
+                        </StackPanel>
+                    </Expander>
                 </StackPanel>
             </Border>
 

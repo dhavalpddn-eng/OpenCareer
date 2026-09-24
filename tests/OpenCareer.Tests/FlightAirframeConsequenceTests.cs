@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Careers;
+using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Infrastructure.Flights;
 using OpenCareer.Infrastructure.Ownership;
@@ -304,6 +305,32 @@ public sealed class FlightAirframeConsequenceTests
             Assert.Null((await reopened.ReadLatestAsync())?.Application?.After);
             Assert.Empty((await reopened.LoadSnapshotAsync("career")).Aircraft);
             Assert.Equal(1, await CountRowsAsync(path, "flight_airframe_consequences"));
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task DevelopmentProviderStillGetsRealConsequenceExactlyOnceAfterRestart()
+    {
+        var offer = DevelopmentFlight.CreateOffer(Guid.NewGuid(), Start);
+        var provider = Assert.IsType<ProviderAircraftAssignment>(await new ProviderAircraftAssignmentResolver()
+            .ResolveAsync(offer, offer.ContractTerms!.AircraftRequirements));
+        var identity = new FlightSessionAircraftIdentity(FlightSessionAircraftKind.Provider,
+            provider.ProviderAircraftInstanceId.ToString("D"), provider.AircraftId);
+        string path = TemporaryPath();
+        try
+        {
+            var store = new SqliteOwnershipStore(path);
+            await store.InitializeAsync();
+            var result = FlightAirframeConsequenceCalculator.Calculate(Finalized(identity, 1450));
+            await store.ApplyAsync(result);
+            var reopened = new SqliteOwnershipStore(path);
+            await reopened.ApplyAsync(result);
+            var saved = await reopened.ReadAsync(result.Summary.SessionId);
+            Assert.Equal(identity, saved?.Summary.Aircraft);
+            Assert.Equal(FlightDamageSeverity.MinorDamage, saved?.Severity);
+            Assert.Equal(1, await CountRowsAsync(path, "flight_airframe_consequences"));
+            Assert.Empty((await reopened.LoadSnapshotAsync("career")).Aircraft);
         }
         finally { Cleanup(path); }
     }

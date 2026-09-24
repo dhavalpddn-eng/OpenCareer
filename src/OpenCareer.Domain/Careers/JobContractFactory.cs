@@ -180,6 +180,24 @@ public static class JobContractFactory
         JobMarketOfferDraft offer =
             request.Offer;
 
+        // Development offers still use normal contract creation and settlement.
+        // Zero rates apply only to the explicit persisted development identity.
+        if (DevelopmentFlight.IsDevelopment(offer))
+        {
+            if (request.MarketId != DevelopmentFlight.MarketId
+                || offer.OriginIcao != "KJFK" || offer.DestinationIcao != "KJFK"
+                || request.ReputationReward != 0 || request.ReputationPenalty != 0
+                || request.EstimatedPlayerOperatingCosts != 0)
+                throw new InvalidOperationException("Invalid development flight terms.");
+
+            payPolicy = ContractPayPolicy.Default with
+            {
+                TimeRatePerFlightHour = 0,
+                DistanceRatePerNauticalMile = 0,
+                PayloadRatePerPoundNauticalMile = 0
+            };
+        }
+
         ContractPayQuote quote =
             ContractPayQuoteEngine.Quote(
                 new ContractPayQuoteRequest(

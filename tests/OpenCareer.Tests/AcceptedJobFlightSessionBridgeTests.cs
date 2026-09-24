@@ -18,11 +18,18 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         AircraftCanonicalIdentity.FromMsfsTitle(
             "Fixture Aircraft");
 
-    [Fact]
-    public async Task SuccessfulContractStartCreatesPersistentContractLinkedSession()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SuccessfulContractStartCreatesPersistentContractLinkedSession(bool development)
     {
         PersistedJobContract accepted =
             AcceptedContract();
+        if (development)
+            accepted = accepted with { Contract = accepted.Contract with
+            {
+                MarketId = DevelopmentFlight.MarketId, OriginIcao = "KJFK", DestinationIcao = "KJFK"
+            } };
         var contractStore =
             new FakeContractStore(accepted);
         var sessionStore =
@@ -53,10 +60,10 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             accepted.Contract.ContractId,
             result.FlightSession.SessionId);
         Assert.Equal(
-            "KRME",
+            development ? "KJFK" : "KRME",
             result.FlightSession.Plan?.PlannedOrigin);
         Assert.Equal(
-            "KSYR",
+            development ? "KJFK" : "KSYR",
             result.FlightSession.Plan?.PlannedDestination);
         Assert.Equal(
             result.FlightSession,
@@ -173,8 +180,10 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         Assert.Equal(1, contractStore.UpdateCount);
     }
 
-    [Fact]
-    public async Task WrongAircraftBlocksWithoutMutationAndCorrectRetryStartsOnce()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WrongAircraftBlocksWithoutMutationAndCorrectRetryStartsOnce(bool development)
     {
         ProviderAircraftAssignment provider =
             ProviderAircraftAssignment.CreateForOffer(
@@ -187,6 +196,15 @@ public sealed class AcceptedJobFlightSessionBridgeTests
 
         PersistedJobContract accepted =
             AcceptedContract(provider);
+        if (development)
+        {
+            provider = provider with { OriginIcao = "KJFK" };
+            accepted = accepted with { Contract = accepted.Contract with
+            {
+                MarketId = DevelopmentFlight.MarketId, OriginIcao = "KJFK", DestinationIcao = "KJFK",
+                ProviderAircraft = provider
+            } };
+        }
         var contractStore =
             new FakeContractStore(accepted);
         var sessionStore =

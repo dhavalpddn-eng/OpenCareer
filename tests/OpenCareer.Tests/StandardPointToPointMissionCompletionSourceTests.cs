@@ -14,6 +14,33 @@ public sealed class StandardPointToPointMissionCompletionSourceTests
     private static readonly DateTimeOffset Epoch =
         new(2026, 9, 22, 8, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DevelopmentLocalCircuitRequiresRealTakeoffAndLanding(bool flew)
+    {
+        Guid id = Guid.NewGuid();
+        var contract = InProgressContract(id, ContractKind.Reposition) with
+        {
+            OriginIcao = "KJFK", DestinationIcao = "KJFK", MarketId = DevelopmentFlight.MarketId
+        };
+        var session = ShutdownSession(id, 40.6413, -73.7781) with
+        { Plan = new FlightSessionPlan("KJFK", "KJFK") };
+        if (!flew)
+            session = session with { Tracking = session.Tracking with { TakeoffCount = 0, LandingEpisodeCount = 0 } };
+        var source = new StandardPointToPointMissionCompletionSource(new StubAirportSource(
+            Destination() with { Icao = "KJFK", LatitudeDegrees = 40.6413, LongitudeDegrees = -73.7781 }),
+            StandardPointToPointMissionPolicy.Default);
+        var evidence = await source.ReadAsync(contract, session);
+        if (flew)
+        {
+            Assert.NotNull(evidence);
+            Assert.True(evidence.MissionConditionsVerified);
+            Assert.Equal("KJFK", evidence.ActualArrival);
+        }
+        else Assert.Null(evidence);
+    }
+
     [Fact]
     public async Task FerryAtContractedDestinationProducesVerifiedMissionEvidence()
     {

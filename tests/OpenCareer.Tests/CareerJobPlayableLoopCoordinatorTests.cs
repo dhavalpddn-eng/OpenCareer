@@ -137,7 +137,37 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             result.Terminal.Finalization.Status);
     }
 
-    private static TestContext CreateContext()
+    [Fact]
+    public async Task DevelopmentCompletionUsesTerminalWorkflowWithoutPayOrExperienceAndReplaysFiveTimes()
+    {
+        TestContext context = CreateContext(development: true);
+        for (int i = 0; i < 5; i++)
+        {
+            var result = await context.Coordinator.CompleteAsync(context.Request);
+            Assert.Equal(ContractStatus.Completed, result.CompletedContract.Contract.Status);
+            Assert.Equal(0m, result.Terminal.Settlement.Settlement.Transaction.TotalDebits);
+            Assert.Equal(PilotExperienceTotals.Empty, result.Terminal.CareerProfile.Profile.Experience);
+            Assert.Contains(result.Terminal.Logbook.Entry.Debrief.DebriefId,
+                result.Terminal.CareerProfile.Profile.AppliedExperienceDebriefIds);
+            Assert.True(result.Terminal.CareerProfile.SavedAt >= result.Terminal.Logbook.Entry.CommittedAt);
+            Assert.Equal("KJFK", result.Terminal.CareerProfile.Profile.Location.CurrentAirportIcao);
+        }
+        Assert.Single(context.Logbook.Entries);
+        Assert.Equal(1, context.Ledger.UniquePostCount);
+        Assert.Equal(1, context.Fleet.ReleaseCount);
+        Assert.Equal(1, context.CheckpointStore.ClearCount);
+        Assert.Null(context.Sessions.Current);
+
+        var entry = Assert.Single(context.Logbook.Entries);
+        var restartedExperience = new PlayerCareerExperienceCoordinator(context.ProfileStore,
+            new PlayerCareerRuntimeState(context.ProfileStore), context.ContractStore);
+        var recovered = await restartedExperience.ApplyCommittedAsync(entry,
+            context.Request.ExperienceSavedAt.AddMinutes(1));
+        Assert.Equal(PilotExperienceTotals.Empty, recovered.Profile.Experience);
+        Assert.Equal(2, context.ProfileStore.SaveCount);
+    }
+
+    private static TestContext CreateContext(bool development = false)
     {
         Guid contractId =
             Guid.Parse(
@@ -146,6 +176,19 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         PersistedJobContract inProgress =
             InProgressContract(
                 contractId);
+
+        if (development)
+        {
+            var offer = DevelopmentFlight.CreateOffer(contractId, Epoch.AddHours(-1));
+            var terms = offer.ContractTerms!;
+            var contract = JobContractFactory.Create(new JobContractCreationRequest(
+                offer, Epoch, terms.AircraftRequirements, terms.EstimatedFlightHours, 0, 1, 0, 0,
+                ReputationReward: 0, ReputationPenalty: 0, MarketId: DevelopmentFlight.MarketId));
+            inProgress = new(contract with
+            {
+                Status = ContractStatus.InProgress, AcceptedAt = Epoch, StartedAt = Epoch
+            }, 2);
+        }
 
         var contractStore =
             new FakeContractStore(
@@ -158,6 +201,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         FlightSession shutdownSession =
             ShutdownSession(
                 contractId);
+        if (development)
+            shutdownSession = shutdownSession with { Plan = new FlightSessionPlan("KJFK", "KJFK") };
 
         var sessions =
             new FlightSessionCoordinator();
@@ -219,7 +264,9 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
 
         var profileStore =
             new FakeProfileStore(
-                InitialProfile());
+                development ? new PlayerCareerProfileStoreRecord(1,
+                    PlayerCareerProfile.Start(Guid.NewGuid(), "KJFK", Epoch.AddHours(-2)), Epoch.AddHours(-1))
+                    : InitialProfile());
 
         var profileRuntime =
             new PlayerCareerRuntimeState(
@@ -229,7 +276,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             new CareerLogbookExperienceCoordinator(
                 new PlayerCareerExperienceCoordinator(
                     profileStore,
-                    profileRuntime));
+                    profileRuntime,
+                    contractStore));
 
         var location =
             new PlayerCareerLocationCoordinator(
@@ -375,6 +423,15 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                 logbookCommittedAt,
                 ExperienceSavedAt:
                     logbookCommittedAt.AddMinutes(1));
+
+        if (development)
+            request = request with
+            {
+                LogbookContext = request.LogbookContext with
+                {
+                    ActualDeparture = "KJFK", ActualArrival = "KJFK", ReputationDelta = 0
+                }
+            };
 
         return new(
             coordinator,

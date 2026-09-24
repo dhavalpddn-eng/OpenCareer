@@ -88,6 +88,40 @@ public sealed class JobBoardGenerationService
         }
     }
 
+    internal async Task<JobMarketOfferDraft> AddDevelopmentOfferAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        await _stateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            JobBoardState board = await _store.GetAsync("KJFK", cancellationToken)
+                .ConfigureAwait(false) ?? JobBoardState.Empty("KJFK", now);
+            board.Validate();
+            EnsureAirportIdentity(board, "KJFK");
+            if (now < board.UpdatedAt) now = board.UpdatedAt;
+            JobMarketOfferDraft? existing = board.Offers.FirstOrDefault(
+                offer => DevelopmentFlight.IsDevelopment(offer) && offer.ExpiresAt > now);
+            if (existing is not null) return existing;
+
+            foreach (JobMarketOfferDraft expired in board.Offers.Where(DevelopmentFlight.IsDevelopment))
+                board = board.Retire(expired.OfferId, now);
+
+            JobMarketOfferDraft created = DevelopmentFlight.CreateOffer(Guid.NewGuid(), now);
+            JobBoardState next = board with { UpdatedAt = now, Offers = board.Offers.Add(created) };
+            next.Validate();
+            await _store.SaveAsync(next, cancellationToken).ConfigureAwait(false);
+            JobBoardState saved = await _store.GetAsync("KJFK", cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Development offer was not durably stored.");
+            saved.Validate();
+            JobMarketOfferDraft? persisted = saved.Offers.SingleOrDefault(offer => offer.OfferId == created.OfferId);
+            if (persisted is null || !DevelopmentFlight.IsDevelopment(persisted))
+                throw new InvalidOperationException("Development offer was not durably stored.");
+            return persisted;
+        }
+        finally { _stateGate.Release(); }
+    }
+
     private static void EnsureAirportIdentity(
         JobBoardState state,
         string expectedAirportIcao)

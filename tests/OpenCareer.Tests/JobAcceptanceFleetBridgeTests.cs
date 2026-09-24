@@ -549,6 +549,33 @@ public sealed class JobAcceptanceFleetBridgeTests
             reservations);
     }
 
+    [Fact]
+    public async Task DevelopmentOfferAcceptsReservesAndDispatchesAtSameAirportWithoutInstalledCatalog()
+    {
+        var offer = DevelopmentFlight.CreateOffer(Guid.NewGuid(), OfferedAt);
+        var terms = offer.ContractTerms!;
+        var provider = ProviderAircraftAssignment.CreateForOffer(offer.OfferId,
+            new ProviderAircraftType("canonical-aircraft", "Provider test aircraft"), "KJFK");
+        var request = new JobContractCreationRequest(offer, OfferedAt.AddMinutes(1),
+            terms.AircraftRequirements, terms.EstimatedFlightHours, 0, 1, 0, 0,
+            ReputationReward: 0, ReputationPenalty: 0, MarketId: DevelopmentFlight.MarketId,
+            ProviderAircraft: provider);
+        var store = new FakeContractStore();
+        var fleet = new StatefulReservationStore();
+        var board = new FakeBoardStore(BoardWithOffer(offer));
+        var airport = StandardAirports()[0] with { Icao = "KJFK" };
+        var bridge = CreateDispatchBridge(store, board, fleet, [airport], isInstalled: false);
+        var result = await bridge.AcceptReserveAndEvaluateAsync(request,
+            DispatchContext(request.AcceptanceTime), new OperationDispatchRequirements(0, 0),
+            provider.ProviderAircraftInstanceId);
+        Assert.Equal(JobAcceptanceFleetStatus.AcceptedAndReserved, result.FleetResult.Status);
+        Assert.Equal(DispatchFeasibilityStatus.Feasible, result.DispatchResult?.Status);
+        Assert.Equal(provider, result.FleetResult.AcceptedContract?.Contract.ProviderAircraft);
+        Assert.Equal(0m, result.FleetResult.AcceptedContract?.Contract.Compensation.PilotCompensation);
+        Assert.Equal(1, fleet.AcquiredCount);
+        Assert.Contains(offer.OfferId, board.State!.RetiredOfferIds);
+    }
+
     private static AcceptedJobDispatchBridge CreateDispatchBridge(
         FakeContractStore contractStore,
         FakeBoardStore boardStore,

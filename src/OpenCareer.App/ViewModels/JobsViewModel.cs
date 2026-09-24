@@ -12,6 +12,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private readonly PlayerCareerRuntimeState _career;
     private readonly TimeProvider _timeProvider;
     private readonly ICareerJobBoardRefillService? _boardRefill;
+    private readonly DevelopmentFlightService? _developmentFlights;
     private readonly ICareerJobPreFlightSessionRecoveryService? _startRecovery;
     private readonly CareerJobAircraftSelectionSource? _aircraftSelection;
     private readonly ICareerJobStartAction? _startAction;
@@ -65,7 +66,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         ICareerJobStartAction? startAction,
         ILogger<JobsViewModel>? logger,
         ICareerJobBoardRefillService? boardRefill = null,
-        ICareerJobPreFlightSessionRecoveryService? startRecovery = null)
+        ICareerJobPreFlightSessionRecoveryService? startRecovery = null,
+        DevelopmentFlightService? developmentFlights = null)
     {
         _jobBoards =
             jobBoards
@@ -78,6 +80,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(timeProvider));
         _boardRefill =
             boardRefill;
+        _developmentFlights = developmentFlights;
         _startRecovery =
             startRecovery;
         _aircraftSelection =
@@ -98,6 +101,26 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public string StatusText => _statusText;
     public string AircraftStatus => _aircraftStatus;
     public string AcceptanceStatus => _acceptanceStatus;
+
+    public async Task GenerateDevelopmentFlightAsync(bool positionPilotAtKjfk, CancellationToken cancellationToken = default)
+    {
+        await _startGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_developmentFlights is null)
+                throw new InvalidOperationException("Development flight generation is unavailable.");
+            await _developmentFlights.GenerateAsync(positionPilotAtKjfk, cancellationToken);
+            await RefreshAsync(cancellationToken);
+            SetField(ref _acceptanceStatus,
+                "TEST / DEVELOPMENT offer ready. Select its contract-supplied Cessna. Zero pay and career experience; real wear/damage and logbook.",
+                nameof(AcceptanceStatus));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SetField(ref _acceptanceStatus, ex.Message, nameof(AcceptanceStatus));
+        }
+        finally { _startGate.Release(); }
+    }
 
     public async Task RefreshAsync(
         CancellationToken cancellationToken = default)
@@ -679,7 +702,7 @@ public sealed class JobOfferItemViewModel
         $"{Offer.OriginIcao} → {Offer.DestinationIcao}";
 
     public string KindText =>
-        Friendly(
+        DevelopmentFlight.IsDevelopment(Offer) ? DevelopmentFlight.Name : Friendly(
             Offer.Kind);
 
     public string TrackText =>

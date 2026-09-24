@@ -7,16 +7,19 @@ public sealed class PlayerCareerExperienceCoordinator
 {
     private readonly IPlayerCareerProfileStore _store;
     private readonly PlayerCareerRuntimeState _runtime;
+    private readonly IJobContractStore? _contracts;
     private readonly SemaphoreSlim _applyGate = new(1, 1);
 
     public PlayerCareerExperienceCoordinator(
         IPlayerCareerProfileStore store,
-        PlayerCareerRuntimeState runtime)
+        PlayerCareerRuntimeState runtime,
+        IJobContractStore? contracts = null)
     {
         _store = store
             ?? throw new ArgumentNullException(nameof(store));
         _runtime = runtime
             ?? throw new ArgumentNullException(nameof(runtime));
+        _contracts = contracts;
     }
 
     public async Task<PlayerCareerProfileStoreRecord> ApplyCommittedAsync(
@@ -34,6 +37,14 @@ public sealed class PlayerCareerExperienceCoordinator
 
         PilotExperienceTotals increment =
             ExperienceIncrement(entry.Debrief);
+        if (_contracts is not null && entry.Debrief.ContractId is { } contractId)
+        {
+            PersistedJobContract contract = await _contracts.ReadJobContractAsync(
+                contractId, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Committed career flight contract is unavailable.");
+            if (DevelopmentFlight.IsDevelopment(contract.Contract))
+                increment = PilotExperienceTotals.Empty;
+        }
         increment.Validate();
 
         await _applyGate
