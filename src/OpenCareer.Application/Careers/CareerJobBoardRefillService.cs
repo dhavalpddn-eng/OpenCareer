@@ -50,9 +50,8 @@ public sealed class CareerJobBoardRefillService
 
     private static readonly ProviderAircraftType PlayableLoopProviderAircraft =
         new(
-            AircraftCanonicalIdentity.FromMsfsTitle(
-                "Cessna 172 Skyhawk"),
-            "Cessna 172 Skyhawk");
+            PlayableLoopAircraftRegistrySource.AircraftId,
+            PlayableLoopAircraftRegistrySource.AircraftTitle);
 
     private readonly JobBoardGenerationService _generation;
     private readonly IJobBoardStateStore _store;

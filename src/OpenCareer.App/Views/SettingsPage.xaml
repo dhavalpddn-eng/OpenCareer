@@ -191,6 +191,9 @@
                         </StackPanel>
                     </Grid>
 
+                    <TextBlock Text="LIVE AIRCRAFT IDENTITY" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                    <TextBlock Text="{Binding LiveAircraftIdentity}" TextWrapping="Wrap" Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+
                     <Button Content="Refresh diagnostics"
                             Style="{StaticResource OpenCareerSecondaryButtonStyle}"
                             HorizontalAlignment="Left"

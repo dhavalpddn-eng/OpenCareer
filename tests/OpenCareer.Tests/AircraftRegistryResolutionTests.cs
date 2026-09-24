@@ -6,6 +6,61 @@ namespace OpenCareer.Tests;
 public class AircraftRegistryResolutionTests
 {
     [Fact]
+    public void BasicC172MapsToSupportedCareerIdentityWithoutConflatingCargoVariant()
+    {
+        Assert.Equal(PlayableLoopAircraftRegistrySource.AircraftId,
+            AircraftCanonicalIdentity.FromMsfsTitle(
+                "Cessna 172 Skyhawk - Asobo Studio Basic"));
+        Assert.NotEqual(PlayableLoopAircraftRegistrySource.AircraftId,
+            AircraftCanonicalIdentity.FromMsfsTitle(
+                "Cessna 172 Skyhawk - Asobo Studio G1000 Cargo"));
+    }
+
+    [Fact]
+    public async Task ProviderBootstrapResolvesWithoutInstalledAircraftCatalog()
+    {
+        var registry = new AircraftRegistryCatalogService(
+        [
+            new PlayableLoopAircraftRegistrySource()
+        ]);
+
+        AircraftRegistryResolution resolution = Assert.IsType<AircraftRegistryResolution>(
+            await registry.FindAircraftAsync(PlayableLoopAircraftRegistrySource.AircraftId));
+
+        Assert.Equal(AircraftInstallationStatus.KnownOnly, resolution.InstallationStatus);
+        Assert.Equal(PlayableLoopAircraftRegistrySource.AircraftTitle,
+            resolution.CapabilityValues.DisplayName);
+        Assert.NotNull(resolution.TryCreateRegistryRecord());
+        Assert.Null(await registry.FindAircraftAsync(
+            AircraftCanonicalIdentity.FromMsfsTitle("Some other aircraft")));
+    }
+
+    [Fact]
+    public async Task InstalledDiscoveryEnrichesBootstrapWithoutControllingProviderIdentity()
+    {
+        var registry = new AircraftRegistryCatalogService(
+        [
+            new PlayableLoopAircraftRegistrySource(),
+            new StubObservationSource(
+            [
+                new AircraftRegistryObservation(
+                    PlayableLoopAircraftRegistrySource.AircraftId,
+                    "msfs-installed",
+                    "installed-title",
+                    AircraftDataConfidence.Verified,
+                    IsInstalled: true)
+            ])
+        ]);
+
+        AircraftRegistryResolution resolution = Assert.IsType<AircraftRegistryResolution>(
+            await registry.FindAircraftAsync(PlayableLoopAircraftRegistrySource.AircraftId));
+
+        Assert.Equal(AircraftInstallationStatus.Installed, resolution.InstallationStatus);
+        Assert.Equal("opencareer-provider-bootstrap",
+            resolution.Provenance[AircraftRegistryField.Access].ProviderId);
+    }
+
+    [Fact]
     public void HigherConfidenceWinsPerFieldWithoutUnioningCapabilities()
     {
         AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(

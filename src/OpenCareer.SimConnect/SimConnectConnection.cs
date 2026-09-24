@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Telemetry;
 using OpenCareer.SimConnect.Native;
 
@@ -789,6 +790,19 @@ public sealed class SimConnectConnection
     private void PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot snapshot) =>
         Volatile.Write(ref _aircraftCatalog, snapshot);
 
-    private void PublishCurrentAircraftTitle(string? title) =>
+    private void PublishCurrentAircraftTitle(string? title)
+    {
+        string? previous = Volatile.Read(ref _currentAircraftTitle);
+        if (string.Equals(previous, title, StringComparison.Ordinal))
+            return;
+
         Volatile.Write(ref _currentAircraftTitle, title);
+        _logger.LogInformation(
+            "Live aircraft TITLE changed: raw={RawTitle}, canonical={CanonicalAircraftId}, connection={ConnectionState}.",
+            title ?? "(unavailable)",
+            string.IsNullOrWhiteSpace(title)
+                ? "(unavailable)"
+                : AircraftCanonicalIdentity.FromMsfsTitle(title),
+            Current.State);
+    }
 }

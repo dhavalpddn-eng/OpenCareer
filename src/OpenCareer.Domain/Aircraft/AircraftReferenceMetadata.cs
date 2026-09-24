@@ -44,7 +44,18 @@ public static class AircraftCanonicalIdentity
     public static string FromMsfsTitle(string aircraftTitle)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftTitle);
-        return MsfsTitlePrefix + aircraftTitle.Trim();
+        string title = aircraftTitle.Trim();
+
+        // Explicitly recognize the Basic variant seen in the live simulator picker.
+        // Other variants, including Cargo, retain distinct identities. The live
+        // SimConnect TITLE is still logged so this mapping can be verified in MSFS.
+        if (string.Equals(title, "Cessna 172 Skyhawk - Asobo Studio Basic",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            title = "Cessna 172 Skyhawk";
+        }
+
+        return MsfsTitlePrefix + title;
     }
 
     public static bool TryGetMsfsTitle(string canonicalAircraftId, out string aircraftTitle)

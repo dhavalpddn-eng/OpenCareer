@@ -1,12 +1,15 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using OpenCareer.App.Services;
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Planning;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Telemetry;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Domain.Aircraft;
 
 namespace OpenCareer.App.ViewModels;
 
@@ -21,6 +24,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private readonly OpenCareerDataPaths _paths;
     private readonly IFlightAirframeConsequenceStore _airframeConsequences;
     private readonly FlightSessionCoordinator _flightSessions;
+    private readonly ILiveAircraftIdentitySource _liveAircraft;
+    private readonly IAircraftRegistrySource _aircraftRegistry;
+    private readonly ILogger<SettingsViewModel> _logger;
 
     private string _actionStatus = "Ready.";
     private bool _isBusy;
@@ -32,6 +38,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private string _telemetryState = "No telemetry";
     private string _lastTelemetry = "—";
     private string _aircraftRuntimeState = "—";
+    private string _liveAircraftIdentity = "No live aircraft TITLE received";
+    private string? _lastResolvedTitle;
+    private bool _resolvingTitle;
     private string _latestAirframeConsequence = "No finalized flight consequence yet.";
 
     public SettingsViewModel(
@@ -43,7 +52,10 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         ShellOpenService shell,
         OpenCareerDataPaths paths,
         IFlightAirframeConsequenceStore airframeConsequences,
-        FlightSessionCoordinator flightSessions)
+        FlightSessionCoordinator flightSessions,
+        ILiveAircraftIdentitySource liveAircraft,
+        IAircraftRegistrySource aircraftRegistry,
+        ILogger<SettingsViewModel> logger)
     {
         _settings = settings;
         _connection = connection;
@@ -54,6 +66,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _paths = paths;
         _airframeConsequences = airframeConsequences;
         _flightSessions = flightSessions;
+        _liveAircraft = liveAircraft;
+        _aircraftRegistry = aircraftRegistry;
+        _logger = logger;
 
         _settings.Changed += OnSettingsChanged;
         RefreshDiagnostics();
@@ -96,6 +111,43 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public string TelemetryState => _telemetryState;
     public string LastTelemetry => _lastTelemetry;
     public string AircraftRuntimeState => _aircraftRuntimeState;
+    public string LiveAircraftIdentity => _liveAircraftIdentity;
+
+    public async Task RefreshLiveAircraftIdentityAsync()
+    {
+        string? title = _liveAircraft.CurrentAircraftTitle;
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            _lastResolvedTitle = null;
+            SetField(ref _liveAircraftIdentity, "No live aircraft TITLE received", nameof(LiveAircraftIdentity));
+            return;
+        }
+
+        if (_resolvingTitle || string.Equals(title, _lastResolvedTitle, StringComparison.Ordinal))
+            return;
+
+        _resolvingTitle = true;
+        try
+        {
+            string canonical = AircraftCanonicalIdentity.FromMsfsTitle(title);
+            AircraftRegistryResolution? resolution = await _aircraftRegistry.FindAircraftAsync(canonical);
+            SetField(ref _liveAircraftIdentity,
+                $"TITLE: {title} | AircraftId: {canonical} | Registry: {(resolution is null ? "unresolved" : resolution.InstallationStatus.ToString())}",
+                nameof(LiveAircraftIdentity));
+            _logger.LogInformation(
+                "Live aircraft registry: raw={RawTitle}, canonical={CanonicalAircraftId}, resolved={Resolved}, connection={ConnectionState}.",
+                title, canonical, resolution is not null, _connection.Current.State);
+            _lastResolvedTitle = title;
+        }
+        catch (Exception ex)
+        {
+            SetField(ref _liveAircraftIdentity, $"TITLE: {title} | Registry error: {ex.Message}", nameof(LiveAircraftIdentity));
+        }
+        finally
+        {
+            _resolvingTitle = false;
+        }
+    }
     public string LatestAirframeConsequence => _latestAirframeConsequence;
 
     public async Task RefreshLatestAirframeConsequenceAsync(

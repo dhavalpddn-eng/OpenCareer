@@ -38,6 +38,7 @@ internal static class PlanningServiceRegistration
         services.AddSingleton<IAircraftReservationLookup>(provider =>
             provider.GetRequiredService<SqliteAircraftAvailabilityStore>());
         services.AddSingleton<AircraftReservationCoordinator>();
+        services.AddSingleton<IAircraftRegistryObservationSource, PlayableLoopAircraftRegistrySource>();
         services.AddSingleton<PersistentInstalledAircraftObservationSource>();
         services.AddSingleton<IAircraftRegistryObservationSource>(provider =>
             provider.GetRequiredService<PersistentInstalledAircraftObservationSource>());

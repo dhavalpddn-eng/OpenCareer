@@ -31,6 +31,7 @@ public sealed partial class SettingsPage : Page
 
         ApplyPreferenceControls();
         _settings.RefreshDiagnostics();
+        await _settings.RefreshLiveAircraftIdentityAsync();
 
         _diagnosticTimer = DispatcherQueue.CreateTimer();
         _diagnosticTimer.Interval = TimeSpan.FromSeconds(1);
@@ -76,8 +77,12 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void OnDiagnosticTimerTick(DispatcherQueueTimer sender, object args) =>
+    private async void OnDiagnosticTimerTick(DispatcherQueueTimer sender, object args)
+    {
         _settings?.RefreshDiagnostics();
+        if (_settings is not null)
+            await _settings.RefreshLiveAircraftIdentityAsync();
+    }
 
     private async void UnitsComboBox_SelectionChanged(
         object sender,
@@ -135,7 +140,10 @@ public sealed partial class SettingsPage : Page
     {
         _settings?.RefreshDiagnostics();
         if (_settings is not null)
+        {
+            await _settings.RefreshLiveAircraftIdentityAsync();
             await _settings.RefreshLatestAirframeConsequenceAsync();
+        }
     }
 
     private async void CreateBackup_Click(object sender, RoutedEventArgs e)
