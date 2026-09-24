@@ -63,6 +63,30 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     }
 
     [Fact]
+    public async Task AcceptedProviderRecoversAfterLiveTitleWasUnavailableBeforeSelectionCheckpoint()
+    {
+        ProviderAircraftAssignment provider = ProviderAircraftAssignment.CreateForOffer(
+            Guid.Parse("c1000000-0000-0000-0000-000000000001"),
+            new ProviderAircraftType(FixtureAircraftId, "Fixture Aircraft"),
+            "KRME");
+        TestContext context = CreateContext(
+            Persisted(ContractStatus.Accepted, provider),
+            hasReservation: true,
+            now: StartedAt,
+            hasAirframeSelection: false);
+
+        CareerJobPreFlightSessionRecoveryResult result = await context.Recovery.RecoverAsync();
+
+        Assert.True(result.Recovered);
+        Assert.Equal(FlightSessionAircraftKind.Provider, context.Sessions.Current?.AircraftIdentity?.Kind);
+        Assert.Equal(provider.ProviderAircraftInstanceId.ToString("D"),
+            context.Sessions.Current?.AircraftIdentity?.InstanceId);
+        Assert.Equal(FixtureAircraftId, context.Sessions.Current?.AircraftIdentity?.AircraftId);
+        Assert.Equal(1, context.Contracts.UpdateCount);
+        Assert.Equal(1, context.Checkpoints.SaveCount);
+    }
+
+    [Fact]
     public async Task InProgressContractRecoversFlightSessionWithoutSecondLifecycleTransition()
     {
         TestContext context =
@@ -157,7 +181,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     private static TestContext CreateContext(
         PersistedJobContract persisted,
         bool hasReservation,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        bool hasAirframeSelection = true)
     {
         var contracts =
             new FakeContractStore(
@@ -238,7 +263,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                     checkpoints),
                 sessions,
                 new FixedLiveAircraftIdentitySource(),
-                new FixedAirframeSelectionStore(FixtureAircraftId));
+                new FixedAirframeSelectionStore(FixtureAircraftId,
+                    hasAirframeSelection));
 
         var service =
             new CareerJobPreFlightSessionRecoveryService(
@@ -261,7 +287,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     }
 
     private static PersistedJobContract Persisted(
-        ContractStatus status)
+        ContractStatus status,
+        ProviderAircraftAssignment? provider = null)
     {
         var contract =
             new JobContract(
@@ -307,6 +334,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                             0),
                 Status:
                     status,
+                ProviderAircraft:
+                    provider,
                 AcceptedAt:
                     AcceptedAt,
                 StartedAt:
@@ -616,17 +645,20 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
         }
     }
 
-    private sealed class FixedAirframeSelectionStore(string aircraftId)
+    private sealed class FixedAirframeSelectionStore(string aircraftId, bool hasSelection)
         : IContractAirframeSelectionStore
     {
         private FlightSessionAircraftIdentity? _selected =
-            new(FlightSessionAircraftKind.Owned, "fixture-ownership", aircraftId);
+            hasSelection
+                ? new(FlightSessionAircraftKind.Owned, "fixture-ownership", aircraftId)
+                : null;
 
         public Task SaveAsync(Guid contractId, FlightSessionAircraftIdentity identity,
             CancellationToken cancellationToken = default)
         {
-            if (_selected != identity)
+            if (_selected is not null && _selected != identity)
                 throw new InvalidOperationException("Recovery cannot switch aircraft.");
+            _selected = identity;
             return Task.CompletedTask;
         }
 

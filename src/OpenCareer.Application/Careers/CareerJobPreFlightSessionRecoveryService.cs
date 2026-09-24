@@ -307,7 +307,9 @@ public sealed class CareerJobPreFlightSessionRecoveryService
                             fleet,
                             dispatch),
                         context,
-                        cancellationToken)
+                        cancellationToken,
+                        selectedProviderAircraftInstanceId:
+                            contract.ProviderAircraft?.ProviderAircraftInstanceId)
                     .ConfigureAwait(false);
 
             return Result(
@@ -379,7 +381,9 @@ public sealed class CareerJobPreFlightSessionRecoveryService
                     DispatchResult:
                         null),
                 context,
-                cancellationToken)
+                cancellationToken,
+                selectedProviderAircraftInstanceId:
+                    inProgress.Contract.ProviderAircraft?.ProviderAircraftInstanceId)
             .ConfigureAwait(false);
     }
 

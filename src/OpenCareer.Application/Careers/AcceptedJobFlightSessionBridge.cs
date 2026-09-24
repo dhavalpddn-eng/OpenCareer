@@ -131,15 +131,17 @@ public sealed class AcceptedJobFlightSessionBridge
                 || (authoritative.Contract.Status == ContractStatus.InProgress
                     && current is null);
 
+            if (_airframeSelections is not null)
+                await _airframeSelections.SaveAsync(contractId, identity, cancellationToken)
+                    .ConfigureAwait(false);
+
+            // Acceptance and Fleet reservation are already durable. Keep the
+            // chosen instance even when SimConnect temporarily loses TITLE.
             if (requiresLiveAircraftValidation)
             {
                 ValidateLiveAircraft(
                     acceptedDispatch);
             }
-
-            if (_airframeSelections is not null)
-                await _airframeSelections.SaveAsync(contractId, identity, cancellationToken)
-                    .ConfigureAwait(false);
 
             PersistedJobContract started =
                 authoritative.Contract.Status switch

@@ -281,6 +281,37 @@ public sealed class AcceptedJobFlightSessionBridgeTests
     }
 
     [Fact]
+    public async Task MissingLiveTitleKeepsSelectedProviderForRetry()
+    {
+        ProviderAircraftAssignment provider = ProviderAircraftAssignment.CreateForOffer(
+            Guid.Parse("96000000-0000-0000-0000-000000000001"),
+            new ProviderAircraftType(SelectedAircraftId, "Fixture Aircraft"), "KRME");
+        PersistedJobContract accepted = AcceptedContract(provider);
+        var contracts = new FakeContractStore(accepted);
+        var sessions = new MemorySessionStore();
+        var selected = new MemoryAirframeSelectionStore();
+        var live = new FakeLiveAircraftIdentitySource(null);
+        AcceptedJobFlightSessionBridge bridge = CreateBridge(
+            contracts, sessions, new FlightSessionCoordinator(), live, selected);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => bridge.StartAsync(
+            DispatchResult(accepted), DispatchContext(OfferedAt.AddMinutes(20)),
+            selectedProviderAircraftInstanceId: provider.ProviderAircraftInstanceId));
+
+        Assert.Equal(ContractStatus.Accepted, contracts.Current.Contract.Status);
+        Assert.Equal(0, contracts.UpdateCount);
+        Assert.Equal(0, sessions.SaveCount);
+        Assert.Equal(provider.ProviderAircraftInstanceId.ToString("D"), selected.Identity?.InstanceId);
+
+        live.CurrentAircraftTitle = "Fixture Aircraft";
+        StartedJobFlightSessionResult retried = await bridge.StartAsync(
+            DispatchResult(accepted), DispatchContext(OfferedAt.AddMinutes(20)));
+        Assert.Equal(selected.Identity, retried.FlightSession.AircraftIdentity);
+        Assert.Equal(1, contracts.UpdateCount);
+        Assert.Equal(1, sessions.SaveCount);
+    }
+
+    [Fact]
     public async Task UnrecognizedLiveAircraftBlocksBeforeMutation()
     {
         PersistedJobContract accepted =
@@ -475,7 +506,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         FakeContractStore contractStore,
         MemorySessionStore sessionStore,
         FlightSessionCoordinator coordinator,
-        ILiveAircraftIdentitySource? liveAircraft = null)
+        ILiveAircraftIdentitySource? liveAircraft = null,
+        IContractAirframeSelectionStore? airframeSelections = null)
     {
         var lifecycle =
             new JobContractLifecycleService(
@@ -497,7 +529,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             coordinator,
             liveAircraft
             ?? new FakeLiveAircraftIdentitySource(
-                "Fixture Aircraft"));
+                "Fixture Aircraft"),
+            airframeSelections);
     }
 
     private static AcceptedJobDispatchResult DispatchResult(
@@ -611,6 +644,23 @@ public sealed class AcceptedJobFlightSessionBridgeTests
     {
         public string? CurrentAircraftTitle { get; set; } =
             currentAircraftTitle;
+    }
+
+    private sealed class MemoryAirframeSelectionStore : IContractAirframeSelectionStore
+    {
+        public FlightSessionAircraftIdentity? Identity { get; private set; }
+
+        public Task SaveAsync(Guid contractId, FlightSessionAircraftIdentity identity,
+            CancellationToken cancellationToken = default)
+        {
+            if (Identity is not null && Identity != identity)
+                throw new InvalidOperationException("Airframe selection changed on replay.");
+            Identity = identity;
+            return Task.CompletedTask;
+        }
+
+        public Task<FlightSessionAircraftIdentity?> ReadAsync(Guid contractId,
+            CancellationToken cancellationToken = default) => Task.FromResult(Identity);
     }
 
     private sealed class FakeContractStore(
