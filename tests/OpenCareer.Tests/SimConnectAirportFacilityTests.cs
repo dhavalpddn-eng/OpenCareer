@@ -102,6 +102,38 @@ public sealed class SimConnectAirportFacilityTests
     }
 
     [Fact]
+    public async Task TruncatedFacilityResponseFailsOnlyAirportLookupAndKeepsLiveTitle()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api);
+        var source = new SimConnectAirportDataObservationSource(connection);
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+
+        api.Enqueue(SimConnectPackets.StringSimObjectData(
+            SimConnectCurrentAircraftDefinition.RequestId,
+            SimConnectCurrentAircraftDefinition.DefinitionId,
+            "C172SP Classic Passengers"));
+        await Until(() => connection.CurrentAircraftTitle == "C172SP Classic Passengers");
+
+        Task<AirportDataObservation?> lookup = source.FindAirportObservationAsync("KAAA");
+        await Until(() => api.FacilityRequests.Count == 1);
+
+        byte[] packet = SimConnectPackets.AirportFacility(
+            api.FacilityRequests.Single().RequestId, 41, "Fixture Municipal", "KAAA");
+        Array.Resize(ref packet, packet.Length - 4);
+        BitConverter.GetBytes((uint)packet.Length).CopyTo(packet, 0);
+        api.Enqueue(packet);
+
+        Assert.Null(await lookup.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+        Assert.Equal("C172SP Classic Passengers", connection.CurrentAircraftTitle);
+        Assert.Equal(1, api.Attempts);
+    }
+
+    [Fact]
     public async Task FacilityRequestUsesOwnedWorkerAndMapsAirportRunways()
     {
         var api = new SimConnectTestTransport();

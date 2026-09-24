@@ -20,6 +20,21 @@ internal static class SimConnectMessageDecoder
     private const int AirportFacilityPayloadSize = 88;
     private const int RunwayFacilityPayloadSize = 50;
 
+    internal static bool TryGetFacilityRequestId(nint data, uint bufferSize, out uint requestId)
+    {
+        requestId = 0;
+        if (data == nint.Zero || bufferSize < HeaderSize + sizeof(uint))
+            return false;
+
+        uint declaredSize = unchecked((uint)Marshal.ReadInt32(data));
+        if (declaredSize < HeaderSize + sizeof(uint) || declaredSize > bufferSize
+            || unchecked((uint)Marshal.ReadInt32(data, 8)) != (uint)SimConnectMessageKind.FacilityData)
+            return false;
+
+        requestId = unchecked((uint)Marshal.ReadInt32(data, 12));
+        return true;
+    }
+
     internal static SimConnectMessage Decode(nint data, uint bufferSize)
     {
         if (data == nint.Zero || bufferSize < HeaderSize)

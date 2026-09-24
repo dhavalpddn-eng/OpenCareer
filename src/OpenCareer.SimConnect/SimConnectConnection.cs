@@ -230,7 +230,14 @@ public sealed class SimConnectConnection
             DispatchCallback callback = (data, size, _) =>
             {
                 // No managed exception may cross the unmanaged callback boundary.
+                uint malformedFacilityRequestId = 0;
                 try { messages.Add(SimConnectMessageDecoder.Decode(data, size)); }
+                catch (InvalidDataException) when (SimConnectMessageDecoder.TryGetFacilityRequestId(data, size, out malformedFacilityRequestId))
+                {
+                    // Bad airport data fails only its request. It must not discard
+                    // the live TITLE and telemetry by reconnecting SimConnect.
+                    messages.Add(new(SimConnectMessageKind.None, RequestId: malformedFacilityRequestId));
+                }
                 catch (Exception ex) { callbackError ??= ex; }
             };
 
@@ -257,6 +264,15 @@ public sealed class SimConnectConnection
                 {
                     switch (message.Kind)
                     {
+                        case SimConnectMessageKind.None
+                            when activeAirportFacilityRequest is not null
+                                && message.RequestId == activeAirportFacilityRequest.RequestId:
+                            _logger.LogWarning(
+                                "Malformed SimConnect airport facility response for {Icao}; using airport fallback without reconnecting.",
+                                activeAirportFacilityRequest.Query.Icao);
+                            activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
+                            activeAirportFacilityRequest = null;
+                            break;
                         case SimConnectMessageKind.Open when !acknowledged:
                             if (!ConfigureTelemetry(handle))
                                 return SimulatorConnectionIssue.SimulatorError;
