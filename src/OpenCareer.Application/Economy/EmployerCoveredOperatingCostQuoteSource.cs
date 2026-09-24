@@ -29,7 +29,8 @@ public sealed class EmployerCoveredOperatingCostQuoteSource
         if (basis.ContractId
                 != contract.ContractId
             || contract.Status
-                != ContractStatus.InProgress)
+                is not ContractStatus.InProgress
+                    and not ContractStatus.Completed)
         {
             return Task.FromResult<CareerJobOperatingCostQuote?>(
                 null);

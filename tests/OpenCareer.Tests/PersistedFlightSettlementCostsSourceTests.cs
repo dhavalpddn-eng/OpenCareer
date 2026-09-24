@@ -1,4 +1,5 @@
 using OpenCareer.Application.Careers;
+using OpenCareer.Application.Flights;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
@@ -162,6 +163,48 @@ public sealed class PersistedFlightSettlementCostsSourceTests
             () => source.ReadAsync(
                 InProgressContract(contractId),
                 ShutdownSessionWithFuel(contractId)));
+    }
+
+    [Fact]
+    public async Task CompletedContractAndSessionPreserveSettlementCostsForReplay()
+    {
+        Guid contractId =
+            Guid.Parse(
+                "a4000000-0000-0000-0000-000000000006");
+
+        var source =
+            new PersistedFlightSettlementCostsSource(
+            [
+                new CapturingPricingSource(
+                    new ContractSettlementCosts(
+                        120m,
+                        40m,
+                        15m))
+            ]);
+
+        FlightSession session =
+            CompleteSession(
+                ShutdownSessionWithFuel(
+                    contractId));
+
+        JobContract contract =
+            FlightSessionContractBridge.CompleteContract(
+                InProgressContract(
+                    contractId),
+                session);
+
+        CareerJobSettlementCostsEvidence evidence =
+            Assert.IsType<CareerJobSettlementCostsEvidence>(
+                await source.ReadAsync(
+                    contract,
+                    session));
+
+        Assert.Equal(
+            new ContractSettlementCosts(
+                120m,
+                40m,
+                15m),
+            evidence.Costs);
     }
 
     private static JobContract InProgressContract(
@@ -413,8 +456,26 @@ public sealed class PersistedFlightSettlementCostsSourceTests
                 ShutdownConfirmed:
                     shutdown,
                 Observation:
-                    observation));
+                observation));
     }
+
+    private static FlightSession CompleteSession(
+        FlightSession session) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    session.UpdatedAt.AddSeconds(1),
+                    Connected:
+                        true,
+                    StableTelemetry:
+                        true,
+                    ContinuityPlausible:
+                        true,
+                    OperationCompleteConfirmed:
+                        true),
+                ShutdownConfirmed:
+                    true));
 
     private sealed class CapturingPricingSource(
         ContractSettlementCosts costs,

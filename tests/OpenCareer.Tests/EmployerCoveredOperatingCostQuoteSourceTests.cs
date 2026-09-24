@@ -51,6 +51,45 @@ public sealed class EmployerCoveredOperatingCostQuoteSourceTests
     }
 
     [Fact]
+    public async Task CompletedCivilianEmploymentPreservesZeroCostQuoteForReplay()
+    {
+        JobContract inProgress =
+            InProgressContract(
+                ServiceTrack.CivilianEmployment,
+                CompensationModel.PilotWage,
+                coversFuel:
+                    true,
+                coversMaintenance:
+                    true,
+                coversAirportFees:
+                    true);
+
+        JobContract completed =
+            inProgress.Complete(
+                Epoch.AddMinutes(50),
+                flightCompletionVerified:
+                    true);
+
+        var source =
+            new EmployerCoveredOperatingCostQuoteSource();
+
+        CareerJobOperatingCostQuote quote =
+            Assert.IsType<CareerJobOperatingCostQuote>(
+                await source.QuoteAsync(
+                    completed,
+                    Basis(
+                        completed.ContractId)));
+
+        Assert.Equal(
+            new ContractSettlementCosts(
+                0m,
+                0m,
+                0m,
+                0m),
+            quote.Costs);
+    }
+
+    [Fact]
     public async Task OwnerPaidCompanyContractRemainsUnpriced()
     {
         JobContract contract =

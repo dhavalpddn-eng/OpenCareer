@@ -1,4 +1,5 @@
 using OpenCareer.Application.Careers;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
@@ -178,6 +179,43 @@ public sealed class StandardPointToPointMissionCompletionSourceTests
             evidence.MissionConditionsVerified);
     }
 
+    [Fact]
+    public async Task CompletedContractAndSessionPreserveVerifiedMissionEvidenceForReplay()
+    {
+        Guid contractId =
+            Guid.Parse(
+                "a3000000-0000-0000-0000-000000000006");
+
+        var source =
+            new StandardPointToPointMissionCompletionSource(
+                new StubAirportSource(
+                    Destination()),
+                StandardPointToPointMissionPolicy.Default);
+
+        FlightSession session =
+            CompleteSession(
+                ShutdownSession(
+                    contractId,
+                    43.111,
+                    -76.106));
+
+        JobContract contract =
+            FlightSessionContractBridge.CompleteContract(
+                InProgressContract(
+                    contractId,
+                    ContractKind.Ferry),
+                session);
+
+        CareerJobMissionCompletionEvidence evidence =
+            Assert.IsType<CareerJobMissionCompletionEvidence>(
+                await source.ReadAsync(
+                    contract,
+                    session));
+
+        Assert.True(
+            evidence.MissionConditionsVerified);
+    }
+
     private static AirportRecord Destination() =>
         new(
             "KSYR",
@@ -354,6 +392,24 @@ public sealed class StandardPointToPointMissionCompletionSourceTests
                         parking),
                 ShutdownConfirmed:
                     shutdown));
+
+    private static FlightSession CompleteSession(
+        FlightSession session) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    session.UpdatedAt.AddSeconds(1),
+                    Connected:
+                        true,
+                    StableTelemetry:
+                        true,
+                    ContinuityPlausible:
+                        true,
+                    OperationCompleteConfirmed:
+                        true),
+                ShutdownConfirmed:
+                    true));
 
     private sealed class StubAirportSource(
         AirportRecord? airport)

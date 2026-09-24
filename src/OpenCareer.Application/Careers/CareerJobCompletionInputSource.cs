@@ -203,24 +203,42 @@ public sealed class CareerJobCompletionInputSource
         persisted.Validate();
 
         if (persisted.Contract.Status
-            != ContractStatus.InProgress)
+            is not ContractStatus.InProgress
+                and not ContractStatus.Completed)
         {
             return Blocked(
                 CareerJobCompletionInputState.ContractNotInProgress,
                 contractId,
-                $"Career completion inputs require an InProgress contract, not {persisted.Contract.Status}.");
+                $"Career completion inputs require an InProgress or Completed contract, not {persisted.Contract.Status}.");
         }
 
         JobFlightCompletionEvidenceSnapshot? flightEvidence =
             _flightEvidence.Current;
 
-        if (session.Status != FlightSessionStatus.Active
-            || session.OperationState != FlightOperationState.Shutdown
-            || flightEvidence is null
-            || flightEvidence.ContractId != contractId
-            || flightEvidence.FlightSessionId != session.SessionId
-            || !flightEvidence.CoreFlightSequenceObserved
-            || flightEvidence.IsFailedOrCancelled)
+        bool initialCompletionReady =
+            persisted.Contract.Status == ContractStatus.InProgress
+            && session.Status == FlightSessionStatus.Active
+            && session.OperationState == FlightOperationState.Shutdown
+            && flightEvidence is not null
+            && flightEvidence.ContractId == contractId
+            && flightEvidence.FlightSessionId == session.SessionId
+            && flightEvidence.CoreFlightSequenceObserved
+            && !flightEvidence.IsFailedOrCancelled;
+
+        DateTimeOffset sessionCompletedAt =
+            session.Milestones.CompletedAt
+            ?? session.UpdatedAt;
+
+        bool terminalReplayReady =
+            persisted.Contract.Status == ContractStatus.Completed
+            && persisted.Contract.CompletedAt == sessionCompletedAt
+            && session.Status == FlightSessionStatus.Completed
+            && session.OperationState == FlightOperationState.Complete
+            && session.Tracking.State == FlightTrackingState.Complete
+            && !session.Tracking.CrashReported;
+
+        if (!initialCompletionReady
+            && !terminalReplayReady)
         {
             return Blocked(
                 CareerJobCompletionInputState.FlightEvidenceIncomplete,

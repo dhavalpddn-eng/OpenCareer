@@ -115,6 +115,31 @@ public sealed class CareerJobCompletionInputSourceTests
     }
 
     [Fact]
+    public async Task CompletedContractAndSessionProduceTerminalReplayRequest()
+    {
+        TestFixture fixture =
+            CreateFixture(
+                missionSources:
+                    [new FixedMissionSource()],
+                costSources:
+                    [new FixedCostsSource()],
+                completedReplay:
+                    true);
+
+        CareerJobCompletionInputSnapshot snapshot =
+            await fixture.Source.ReadCurrentAsync();
+
+        Assert.True(
+            snapshot.IsReady);
+        Assert.Equal(
+            ContractStatus.Completed,
+            fixture.Contract.Contract.Status);
+        Assert.Equal(
+            fixture.Contract.Contract.ContractId,
+            snapshot.Request?.ContractId);
+    }
+
+    [Fact]
     public async Task UnverifiedMissionConditionsCannotProduceRequest()
     {
         TestFixture fixture =
@@ -157,7 +182,8 @@ public sealed class CareerJobCompletionInputSourceTests
 
     private static TestFixture CreateFixture(
         IReadOnlyList<ICareerJobMissionCompletionSource> missionSources,
-        IReadOnlyList<ICareerJobSettlementCostsSource> costSources)
+        IReadOnlyList<ICareerJobSettlementCostsSource> costSources,
+        bool completedReplay = false)
     {
         Guid contractId =
             Guid.Parse(
@@ -170,6 +196,20 @@ public sealed class CareerJobCompletionInputSourceTests
         FlightSession session =
             ShutdownSession(
                 contractId);
+
+        if (completedReplay)
+        {
+            session =
+                CompleteSession(
+                    session);
+
+            contract =
+                new PersistedJobContract(
+                    FlightSessionContractBridge.CompleteContract(
+                        contract.Contract,
+                        session),
+                    contract.Version + 1);
+        }
 
         var sessions =
             new FlightSessionCoordinator();
@@ -362,6 +402,24 @@ public sealed class CareerJobCompletionInputSourceTests
                         parking),
                 ShutdownConfirmed:
                     shutdown));
+
+    private static FlightSession CompleteSession(
+        FlightSession session) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    session.UpdatedAt.AddSeconds(1),
+                    Connected:
+                        true,
+                    StableTelemetry:
+                        true,
+                    ContinuityPlausible:
+                        true,
+                    OperationCompleteConfirmed:
+                        true),
+                ShutdownConfirmed:
+                    true));
 
     private sealed record TestFixture(
         CareerJobCompletionInputSource Source,

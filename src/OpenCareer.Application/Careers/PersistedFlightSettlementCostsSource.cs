@@ -135,16 +135,27 @@ public sealed class PersistedFlightSettlementCostsSource
 
         contract.Validate();
 
-        if (contract.Status
-                != ContractStatus.InProgress
-            || flightSession.ContractId
+        bool initialCompletionReady =
+            contract.Status == ContractStatus.InProgress
+            && flightSession.Status == FlightSessionStatus.Active
+            && flightSession.OperationState == FlightOperationState.Shutdown
+            && flightSession.Tracking.State == FlightTrackingState.Parked;
+
+        DateTimeOffset sessionCompletedAt =
+            flightSession.Milestones.CompletedAt
+            ?? flightSession.UpdatedAt;
+
+        bool terminalReplayReady =
+            contract.Status == ContractStatus.Completed
+            && contract.CompletedAt == sessionCompletedAt
+            && flightSession.Status == FlightSessionStatus.Completed
+            && flightSession.OperationState == FlightOperationState.Complete
+            && flightSession.Tracking.State == FlightTrackingState.Complete;
+
+        if (flightSession.ContractId
                 != contract.ContractId
-            || flightSession.Status
-                != FlightSessionStatus.Active
-            || flightSession.OperationState
-                != FlightOperationState.Shutdown
-            || flightSession.Tracking.State
-                != FlightTrackingState.Parked
+            || (!initialCompletionReady
+                && !terminalReplayReady)
             || flightSession.Tracking.CrashReported)
         {
             return null;
