@@ -100,6 +100,43 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             context.CheckpointStore.ClearCount);
     }
 
+    [Fact]
+    public async Task CompleteRaisesStaleTerminalTimesToContractCompletion()
+    {
+        TestContext context =
+            CreateContext();
+
+        DateTimeOffset staleTerminalTime =
+            context.Request.FlightCompletionTime
+                .AddMinutes(-1);
+
+        CareerJobPlayableCompletionResult result =
+            await context.Coordinator.CompleteAsync(
+                context.Request with
+                {
+                    SettledAt = staleTerminalTime,
+                    LogbookCommittedAt = staleTerminalTime,
+                    ExperienceSavedAt = staleTerminalTime
+                });
+
+        DateTimeOffset completedAt =
+            Assert.IsType<DateTimeOffset>(
+                result.CompletedContract.Contract.CompletedAt);
+
+        Assert.Equal(
+            completedAt,
+            result.Terminal.Settlement.Settlement.Transaction.OccurredAt);
+        Assert.Equal(
+            completedAt,
+            result.Terminal.Logbook.Entry.CommittedAt);
+        Assert.Equal(
+            completedAt,
+            result.Terminal.CareerProfile.SavedAt);
+        Assert.Equal(
+            CareerFlightFinalizationStatus.Finalized,
+            result.Terminal.Finalization.Status);
+    }
+
     private static TestContext CreateContext()
     {
         Guid contractId =

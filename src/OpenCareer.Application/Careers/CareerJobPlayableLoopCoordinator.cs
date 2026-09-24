@@ -175,6 +175,26 @@ public sealed class CareerJobPlayableLoopCoordinator
                 ContractSettlementEngine.GetIdempotencyKey(
                     completedContract.Contract.ContractId);
 
+            DateTimeOffset completedAt =
+                completedContract.Contract.CompletedAt
+                ?? throw new InvalidOperationException(
+                    "Completed career contract is missing its completion timestamp.");
+
+            DateTimeOffset settledAt =
+                Latest(
+                    request.SettledAt,
+                    completedAt);
+
+            DateTimeOffset logbookCommittedAt =
+                Latest(
+                    request.LogbookCommittedAt,
+                    settledAt);
+
+            DateTimeOffset experienceSavedAt =
+                Latest(
+                    request.ExperienceSavedAt,
+                    logbookCommittedAt);
+
             var terminalRequest =
                 new CareerFlightTerminalWorkflowRequest(
                     new SettlementPendingContractRequest(
@@ -182,10 +202,10 @@ public sealed class CareerJobPlayableLoopCoordinator
                             completedContract,
                             settlementKey),
                         request.ActualCosts,
-                        request.SettledAt),
+                        settledAt),
                     request.LogbookContext,
-                    request.LogbookCommittedAt,
-                    request.ExperienceSavedAt);
+                    logbookCommittedAt,
+                    experienceSavedAt);
 
             CareerFlightTerminalWorkflowResult terminal =
                 await _terminal
@@ -216,6 +236,13 @@ public sealed class CareerJobPlayableLoopCoordinator
     }
 
     private FlightSession? _lastCompletedFlight;
+
+    private static DateTimeOffset Latest(
+        DateTimeOffset first,
+        DateTimeOffset second) =>
+        first >= second
+            ? first
+            : second;
 
     private async Task<PersistedJobContract> CompleteInProgressAsync(
         CareerJobPlayableCompletionRequest request,
