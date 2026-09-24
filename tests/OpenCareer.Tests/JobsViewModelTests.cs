@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Careers;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 
 namespace OpenCareer.Tests;

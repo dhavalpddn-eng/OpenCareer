@@ -124,9 +124,10 @@ public sealed class FlightAirframeConsequenceTests
             Assert.True(results[i].Decision!.AdditionalLandingGearWearPercent
                 >= results[i - 1].Decision!.AdditionalLandingGearWearPercent);
         }
-        Assert.Equal(0, results[1].Decision?.CrashDamagePercent);
-        Assert.Equal(0, results[1].Decision!.TouchdownDamagePercent);
-        Assert.True(results[1].Decision.AdditionalLandingGearWearPercent > 0);
+        var firmDecision = Assert.IsType<FlightAirframeDecision>(results[1].Decision);
+        Assert.Equal(0, firmDecision.CrashDamagePercent);
+        Assert.Equal(0, firmDecision.TouchdownDamagePercent);
+        Assert.True(firmDecision.AdditionalLandingGearWearPercent > 0);
     }
 
     [Fact]
