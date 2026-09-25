@@ -647,6 +647,128 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task ProvisionalGroundContactAnchorAllowsRepeatedBriefAirborneTransitions()
+    {
+        FlightSession active =
+            ApproachSession();
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Restore(active);
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = active
+            };
+
+        var telemetry =
+            new TestTelemetrySource
+            {
+                Latest =
+                    Telemetry(
+                        Epoch.AddSeconds(6),
+                        32.0002,
+                        -97.0002,
+                        onGround: true,
+                        altitudeMsl: 650,
+                        groundSpeed: 55)
+            };
+
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                persistence,
+                new FlightTelemetryEvidenceProcessor(
+                    new FlightEvidenceProcessorOptions(
+                        StableTelemetrySamples: 1,
+                        AirborneConfirmationSamples: 1,
+                        GroundConfirmationSamples: 2)),
+                new FlightContinuityPolicy(),
+                Connected(),
+                telemetry,
+                new FixedTimeProvider(
+                    Epoch.AddHours(1)));
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current?.Status);
+        Assert.Equal(
+            FlightTrackingState.Approach,
+            coordinator.Current?.Tracking.State);
+        Assert.True(
+            coordinator.Current?.ContinuityAnchor?.OnGround);
+
+        telemetry.Latest =
+            Telemetry(
+                Epoch.AddSeconds(7),
+                32.0004,
+                -97.0004,
+                onGround: false,
+                altitudeMsl: 675,
+                groundSpeed: 65,
+                altitudeAgl: 25);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current?.Status);
+        Assert.Equal(
+            FlightTrackingState.Approach,
+            coordinator.Current?.Tracking.State);
+        Assert.False(
+            coordinator.Current?.ContinuityAnchor?.OnGround);
+
+        telemetry.Latest =
+            Telemetry(
+                Epoch.AddSeconds(8),
+                32.0006,
+                -97.0006,
+                onGround: true,
+                altitudeMsl: 650,
+                groundSpeed: 52);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.True(
+            coordinator.Current?.ContinuityAnchor?.OnGround);
+
+        telemetry.Latest =
+            Telemetry(
+                Epoch.AddSeconds(9),
+                32.0008,
+                -97.0008,
+                onGround: false,
+                altitudeMsl: 670,
+                groundSpeed: 62,
+                altitudeAgl: 20);
+
+        Assert.True(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current?.Status);
+        Assert.Equal(
+            FlightTrackingState.Approach,
+            coordinator.Current?.Tracking.State);
+        Assert.False(
+            coordinator.Current?.ContinuityAnchor?.OnGround);
+    }
+
+    [Fact]
     public async Task DuplicateTelemetryTimestampDoesNotAdvanceTwice()
     {
         FlightSession active =
@@ -769,7 +891,8 @@ public sealed class FlightSessionRuntimeTests
         return session;
     }
 
-    private static FlightSession AirborneSession()
+    private static FlightSession AirborneSession(
+        double altitudeMsl = 10_000)
     {
         FlightSession session =
             PreflightSession();
@@ -808,10 +931,32 @@ public sealed class FlightSessionRuntimeTests
                             Epoch.AddSeconds(4),
                             32,
                             -97,
-                            10_000,
+                            altitudeMsl,
                             OnGround: false)));
 
         return session;
+    }
+
+    private static FlightSession ApproachSession()
+    {
+        FlightSession session =
+            AirborneSession(700);
+
+        return FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(5),
+                    Connected: true,
+                    ContinuityPlausible: true,
+                    ApproachConfirmed: true),
+                ContinuityAnchor:
+                    new FlightContinuityAnchor(
+                        Epoch.AddSeconds(5),
+                        32,
+                        -97,
+                        700,
+                        OnGround: false)));
     }
 
     private static FlightSession Suspend(
@@ -830,13 +975,15 @@ public sealed class FlightSessionRuntimeTests
         double longitude,
         bool onGround,
         double altitudeMsl = 650,
-        double groundSpeed = 0) =>
+        double groundSpeed = 0,
+        double? altitudeAgl = null) =>
         new(
             timestamp,
             latitude,
             longitude,
             altitudeMsl,
-            onGround ? 0 : 2_000,
+            altitudeAgl
+                ?? (onGround ? 0 : 2_000),
             onGround ? 0 : 150,
             groundSpeed,
             onGround ? 0 : -500,
