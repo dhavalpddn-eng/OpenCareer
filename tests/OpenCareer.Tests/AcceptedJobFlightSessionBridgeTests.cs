@@ -63,6 +63,57 @@ public sealed class AcceptedJobFlightSessionBridgeTests
     }
 
     [Fact]
+    public async Task DevelopmentContractUsesNormalPersistentFlightSessionStart()
+    {
+        PersistedJobContract accepted =
+            AcceptedDevelopmentContract();
+        var contractStore =
+            new FakeContractStore(accepted);
+        var sessionStore =
+            new MemorySessionStore();
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        StartedJobFlightSessionResult result =
+            await CreateBridge(
+                    contractStore,
+                    sessionStore,
+                    coordinator)
+                .StartAsync(
+                    DispatchResult(accepted),
+                    DispatchContext(
+                        OfferedAt.AddMinutes(20)));
+
+        Assert.Equal(
+            ContractStatus.InProgress,
+            result.Contract.Contract.Status);
+        Assert.Equal(
+            accepted.Contract.ContractId,
+            result.FlightSession.ContractId);
+        Assert.Equal(
+            accepted.Contract.ContractId,
+            result.FlightSession.SessionId);
+        Assert.Equal(
+            "KJFK",
+            result.FlightSession.Plan?.PlannedOrigin);
+        Assert.Equal(
+            "KJFK",
+            result.FlightSession.Plan?.PlannedDestination);
+        Assert.Equal(
+            result.FlightSession,
+            sessionStore.Checkpoint);
+        Assert.Equal(
+            result.FlightSession,
+            coordinator.Current);
+        Assert.Equal(
+            1,
+            contractStore.UpdateCount);
+        Assert.Equal(
+            1,
+            sessionStore.SaveCount);
+    }
+
+    [Fact]
     public async Task ReplayReusesExistingSessionAndDoesNotRestartContract()
     {
         PersistedJobContract accepted =
@@ -355,6 +406,53 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         return new(
             contract,
             Version: 1);
+    }
+
+    private static PersistedJobContract AcceptedDevelopmentContract()
+    {
+        JobMarketOfferDraft offer =
+            DevelopmentFlight.CreateOffer(
+                Guid.Parse(
+                    "96000000-0000-0000-0000-000000000090"),
+                OfferedAt);
+
+        JobMarketContractTermsEnvelope terms =
+            Assert.IsType<JobMarketContractTermsEnvelope>(
+                offer.ContractTerms);
+
+        var request =
+            new JobContractCreationRequest(
+                offer,
+                OfferedAt.AddMinutes(10),
+                terms.AircraftRequirements,
+                terms.EstimatedFlightHours,
+                terms.PayloadPounds,
+                terms.DemandAttractiveness,
+                terms.Urgency,
+                terms.Difficulty,
+                terms.EstimatedPlayerOperatingCosts,
+                ReputationReward:
+                    terms.ReputationReward,
+                ReputationPenalty:
+                    terms.ReputationPenalty,
+                MarketId:
+                    terms.MarketId);
+
+        JobContract accepted =
+            JobContractFactory
+                .Create(request)
+                .Accept(
+                    DispatchContext(
+                        request.AcceptanceTime) with
+                    {
+                        DispatchFeasibilityVerified =
+                            true
+                    });
+
+        return new(
+            accepted,
+            Version:
+                1);
     }
 
     private static ContractDispatchContext DispatchContext(

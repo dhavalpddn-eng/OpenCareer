@@ -170,6 +170,48 @@ public static class JobContractFactory
         JobMarketOfferDraft offer =
             request.Offer;
 
+        bool isDevelopmentOffer =
+            DevelopmentFlight.IsDevelopment(offer);
+
+        bool isDevelopmentRequest =
+            string.Equals(
+                request.MarketId,
+                DevelopmentFlight.MarketId,
+                StringComparison.Ordinal);
+
+        if (isDevelopmentOffer != isDevelopmentRequest)
+        {
+            throw new InvalidOperationException(
+                "Development flight identity must match the persisted offer and accepted contract terms.");
+        }
+
+        if (isDevelopmentOffer)
+        {
+            if (!string.Equals(
+                    offer.OriginIcao,
+                    "KJFK",
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    offer.DestinationIcao,
+                    "KJFK",
+                    StringComparison.Ordinal)
+                || request.ReputationReward != 0
+                || request.ReputationPenalty != 0
+                || request.EstimatedPlayerOperatingCosts != 0)
+            {
+                throw new InvalidOperationException(
+                    "Development flight terms do not match the persisted development offer.");
+            }
+
+            payPolicy =
+                ContractPayPolicy.Default with
+                {
+                    TimeRatePerFlightHour = 0,
+                    DistanceRatePerNauticalMile = 0,
+                    PayloadRatePerPoundNauticalMile = 0
+                };
+        }
+
         ContractPayQuote quote =
             ContractPayQuoteEngine.Quote(
                 new ContractPayQuoteRequest(

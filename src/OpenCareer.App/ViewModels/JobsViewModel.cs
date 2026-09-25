@@ -12,6 +12,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private readonly PlayerCareerRuntimeState _career;
     private readonly TimeProvider _timeProvider;
     private readonly ICareerJobBoardRefillService? _boardRefill;
+    private readonly DevelopmentFlightService? _developmentFlights;
     private readonly ICareerJobPreFlightSessionRecoveryService? _startRecovery;
     private readonly CareerJobAircraftSelectionSource? _aircraftSelection;
     private readonly ICareerJobStartAction? _startAction;
@@ -62,7 +63,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         ICareerJobStartAction? startAction,
         ILogger<JobsViewModel>? logger,
         ICareerJobBoardRefillService? boardRefill = null,
-        ICareerJobPreFlightSessionRecoveryService? startRecovery = null)
+        ICareerJobPreFlightSessionRecoveryService? startRecovery = null,
+        DevelopmentFlightService? developmentFlights = null)
     {
         _jobBoards =
             jobBoards
@@ -75,6 +77,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(timeProvider));
         _boardRefill =
             boardRefill;
+        _developmentFlights =
+            developmentFlights;
         _startRecovery =
             startRecovery;
         _aircraftSelection =
@@ -94,6 +98,54 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public string StatusText => _statusText;
     public string AircraftStatus => _aircraftStatus;
     public string AcceptanceStatus => _acceptanceStatus;
+
+    public async Task GenerateDevelopmentFlightAsync(
+        bool positionPilotAtKjfk,
+        CancellationToken cancellationToken = default)
+    {
+        await _startGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(true);
+
+        try
+        {
+            if (_developmentFlights is null)
+            {
+                throw new InvalidOperationException(
+                    "Development flight generation is unavailable.");
+            }
+
+            await _developmentFlights
+                .GenerateAsync(
+                    positionPilotAtKjfk,
+                    cancellationToken)
+                .ConfigureAwait(true);
+
+            await RefreshAsync(cancellationToken)
+                .ConfigureAwait(true);
+
+            SetField(
+                ref _acceptanceStatus,
+                "TEST / DEVELOPMENT offer ready. Select an installed aircraft; normal dispatch and FlightSession validation apply. Pay and career progression are zero.",
+                nameof(AcceptanceStatus));
+        }
+        catch (Exception ex)
+            when (ex is not OperationCanceledException)
+        {
+            _logger?.LogWarning(
+                ex,
+                "KJFK development flight generation failed.");
+
+            SetField(
+                ref _acceptanceStatus,
+                ex.Message,
+                nameof(AcceptanceStatus));
+        }
+        finally
+        {
+            _startGate.Release();
+        }
+    }
 
     public async Task RefreshAsync(
         CancellationToken cancellationToken = default)
@@ -614,8 +666,10 @@ public sealed class JobOfferItemViewModel
         $"{Offer.OriginIcao} → {Offer.DestinationIcao}";
 
     public string KindText =>
-        Friendly(
-            Offer.Kind);
+        DevelopmentFlight.IsDevelopment(Offer)
+            ? DevelopmentFlight.Name
+            : Friendly(
+                Offer.Kind);
 
     public string TrackText =>
         Friendly(

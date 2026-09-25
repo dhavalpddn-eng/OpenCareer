@@ -13,6 +13,87 @@ public sealed class StandardPointToPointMissionCompletionSourceTests
     private static readonly DateTimeOffset Epoch =
         new(2026, 9, 22, 8, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DevelopmentLocalCircuitRequiresRealTakeoffAndLanding(
+        bool flewCircuit)
+    {
+        Guid contractId =
+            Guid.Parse(
+                "a3000000-0000-0000-0000-000000000090");
+
+        JobContract contract =
+            InProgressContract(
+                contractId,
+                ContractKind.Reposition) with
+            {
+                OriginIcao = "KJFK",
+                DestinationIcao = "KJFK",
+                MarketId = DevelopmentFlight.MarketId
+            };
+
+        FlightSession session =
+            ShutdownSession(
+                contractId,
+                latitude:
+                    40.6413,
+                longitude:
+                    -73.7781) with
+            {
+                Plan =
+                    new FlightSessionPlan(
+                        "KJFK",
+                        "KJFK")
+            };
+
+        if (!flewCircuit)
+        {
+            session =
+                session with
+                {
+                    Tracking =
+                        session.Tracking with
+                        {
+                            TakeoffCount = 0,
+                            LandingEpisodeCount = 0
+                        }
+                };
+        }
+
+        var source =
+            new StandardPointToPointMissionCompletionSource(
+                new StubAirportSource(
+                    new AirportRecord(
+                        "KJFK",
+                        "John F. Kennedy International",
+                        Array.Empty<RunwayRecord>(),
+                        LatitudeDegrees:
+                            40.6413,
+                        LongitudeDegrees:
+                            -73.7781)),
+                StandardPointToPointMissionPolicy.Default);
+
+        CareerJobMissionCompletionEvidence? evidence =
+            await source.ReadAsync(
+                contract,
+                session);
+
+        if (flewCircuit)
+        {
+            Assert.NotNull(evidence);
+            Assert.True(
+                evidence.MissionConditionsVerified);
+            Assert.Equal(
+                "KJFK",
+                evidence.ActualArrival);
+        }
+        else
+        {
+            Assert.Null(evidence);
+        }
+    }
+
     [Fact]
     public async Task FerryAtContractedDestinationProducesVerifiedMissionEvidence()
     {

@@ -99,7 +99,106 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             context.CheckpointStore.ClearCount);
     }
 
-    private static TestContext CreateContext()
+    [Fact]
+    public async Task DevelopmentCompletionUsesNormalTerminalWorkflowWithoutProgression()
+    {
+        TestContext context =
+            CreateContext(
+                development:
+                    true);
+
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            CareerJobPlayableCompletionResult result =
+                await context.Coordinator.CompleteAsync(
+                    context.Request);
+
+            Assert.Equal(
+                ContractStatus.Completed,
+                result.CompletedContract.Contract.Status);
+            Assert.Equal(
+                0m,
+                result.Terminal.Settlement.Settlement.Transaction
+                    .TotalDebits);
+            Assert.Equal(
+                0m,
+                result.Terminal.Settlement.Settlement.Transaction
+                    .TotalCredits);
+            Assert.Equal(
+                0m,
+                result.Terminal.Settlement.Settlement
+                    .GrossCashReceipt);
+            Assert.Equal(
+                0m,
+                result.Terminal.Settlement.Settlement
+                    .PlayerOperatingCosts);
+            Assert.Equal(
+                0m,
+                result.Terminal.Settlement.Settlement
+                    .NetCashChange);
+            Assert.Equal(
+                PilotExperienceTotals.Empty,
+                result.Terminal.CareerProfile.Profile.Experience);
+            Assert.Equal(
+                PilotQualificationState.Entry,
+                result.Terminal.CareerProfile.Profile.Qualifications);
+            Assert.Contains(
+                result.Terminal.Logbook.Entry.Debrief.DebriefId,
+                result.Terminal.CareerProfile.Profile
+                    .AppliedExperienceDebriefIds);
+            Assert.True(
+                result.Terminal.CareerProfile.SavedAt
+                >= result.Terminal.Logbook.Entry.CommittedAt);
+            Assert.Equal(
+                "KJFK",
+                result.Terminal.CareerProfile.Profile.Location
+                    .CurrentAirportIcao);
+        }
+
+        Assert.Single(
+            context.Logbook.Entries);
+        Assert.Equal(
+            1,
+            context.Ledger.UniquePostCount);
+        Assert.Equal(
+            1,
+            context.Fleet.ReleaseCount);
+        Assert.Equal(
+            1,
+            context.CheckpointStore.ClearCount);
+        Assert.Null(
+            context.Sessions.Current);
+
+        LogbookEntry entry =
+            Assert.Single(
+                context.Logbook.Entries);
+
+        Assert.Equal(
+            0,
+            entry.Debrief.Settlement.ReputationDelta);
+
+        var restartedExperience =
+            new PlayerCareerExperienceCoordinator(
+                context.ProfileStore,
+                new PlayerCareerRuntimeState(
+                    context.ProfileStore),
+                context.ContractStore);
+
+        PlayerCareerProfileStoreRecord recovered =
+            await restartedExperience.ApplyCommittedAsync(
+                entry,
+                context.Request.ExperienceSavedAt.AddMinutes(1));
+
+        Assert.Equal(
+            PilotExperienceTotals.Empty,
+            recovered.Profile.Experience);
+        Assert.Equal(
+            2,
+            context.ProfileStore.SaveCount);
+    }
+
+    private static TestContext CreateContext(
+        bool development = false)
     {
         Guid contractId =
             Guid.Parse(
@@ -108,6 +207,48 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         PersistedJobContract inProgress =
             InProgressContract(
                 contractId);
+
+        if (development)
+        {
+            JobMarketOfferDraft offer =
+                DevelopmentFlight.CreateOffer(
+                    contractId,
+                    Epoch.AddHours(-1));
+
+            JobMarketContractTermsEnvelope terms =
+                Assert.IsType<JobMarketContractTermsEnvelope>(
+                    offer.ContractTerms);
+
+            JobContract contract =
+                JobContractFactory.Create(
+                    new JobContractCreationRequest(
+                        offer,
+                        Epoch,
+                        terms.AircraftRequirements,
+                        terms.EstimatedFlightHours,
+                        terms.PayloadPounds,
+                        terms.DemandAttractiveness,
+                        terms.Urgency,
+                        terms.Difficulty,
+                        terms.EstimatedPlayerOperatingCosts,
+                        ReputationReward:
+                            terms.ReputationReward,
+                        ReputationPenalty:
+                            terms.ReputationPenalty,
+                        MarketId:
+                            terms.MarketId));
+
+            inProgress =
+                new PersistedJobContract(
+                    contract with
+                    {
+                        Status = ContractStatus.InProgress,
+                        AcceptedAt = Epoch,
+                        StartedAt = Epoch
+                    },
+                    Version:
+                        2);
+        }
 
         var contractStore =
             new FakeContractStore(
@@ -120,6 +261,18 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         FlightSession shutdownSession =
             ShutdownSession(
                 contractId);
+
+        if (development)
+        {
+            shutdownSession =
+                shutdownSession with
+                {
+                    Plan =
+                        new FlightSessionPlan(
+                            "KJFK",
+                            "KJFK")
+                };
+        }
 
         var sessions =
             new FlightSessionCoordinator();
@@ -181,7 +334,18 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
 
         var profileStore =
             new FakeProfileStore(
-                InitialProfile());
+                development
+                    ? new PlayerCareerProfileStoreRecord(
+                        Revision:
+                            1,
+                        PlayerCareerProfile.Start(
+                            Guid.Parse(
+                                "a0000000-0000-0000-0000-000000000098"),
+                            "KJFK",
+                            Epoch.AddHours(-2)),
+                        SavedAt:
+                            Epoch.AddHours(-1))
+                    : InitialProfile());
 
         var profileRuntime =
             new PlayerCareerRuntimeState(
@@ -191,7 +355,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             new CareerLogbookExperienceCoordinator(
                 new PlayerCareerExperienceCoordinator(
                     profileStore,
-                    profileRuntime));
+                    profileRuntime,
+                    contractStore));
 
         var location =
             new PlayerCareerLocationCoordinator(
@@ -336,6 +501,21 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                 logbookCommittedAt,
                 ExperienceSavedAt:
                     logbookCommittedAt.AddMinutes(1));
+
+        if (development)
+        {
+            request =
+                request with
+                {
+                    LogbookContext =
+                        request.LogbookContext with
+                        {
+                            ActualDeparture = "KJFK",
+                            ActualArrival = "KJFK",
+                            ReputationDelta = 0
+                        }
+                };
+        }
 
         return new(
             coordinator,

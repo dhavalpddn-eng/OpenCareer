@@ -1,5 +1,6 @@
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Logbook;
@@ -26,7 +27,8 @@ public sealed class CareerLogbookExperienceCoordinatorTests
             new CareerLogbookExperienceCoordinator(
                 new PlayerCareerExperienceCoordinator(
                     store,
-                    runtime));
+                    runtime,
+                    new FakeContractStore()));
 
         LogbookEntry entry =
             CareerEntry();
@@ -73,7 +75,8 @@ public sealed class CareerLogbookExperienceCoordinatorTests
             new CareerLogbookExperienceCoordinator(
                 new PlayerCareerExperienceCoordinator(
                     store,
-                    runtime));
+                    runtime,
+                    new FakeContractStore()));
 
         LogbookEntry entry =
             CareerEntry();
@@ -104,6 +107,35 @@ public sealed class CareerLogbookExperienceCoordinatorTests
     }
 
     [Fact]
+    public async Task CareerJobExperienceWithoutContractAuthorityFailsClosed()
+    {
+        var store =
+            new FakeProfileStore(
+                ExistingProfile());
+
+        var coordinator =
+            new CareerLogbookExperienceCoordinator(
+                new PlayerCareerExperienceCoordinator(
+                    store,
+                    new PlayerCareerRuntimeState(
+                        store)));
+
+        LogbookEntry entry =
+            CareerEntry();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.ApplyAsync(
+                new LogbookAppendResult(
+                    LogbookAppendDisposition.Appended,
+                    entry),
+                entry.CommittedAt.AddMinutes(1)));
+
+        Assert.Equal(
+            0,
+            store.SaveCount);
+    }
+
+    [Fact]
     public async Task ManualLogbookEntryCannotApplyCareerJobExperience()
     {
         var store =
@@ -118,7 +150,8 @@ public sealed class CareerLogbookExperienceCoordinatorTests
             new CareerLogbookExperienceCoordinator(
                 new PlayerCareerExperienceCoordinator(
                     store,
-                    runtime));
+                    runtime,
+                    new FakeContractStore()));
 
         LogbookEntry manual =
             ManualEntry();
@@ -150,7 +183,8 @@ public sealed class CareerLogbookExperienceCoordinatorTests
             new CareerLogbookExperienceCoordinator(
                 new PlayerCareerExperienceCoordinator(
                     store,
-                    runtime));
+                    runtime,
+                    new FakeContractStore()));
 
         LogbookEntry entry =
             CareerEntry();
@@ -407,5 +441,79 @@ public sealed class CareerLogbookExperienceCoordinatorTests
             return Task.FromResult(
                 _current);
         }
+    }
+
+    private sealed class FakeContractStore
+        : IJobContractStore
+    {
+        public Task<PersistedJobContract?> ReadJobContractAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var contract =
+                new JobContract(
+                    ContractId:
+                        contractId,
+                    EmployerId:
+                        null,
+                    Kind:
+                        ContractKind.Ferry,
+                    ServiceTrack:
+                        ServiceTrack.CivilianEmployment,
+                    OriginIcao:
+                        "KRME",
+                    DestinationIcao:
+                        "KSYR",
+                    Compensation:
+                        new ContractCompensation(
+                            CompensationModel.PilotWage,
+                            GrossCustomerRevenue:
+                                900m,
+                            PilotCompensation:
+                                900m,
+                            EmployerCoversFuel:
+                                true,
+                            EmployerCoversMaintenance:
+                                true,
+                            EmployerCoversAirportFees:
+                                true),
+                    OfferedAt:
+                        Epoch.AddHours(-1),
+                    MustStartBy:
+                        null,
+                    MustCompleteBy:
+                        null,
+                    AircraftRequirements:
+                        new AircraftMissionRequirements(),
+                    Status:
+                        ContractStatus.Completed,
+                    AcceptedAt:
+                        Epoch.AddMinutes(-30),
+                    StartedAt:
+                        Epoch,
+                    CompletedAt:
+                        Epoch.AddMinutes(90));
+
+            contract.Validate();
+
+            return Task.FromResult<PersistedJobContract?>(
+                new PersistedJobContract(
+                    contract,
+                    Version:
+                        1));
+        }
+
+        public Task<JobContractSaveResult> CreateJobContractAsync(
+            JobContract contract,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<JobContractSaveResult> UpdateJobContractAsync(
+            JobContract contract,
+            long expectedVersion,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

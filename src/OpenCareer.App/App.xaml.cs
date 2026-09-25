@@ -167,6 +167,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddOpenCareerPlanningServices();
 
         services.AddSingleton<CareerJobBoardRefillService>();
+        services.AddSingleton<DevelopmentFlightService>();
         services.AddSingleton<ICareerJobBoardRefillService>(provider =>
             provider.GetRequiredService<CareerJobBoardRefillService>());
 

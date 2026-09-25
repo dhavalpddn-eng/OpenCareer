@@ -102,6 +102,95 @@ public sealed class CareerJobStartInputSourceTests
     }
 
     [Fact]
+    public async Task DevelopmentOfferWithSelectedInstalledAircraftProducesNormalReadyRequest()
+    {
+        JobMarketOfferDraft offer =
+            DevelopmentFlight.CreateOffer(
+                Guid.Parse(
+                    "a7000000-0000-0000-0000-000000000090"),
+                Now.AddMinutes(-30));
+
+        JobBoardState board =
+            JobBoardState
+                .Empty(
+                    "KJFK",
+                    offer.OfferedAt)
+                .Reconcile(
+                    offer.OfferedAt,
+                    1,
+                    [offer]);
+
+        PlayerCareerProfile profile =
+            PlayerCareerProfile.Start(
+                Guid.Parse(
+                    "a7000000-0000-0000-0000-000000000091"),
+                "KJFK",
+                Now.AddDays(-30));
+
+        var registry =
+            new FakeAircraftRegistrySource();
+
+        var source =
+            new CareerJobStartInputSource(
+                new FakeBoardStore(board),
+                new PlayerCareerRuntimeState(
+                    new FakeProfileStore(
+                        new PlayerCareerProfileStoreRecord(
+                            Revision:
+                                1,
+                            profile,
+                            SavedAt:
+                                Now.AddDays(-1)))),
+                new FakeContractStore(existing: null),
+                registry,
+                new OperationDispatchPlanningService(
+                    registry,
+                    new FakeAirportSource()),
+                [new PersistedJobContractTermsSource()],
+                [new StandardCivilianPointToPointDispatchAuthoritySource()],
+                new FixedTimeProvider(Now));
+
+        CareerJobStartInputSnapshot snapshot =
+            await source.ReadAsync(
+                offer.OfferId,
+                "fixture-aircraft");
+
+        Assert.True(
+            snapshot.IsReady);
+
+        CareerJobPlayableStartRequest request =
+            Assert.IsType<CareerJobPlayableStartRequest>(
+                snapshot.Request);
+
+        Assert.Equal(
+            "fixture-aircraft",
+            request.DispatchContext.Aircraft.AircraftId);
+        Assert.Equal(
+            "KJFK",
+            request.Contract.Offer.OriginIcao);
+        Assert.Equal(
+            "KJFK",
+            request.Contract.Offer.DestinationIcao);
+        Assert.Equal(
+            DevelopmentFlight.MarketId,
+            request.Contract.MarketId);
+        Assert.Equal(
+            0,
+            request.Contract.ReputationReward);
+        Assert.Equal(
+            0,
+            request.Contract.ReputationPenalty);
+
+        JobContract contract =
+            JobContractFactory.Create(
+                request.Contract);
+
+        Assert.Equal(
+            0m,
+            contract.Compensation.PilotCompensation);
+    }
+
+    [Fact]
     public async Task MissingIrrelevantCapabilityFieldsUseFailClosedFerryProjection()
     {
         TestFixture fixture =

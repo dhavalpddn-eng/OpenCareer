@@ -227,7 +227,8 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
             new CareerLogbookExperienceCoordinator(
                 new PlayerCareerExperienceCoordinator(
                     profileStore,
-                    profileRuntime));
+                    profileRuntime,
+                    contractStore));
 
         var location =
             new PlayerCareerLocationCoordinator(

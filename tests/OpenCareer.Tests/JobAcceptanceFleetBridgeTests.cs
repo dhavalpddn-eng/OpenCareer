@@ -365,6 +365,83 @@ public sealed class JobAcceptanceFleetBridgeTests
                 new OperationDispatchRequirements(500, 149)));
     }
 
+    [Fact]
+    public async Task DevelopmentOfferUsesNormalAcceptanceReservationAndDispatch()
+    {
+        JobMarketOfferDraft offer =
+            DevelopmentFlight.CreateOffer(
+                Guid.Parse(
+                    "94000000-0000-0000-0000-000000000090"),
+                OfferedAt);
+
+        JobMarketContractTermsEnvelope terms =
+            Assert.IsType<JobMarketContractTermsEnvelope>(
+                offer.ContractTerms);
+
+        var request =
+            new JobContractCreationRequest(
+                offer,
+                OfferedAt.AddMinutes(1),
+                terms.AircraftRequirements,
+                terms.EstimatedFlightHours,
+                terms.PayloadPounds,
+                terms.DemandAttractiveness,
+                terms.Urgency,
+                terms.Difficulty,
+                terms.EstimatedPlayerOperatingCosts,
+                ReputationReward:
+                    terms.ReputationReward,
+                ReputationPenalty:
+                    terms.ReputationPenalty,
+                MarketId:
+                    terms.MarketId);
+
+        var contractStore =
+            new FakeContractStore();
+        var boardStore =
+            new FakeBoardStore(
+                BoardWithOffer(offer));
+        var reservationStore =
+            new StatefulReservationStore();
+
+        AcceptedJobDispatchResult result =
+            await CreateDispatchBridge(
+                    contractStore,
+                    boardStore,
+                    reservationStore,
+                    [Airport("KJFK", 5_000)])
+                .AcceptReserveAndEvaluateAsync(
+                    request,
+                    DispatchContext(
+                        request.AcceptanceTime),
+                    new OperationDispatchRequirements(
+                        PayloadPounds:
+                            0,
+                        RequiredRangeNauticalMiles:
+                            0));
+
+        Assert.Equal(
+            JobAcceptanceFleetStatus.AcceptedAndReserved,
+            result.FleetResult.Status);
+        Assert.Equal(
+            DispatchFeasibilityStatus.Feasible,
+            result.DispatchResult?.Status);
+        Assert.Equal(
+            DevelopmentFlight.MarketId,
+            result.FleetResult.AcceptedContract?.Contract.MarketId);
+        Assert.Equal(
+            0m,
+            result.FleetResult.AcceptedContract?.Contract
+                .Compensation.PilotCompensation);
+        Assert.Equal(
+            1,
+            reservationStore.AcquiredCount);
+        Assert.Contains(
+            offer.OfferId,
+            Assert.IsType<JobBoardState>(boardStore.State)
+                .RetiredOfferIds);
+    }
+
     private static JobAcceptanceFleetBridge CreateBridge(
         FakeContractStore contractStore,
         FakeBoardStore boardStore,
