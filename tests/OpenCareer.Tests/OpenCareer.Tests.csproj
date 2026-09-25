@@ -31,6 +31,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="../../src/OpenCareer.App/Views/JobsPage.xaml;../../src/OpenCareer.App/Views/JobsPage.xaml.cs;../../src/OpenCareer.App/Views/CurrentFlightPage.xaml;../../src/OpenCareer.App/Views/CurrentFlightPage.xaml.cs;../../src/OpenCareer.App/App.xaml.cs;../../src/OpenCareer.App/Services/PlanningServiceRegistration.cs"
+          Link="UiContracts/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/OpenCareer.App/Styles/DesignTokens.xaml"
           Link="UiDesign/DesignTokens.xaml"
           CopyToOutputDirectory="PreserveNewest" />
