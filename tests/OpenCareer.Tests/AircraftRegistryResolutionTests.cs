@@ -1,5 +1,6 @@
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
+using OpenCareer.Infrastructure.Aircraft;
 
 namespace OpenCareer.Tests;
 
@@ -298,6 +299,84 @@ public class AircraftRegistryResolutionTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => catalog.FindAircraftAsync("fixture-aircraft"));
+    }
+
+    [Fact]
+    public async Task C172ReferenceCompletesInstalledEvidenceWithoutClaimingInstallation()
+    {
+        var reference =
+            new PlayableLoopReferenceAircraftObservationSource();
+
+        IReadOnlyList<AircraftRegistryObservation> referenceOnly =
+            await reference.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId);
+
+        AircraftRegistryObservation seeded =
+            Assert.Single(referenceOnly);
+
+        Assert.False(seeded.IsInstalled);
+
+        var referenceCatalog =
+            new AircraftRegistryCatalogService([reference]);
+
+        AircraftRegistryResolution knownOnly =
+            Assert.IsType<AircraftRegistryResolution>(
+                await referenceCatalog.FindAircraftAsync(
+                    AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId));
+
+        Assert.Equal(
+            AircraftInstallationStatus.KnownOnly,
+            knownOnly.InstallationStatus);
+
+        var catalog =
+            new AircraftRegistryCatalogService(
+            [
+                new StubObservationSource(
+                [
+                    new AircraftRegistryObservation(
+                        AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId,
+                        "msfs-live",
+                        "C172SP Classic Passengers",
+                        AircraftDataConfidence.Verified,
+                        IsInstalled: true,
+                        DisplayName: "C172SP Classic Passengers")
+                ]),
+                reference
+            ]);
+
+        AircraftRegistryResolution resolved =
+            Assert.IsType<AircraftRegistryResolution>(
+                await catalog.FindAircraftAsync(
+                    AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId));
+
+        AircraftRegistryRecord record =
+            Assert.IsType<AircraftRegistryRecord>(
+                resolved.TryCreateRegistryRecord());
+
+        Assert.Equal(
+            AircraftInstallationStatus.Installed,
+            resolved.InstallationStatus);
+        Assert.True(record.IsInstalled);
+        Assert.Equal(870, record.Capabilities.MaximumPayloadPounds);
+        Assert.Equal(640, record.Capabilities.MaximumRangeNauticalMiles);
+        Assert.Equal(4, record.Capabilities.Seats);
+        Assert.Equal(1, record.Capabilities.EngineCount);
+        Assert.NotNull(record.RunwayPerformance);
+        Assert.Equal(
+            PlayableLoopReferenceAircraftObservationSource.ProviderId,
+            resolved.Provenance[AircraftRegistryField.MaximumRangeNauticalMiles]
+                .ProviderId);
+    }
+
+    [Fact]
+    public async Task C172ReferenceDoesNotSeedOtherAircraft()
+    {
+        var source =
+            new PlayableLoopReferenceAircraftObservationSource();
+
+        Assert.Empty(
+            await source.FindAircraftObservationsAsync(
+                "msfs-title:Unknown Aircraft"));
     }
 
     private static AircraftRegistryObservation Observation(

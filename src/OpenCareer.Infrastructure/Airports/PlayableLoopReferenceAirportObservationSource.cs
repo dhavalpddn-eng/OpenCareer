@@ -18,7 +18,33 @@ public sealed class PlayableLoopReferenceAirportObservationSource(
                 "KJFK",
                 "John F Kennedy International",
                 40.6399,
-                -73.7787),
+                -73.7787,
+                [
+                    Runway(
+                        "04L/22R",
+                        12_079,
+                        RunwaySurface.Concrete,
+                        new("04L", 31),
+                        new("22R", 211)),
+                    Runway(
+                        "04R/22L",
+                        8_400,
+                        RunwaySurface.Asphalt,
+                        new("04R", 31),
+                        new("22L", 211)),
+                    Runway(
+                        "13L/31R",
+                        10_000,
+                        RunwaySurface.Concrete,
+                        new("13L", 121),
+                        new("31R", 301)),
+                    Runway(
+                        "13R/31L",
+                        14_511,
+                        RunwaySurface.Concrete,
+                        new("13R", 121),
+                        new("31L", 301))
+                ]),
             ["KRME"] = Airport(
                 "KRME",
                 "Griffiss International",
@@ -90,11 +116,24 @@ public sealed class PlayableLoopReferenceAirportObservationSource(
         string icao,
         string name,
         double latitude,
-        double longitude) =>
+        double longitude,
+        IReadOnlyList<RunwayRecord>? runways = null) =>
         new(
             icao,
             name,
-            Array.Empty<RunwayRecord>(),
+            runways ?? Array.Empty<RunwayRecord>(),
             latitude,
             longitude);
+
+    private static RunwayRecord Runway(
+        string identifier,
+        double lengthFeet,
+        RunwaySurface surface,
+        params RunwayEndRecord[] ends) =>
+        new(
+            identifier,
+            lengthFeet,
+            WidthFeet: 200,
+            Surface: surface,
+            Ends: ends);
 }

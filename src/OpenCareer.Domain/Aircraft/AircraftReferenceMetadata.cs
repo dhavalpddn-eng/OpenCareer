@@ -40,6 +40,9 @@ public sealed record AircraftReferenceMetadata(
 public static class AircraftCanonicalIdentity
 {
     public const string MsfsTitlePrefix = "msfs-title:";
+    public const string Cessna172SkyhawkTitle = "Cessna 172 Skyhawk";
+    public const string Cessna172SkyhawkAircraftId =
+        MsfsTitlePrefix + Cessna172SkyhawkTitle;
 
     public static string FromMsfsTitle(string aircraftTitle)
     {

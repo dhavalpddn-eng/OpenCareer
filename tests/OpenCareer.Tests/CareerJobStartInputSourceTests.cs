@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
@@ -6,6 +7,9 @@ using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Events;
 using OpenCareer.Domain.Planning;
+using OpenCareer.Infrastructure.Aircraft;
+using OpenCareer.Infrastructure.Airports;
+using OpenCareer.SimConnect;
 
 namespace OpenCareer.Tests;
 
@@ -188,6 +192,186 @@ public sealed class CareerJobStartInputSourceTests
         Assert.Equal(
             0m,
             contract.Compensation.PilotCompensation);
+    }
+
+    [Fact]
+    public async Task StockC172DevelopmentFlightResolvesToReadyAndEnablesNormalStartAction()
+    {
+        const string rawTitle =
+            "C172SP Classic Passengers";
+
+        string canonicalAircraftId =
+            SimConnectInstalledAircraftObservationSource
+                .CreateCanonicalAircraftId(rawTitle);
+
+        Assert.Equal(
+            AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId,
+            canonicalAircraftId);
+
+        JobMarketOfferDraft offer =
+            DevelopmentFlight.CreateOffer(
+                Guid.Parse(
+                    "a7000000-0000-0000-0000-000000000092"),
+                Now.AddMinutes(-30));
+
+        JobBoardState board =
+            JobBoardState
+                .Empty(
+                    "KJFK",
+                    offer.OfferedAt)
+                .Reconcile(
+                    offer.OfferedAt,
+                    1,
+                    [offer]);
+
+        PlayerCareerProfile profile =
+            PlayerCareerProfile.Start(
+                Guid.Parse(
+                    "a7000000-0000-0000-0000-000000000093"),
+                "KJFK",
+                Now.AddDays(-30));
+
+        var boardStore =
+            new FakeBoardStore(board);
+        var career =
+            new PlayerCareerRuntimeState(
+                new FakeProfileStore(
+                    new PlayerCareerProfileStoreRecord(
+                        Revision: 1,
+                        profile,
+                        SavedAt: Now.AddDays(-1))));
+        var installed =
+            new FixedInstalledSource(
+                new AircraftRegistryObservation(
+                    canonicalAircraftId,
+                    SimConnectInstalledAircraftObservationSource.ProviderId,
+                    rawTitle,
+                    AircraftDataConfidence.Verified,
+                    IsInstalled: true,
+                    DisplayName: rawTitle));
+        var registry =
+            new AircraftRegistryCatalogService(
+            [
+                installed,
+                new PlayableLoopReferenceAircraftObservationSource()
+            ]);
+        var airportData =
+            new CachedAirportDataSource(
+            [
+                new PlayableLoopReferenceAirportObservationSource(
+                    new FixedTimeProvider(Now))
+            ],
+            clock: new FixedTimeProvider(Now));
+
+        var dispatchPlanning =
+            new OperationDispatchPlanningService(
+                registry,
+                airportData);
+        var inputs =
+            new CareerJobStartInputSource(
+                boardStore,
+                career,
+                new FakeContractStore(existing: null),
+                registry,
+                dispatchPlanning,
+                [new PersistedJobContractTermsSource()],
+                [new StandardCivilianPointToPointDispatchAuthoritySource()],
+                new FixedTimeProvider(Now));
+
+        CareerJobStartInputSnapshot snapshot =
+            await inputs.ReadAsync(
+                offer.OfferId,
+                canonicalAircraftId);
+
+        Assert.Equal(
+            CareerJobStartInputState.Ready,
+            snapshot.State);
+        Assert.True(snapshot.IsReady);
+
+        CareerJobPlayableStartRequest request =
+            Assert.IsType<CareerJobPlayableStartRequest>(
+                snapshot.Request);
+
+        Assert.Equal(
+            canonicalAircraftId,
+            request.DispatchContext.Aircraft.AircraftId);
+        Assert.Equal(0, request.DispatchRequirements.PayloadPounds);
+        Assert.Equal(0, request.DispatchRequirements.RequiredRangeNauticalMiles);
+        Assert.True(request.DispatchContext.DispatchFeasibilityVerified);
+
+        AircraftRegistryResolution resolution =
+            Assert.IsType<AircraftRegistryResolution>(
+                await registry.FindAircraftAsync(canonicalAircraftId));
+
+        Assert.Equal(
+            AircraftInstallationStatus.Installed,
+            resolution.InstallationStatus);
+        Assert.True(resolution.HasCompleteCapabilityProfile);
+        Assert.NotNull(resolution.RunwayPerformance);
+
+        DispatchFeasibilityResult ordinaryRangeGate =
+            await dispatchPlanning.EvaluateAsync(
+                canonicalAircraftId,
+                "KJFK",
+                "KJFK",
+                new OperationDispatchRequirements(
+                    PayloadPounds: 0,
+                    RequiredRangeNauticalMiles: 641));
+
+        Assert.Equal(
+            DispatchFeasibilityStatus.Infeasible,
+            ordinaryRangeGate.Status);
+        Assert.Contains(
+            ordinaryRangeGate.Issues,
+            static issue =>
+                issue.Reason
+                == DispatchFeasibilityReason.RangeExceedsAircraftMaximum);
+
+        DispatchFeasibilityResult ordinaryPayloadGate =
+            await dispatchPlanning.EvaluateAsync(
+                canonicalAircraftId,
+                "KJFK",
+                "KJFK",
+                new OperationDispatchRequirements(
+                    PayloadPounds: 871,
+                    RequiredRangeNauticalMiles: 0));
+
+        Assert.Equal(
+            DispatchFeasibilityStatus.Infeasible,
+            ordinaryPayloadGate.Status);
+        Assert.Contains(
+            ordinaryPayloadGate.Issues,
+            static issue =>
+                issue.Reason
+                == DispatchFeasibilityReason.PayloadExceedsAircraftMaximum);
+
+        var viewModel =
+            new JobsViewModel(
+                boardStore,
+                career,
+                new FixedTimeProvider(Now),
+                new CareerJobAircraftSelectionSource(installed),
+                new InputBackedStartAction(inputs),
+                logger: null);
+
+        await viewModel.RefreshAsync();
+
+        CareerJobAircraftOption option =
+            Assert.Single(viewModel.AircraftOptions);
+
+        Assert.Equal(canonicalAircraftId, option.AircraftId);
+        Assert.Equal(rawTitle, option.DisplayName);
+
+        await viewModel.SelectAircraftAsync(option.AircraftId);
+
+        JobOfferItemViewModel startable =
+            Assert.Single(viewModel.Offers);
+
+        Assert.Equal(
+            CareerJobStartInputState.Ready,
+            startable.StartInputState);
+        Assert.True(startable.CanStart);
+        Assert.Equal("READY TO START", startable.AvailabilityText);
     }
 
     [Fact]
@@ -481,6 +665,63 @@ public sealed class CareerJobStartInputSourceTests
     private sealed record TestFixture(
         CareerJobStartInputSource Source,
         JobMarketOfferDraft Offer);
+
+    private sealed class FixedInstalledSource(
+        AircraftRegistryObservation observation)
+        : IAircraftRegistryObservationSource,
+          IInstalledAircraftDiscoverySource
+    {
+        public InstalledAircraftDiscoverySnapshot Current { get; } =
+            new(
+                InstalledAircraftDiscoveryAvailability.Available,
+                [observation]);
+
+        public Task<IReadOnlyList<AircraftRegistryObservation>> FindAircraftObservationsAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            IReadOnlyList<AircraftRegistryObservation> result =
+                string.Equals(
+                    canonicalAircraftId,
+                    observation.CanonicalAircraftId,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? [observation]
+                    : Array.Empty<AircraftRegistryObservation>();
+
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class InputBackedStartAction(
+        CareerJobStartInputSource inputs)
+        : ICareerJobStartAction
+    {
+        public async Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
+            Guid offerId,
+            string aircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            CareerJobStartInputSnapshot snapshot =
+                await inputs.ReadAsync(
+                    offerId,
+                    aircraftId,
+                    cancellationToken);
+
+            return new(
+                snapshot.IsReady,
+                snapshot.State,
+                snapshot.Detail);
+        }
+
+        public Task<CareerJobPlayableStartResult> StartAsync(
+            Guid offerId,
+            string aircraftId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException(
+                "This fixture verifies the production readiness boundary only.");
+    }
 
     private sealed class FixedContractTermsSource
         : ICareerJobContractTermsSource

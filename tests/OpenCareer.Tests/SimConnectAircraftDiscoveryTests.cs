@@ -115,7 +115,7 @@ public sealed class SimConnectAircraftDiscoveryTests
             SimConnectPackets.StringSimObjectData(
                 SimConnectCurrentAircraftDefinition.RequestId,
                 SimConnectCurrentAircraftDefinition.DefinitionId,
-                "Cessna 172 Skyhawk"));
+                "C172SP Classic Passengers"));
 
         await Until(() =>
             source.Current.Availability
@@ -128,7 +128,7 @@ public sealed class SimConnectAircraftDiscoveryTests
             "msfs-title:Cessna 172 Skyhawk",
             aircraft.CanonicalAircraftId);
         Assert.Equal(
-            "Cessna 172 Skyhawk",
+            "C172SP Classic Passengers",
             aircraft.DisplayName);
         Assert.True(aircraft.IsInstalled);
         Assert.Equal(
@@ -161,6 +161,38 @@ public sealed class SimConnectAircraftDiscoveryTests
 
         await Until(() => source.Current.Availability == InstalledAircraftDiscoveryAvailability.Available);
         Assert.Single(source.Current.Observations);
+    }
+
+    [Fact]
+    public async Task StockC172AliasAndCanonicalTitleProduceOneCanonicalAircraft()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api);
+        var source = new SimConnectInstalledAircraftObservationSource(connection);
+
+        connection.Start();
+        await Until(() => api.AircraftEnumerations.Count == 1);
+
+        api.Enqueue(SimConnectPackets.EnumeratedSimObjects(
+            SimConnectAircraftCatalog.RequestId,
+            0,
+            1,
+            ("C172SP Classic Passengers", "Classic"),
+            ("Cessna 172 Skyhawk", "Glass")));
+
+        await Until(() => source.Current.Availability == InstalledAircraftDiscoveryAvailability.Available);
+
+        AircraftRegistryObservation aircraft =
+            Assert.Single(source.Current.Observations);
+
+        Assert.Equal(
+            AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId,
+            aircraft.CanonicalAircraftId);
+        Assert.Equal(
+            "C172SP Classic Passengers",
+            aircraft.ProviderRecordId);
     }
 
     [Fact]

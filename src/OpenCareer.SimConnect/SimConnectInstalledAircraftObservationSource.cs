@@ -33,6 +33,17 @@ public sealed class SimConnectInstalledAircraftObservationSource(
 
             AircraftRegistryObservation[] observations = titles
                 .Select(CreateObservation)
+                .GroupBy(
+                    static observation => observation.CanonicalAircraftId,
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(static group => group
+                    .OrderBy(
+                        static observation => observation.ProviderRecordId,
+                        StringComparer.Ordinal)
+                    .First())
+                .OrderBy(
+                    static observation => observation.DisplayName,
+                    StringComparer.Ordinal)
                 .ToArray();
 
             return new(
@@ -65,7 +76,8 @@ public sealed class SimConnectInstalledAircraftObservationSource(
     public static string CreateCanonicalAircraftId(string aircraftTitle)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftTitle);
-        return AircraftCanonicalIdentity.FromMsfsTitle(aircraftTitle);
+        return AircraftCanonicalIdentity.FromMsfsTitle(
+            MsfsAircraftTitleCanonicalizer.Resolve(aircraftTitle));
     }
 
     private static AircraftRegistryObservation CreateObservation(string aircraftTitle) =>
