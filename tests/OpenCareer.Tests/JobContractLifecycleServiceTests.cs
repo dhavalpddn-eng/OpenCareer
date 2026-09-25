@@ -314,6 +314,34 @@ public sealed class JobContractLifecycleServiceTests
     }
 
     [Fact]
+    public async Task StartedContractCanBeCancelledWithoutCompletion()
+    {
+        JobContract inProgress =
+            BaseContract() with
+            {
+                Status = ContractStatus.InProgress,
+                AcceptedAt = OfferedAt.AddMinutes(5),
+                StartedAt = OfferedAt.AddMinutes(15)
+            };
+
+        var store =
+            new FakeStore(
+                new PersistedJobContract(
+                    inProgress,
+                    Version: 2));
+
+        PersistedJobContract cancelled =
+            await new JobContractLifecycleService(store)
+                .CancelAsync(inProgress.ContractId);
+
+        Assert.Equal(
+            ContractStatus.Cancelled,
+            cancelled.Contract.Status);
+        Assert.Null(cancelled.Contract.CompletedAt);
+        Assert.Equal(3, cancelled.Version);
+    }
+
+    [Fact]
     public async Task OptimisticConcurrencyFailureIsNotHidden()
     {
         JobContract offered =

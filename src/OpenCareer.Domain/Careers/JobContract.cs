@@ -125,7 +125,9 @@ public sealed record JobContract(
         ? this with { Status = ContractStatus.Failed }
         : throw InvalidTransition("fail");
 
-    public JobContract Cancel() => Status is ContractStatus.Offered or ContractStatus.Accepted
+    public JobContract Cancel() => Status is ContractStatus.Offered
+        or ContractStatus.Accepted
+        or ContractStatus.InProgress
         ? this with { Status = ContractStatus.Cancelled }
         : throw InvalidTransition("cancel");
 

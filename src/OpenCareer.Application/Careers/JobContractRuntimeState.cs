@@ -147,6 +147,77 @@ public sealed class JobContractRuntimeState
         }
     }
 
+    public async Task<bool> RemoveCancelledAsync(
+        PersistedJobContract cancelled,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(cancelled);
+        cancelled.Validate();
+
+        if (cancelled.Contract.Status
+            != ContractStatus.Cancelled)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(cancelled),
+                "Only an authoritatively cancelled contract can be removed from recoverable runtime state.");
+        }
+
+        if (!IsInitialized)
+        {
+            await InitializeAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        await _initializationGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            IReadOnlyList<PersistedJobContract> current =
+                Current;
+
+            int existingIndex = -1;
+
+            for (int index = 0; index < current.Count; index++)
+            {
+                if (current[index].Contract.ContractId
+                    == cancelled.Contract.ContractId)
+                {
+                    existingIndex = index;
+                    break;
+                }
+            }
+
+            if (existingIndex < 0)
+                return false;
+
+            PersistedJobContract existing =
+                current[existingIndex];
+
+            if (existing.Version >= cancelled.Version)
+            {
+                throw new InvalidOperationException(
+                    "Cancelled job-contract retirement must be newer than recoverable runtime state.");
+            }
+
+            PersistedJobContract[] next =
+                current
+                    .Where((_, index) => index != existingIndex)
+                    .ToArray();
+
+            Volatile.Write(
+                ref _current,
+                Array.AsReadOnly(next));
+
+            return true;
+        }
+        finally
+        {
+            _initializationGate.Release();
+        }
+    }
+
     public async Task<IReadOnlyList<PersistedJobContract>> InitializeAsync(
         CancellationToken cancellationToken = default)
     {

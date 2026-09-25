@@ -19,8 +19,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly FlightSessionPersistenceService? _flightPersistence;
     private readonly CareerJobPlayableLoopReadinessSource? _careerReadiness;
     private readonly ICareerJobCompletionAction? _careerCompletionAction;
+    private readonly ICareerFlightAbandonAction? _careerAbandonAction;
     private readonly ILogger<ShellViewModel>? _logger;
-    private readonly SemaphoreSlim _careerCompletionGate = new(1, 1);
+    private readonly SemaphoreSlim _careerActionGate = new(1, 1);
 
     private SimulatorConnectionSnapshot? _lastConnectionSnapshot;
     private AircraftTelemetrySnapshot? _lastTelemetry;
@@ -61,6 +62,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "Complete Career Flight";
     private string _careerCompletionActionDetail =
         "Career completion inputs have not been checked yet.";
+    private bool _canAbandonCurrentFlight;
+    private bool _isCareerAbandonBusy;
+    private string _careerAbandonActionText =
+        "Abandon Current Flight";
+    private string _careerAbandonActionDetail =
+        "Flight abandonment availability has not been checked yet.";
+    private Guid? _abandonSessionId;
+    private Guid? _abandonContractId;
 
 
     public ShellViewModel(
@@ -109,6 +118,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             careerReadiness,
             careerCompletionAction:
                 null,
+            careerAbandonAction:
+                null,
             logger:
                 null)
     {
@@ -122,6 +133,31 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         FlightSessionPersistenceService? flightPersistence,
         CareerJobPlayableLoopReadinessSource? careerReadiness,
         ICareerJobCompletionAction? careerCompletionAction,
+        ILogger<ShellViewModel>? logger)
+        : this(
+            connection,
+            telemetrySource,
+            settings,
+            flightSessions,
+            flightPersistence,
+            careerReadiness,
+            careerCompletionAction,
+            careerAbandonAction:
+                null,
+            logger:
+                logger)
+    {
+    }
+
+    public ShellViewModel(
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        IAppSettingsService settings,
+        FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService? flightPersistence,
+        CareerJobPlayableLoopReadinessSource? careerReadiness,
+        ICareerJobCompletionAction? careerCompletionAction,
+        ICareerFlightAbandonAction? careerAbandonAction,
         ILogger<ShellViewModel>? logger)
     {
         _connection =
@@ -143,6 +179,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _flightPersistence = flightPersistence;
         _careerReadiness = careerReadiness;
         _careerCompletionAction = careerCompletionAction;
+        _careerAbandonAction = careerAbandonAction;
         _logger = logger;
         _settings.Changed += OnSettingsChanged;
     }
@@ -177,6 +214,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public bool IsCareerCompletionBusy => _isCareerCompletionBusy;
     public string CareerCompletionActionText => _careerCompletionActionText;
     public string CareerCompletionActionDetail => _careerCompletionActionDetail;
+    public bool CanAbandonCurrentFlight => _canAbandonCurrentFlight;
+    public bool IsCareerAbandonBusy => _isCareerAbandonBusy;
+    public string CareerAbandonActionText => _careerAbandonActionText;
+    public string CareerAbandonActionDetail => _careerAbandonActionDetail;
     private bool _hasFlightSession;
     private bool _hasRecoveredFlightSession;
 
@@ -384,7 +425,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
 
         bool entered =
-            await _careerCompletionGate
+            await _careerActionGate
                 .WaitAsync(
                     millisecondsTimeout:
                         0,
@@ -433,7 +474,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
         finally
         {
-            _careerCompletionGate.Release();
+            _careerActionGate.Release();
         }
     }
 
@@ -443,7 +484,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         if (_careerCompletionAction is null)
             return;
 
-        await _careerCompletionGate
+        await _careerActionGate
             .WaitAsync(cancellationToken);
 
         try
@@ -458,6 +499,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 false,
                 nameof(CanCompleteCareerFlight));
 
+            SetBoolean(
+                ref _canAbandonCurrentFlight,
+                false,
+                nameof(CanAbandonCurrentFlight));
+
             SetField(
                 ref _careerCompletionActionText,
                 "Completing Career Flight…",
@@ -470,6 +516,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
             await _careerCompletionAction
                 .CompleteAsync(cancellationToken);
+
+            _abandonSessionId = null;
+            _abandonContractId = null;
 
             RefreshConnectionStatus();
 
@@ -524,8 +573,228 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 "Complete Career Flight",
                 nameof(CareerCompletionActionText));
 
-            _careerCompletionGate.Release();
+            _careerActionGate.Release();
         }
+
+    }
+
+    public async Task RefreshCareerAbandonActionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_careerAbandonAction is null)
+        {
+            SetAbandonAvailability(
+                canAbandon: false,
+                sessionId: null,
+                contractId: null,
+                detail:
+                    "Flight abandonment is not connected to this view.");
+            return;
+        }
+
+        bool entered =
+            await _careerActionGate
+                .WaitAsync(
+                    millisecondsTimeout:
+                        0,
+                    cancellationToken);
+
+        if (!entered)
+            return;
+
+        try
+        {
+            CareerFlightAbandonAvailability availability =
+                await _careerAbandonAction
+                    .ReadAvailabilityAsync(
+                        cancellationToken);
+
+            SetAbandonAvailability(
+                availability.CanAbandon
+                    && !_isCareerAbandonBusy,
+                availability.SessionId,
+                availability.ContractId,
+                availability.Detail);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Career flight abandonment readiness refresh failed.");
+
+            SetAbandonAvailability(
+                canAbandon: false,
+                sessionId: null,
+                contractId: null,
+                detail:
+                    "Flight abandonment readiness could not be verified.");
+        }
+        finally
+        {
+            _careerActionGate.Release();
+        }
+    }
+
+    public async Task<bool> AbandonCurrentFlightAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_careerAbandonAction is null
+            || _abandonSessionId is not { } sessionId
+            || _abandonContractId is not { } contractId)
+        {
+            return false;
+        }
+
+        await _careerActionGate
+            .WaitAsync(cancellationToken);
+
+        try
+        {
+            SetBoolean(
+                ref _isCareerAbandonBusy,
+                true,
+                nameof(IsCareerAbandonBusy));
+
+            SetBoolean(
+                ref _canAbandonCurrentFlight,
+                false,
+                nameof(CanAbandonCurrentFlight));
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                false,
+                nameof(CanCompleteCareerFlight));
+
+            SetField(
+                ref _careerAbandonActionText,
+                "Abandoning Current Flight…",
+                nameof(CareerAbandonActionText));
+
+            SetField(
+                ref _careerAbandonActionDetail,
+                "Persisting cancellation, cancelling the contract, releasing its Fleet reservation, and cleaning up the saved session.",
+                nameof(CareerAbandonActionDetail));
+
+            CareerFlightAbandonResult result =
+                await _careerAbandonAction
+                    .AbandonAsync(
+                        sessionId,
+                        contractId,
+                        cancellationToken);
+
+            _abandonSessionId = null;
+            _abandonContractId = null;
+
+            RefreshConnectionStatus();
+
+            SetField(
+                ref _careerAbandonActionDetail,
+                result.Status == CareerFlightAbandonStatus.NoActiveSession
+                    ? "No current FlightSession remained; no abandonment changes were made."
+                    : "Current flight abandoned. The contract was cancelled and its aircraft reservation released; no completion rewards were applied.",
+                nameof(CareerAbandonActionDetail));
+
+            return true;
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Career flight abandonment failed for session {SessionId} and contract {ContractId}.",
+                sessionId,
+                contractId);
+
+            SetField(
+                ref _careerAbandonActionDetail,
+                $"Flight abandonment failed: {ex.Message}",
+                nameof(CareerAbandonActionDetail));
+
+            try
+            {
+                CareerFlightAbandonAvailability availability =
+                    await _careerAbandonAction
+                        .ReadAvailabilityAsync(
+                            cancellationToken);
+
+                SetAbandonAvailability(
+                    availability.CanAbandon,
+                    availability.SessionId,
+                    availability.ContractId,
+                    _careerAbandonActionDetail);
+            }
+            catch (Exception refreshEx)
+            {
+                _logger?.LogWarning(
+                    refreshEx,
+                    "Flight abandonment readiness could not be refreshed after a failed attempt.");
+            }
+
+            return false;
+        }
+        finally
+        {
+            SetBoolean(
+                ref _isCareerAbandonBusy,
+                false,
+                nameof(IsCareerAbandonBusy));
+
+            SetField(
+                ref _careerAbandonActionText,
+                "Abandon Current Flight",
+                nameof(CareerAbandonActionText));
+
+            _careerActionGate.Release();
+        }
+    }
+
+    private void SetAbandonAvailability(
+        bool canAbandon,
+        Guid? sessionId,
+        Guid? contractId,
+        string detail)
+    {
+        _abandonSessionId =
+            canAbandon
+                ? sessionId
+                : null;
+        _abandonContractId =
+            canAbandon
+                ? contractId
+                : null;
+
+        SetBoolean(
+            ref _canAbandonCurrentFlight,
+            canAbandon,
+            nameof(CanAbandonCurrentFlight));
+
+        SetField(
+            ref _careerAbandonActionDetail,
+            detail,
+            nameof(CareerAbandonActionDetail));
+    }
+
+    public void ReportCareerAbandonProjectionRefreshFailure(
+        Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        _logger?.LogWarning(
+            exception,
+            "Career flight was abandoned, but the Jobs projection refresh failed.");
+
+        SetField(
+            ref _careerAbandonActionDetail,
+            "Current flight was abandoned successfully, but the Jobs view could not refresh. Reopen Jobs to retry its authoritative refresh.",
+            nameof(CareerAbandonActionDetail));
     }
 
     private void RefreshCareerWorkflow()

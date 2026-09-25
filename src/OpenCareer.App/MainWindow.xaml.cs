@@ -119,6 +119,10 @@ public sealed partial class MainWindow : Window
                 await ViewModel
                     .RefreshCareerCompletionActionAsync(
                         _lifetimeCts.Token);
+
+                await ViewModel
+                    .RefreshCareerAbandonActionAsync(
+                        _lifetimeCts.Token);
             }
         }
         catch (OperationCanceledException)
@@ -156,7 +160,11 @@ public sealed partial class MainWindow : Window
                 Navigate(typeof(JobsPage), Jobs);
                 break;
             case "current-flight":
-                Navigate(typeof(CurrentFlightPage), ViewModel);
+                Navigate(
+                    typeof(CurrentFlightPage),
+                    new CurrentFlightPageContext(
+                        ViewModel,
+                        Jobs));
                 break;
             case "military":
                 Navigate(

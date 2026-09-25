@@ -109,6 +109,20 @@
                                     HorizontalAlignment="Left" />
                         </StackPanel>
                     </Border>
+
+                    <Border Margin="0,8,0,0"
+                            Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding CareerAbandonActionDetail}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                            <Button Content="{Binding CareerAbandonActionText}"
+                                    IsEnabled="{Binding CanAbandonCurrentFlight}"
+                                    Click="AbandonCurrentFlight_Click"
+                                    Style="{StaticResource OpenCareerDangerButtonStyle}"
+                                    HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 

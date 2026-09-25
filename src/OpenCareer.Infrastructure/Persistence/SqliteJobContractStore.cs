@@ -490,6 +490,7 @@ public sealed class SqliteJobContractStore : IJobContractStore
             (ContractStatus.Accepted, ContractStatus.Cancelled) => true,
             (ContractStatus.InProgress, ContractStatus.Completed) => true,
             (ContractStatus.InProgress, ContractStatus.Failed) => true,
+            (ContractStatus.InProgress, ContractStatus.Cancelled) => true,
             _ => false
         };
 

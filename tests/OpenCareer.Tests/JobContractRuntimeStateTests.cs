@@ -85,6 +85,37 @@ public sealed class JobContractRuntimeStateTests
     }
 
     [Fact]
+    public async Task AuthoritativeCancellationRetiresRecoverableRuntimeStateIdempotently()
+    {
+        PersistedJobContract accepted =
+            AcceptedContract(
+                Guid.Parse(
+                    "c1000000-0000-0000-0000-000000000004"));
+
+        var state =
+            new JobContractRuntimeState(
+                new JobContractRecoveryService(
+                    new FakeRecoverySource(
+                        [Candidate(accepted)]),
+                    new FakeContractStore(
+                        [accepted])));
+
+        await state.InitializeAsync();
+
+        PersistedJobContract cancelled =
+            new(
+                accepted.Contract.Cancel(),
+                accepted.Version + 1);
+
+        Assert.True(
+            await state.RemoveCancelledAsync(cancelled));
+        Assert.False(
+            await state.RemoveCancelledAsync(cancelled));
+        Assert.Null(
+            state.Find(accepted.Contract.ContractId));
+    }
+
+    [Fact]
     public async Task FailedInitializationCanRetryWithoutPublishingPartialState()
     {
         PersistedJobContract accepted =

@@ -184,6 +184,62 @@ public sealed class SqliteJobContractStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task InProgressContractCanPersistCancellation()
+    {
+        JobContract offered =
+            CreateContract();
+        SqliteJobContractStore store =
+            CreateStore();
+
+        await store.CreateJobContractAsync(offered);
+
+        JobContract accepted =
+            offered with
+            {
+                Status = ContractStatus.Accepted,
+                AcceptedAt = OfferedAt.AddMinutes(5)
+            };
+
+        Assert.Equal(
+            JobContractSaveResult.Updated,
+            await store.UpdateJobContractAsync(
+                accepted,
+                expectedVersion: 0));
+
+        JobContract inProgress =
+            accepted with
+            {
+                Status = ContractStatus.InProgress,
+                StartedAt = OfferedAt.AddMinutes(10)
+            };
+
+        Assert.Equal(
+            JobContractSaveResult.Updated,
+            await store.UpdateJobContractAsync(
+                inProgress,
+                expectedVersion: 1));
+
+        JobContract cancelled =
+            inProgress.Cancel();
+
+        Assert.Equal(
+            JobContractSaveResult.Updated,
+            await store.UpdateJobContractAsync(
+                cancelled,
+                expectedVersion: 2));
+
+        PersistedJobContract persisted =
+            (await store.ReadJobContractAsync(
+                offered.ContractId))!;
+
+        Assert.Equal(3, persisted.Version);
+        Assert.Equal(
+            ContractStatus.Cancelled,
+            persisted.Contract.Status);
+        Assert.Null(persisted.Contract.CompletedAt);
+    }
+
+    [Fact]
     public async Task DifferentContractCannotReuseIdentity()
     {
         JobContract first =
