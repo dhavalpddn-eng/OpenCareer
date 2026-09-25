@@ -97,7 +97,78 @@ public sealed class InstalledAircraftDiscoveryFallbackTests
                         AircraftCanonicalIdentity.MsfsTitlePrefix,
                         observation.CanonicalAircraftId,
                         StringComparison.Ordinal);
+                    Assert.Equal(
+                        AircraftAccess.Civilian,
+                        observation.Access);
                 });
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PackageDiscoveryPublishesMilitaryAccessFromMilitaryParkingEvidence()
+    {
+        string root =
+            CreateInstalledPackage(
+                """
+                [FLTSIM.0]
+                title = Military Fixture
+                isUserSelectable = 1
+                isAirTraffic = 0
+                atc_parking_types = MIL_COMBAT
+                """);
+
+        try
+        {
+            var source =
+                new MsfsPackageInstalledAircraftDiscoverySource(
+                    [Path.Combine(root, "Community")]);
+
+            await source.InitializeAsync();
+
+            AircraftRegistryObservation observation =
+                Assert.Single(
+                    source.Current.Observations);
+
+            Assert.Equal(
+                AircraftAccess.Military,
+                observation.Access);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PackageDiscoveryLeavesAmbiguousAccessUnknown()
+    {
+        string root =
+            CreateInstalledPackage(
+                """
+                [FLTSIM.0]
+                title = Ambiguous Fixture
+                """);
+
+        try
+        {
+            var source =
+                new MsfsPackageInstalledAircraftDiscoverySource(
+                    [Path.Combine(root, "Community")]);
+
+            await source.InitializeAsync();
+
+            AircraftRegistryObservation observation =
+                Assert.Single(
+                    source.Current.Observations);
+
+            Assert.Null(
+                observation.Access);
         }
         finally
         {
@@ -162,8 +233,13 @@ public sealed class InstalledAircraftDiscoveryFallbackTests
             """
             [FLTSIM.0]
             title = AI Only Aircraft
-            isUserSelectable = 0
+            isUserSelectable = 1
             isAirTraffic = 1
+
+            [FLTSIM.1]
+            title = Nonselectable Aircraft
+            isUserSelectable = 0
+            isAirTraffic = 0
             """);
 
         try
@@ -272,6 +348,35 @@ public sealed class InstalledAircraftDiscoveryFallbackTests
                 true,
             DisplayName:
                 title);
+
+    private static string CreateInstalledPackage(
+        string aircraftCfg)
+    {
+        string root =
+            Path.Combine(
+                Path.GetTempPath(),
+                "OpenCareer.Tests",
+                Guid.NewGuid().ToString("N"));
+
+        string package =
+            Path.Combine(
+                root,
+                "Community",
+                "fixture-aircraft");
+
+        Directory.CreateDirectory(package);
+        File.WriteAllText(
+            Path.Combine(package, "manifest.json"),
+            "{}");
+        File.WriteAllText(
+            Path.Combine(package, "layout.json"),
+            "{}");
+        File.WriteAllText(
+            Path.Combine(package, "aircraft.cfg"),
+            aircraftCfg);
+
+        return root;
+    }
 
     private sealed class StubDiscovery(
         InstalledAircraftDiscoverySnapshot current)

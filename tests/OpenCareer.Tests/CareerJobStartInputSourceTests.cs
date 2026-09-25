@@ -228,6 +228,36 @@ public sealed class CareerJobStartInputSourceTests
     }
 
     [Fact]
+    public async Task InstalledAccessOnlyResolutionCreatesConservativeProjectionThenFailsPhysicalPreflight()
+    {
+        TestFixture fixture =
+            CreateFixture(
+                contractTerms:
+                    [new FixedContractTermsSource()],
+                dispatchAuthorities:
+                    [new FixedDispatchAuthoritySource()],
+                registry:
+                    new AccessOnlyAircraftRegistrySource());
+
+        CareerJobStartInputSnapshot snapshot =
+            await fixture.Source.ReadAsync(
+                fixture.Offer.OfferId,
+                "fixture-aircraft");
+
+        Assert.Equal(
+            CareerJobStartInputState.PreflightDataInsufficient,
+            snapshot.State);
+        Assert.DoesNotContain(
+            "safe job capability projection",
+            snapshot.Detail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "AircraftRangeUnknown",
+            snapshot.Detail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task PhysicalPreflightFailureCannotSetDispatchVerified()
     {
         TestFixture fixture =
@@ -584,6 +614,51 @@ public sealed class CareerJobStartInputSourceTests
 
             Assert.Contains(
                 AircraftRegistryField.Seats,
+                resolution.UnresolvedCapabilityFields);
+
+            return Task.FromResult<AircraftRegistryResolution?>(
+                resolution);
+        }
+    }
+
+    private sealed class AccessOnlyAircraftRegistrySource
+        : IAircraftRegistrySource
+    {
+        public Task<AircraftRegistryResolution?> FindAircraftAsync(
+            string aircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!string.Equals(
+                    aircraftId,
+                    "fixture-aircraft",
+                    StringComparison.Ordinal))
+            {
+                return Task.FromResult<AircraftRegistryResolution?>(
+                    null);
+            }
+
+            AircraftRegistryResolution resolution =
+                AircraftRegistryResolver.Resolve(
+                [
+                    new AircraftRegistryObservation(
+                        "fixture-aircraft",
+                        ProviderId:
+                            "installed-access-fixture",
+                        ProviderRecordId:
+                            "fixture-aircraft",
+                        AircraftDataConfidence.Reference,
+                        IsInstalled:
+                            true,
+                        DisplayName:
+                            "Fixture Aircraft",
+                        Access:
+                            AircraftAccess.Civilian)
+                ]);
+
+            Assert.Contains(
+                AircraftRegistryField.MaximumRangeNauticalMiles,
                 resolution.UnresolvedCapabilityFields);
 
             return Task.FromResult<AircraftRegistryResolution?>(

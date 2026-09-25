@@ -182,7 +182,10 @@ public sealed class MsfsPackageInstalledAircraftDiscoverySource
                             IsInstalled:
                                 true,
                             DisplayName:
-                                title));
+                                title,
+                            Access:
+                                AircraftCfgParser.InferAccess(
+                                    variation)));
                 }
             }
         }

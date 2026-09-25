@@ -22,6 +22,39 @@ internal sealed record AircraftCfgDocument(
 
 internal static class AircraftCfgParser
 {
+    internal static AircraftAccess? InferAccess(
+        AircraftCfgVariation variation)
+    {
+        ArgumentNullException.ThrowIfNull(variation);
+
+        if (variation.IsUserSelectable == false
+            || variation.IsAirTraffic == true)
+        {
+            return null;
+        }
+
+        if (variation.AtcParkingTypes.Any(
+                static type =>
+                    type is "MIL_COMBAT" or "MIL_CARGO"))
+        {
+            return AircraftAccess.Military;
+        }
+
+        if (variation.IsUserSelectable == true
+            || variation.AtcParkingTypes.Any(
+                static type =>
+                    type is "ANY"
+                        or "RAMP"
+                        or "CARGO"
+                        or "GATE"
+                        or "DOCK"))
+        {
+            return AircraftAccess.Civilian;
+        }
+
+        return null;
+    }
+
     internal static AircraftCfgDocument Parse(string content)
     {
         ArgumentNullException.ThrowIfNull(content);
