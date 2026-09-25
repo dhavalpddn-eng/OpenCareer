@@ -7,7 +7,7 @@ internal static class OpenCareerDatabaseMigrator
     // Career and Economy branches independently reused schema versions 1-10.
     // Version 11 was the first shared convergence point; pre-v11 user_version
     // alone cannot be used to infer which subsystem tables already exist.
-    public const int CurrentSchemaVersion = 12;
+    public const int CurrentSchemaVersion = 13;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -45,6 +45,9 @@ internal static class OpenCareerDatabaseMigrator
                 connection,
                 transaction,
                 cancellationToken)
+            .ConfigureAwait(false);
+
+        await EnsurePlayerProfileSavePrecisionAsync(connection, transaction, cancellationToken)
             .ConfigureAwait(false);
 
         await ExecuteAsync(
@@ -155,6 +158,7 @@ internal static class OpenCareerDatabaseMigrator
                     revision INTEGER NOT NULL CHECK (revision >= 1),
                     payload_schema_version INTEGER NOT NULL,
                     saved_at_ms INTEGER NOT NULL,
+                    saved_at_utc_ticks INTEGER NULL,
                     payload_json TEXT NOT NULL,
                     CHECK (slot_id = 1)
                 );
@@ -294,6 +298,31 @@ internal static class OpenCareerDatabaseMigrator
                 """,
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private static async Task EnsurePlayerProfileSavePrecisionAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = "PRAGMA table_info(player_career_profile);";
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (string.Equals(reader.GetString(1), "saved_at_utc_ticks", StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+        }
+
+        // Legacy milliseconds cannot reconstruct lost ticks. Preserve them without inventing precision;
+        // new profile commits persist exact UTC ticks in the same transaction as revision and payload.
+        await ExecuteAsync(connection, transaction,
+            "ALTER TABLE player_career_profile ADD COLUMN saved_at_utc_ticks INTEGER NULL;",
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task EnsureAircraftAvailabilityReservationColumnAsync(

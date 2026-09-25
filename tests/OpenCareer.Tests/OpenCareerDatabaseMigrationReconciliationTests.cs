@@ -9,7 +9,7 @@ namespace OpenCareer.Tests;
 public sealed class OpenCareerDatabaseMigrationReconciliationTests
 {
     [Fact]
-    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV12()
+    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV13()
     {
         string directory = CreateTempDirectory();
 
@@ -47,7 +47,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV12()
+    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV13()
     {
         string directory = CreateTempDirectory();
 
@@ -82,7 +82,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV12()
+    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV13()
     {
         string directory = CreateTempDirectory();
 
@@ -161,7 +161,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV12()
+    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV13()
     {
         string directory = CreateTempDirectory();
 
@@ -363,7 +363,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            12L,
+            13L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));

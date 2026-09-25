@@ -454,7 +454,7 @@ public sealed class KjfkPlayableLoopCertificationTests
 
     private sealed class TestClock : TimeProvider
     {
-        public DateTimeOffset Now { get; set; } = new(2026, 9, 25, 12, 0, 0, TimeSpan.Zero);
+        public DateTimeOffset Now { get; set; } = new DateTimeOffset(2026, 9, 25, 12, 0, 0, TimeSpan.Zero).AddTicks(1_234_567);
         public override DateTimeOffset GetUtcNow() => Now;
     }
     private sealed class TestTelemetry : ISimulatorTelemetrySource

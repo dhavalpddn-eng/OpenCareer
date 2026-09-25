@@ -266,6 +266,40 @@ public sealed class SqlitePlayerCareerProfileStoreTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdatePreservesExactSaveTimeAcrossRestartAndLegacyMigration(bool legacyV12)
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "opencareer.db");
+            var options = new OpenCareerDatabaseOptions(path);
+            var profile = PlayerCareerProfile.Start(CareerId, "KJFK", Epoch);
+            var original = await CreateStore(options).SaveAsync(profile, null, Epoch);
+            if (legacyV12)
+            {
+                await using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}");
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText = "ALTER TABLE player_career_profile DROP COLUMN saved_at_utc_ticks; PRAGMA user_version = 12;";
+                await command.ExecuteNonQueryAsync();
+            }
+            var migrated = (await CreateStore(options).LoadAsync())!;
+            AssertEquivalent(original, migrated);
+            DateTimeOffset preciseSave = Epoch.AddMinutes(4).AddTicks(4_321);
+            var saved = await CreateStore(options).SaveAsync(profile, migrated.Revision, preciseSave);
+            Assert.Equal(preciseSave, saved.SavedAt);
+            Assert.Equal(migrated.Revision + 1, saved.Revision);
+            AssertEquivalent(saved, await CreateStore(options).LoadAsync());
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
     private static void AssertEquivalent(
         PlayerCareerProfileStoreRecord expected,
         PlayerCareerProfileStoreRecord? actualRecord)

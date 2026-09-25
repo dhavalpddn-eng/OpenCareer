@@ -47,7 +47,12 @@ button labels, enablement bindings, handler links, confirmation and registration
 2. A rollout indication consumed on the same sample as a higher-priority landing/bounce event could
    retire the processor's landing context before the reducer reached TaxiIn. Rollout is retained until
    a subsequent eligible ground observation.
-3. Windows build jobs previously checked out the PR merge ref. Both build workflows now select the
+3. Fractional-second telemetry reproduced the original profile/logbook ordering exception. SQLite
+   stored the profile marker at millisecond precision while the logbook retained exact ticks. Schema 13
+   adds an exact UTC-tick save marker committed atomically with the existing revision/payload. Legacy
+   timestamps remain readable without inventing lost precision. The ordering invariant is unchanged.
+   The entire lifecycle fixture now deliberately uses sub-millisecond timestamps.
+4. Windows build jobs previously checked out the PR merge ref. Both build workflows now select the
    PR head explicitly; Windows asserts the checked-out SHA and runs the certification gate separately.
 
 Bounce evidence uses named defaults of at most five seconds airborne and fifty feet AGL. These are

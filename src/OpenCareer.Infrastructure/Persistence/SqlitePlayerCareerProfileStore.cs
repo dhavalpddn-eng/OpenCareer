@@ -49,7 +49,7 @@ public sealed class SqlitePlayerCareerProfileStore
 
         command.CommandText =
             """
-            SELECT career_id, revision, payload_schema_version, saved_at_ms, payload_json
+            SELECT career_id, revision, payload_schema_version, saved_at_ms, payload_json, saved_at_utc_ticks
             FROM player_career_profile
             WHERE slot_id = $slot_id
             LIMIT 1;
@@ -81,10 +81,12 @@ public sealed class SqlitePlayerCareerProfileStore
                 "Stored player career profile identity does not match its payload.");
         }
 
-        DateTimeOffset persistedSavedAt =
-            RestoreSavedAtPrecision(
-                DateTimeOffset.FromUnixTimeMilliseconds(savedAtMs),
-                profile.CreatedAt);
+        DateTimeOffset persistedSavedAt = reader.IsDBNull(5)
+            ? RestoreSavedAtPrecision(DateTimeOffset.FromUnixTimeMilliseconds(savedAtMs), profile.CreatedAt)
+            : new DateTimeOffset(reader.GetInt64(5), TimeSpan.Zero);
+
+        if (!reader.IsDBNull(5) && persistedSavedAt.ToUnixTimeMilliseconds() != savedAtMs)
+            throw new InvalidDataException("Player career save timestamp metadata is inconsistent.");
 
         var record = new PlayerCareerProfileStoreRecord(
             revision,
@@ -109,10 +111,9 @@ public sealed class SqlitePlayerCareerProfileStore
         if (expectedRevision is < 1)
             throw new ArgumentOutOfRangeException(nameof(expectedRevision));
 
-        DateTimeOffset persistedSavedAt =
-            NormalizeSavedAtForStorage(
-                savedAt,
-                profile.CreatedAt);
+        // The logbook's authoritative commit retains sub-millisecond precision. Truncating this
+        // marker can falsely place a successfully applied profile before that commit.
+        DateTimeOffset persistedSavedAt = savedAt.ToUniversalTime();
 
         await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -141,6 +142,7 @@ public sealed class SqlitePlayerCareerProfileStore
                         revision,
                         payload_schema_version,
                         saved_at_ms,
+                        saved_at_utc_ticks,
                         payload_json
                     )
                     VALUES (
@@ -149,6 +151,7 @@ public sealed class SqlitePlayerCareerProfileStore
                         $revision,
                         $payload_schema_version,
                         $saved_at_ms,
+                        $saved_at_utc_ticks,
                         $payload_json
                     )
                     ON CONFLICT(slot_id) DO NOTHING;
@@ -183,6 +186,7 @@ public sealed class SqlitePlayerCareerProfileStore
                     SET revision = $revision,
                         payload_schema_version = $payload_schema_version,
                         saved_at_ms = $saved_at_ms,
+                        saved_at_utc_ticks = $saved_at_utc_ticks,
                         payload_json = $payload_json
                     WHERE slot_id = $slot_id
                       AND career_id = $career_id
@@ -320,20 +324,6 @@ public sealed class SqlitePlayerCareerProfileStore
             .ConfigureAwait(false);
     }
 
-    private static DateTimeOffset NormalizeSavedAtForStorage(
-        DateTimeOffset savedAt,
-        DateTimeOffset createdAt)
-    {
-        DateTimeOffset persisted =
-            DateTimeOffset.FromUnixTimeMilliseconds(
-                savedAt.ToUnixTimeMilliseconds());
-
-        if (persisted < createdAt)
-            persisted = persisted.AddMilliseconds(1);
-
-        return persisted;
-    }
-
     private static DateTimeOffset RestoreSavedAtPrecision(
         DateTimeOffset persistedSavedAt,
         DateTimeOffset createdAt)
@@ -365,6 +355,7 @@ public sealed class SqlitePlayerCareerProfileStore
         command.Parameters.AddWithValue(
             "$saved_at_ms",
             savedAt.ToUnixTimeMilliseconds());
+        command.Parameters.AddWithValue("$saved_at_utc_ticks", savedAt.UtcTicks);
         command.Parameters.AddWithValue("$payload_json", payload);
     }
 
