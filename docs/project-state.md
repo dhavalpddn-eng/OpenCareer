@@ -2,6 +2,18 @@
 
 **Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
 
+## MBL-17 physical-airframe foundation — 2026-09-25
+
+- Isolated branch: `feature/mbl17-airframe-condition`, directly from frozen live-test candidate `2140dea7902b00a3167df31bc169b289672866e8`. Do not move `feature/playable-loop-integration` or modify validation PR #105 for this work.
+- `AirframeId` is an explicit non-empty GUID value type for one physical aircraft. `Airframe` retains immutable canonical model identity and creation time. Future OwnershipId will represent tenure; it is not created or equated with AirframeId here.
+- `AirframeCondition.WearFraction` is a finite normalized structural-wear value, independent of discrete `Damage` (`None`, `Recorded`, `Grounding`). `RequiresGrounding` reflects explicit grounding damage only; false does not authorize dispatch. No wear accumulation, service limit, severity threshold, repair or failure probability is defined.
+- `IAirframeStore` exposes explicit create, find by physical ID, and revision-checked condition update. Production DI resolves `SqliteAirframeStore`. One SQLite row atomically holds immutable identity, wear, damage, revision and exact UTC timestamps. Duplicate IDs, stale/replayed writes, identity replacement, backdated updates and invalid persisted values fail closed.
+- Schema 14 adds `airframes`; existing schema-13 tables/rows are retained. No legacy model reservation or installed TITLE is promoted into a physical aircraft. Two records can share the same canonical model and have independent condition.
+- No FlightSession, provider, ownership, discovery, Fleet reservation, dispatch or KJFK behavior is changed. Callers must explicitly supply the future authoritative physical identity. History, hours/cycles, schedules and flight consequences remain later slices.
+- New deterministic domain/SQLite tests cover identity, independent wear/damage, restart, concurrency, corruption, rollback/retry and schema-13 migration preserving playable-loop data. The unchanged KJFK certification, full xUnit, SimLab, WinUI x64 Release and probe build are verification gates; consult this branch's exact-head PR CI for execution results. No live MSFS validation is claimed.
+- Local .NET 10 Release verification: 41 focused tests (including unchanged KJFK certification), 1,256 full xUnit tests, and 29 SimLab scenarios passed. `git diff --check` passed. Windows build/probe results are recorded on the draft PR's exact commit after publication.
+- Schema 14 is not readable by the frozen schema-13 binary. Keep later Windows validation of this branch on a separate test database; do not migrate the frozen candidate's live save during its pending flight test.
+
 Updated: 2026-09-20. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here

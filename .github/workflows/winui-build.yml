@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/m1-simulation-core
+      - feature/playable-loop-integration
     paths:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"

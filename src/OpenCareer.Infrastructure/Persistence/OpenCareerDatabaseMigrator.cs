@@ -7,7 +7,7 @@ internal static class OpenCareerDatabaseMigrator
     // Career and Economy branches independently reused schema versions 1-10.
     // Version 11 was the first shared convergence point; pre-v11 user_version
     // alone cannot be used to infer which subsystem tables already exist.
-    public const int CurrentSchemaVersion = 13;
+    public const int CurrentSchemaVersion = 14;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -69,6 +69,16 @@ internal static class OpenCareerDatabaseMigrator
                 connection,
                 transaction,
                 """
+                CREATE TABLE IF NOT EXISTS airframes (
+                    airframe_id TEXT NOT NULL PRIMARY KEY,
+                    canonical_aircraft_id TEXT NOT NULL CHECK (length(trim(canonical_aircraft_id)) > 0),
+                    created_at_utc_ticks INTEGER NOT NULL,
+                    wear_fraction REAL NOT NULL CHECK (wear_fraction >= 0 AND wear_fraction <= 1),
+                    damage_state INTEGER NOT NULL CHECK (damage_state IN (0, 1, 2)),
+                    revision INTEGER NOT NULL CHECK (revision >= 1),
+                    saved_at_utc_ticks INTEGER NOT NULL CHECK (saved_at_utc_ticks >= created_at_utc_ticks)
+                );
+
                 CREATE TABLE IF NOT EXISTS logbook_entries (
                     entry_id TEXT NOT NULL PRIMARY KEY,
                     idempotency_key TEXT NOT NULL UNIQUE,

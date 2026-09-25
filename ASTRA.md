@@ -2,6 +2,8 @@
 
 **Read this first.** If coding, `AGENTS.md` is canonical. Verify remote head before writes.
 
+**MBL-17 isolated foundation (2026-09-25):** `feature/mbl17-airframe-condition` starts directly from `2140dea7902b00a3167df31bc169b289672866e8`. Keep `feature/playable-loop-integration` frozen at that KJFK live-test candidate. Physical `AirframeId`, immutable `Airframe`, separate wear/discrete `AirframeCondition`, and revision-protected `IAirframeStore` / SQLite schema 14 are implemented on this separate branch. No automatic airframe creation, FlightSession linkage, ownership, wear formulas, service, repairs or failures. See the MBL-17 foundation section in `docs/project-state.md`; exact-head CI evidence belongs to the draft PR, never PR #105. The older branch/status notes below describe prior work, not this slice's branch authority.
+
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/m1-simulation-core`  
 **PR:** #2 draft; keep `main` stable.  

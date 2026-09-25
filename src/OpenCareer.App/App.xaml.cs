@@ -9,6 +9,7 @@ using OpenCareer.Application.Careers;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Economy;
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Military;
 using OpenCareer.Application.Planning;
@@ -65,6 +66,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ICommodityMarketSnapshotStore, SqliteCommodityMarketSnapshotStore>();
         services.AddSingleton<WorldSimulationPersistenceService>();
         services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
+        services.AddSingleton<IAirframeStore, SqliteAirframeStore>();
         services.AddSingleton<JobBoardGenerationService>();
         services.AddSingleton<IJobContractStore, SqliteJobContractStore>();
         services.AddSingleton<IJobContractRecoverySource, SqliteJobContractRecoverySource>();

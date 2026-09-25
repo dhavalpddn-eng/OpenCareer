@@ -171,6 +171,8 @@ Payload, fuel/range, runway, weather/environment, qualification and mission feas
 
 Wear, service, repairs, parts/MRO, downtime, history and supported incident consequences.
 
+Isolated foundation on `feature/mbl17-airframe-condition`: permanent physical AirframeId plus separate wear/discrete damage persistence (schema 14), without changing the frozen KJFK playable loop. Maintenance remains incomplete: flight linkage/consequences, service schedules, repairs, downtime and history are deferred.
+
 ### MBL-14 — Economy + Markets
 **Estimated effort: ~8–15 developer days**
 
