@@ -123,7 +123,7 @@ public sealed class CareerFlightAbandonCoordinator
                     "The current FlightSession is not linked to a career contract.");
             }
 
-            if (!IsCancellableSession(session))
+            if (!IsAbandonableSession(session))
             {
                 return Unavailable(
                     session.Status == FlightSessionStatus.Completed
@@ -172,7 +172,9 @@ public sealed class CareerFlightAbandonCoordinator
                     ownership,
                     reservationId);
             }
-            else if (session.Status != FlightSessionStatus.Cancelled
+            else if (session.Status is not
+                    (FlightSessionStatus.Cancelled
+                    or FlightSessionStatus.Interrupted)
                 && persisted.Contract.Status != ContractStatus.Cancelled)
             {
                 return Unavailable(
@@ -180,9 +182,17 @@ public sealed class CareerFlightAbandonCoordinator
             }
 
             bool cleanupPending =
-                session.Status == FlightSessionStatus.Cancelled
+                session.Status is FlightSessionStatus.Cancelled
+                    or FlightSessionStatus.Interrupted
                 || persisted.Contract.Status == ContractStatus.Cancelled
                 || ownership is null;
+
+            string detail =
+                session.Status == FlightSessionStatus.Interrupted
+                    ? "This interrupted flight will be discarded. Its contract, aircraft reservation, and saved session will be cleaned up with no settlement, logbook completion, pay, or career credit."
+                    : cleanupPending
+                        ? "Cancellation cleanup is pending. Retry to reconcile the contract, Fleet reservation, and saved FlightSession."
+                        : "Abandoning cancels this flight and contract, releases its aircraft, and grants no completion rewards.";
 
             return new(
                 CanAbandon: true,
@@ -191,9 +201,7 @@ public sealed class CareerFlightAbandonCoordinator
                     : CareerFlightAbandonAvailabilityState.Ready,
                 session.SessionId,
                 contractId,
-                cleanupPending
-                    ? "Cancellation cleanup is pending. Retry to reconcile the contract, Fleet reservation, and saved FlightSession."
-                    : "Abandoning cancels this flight and contract, releases its aircraft, and grants no completion rewards.");
+                detail);
         }
         finally
         {
@@ -267,7 +275,9 @@ public sealed class CareerFlightAbandonCoordinator
                     ownership,
                     reservationId);
             }
-            else if (session.Status != FlightSessionStatus.Cancelled
+            else if (session.Status is not
+                    (FlightSessionStatus.Cancelled
+                    or FlightSessionStatus.Interrupted)
                 && contract.Contract.Status != ContractStatus.Cancelled)
             {
                 throw new InvalidOperationException(
@@ -276,26 +286,46 @@ public sealed class CareerFlightAbandonCoordinator
 
             bool sessionWasAlreadyCancelled =
                 session.Status == FlightSessionStatus.Cancelled;
+            bool interruptedDiscard =
+                session.Status == FlightSessionStatus.Interrupted;
 
-            _logger.LogInformation(
-                "Abandoning career FlightSession {SessionId} for contract {ContractId}; session already cancelled: {SessionAlreadyCancelled}.",
+            FlightSession cleanupTerminal;
+
+            if (interruptedDiscard)
+            {
+                _logger.LogInformation(
+                    "Discarding terminal interrupted career FlightSession {SessionId} for contract {ContractId} without changing its flight status.",
+                    expectedSessionId,
+                    expectedContractId);
+
+                cleanupTerminal =
+                    session;
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Abandoning career FlightSession {SessionId} for contract {ContractId}; session already cancelled: {SessionAlreadyCancelled}.",
+                    expectedSessionId,
+                    expectedContractId,
+                    sessionWasAlreadyCancelled);
+
+                cleanupTerminal =
+                    await _flightPersistence
+                        .CancelAsync(
+                            expectedSessionId,
+                            expectedContractId,
+                            _timeProvider.GetUtcNow(),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+            }
+
+            ValidateCleanupTerminalSession(
+                cleanupTerminal,
                 expectedSessionId,
                 expectedContractId,
-                sessionWasAlreadyCancelled);
-
-            FlightSession cancelledSession =
-                await _flightPersistence
-                    .CancelAsync(
-                        expectedSessionId,
-                        expectedContractId,
-                        _timeProvider.GetUtcNow(),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-            ValidateCancelledSession(
-                cancelledSession,
-                expectedSessionId,
-                expectedContractId);
+                interruptedDiscard
+                    ? FlightSessionStatus.Interrupted
+                    : FlightSessionStatus.Cancelled);
 
             bool contractWasAlreadyCancelled =
                 contract.Contract.Status == ContractStatus.Cancelled;
@@ -360,12 +390,15 @@ public sealed class CareerFlightAbandonCoordinator
             FlightSession terminal =
                 _flightSessions.Current
                 ?? throw new InvalidOperationException(
-                    "Cancelled FlightSession disappeared before terminal cleanup.");
+                    "Terminal FlightSession disappeared before cleanup.");
 
-            ValidateCancelledSession(
+            ValidateCleanupTerminalSession(
                 terminal,
                 expectedSessionId,
-                expectedContractId);
+                expectedContractId,
+                interruptedDiscard
+                    ? FlightSessionStatus.Interrupted
+                    : FlightSessionStatus.Cancelled);
 
             await _flightPersistence
                 .ClearTerminalAsync(
@@ -375,8 +408,11 @@ public sealed class CareerFlightAbandonCoordinator
                 .ConfigureAwait(false);
 
             _logger.LogInformation(
-                "Career FlightSession {SessionId} abandoned; contract {ContractId} cancelled, reservation {ReservationId} reconciled, and terminal checkpoint cleared.",
+                "Career FlightSession {SessionId} {CleanupKind}; contract {ContractId} cancelled, reservation {ReservationId} reconciled, and terminal checkpoint cleared.",
                 expectedSessionId,
+                interruptedDiscard
+                    ? "interrupted state discarded"
+                    : "abandoned",
                 expectedContractId,
                 reservationId);
 
@@ -430,12 +466,12 @@ public sealed class CareerFlightAbandonCoordinator
                 "Current FlightSession identity changed before abandonment.");
         }
 
-        if (!IsCancellableSession(session))
+        if (!IsAbandonableSession(session))
         {
             throw new InvalidOperationException(
                 session.Status == FlightSessionStatus.Completed
                     ? "A completed career flight cannot be abandoned."
-                    : "An interrupted terminal FlightSession cannot be abandoned.");
+                    : "This terminal FlightSession cannot be abandoned.");
         }
 
         if (session.Status == FlightSessionStatus.Cancelled
@@ -444,12 +480,20 @@ public sealed class CareerFlightAbandonCoordinator
             throw new InvalidOperationException(
                 "Cancelled FlightSession operation state is inconsistent.");
         }
+
+        if (session.Status == FlightSessionStatus.Interrupted
+            && session.Tracking.State != FlightTrackingState.Interrupted)
+        {
+            throw new InvalidOperationException(
+                "Interrupted FlightSession tracking state is inconsistent.");
+        }
     }
 
-    private static bool IsCancellableSession(
+    private static bool IsAbandonableSession(
         FlightSession session) =>
         !session.IsTerminal
-        || session.Status == FlightSessionStatus.Cancelled;
+        || session.Status is FlightSessionStatus.Cancelled
+            or FlightSessionStatus.Interrupted;
 
     private static void ValidateContractState(
         PersistedJobContract contract)
@@ -463,18 +507,32 @@ public sealed class CareerFlightAbandonCoordinator
         }
     }
 
-    private static void ValidateCancelledSession(
+    private static void ValidateCleanupTerminalSession(
         FlightSession session,
         Guid expectedSessionId,
-        Guid expectedContractId)
+        Guid expectedContractId,
+        FlightSessionStatus expectedStatus)
     {
         if (session.SessionId != expectedSessionId
             || session.ContractId != expectedContractId
-            || session.Status != FlightSessionStatus.Cancelled
-            || session.OperationState != FlightOperationState.Cancelled)
+            || session.Status != expectedStatus)
         {
             throw new InvalidOperationException(
-                "FlightSession cancellation did not preserve the expected terminal identity and state.");
+                "FlightSession cleanup did not preserve the expected terminal identity and state.");
+        }
+
+        if (expectedStatus == FlightSessionStatus.Cancelled
+            && session.OperationState != FlightOperationState.Cancelled)
+        {
+            throw new InvalidOperationException(
+                "Cancelled FlightSession operation state is inconsistent.");
+        }
+
+        if (expectedStatus == FlightSessionStatus.Interrupted
+            && session.Tracking.State != FlightTrackingState.Interrupted)
+        {
+            throw new InvalidOperationException(
+                "Interrupted FlightSession tracking state is inconsistent.");
         }
     }
 

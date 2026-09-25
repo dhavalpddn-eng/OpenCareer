@@ -229,16 +229,214 @@ public sealed class CareerFlightAbandonCoordinatorTests
                 fixture.UnrelatedReservationId));
     }
 
-    [Theory]
-    [InlineData(FlightSessionStatus.Completed)]
-    [InlineData(FlightSessionStatus.Interrupted)]
-    public async Task NonCancelledTerminalFlightCannotBeAbandoned(
-        FlightSessionStatus status)
+    [Fact]
+    public async Task InterruptedFlightIsDiscardedWithoutRewritingTerminalState()
     {
         Fixture fixture =
             await Fixture.CreateAsync();
 
-        fixture.SetSessionTerminal(status);
+        fixture.SetSessionInterrupted();
+        FlightSession interrupted =
+            fixture.Sessions.Current!;
+
+        CareerFlightAbandonAvailability availability =
+            await fixture.Action.ReadAvailabilityAsync();
+
+        Assert.True(availability.CanAbandon);
+        Assert.Equal(
+            CareerFlightAbandonAvailabilityState.CleanupPending,
+            availability.State);
+        Assert.Equal(fixture.SessionId, availability.SessionId);
+        Assert.Equal(fixture.ContractId, availability.ContractId);
+        Assert.Contains(
+            "interrupted flight will be discarded",
+            availability.Detail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "no settlement",
+            availability.Detail,
+            StringComparison.OrdinalIgnoreCase);
+
+        CareerFlightAbandonResult result =
+            await fixture.Action.AbandonAsync(
+                fixture.SessionId,
+                fixture.ContractId);
+
+        Assert.Equal(CareerFlightAbandonStatus.Abandoned, result.Status);
+        Assert.False(result.SessionWasAlreadyCancelled);
+        Assert.False(result.ContractWasAlreadyCancelled);
+        Assert.False(result.ReservationWasAlreadyReleased);
+        Assert.Empty(fixture.Checkpoints.SavedSessions);
+        Assert.Equal(interrupted, fixture.Checkpoints.LastClearAttempt);
+        Assert.Equal(
+            FlightSessionStatus.Interrupted,
+            fixture.Checkpoints.LastClearAttempt!.Status);
+        Assert.Equal(
+            FlightTrackingState.Interrupted,
+            fixture.Checkpoints.LastClearAttempt.Tracking.State);
+        Assert.Equal(
+            interrupted.OperationState,
+            fixture.Checkpoints.LastClearAttempt.OperationState);
+        Assert.Equal(
+            interrupted.Milestones.InterruptedAt,
+            fixture.Checkpoints.LastClearAttempt.Milestones.InterruptedAt);
+        Assert.Null(fixture.Sessions.Current);
+        Assert.Null(fixture.Checkpoints.Checkpoint);
+        Assert.Equal(
+            ContractStatus.Cancelled,
+            fixture.Contracts.Current.Contract.Status);
+        Assert.Equal(
+            900m,
+            fixture.Contracts.Current.Contract.Compensation.GrossCustomerRevenue);
+        Assert.Equal(
+            300m,
+            fixture.Contracts.Current.Contract.Compensation.PilotCompensation);
+        Assert.Equal(
+            1d,
+            fixture.Contracts.Current.Contract.ReputationReward);
+        Assert.Equal(
+            1d,
+            fixture.Contracts.Current.Contract.ReputationPenalty);
+        Assert.Null(fixture.Contracts.Current.Contract.CompletedAt);
+        Assert.Null(fixture.ContractRuntime.Find(fixture.ContractId));
+        Assert.Equal(1, fixture.Fleet.ReleaseCount);
+        Assert.NotNull(
+            await fixture.Fleet.FindByReservationIdAsync(
+                fixture.UnrelatedReservationId));
+        Assert.Equal(
+            new[]
+            {
+                "contract-cancelled",
+                "reservation-released",
+                "checkpoint-cleared"
+            },
+            fixture.Trace);
+    }
+
+    [Fact]
+    public async Task InterruptedFlightWithCancelledContractRetiresRuntimeAndClears()
+    {
+        Fixture fixture =
+            await Fixture.CreateAsync();
+
+        fixture.SetSessionInterrupted();
+        fixture.SetContractCancelled();
+
+        CareerFlightAbandonResult result =
+            await fixture.Action.AbandonAsync(
+                fixture.SessionId,
+                fixture.ContractId);
+
+        Assert.True(result.ContractWasAlreadyCancelled);
+        Assert.Equal(0, fixture.Contracts.UpdateCount);
+        Assert.Empty(fixture.Checkpoints.SavedSessions);
+        Assert.Equal(
+            FlightSessionStatus.Interrupted,
+            fixture.Checkpoints.LastClearAttempt!.Status);
+        Assert.Null(fixture.ContractRuntime.Find(fixture.ContractId));
+        Assert.Equal(1, fixture.Fleet.ReleaseCount);
+        Assert.Null(fixture.Sessions.Current);
+    }
+
+    [Fact]
+    public async Task InterruptedFlightWithReleasedReservationDoesNotReleaseAnotherAircraft()
+    {
+        Fixture fixture =
+            await Fixture.CreateAsync();
+
+        fixture.SetSessionInterrupted();
+        fixture.Fleet.Remove(fixture.ReservationId);
+
+        CareerFlightAbandonResult result =
+            await fixture.Action.AbandonAsync(
+                fixture.SessionId,
+                fixture.ContractId);
+
+        Assert.True(result.ReservationWasAlreadyReleased);
+        Assert.Equal(0, fixture.Fleet.ReleaseCount);
+        Assert.NotNull(
+            await fixture.Fleet.FindByReservationIdAsync(
+                fixture.UnrelatedReservationId));
+        Assert.Null(fixture.Sessions.Current);
+        Assert.Equal(
+            ContractStatus.Cancelled,
+            fixture.Contracts.Current.Contract.Status);
+    }
+
+    [Fact]
+    public async Task InterruptedCleanupFailureRetriesWithoutCancellationOrSecondRelease()
+    {
+        Fixture fixture =
+            await Fixture.CreateAsync();
+
+        fixture.SetSessionInterrupted();
+        fixture.Checkpoints.FailNextClear = true;
+
+        await Assert.ThrowsAsync<IOException>(
+            () => fixture.Action.AbandonAsync(
+                fixture.SessionId,
+                fixture.ContractId));
+
+        Assert.Equal(
+            FlightSessionStatus.Interrupted,
+            fixture.Sessions.Current!.Status);
+        Assert.Equal(
+            FlightTrackingState.Interrupted,
+            fixture.Sessions.Current.Tracking.State);
+        Assert.Equal(
+            FlightSessionStatus.Interrupted,
+            fixture.Checkpoints.Checkpoint!.Status);
+        Assert.Empty(fixture.Checkpoints.SavedSessions);
+        Assert.Equal(
+            ContractStatus.Cancelled,
+            fixture.Contracts.Current.Contract.Status);
+        Assert.Equal(1, fixture.Contracts.UpdateCount);
+        Assert.Equal(1, fixture.Fleet.ReleaseCount);
+
+        CareerFlightAbandonResult retry =
+            await fixture.Action.AbandonAsync(
+                fixture.SessionId,
+                fixture.ContractId);
+
+        Assert.False(retry.SessionWasAlreadyCancelled);
+        Assert.True(retry.ContractWasAlreadyCancelled);
+        Assert.True(retry.ReservationWasAlreadyReleased);
+        Assert.Equal(1, fixture.Contracts.UpdateCount);
+        Assert.Equal(1, fixture.Fleet.ReleaseCount);
+        Assert.Equal(2, fixture.Checkpoints.ClearCount);
+        Assert.Null(fixture.Sessions.Current);
+        Assert.Null(fixture.Checkpoints.Checkpoint);
+    }
+
+    [Fact]
+    public async Task InterruptedIdentityMismatchIsRejectedBeforeCleanup()
+    {
+        Fixture fixture =
+            await Fixture.CreateAsync();
+
+        fixture.SetSessionInterrupted();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.Action.AbandonAsync(
+                fixture.SessionId,
+                Guid.NewGuid()));
+
+        Assert.Equal(0, fixture.Contracts.UpdateCount);
+        Assert.Equal(0, fixture.Fleet.ReleaseCount);
+        Assert.Equal(0, fixture.Checkpoints.ClearCount);
+        Assert.Equal(
+            FlightSessionStatus.Interrupted,
+            fixture.Sessions.Current!.Status);
+    }
+
+    [Fact]
+    public async Task CompletedFlightCannotBeAbandoned()
+    {
+        Fixture fixture =
+            await Fixture.CreateAsync();
+
+        fixture.SetSessionTerminal(
+            FlightSessionStatus.Completed);
 
         CareerFlightAbandonAvailability availability =
             await fixture.Action.ReadAvailabilityAsync();
@@ -464,6 +662,22 @@ public sealed class CareerFlightAbandonCoordinatorTests
             Checkpoints.Checkpoint = cancelled;
         }
 
+        public void SetSessionInterrupted()
+        {
+            FlightSession current = Sessions.Current!;
+            FlightSession interrupted =
+                FlightSessionEngine.Advance(
+                    current,
+                    new FlightSessionAdvance(
+                        new FlightStateEvidence(
+                            current.UpdatedAt.AddSeconds(1),
+                            Connected: true,
+                            CrashReported: true)));
+
+            Sessions.CommitPersisted(interrupted);
+            Checkpoints.Checkpoint = interrupted;
+        }
+
         public void SetContractCancelled()
         {
             Contracts.SetCurrent(
@@ -552,6 +766,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
     {
         public FlightSession? Checkpoint { get; set; } = checkpoint;
         public List<FlightSession> SavedSessions { get; } = [];
+        public FlightSession? LastClearAttempt { get; private set; }
         public int ClearCount { get; private set; }
         public bool FailNextClear { get; set; }
 
@@ -580,6 +795,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            LastClearAttempt = Checkpoint;
             ClearCount++;
 
             if (FailNextClear)
@@ -664,6 +880,9 @@ public sealed class CareerFlightAbandonCoordinatorTests
                 new AircraftReservationOwnership(
                     aircraftId,
                     reservationId);
+
+        public void Remove(string reservationId) =>
+            _byReservation.Remove(reservationId);
 
         public Task<AircraftReservationOwnership?> FindByReservationIdAsync(
             string reservationId,

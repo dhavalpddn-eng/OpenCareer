@@ -676,7 +676,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
             SetField(
                 ref _careerAbandonActionDetail,
-                "Persisting cancellation, cancelling the contract, releasing its Fleet reservation, and cleaning up the saved session.",
+                "Reconciling the flight and contract, releasing its Fleet reservation, and cleaning up the saved session without completion credit.",
                 nameof(CareerAbandonActionDetail));
 
             CareerFlightAbandonResult result =

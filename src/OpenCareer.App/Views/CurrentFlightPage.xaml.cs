@@ -72,7 +72,7 @@ public sealed partial class CurrentFlightPage : Page
         {
             XamlRoot = XamlRoot,
             Title = "Abandon Current Flight?",
-            Content = "This cancels the current contract and releases its aircraft. It grants no payment, experience, reputation, location change, or logbook entry.",
+            Content = "This cancels an active flight or discards an interrupted flight, cancels its contract, and releases its aircraft. It grants no payment, experience, reputation, location change, or completed logbook entry.",
             PrimaryButtonText = "Abandon Current Flight",
             CloseButtonText = "Keep Flight",
             DefaultButton = ContentDialogButton.Close
