@@ -35,8 +35,11 @@ public sealed record AirframeMaintenanceSnapshot(
     AirframeStoreRecord Current,
     ImmutableList<AirframeMaintenanceHistoryEntry> History,
     FlightAirframeHistoryCursor? Next,
-    AirframeServiceState ServiceState)
+    AirframeServiceState ServiceState,
+    DateTimeOffset EvaluatedAt)
 {
+    // Uses the very same revision-checked records; no independent reliability-store reads.
+    public AirframeReliabilityAssessment Reliability => AirframeReliabilityAssessment.Evaluate(Current, ServiceState, EvaluatedAt);
     public Airframe Airframe => Current.Airframe;
     public AirframeCondition Condition => Current.Condition;
     public long Revision => Current.Revision;
@@ -58,7 +61,7 @@ public sealed record AirframeMaintenanceReadResult(
 
 /// <summary>Read-only condition/history authority for an explicitly requested physical airframe.</summary>
 public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, IFlightAirframeConsequenceStore consequences,
-    IAirframeMaintenanceStore? maintenance = null, IAirframeServiceStateStore? serviceStates = null)
+    IAirframeMaintenanceStore? maintenance = null, IAirframeServiceStateStore? serviceStates = null, TimeProvider? clock = null)
 {
     public async Task<AirframeMaintenanceReadResult> ReadAsync(
         FlightAirframeHistoryQuery query, CancellationToken cancellationToken = default)
@@ -89,7 +92,7 @@ public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, I
                 throw new InvalidDataException("Retained maintenance history does not match the current physical airframe/model/revision.");
         }
         return new(query.AirframeId, AirframeMaintenanceReadStatus.Available,
-            new(current, page.Entries.Select(a => new AirframeMaintenanceHistoryEntry(a)).ToImmutableList(), page.Next, service));
+            new(current, page.Entries.Select(a => new AirframeMaintenanceHistoryEntry(a)).ToImmutableList(), page.Next, service, (clock ?? TimeProvider.System).GetUtcNow()));
     }
 
     public async Task<AirframeServiceHistoryReadResult> ReadServiceHistoryAsync(

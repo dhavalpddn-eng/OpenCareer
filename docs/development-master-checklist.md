@@ -410,7 +410,7 @@ Chapter status: **FOUNDATION IN PROGRESS** — isolated `feature/mbl17-airframe-
 - [x] Expose read-only physical-airframe condition/serviceability and validated immutable consequence history through bounded schema-15 indexed queries; retain original calibration/evidence and exact identity. Local history/regression tests pass; exact-head Windows results belong to PR #106.
 - [x] Repair discrete Recorded/Grounding damage with unchanged wear/identity, exact-once action IDs, atomic schema-16 condition/service history and separate bounded service-event reads; preserve crash evidence and restore existing physical dispatch readiness. No wear service, cost, downtime or UI.
 - [ ] Use verified simulator wear/component state only where available.
-- [ ] Add fallback OpenCareer reliability state.
+- [x] Derive fallback physical-airframe reliability from coherent persisted condition/service evidence with explicit unknowns; expose a fail-closed future failure boundary that always returns ComponentModelUnavailable after maintenance eligibility, without probability/RNG/simulator commands.
 - [x] Persist exact physical-airframe usage and a versioned historical 50-hour gameplay inspection schedule; atomic consequence usage, explicit migration baseline, exact-once inspection history and distinct dispatch gate. Inspection leaves damage/wear unchanged; model-only KJFK remains unchanged.
 - [ ] Extend the fallback with verified aircraft-specific/component schedules.
 - [ ] Implement repair/maintenance cost and downtime.
