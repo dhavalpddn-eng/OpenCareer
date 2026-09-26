@@ -393,6 +393,16 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 nameof(session),
                 "Flight operation state is invalid.");
         }
+
+        foreach (FlightSessionLandingEpisode episode in session.EffectiveLandingEpisodes)
+        {
+            episode.Validate();
+            foreach (FlightLandingContactEvidence contact in episode.EffectiveContacts)
+            {
+                if (contact.Timestamp < session.CreatedAt || contact.Timestamp > session.UpdatedAt)
+                    throw new InvalidDataException("Landing contact timestamp is outside the persisted FlightSession.");
+            }
+        }
     }
 
     private static void ValidateLoadedCheckpoint(

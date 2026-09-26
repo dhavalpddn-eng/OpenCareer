@@ -403,6 +403,7 @@ Exit gate: cash and financed aircraft purchases survive reload and cannot duplic
 Chapter status: **FOUNDATION IN PROGRESS** — isolated `feature/mbl17-airframe-condition`; the frozen KJFK live-test candidate is unchanged.
 
 - [x] Persist gradual wear separately from discrete damage, keyed by permanent physical AirframeId (schema 14). Accumulation and flight integration remain deferred.
+- [x] Persist normalized first-contact landing telemetry with confirmed episode/bounce evidence in FlightSession checkpoints; no condition consequences or hard-landing thresholds yet.
 - [ ] Use verified simulator wear/component state only where available.
 - [ ] Add fallback OpenCareer reliability state.
 - [ ] Implement component/service schedules.

@@ -4,6 +4,13 @@
 
 ## MBL-17 physical-airframe foundation — 2026-09-25
 
+Slice 2 adds landing-contact evidence only on the same isolated branch / draft PR #106:
+- `FlightLandingContactEvidence` retains timestamp, signed vertical speed (ft/min), normal acceleration (G), IAS/ground speed (knots), heading/pitch/bank (degrees), and fuel/payload (pounds). These are first accepted edge samples, not measured peak impact force or inferred severity.
+- The existing contact/bounce processor buffers trustworthy provisional edges. Both sides of the edge must be trustworthy. Pause, slew, invalid numeric/continuity/loaded-aircraft evidence, disconnect and existing bounce-window gaps discard pending samples. Confirmation publishes the retained observations; only reducer-authorized landing/bounce events can attach them to one episode. Runtime timestamp guards reject duplicate/replayed observations.
+- The episode's existing TouchdownAt remains its confirmation time. Contacts carry their actual earlier observation timestamps. Full-stop and touch-and-go classification retains immutable ordered contacts; no wear, damage or AirframeId link is applied.
+- Existing JSON checkpoints persist confirmed contacts; SQLite remains schema 14 and FlightSession schema remains 1. Legacy episodes with no contacts load with unknown evidence. Missing fields inside a supplied contact do not default silently to zero. Provisional, unconfirmed samples are intentionally discarded on restart/disconnect.
+- Focused SQLite/runtime tests cover first-sample values, one/two bounces, repeated/older ground observations, pause/slew, disconnect, invalid telemetry, teleport rejection, pre-takeoff/false contact suppression, classification, exact restart recovery and legacy JSON. The KJFK certification source is unchanged; exact-head Linux/Windows results are on PR #106.
+
 - Isolated branch: `feature/mbl17-airframe-condition`, directly from frozen live-test candidate `2140dea7902b00a3167df31bc169b289672866e8`. Do not move `feature/playable-loop-integration` or modify validation PR #105 for this work.
 - `AirframeId` is an explicit non-empty GUID value type for one physical aircraft. `Airframe` retains immutable canonical model identity and creation time. Future OwnershipId will represent tenure; it is not created or equated with AirframeId here.
 - `AirframeCondition.WearFraction` is a finite normalized structural-wear value, independent of discrete `Damage` (`None`, `Recorded`, `Grounding`). `RequiresGrounding` reflects explicit grounding damage only; false does not authorize dispatch. No wear accumulation, service limit, severity threshold, repair or failure probability is defined.

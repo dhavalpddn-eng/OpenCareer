@@ -1,3 +1,6 @@
+using System.Collections.Immutable;
+using System.Text.Json.Serialization;
+
 namespace OpenCareer.Domain.Flights;
 
 public sealed record FlightSessionPlan(
@@ -280,8 +283,13 @@ public sealed record FlightSessionLandingEpisode(
     DateTimeOffset TouchdownAt,
     FlightSessionLandingKind Kind,
     int BounceCount,
-    DateTimeOffset? CompletedAt = null)
+    DateTimeOffset? CompletedAt = null,
+    ImmutableList<FlightLandingContactEvidence>? Contacts = null)
 {
+    // Missing evidence in a legacy checkpoint means unknown, never synthesized zero-valued contact data.
+    [JsonIgnore]
+    public ImmutableList<FlightLandingContactEvidence> EffectiveContacts => Contacts ?? ImmutableList<FlightLandingContactEvidence>.Empty;
+
     public void Validate()
     {
         if (EpisodeNumber <= 0)
@@ -294,6 +302,18 @@ public sealed record FlightSessionLandingEpisode(
             && completed < TouchdownAt)
         {
             throw new ArgumentOutOfRangeException(nameof(CompletedAt));
+        }
+
+        DateTimeOffset? previousContact = null;
+        foreach (FlightLandingContactEvidence contact in EffectiveContacts)
+        {
+            ArgumentNullException.ThrowIfNull(contact);
+            contact.Validate();
+            if (previousContact is { } previous && contact.Timestamp <= previous)
+                throw new ArgumentException("Landing contacts must be unique and ordered by observed timestamp.", nameof(Contacts));
+            if (CompletedAt is { } end && contact.Timestamp > end)
+                throw new ArgumentException("Contact evidence cannot follow the end of its landing episode.", nameof(Contacts));
+            previousContact = contact.Timestamp;
         }
     }
 }
