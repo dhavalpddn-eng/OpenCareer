@@ -9,6 +9,12 @@ public sealed class SimConnectInstalledAircraftObservationSource(
 {
     public const string ProviderId = "msfs-simconnect";
 
+    /// <summary>
+    /// The exact current MSFS TITLE, exposed read-only for isolated live-test diagnostics.
+    /// It is not a canonical aircraft identity or career authority.
+    /// </summary>
+    public string? CurrentAircraftTitle => connection.CurrentAircraftTitle;
+
     public InstalledAircraftDiscoverySnapshot Current
     {
         get
