@@ -90,7 +90,7 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
         insert.Parameters.AddWithValue("$airframe", serviceEvent.AirframeId.ToString());
         insert.Parameters.AddWithValue("$kind", (int)serviceEvent.Kind);
         insert.Parameters.AddWithValue("$performed", serviceEvent.PerformedAt.UtcTicks);
-        insert.Parameters.AddWithValue("$schema", serviceEvent.Kind == AirframeMaintenanceEventKind.DiscreteDamageRepair ? 1 : 2);
+        insert.Parameters.AddWithValue("$schema", serviceEvent.Kind == AirframeMaintenanceEventKind.DiscreteDamageRepair ? 1 : 3);
         insert.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(serviceEvent, serviceEvent.GetType(), MaintenanceJson));
         await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -162,8 +162,8 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
         {
             (1, 1) => JsonSerializer.Deserialize<AirframeMaintenanceEvent>(reader.GetString(5), MaintenanceJson)
                 ?? throw new InvalidDataException("Missing repair event payload."),
-            (2, 2) => JsonSerializer.Deserialize<AirframeRoutineInspectionEvent>(reader.GetString(5), MaintenanceJson)
-                ?? throw new InvalidDataException("Missing inspection event payload."),
+            (2, 2) => DeserializeLegacyInspection(reader.GetString(5)),
+            (2, 3) => DeserializeCurrentInspection(reader.GetString(5)),
             _ => throw new NotSupportedException("Unsupported maintenance event kind/payload schema.")
         };
         result.Validate();
@@ -172,4 +172,42 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
             throw new InvalidDataException("Maintenance event metadata does not match retained payload.");
         return result;
     }
+
+    private static AirframeRoutineInspectionEvent DeserializeLegacyInspection(string payload)
+    {
+        var result = JsonSerializer.Deserialize<AirframeRoutineInspectionEvent>(payload, MaintenanceJson)
+            ?? throw new InvalidDataException("Missing inspection event payload.");
+        if (result.ServiceBefore is null || result.ServiceAfter is null)
+            throw new InvalidDataException("Legacy inspection payload is missing service-state evidence.");
+        return result with
+        {
+            ServiceBefore = result.ServiceBefore with
+            {
+                TotalTrackedLandingCycles = 0,
+                LandingCycleOrigin = AirframeUsageOrigin.TrackingFromMigrationBaseline
+            },
+            ServiceAfter = result.ServiceAfter with
+            {
+                TotalTrackedLandingCycles = 0,
+                LandingCycleOrigin = AirframeUsageOrigin.TrackingFromMigrationBaseline
+            }
+        };
+    }
+
+    private static AirframeRoutineInspectionEvent DeserializeCurrentInspection(string payload)
+    {
+        using var document = JsonDocument.Parse(payload);
+        if (!HasCurrentLandingCycleEvidence(document.RootElement, "serviceBefore")
+            || !HasCurrentLandingCycleEvidence(document.RootElement, "serviceAfter"))
+            throw new InvalidDataException("Current inspection payload is missing required landing-cycle evidence.");
+        return JsonSerializer.Deserialize<AirframeRoutineInspectionEvent>(payload, MaintenanceJson)
+            ?? throw new InvalidDataException("Missing inspection event payload.");
+    }
+
+    private static bool HasCurrentLandingCycleEvidence(JsonElement root, string serviceProperty) =>
+        root.ValueKind == JsonValueKind.Object
+        && root.TryGetProperty(serviceProperty, out var service)
+        && service.ValueKind == JsonValueKind.Object
+        && service.TryGetProperty("totalTrackedLandingCycles", out _)
+        && service.TryGetProperty("landingCycleOrigin", out _);
 }

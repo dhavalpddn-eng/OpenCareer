@@ -8,7 +8,7 @@ internal static class OpenCareerDatabaseMigrator
     // Career and Economy branches independently reused schema versions 1-10.
     // Version 11 was the first shared convergence point; pre-v11 user_version
     // alone cannot be used to infer which subsystem tables already exist.
-    public const int CurrentSchemaVersion = 17;
+    public const int CurrentSchemaVersion = 18;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -38,6 +38,8 @@ internal static class OpenCareerDatabaseMigrator
 
         if (version < 17)
             await MigrateAirframeServiceStateAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+        if (version < 18)
+            await MigrateAirframeLandingCyclesAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
 
         await MigrateLegacyIntegrationEconomyAsync(
                 connection,
@@ -102,6 +104,59 @@ internal static class OpenCareerDatabaseMigrator
             """, cancellationToken).ConfigureAwait(false);
     }
 
+    private static async Task MigrateAirframeLandingCyclesAsync(SqliteConnection connection,
+        SqliteTransaction transaction, CancellationToken cancellationToken)
+    {
+        bool hasCycleCount = false;
+        bool hasCycleOrigin = false;
+        await using (var inspect = connection.CreateCommand())
+        {
+            inspect.Transaction = transaction;
+            inspect.CommandText = "PRAGMA table_info(airframe_service_state);";
+            await using var reader = await inspect.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (string.Equals(reader.GetString(1), "total_landing_cycles", StringComparison.OrdinalIgnoreCase))
+                    hasCycleCount = true;
+                if (string.Equals(reader.GetString(1), "landing_cycle_origin", StringComparison.OrdinalIgnoreCase))
+                    hasCycleOrigin = true;
+            }
+        }
+
+        // Schema 17 had no authoritative cycle counter. Preserve every row and establish an
+        // explicit zero baseline rather than reconstructing incomplete history from consequences.
+        if (!hasCycleCount)
+            await ExecuteAsync(connection, transaction, """
+                ALTER TABLE airframe_service_state ADD COLUMN total_landing_cycles INTEGER NOT NULL DEFAULT 0
+                    CHECK (typeof(total_landing_cycles) = 'integer' AND total_landing_cycles >= 0);
+                """, cancellationToken).ConfigureAwait(false);
+        if (!hasCycleOrigin)
+            await ExecuteAsync(connection, transaction, """
+                ALTER TABLE airframe_service_state ADD COLUMN landing_cycle_origin INTEGER NOT NULL DEFAULT 2
+                    CHECK (typeof(landing_cycle_origin) = 'integer' AND landing_cycle_origin IN (1, 2));
+                """, cancellationToken).ConfigureAwait(false);
+
+        // Inspection v2 remains immutable and readable with its zero/migration-baseline defaults.
+        // New cycle-aware inspection evidence is v3 and must retain both fields explicitly.
+        await ExecuteAsync(connection, transaction, """
+            CREATE TABLE airframe_maintenance_events_v18 (
+                maintenance_action_id TEXT NOT NULL PRIMARY KEY,
+                airframe_id TEXT NOT NULL REFERENCES airframes(airframe_id),
+                event_kind INTEGER NOT NULL CHECK (event_kind IN (1, 2)),
+                performed_at_utc_ticks INTEGER NOT NULL,
+                payload_schema_version INTEGER NOT NULL CHECK (
+                    (event_kind = 1 AND payload_schema_version = 1)
+                    OR (event_kind = 2 AND payload_schema_version IN (2, 3))),
+                payload_json TEXT NOT NULL
+            );
+            INSERT INTO airframe_maintenance_events_v18 SELECT * FROM airframe_maintenance_events;
+            DROP TABLE airframe_maintenance_events;
+            ALTER TABLE airframe_maintenance_events_v18 RENAME TO airframe_maintenance_events;
+            CREATE INDEX ix_airframe_maintenance_events_airframe
+                ON airframe_maintenance_events (airframe_id, performed_at_utc_ticks, maintenance_action_id);
+            """, cancellationToken).ConfigureAwait(false);
+    }
+
     private static async Task EnsureUnifiedSchemaAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
@@ -136,7 +191,9 @@ internal static class OpenCareerDatabaseMigrator
                     airframe_id TEXT NOT NULL REFERENCES airframes(airframe_id),
                     event_kind INTEGER NOT NULL CHECK (event_kind IN (1, 2)),
                     performed_at_utc_ticks INTEGER NOT NULL,
-                    payload_schema_version INTEGER NOT NULL CHECK ((event_kind = 1 AND payload_schema_version = 1) OR (event_kind = 2 AND payload_schema_version = 2)),
+                    payload_schema_version INTEGER NOT NULL CHECK (
+                        (event_kind = 1 AND payload_schema_version = 1)
+                        OR (event_kind = 2 AND payload_schema_version IN (2, 3))),
                     payload_json TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS ix_airframe_maintenance_events_airframe
@@ -147,6 +204,8 @@ internal static class OpenCareerDatabaseMigrator
                     schedule_id TEXT NOT NULL CHECK (length(trim(schedule_id)) > 0),
                     schedule_version INTEGER NOT NULL CHECK (schedule_version >= 1),
                     total_airborne_ticks INTEGER NOT NULL CHECK (typeof(total_airborne_ticks) = 'integer' AND total_airborne_ticks >= 0),
+                    total_landing_cycles INTEGER NOT NULL DEFAULT 0 CHECK (typeof(total_landing_cycles) = 'integer' AND total_landing_cycles >= 0),
+                    landing_cycle_origin INTEGER NOT NULL DEFAULT 2 CHECK (typeof(landing_cycle_origin) = 'integer' AND landing_cycle_origin IN (1, 2)),
                     last_inspection_airborne_ticks INTEGER NOT NULL CHECK (typeof(last_inspection_airborne_ticks) = 'integer' AND last_inspection_airborne_ticks >= 0 AND last_inspection_airborne_ticks <= total_airborne_ticks),
                     next_inspection_airborne_ticks INTEGER NOT NULL CHECK (typeof(next_inspection_airborne_ticks) = 'integer' AND next_inspection_airborne_ticks > last_inspection_airborne_ticks),
                     usage_origin INTEGER NOT NULL CHECK (usage_origin IN (1, 2)),

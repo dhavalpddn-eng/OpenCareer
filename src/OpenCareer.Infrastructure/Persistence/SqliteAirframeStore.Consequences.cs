@@ -96,14 +96,22 @@ public sealed partial class SqliteAirframeStore : IFlightAirframeConsequenceStor
         var application = new FlightAirframeApplication(consequence, current, after, appliedAt);
         application.Validate();
 
-        if (consequence.ApplyCondition)
+        // Confirmed landing episodes remain factual even when an interrupted non-crash
+        // session is not trusted for airborne time or condition wear.
+        if (consequence.ApplyCondition || consequence.Summary.LandingEpisodeCount > 0)
         {
             var service = await ReadServiceStateAsync(connection, transaction, current.Airframe.AirframeId, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidDataException("Physical airframe has no authoritative service state.");
             if (service.UpdatedAt < current.Airframe.CreatedAt)
                 throw new InvalidDataException("Service state predates physical airframe creation.");
             await SaveServiceStateAsync(connection, transaction,
-                service.AddTrustedUsage(consequence.Summary.AirborneTime, appliedAt), service.Revision, cancellationToken).ConfigureAwait(false);
+                service.AddTrustedUsage(consequence.ApplyCondition ? consequence.Summary.AirborneTime : TimeSpan.Zero,
+                    consequence.Summary.LandingEpisodeCount, appliedAt),
+                service.Revision, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (consequence.ApplyCondition)
+        {
             await using var update = connection.CreateCommand();
             update.Transaction = transaction;
             update.CommandText = """

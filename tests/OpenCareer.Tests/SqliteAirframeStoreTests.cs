@@ -155,7 +155,7 @@ public sealed class SqliteAirframeStoreTests : IDisposable
     public async Task FreshMigrationCreatesAnEmptyPhysicalFleetAndRegistersProductionStore()
     {
         Assert.Null(await Store().FindAsync(Aircraft().AirframeId));
-        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframes;"));
         string registration = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "UiContracts", "App.xaml.cs"));
         Assert.Contains("AddSingleton<IAirframeStore, SqliteAirframeStore>()", registration);
@@ -186,7 +186,7 @@ public sealed class SqliteAirframeStoreTests : IDisposable
         string before = await PlayableRowsAsync();
         Assert.Equal(13L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Null(await Store().FindAsync(Aircraft().AirframeId));
-        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(before, await PlayableRowsAsync());
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframes;"));
         Assert.Equal(profile.CareerId, (await profiles.LoadAsync())!.Profile.CareerId);

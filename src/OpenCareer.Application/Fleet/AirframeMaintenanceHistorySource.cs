@@ -49,6 +49,8 @@ public sealed record AirframeMaintenanceSnapshot(
             ? AirframeServiceability.InspectionDue : AirframeServiceability.AvailableForDispatch;
     public AirframeInspectionStatus InspectionStatus => ServiceState.InspectionStatus;
     public double TotalTrackedAirborneHours => ServiceState.TotalTrackedAirborneTime.TotalHours;
+    public long TotalTrackedLandingCycles => ServiceState.TotalTrackedLandingCycles;
+    public AirframeUsageOrigin LandingCycleOrigin => ServiceState.LandingCycleOrigin;
     public double HoursUntilInspection => ServiceState.TimeUntilInspection.TotalHours;
     public string ScheduleId => ServiceState.ScheduleId;
     public int ScheduleVersion => ServiceState.ScheduleVersion;

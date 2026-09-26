@@ -32,6 +32,8 @@ public sealed class SqliteFlightAirframeConsequenceTests : IDisposable
     private Task<AirframeStoreRecord> CreateAsync() => Store().CreateAsync(
         new(new AirframeId(Guid.NewGuid()), ConsequenceFixture.Model, ConsequenceFixture.Epoch.AddDays(-1)),
         new(0.2, AirframeDamageState.None), ConsequenceFixture.Epoch);
+    private async Task<AirframeServiceState> StateAsync(AirframeId id) =>
+        Assert.IsType<AirframeServiceState>(await Store().ReadServiceStateAsync(id));
 
     [Fact]
     public async Task FirstApplyAndRestartReplayAreExactOnceAndIsolateSameModelAirframes()
@@ -47,6 +49,8 @@ public sealed class SqliteFlightAirframeConsequenceTests : IDisposable
         Assert.Equal(AirframeDamageState.Recorded, first.Application.After.Condition.Damage);
         Assert.Equal(first.Application.After, await Store().FindAsync(a.Airframe.AirframeId));
         Assert.Equal(b, await Store().FindAsync(b.Airframe.AirframeId));
+        Assert.Equal(1, (await StateAsync(a.Airframe.AirframeId)).TotalTrackedLandingCycles);
+        Assert.Equal(0, (await StateAsync(b.Airframe.AirframeId)).TotalTrackedLandingCycles);
         await Checkpoints().SaveAsync(session);
         var recovered = (await Checkpoints().LoadAsync())!;
         var replay = (await Coordinator().ApplyAsync(recovered))!;
@@ -55,16 +59,19 @@ public sealed class SqliteFlightAirframeConsequenceTests : IDisposable
         Assert.Equal(Json(first.Application), Json(await Store().FindBySessionAsync(session.SessionId)));
         Assert.Equal(1L, await ScalarAsync("SELECT count(*) FROM flight_airframe_consequences;"));
         Assert.Equal(first.Application.After, await Store().FindAsync(a.Airframe.AirframeId));
+        Assert.Equal(1, (await StateAsync(a.Airframe.AirframeId)).TotalTrackedLandingCycles);
     }
 
     [Fact]
     public async Task ConcurrentSameSessionWritersCommitOnlyOnce()
     {
         var before = await CreateAsync();
-        var decision = FlightAirframeConsequenceCalculator.Calculate(ConsequenceFixture.Session(before.Airframe.AirframeId));
+        var decision = FlightAirframeConsequenceCalculator.Calculate(
+            ConsequenceFixture.Session(before.Airframe.AirframeId, verticalSpeeds: [-500]));
         var results = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => Task.Run(() => Store().ApplyAsync(decision, before, Now))));
         Assert.Single(results, r => r.WasNewlyApplied);
         Assert.Equal(2, (await Store().FindAsync(before.Airframe.AirframeId))!.Revision);
+        Assert.Equal(1, (await StateAsync(before.Airframe.AirframeId)).TotalTrackedLandingCycles);
         Assert.Equal(1L, await ScalarAsync("SELECT count(*) FROM flight_airframe_consequences;"));
     }
 
@@ -245,7 +252,7 @@ public sealed class SqliteFlightAirframeConsequenceTests : IDisposable
             """);
         string rows = await AllRowsAsync();
         Assert.Null(await Store().FindBySessionAsync(session.SessionId));
-        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(rows, await AllRowsAsync());
         Assert.Equal(before, await Store().FindAsync(before.Airframe.AirframeId));
         Assert.Equal(session.SessionId, (await Checkpoints().LoadAsync())!.SessionId);

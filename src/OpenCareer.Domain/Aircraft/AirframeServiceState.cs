@@ -24,7 +24,11 @@ public sealed record AirframeServiceState(
     [property: JsonRequired] TimeSpan NextInspectionDueAtTrackedAirborneTime,
     [property: JsonRequired] AirframeUsageOrigin UsageOrigin,
     [property: JsonRequired] long Revision,
-    [property: JsonRequired] DateTimeOffset UpdatedAt)
+    [property: JsonRequired] DateTimeOffset UpdatedAt,
+    // Optional only for retained schema-17/v2 inspection JSON. Absence establishes the
+    // schema-18 migration baseline rather than inventing complete historical cycle tracking.
+    long TotalTrackedLandingCycles = 0,
+    AirframeUsageOrigin LandingCycleOrigin = AirframeUsageOrigin.TrackingFromMigrationBaseline)
 {
     [JsonIgnore] public AirframeInspectionStatus InspectionStatus => TotalTrackedAirborneTime >= NextInspectionDueAtTrackedAirborneTime
         ? AirframeInspectionStatus.InspectionDue : AirframeInspectionStatus.Current;
@@ -33,7 +37,8 @@ public sealed record AirframeServiceState(
 
     public static AirframeServiceState Initial(AirframeId id, DateTimeOffset at, AirframeUsageOrigin origin) =>
         new(id, LightAircraftRoutineInspectionV1.ScheduleId, LightAircraftRoutineInspectionV1.Version,
-            TimeSpan.Zero, TimeSpan.Zero, LightAircraftRoutineInspectionV1.IntervalAirborneTime, origin, 1, at.ToUniversalTime());
+            TimeSpan.Zero, TimeSpan.Zero, LightAircraftRoutineInspectionV1.IntervalAirborneTime, origin, 1,
+            at.ToUniversalTime(), 0, origin);
 
     public void Validate()
     {
@@ -43,20 +48,26 @@ public sealed record AirframeServiceState(
         if (TotalTrackedAirborneTime < TimeSpan.Zero || LastInspectionAtTrackedAirborneTime < TimeSpan.Zero
             || LastInspectionAtTrackedAirborneTime > TotalTrackedAirborneTime
             || NextInspectionDueAtTrackedAirborneTime != LastInspectionAtTrackedAirborneTime + LightAircraftRoutineInspectionV1.IntervalAirborneTime
-            || !Enum.IsDefined(UsageOrigin) || Revision < 1 || UpdatedAt == default)
+            || TotalTrackedLandingCycles < 0 || !Enum.IsDefined(UsageOrigin) || !Enum.IsDefined(LandingCycleOrigin)
+            || Revision < 1 || UpdatedAt == default)
             throw new InvalidDataException("Invalid airframe usage/inspection state.");
     }
 
-    public AirframeServiceState AddTrustedUsage(TimeSpan airborneTime, DateTimeOffset at)
+    public AirframeServiceState AddTrustedUsage(TimeSpan airborneTime, int landingCycles, DateTimeOffset at)
     {
         Validate();
         if (airborneTime < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(airborneTime));
+        if (landingCycles < 0) throw new ArgumentOutOfRangeException(nameof(landingCycles));
         if (at < UpdatedAt) throw new ArgumentOutOfRangeException(nameof(at), "Usage save time cannot move backwards.");
         var result = this with { TotalTrackedAirborneTime = TotalTrackedAirborneTime + airborneTime,
+            TotalTrackedLandingCycles = checked(TotalTrackedLandingCycles + landingCycles),
             Revision = checked(Revision + 1), UpdatedAt = at.ToUniversalTime() };
         result.Validate();
         return result;
     }
+
+    public AirframeServiceState AddTrustedUsage(TimeSpan airborneTime, DateTimeOffset at) =>
+        AddTrustedUsage(airborneTime, 0, at);
 
     public AirframeServiceState Inspect(DateTimeOffset at)
     {

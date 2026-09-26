@@ -29,7 +29,7 @@ public sealed partial class AirframeReliabilityTests : IDisposable
     private async Task<AirframeStoreRecord> FlyAsync(AirframeStoreRecord current, int hours = 1, bool crash = false)
     {
         var session = ConsequenceFixture.Session(current.Airframe.AirframeId,
-            crash ? FlightSessionStatus.Interrupted : FlightSessionStatus.Completed, crash);
+            crash ? FlightSessionStatus.Interrupted : FlightSessionStatus.Completed, crash, -500);
         session = session with { UpdatedAt = current.SavedAt.AddHours(hours + 4),
             TimeLedger = session.TimeLedger with { AirborneTime = TimeSpan.FromHours(hours), BlockTime = TimeSpan.FromHours(hours) } };
         return (await Store().ApplyAsync(FlightAirframeConsequenceCalculator.Calculate(session), current, session.UpdatedAt)).Application.After;
@@ -64,7 +64,7 @@ public sealed partial class AirframeReliabilityTests : IDisposable
     {
         var current = new AirframeStoreRecord(new(new(Guid.NewGuid()), ConsequenceFixture.Model, Epoch), new(wear, damage), 1, Epoch);
         var service = AirframeServiceState.Initial(current.Airframe.AirframeId, Epoch, AirframeUsageOrigin.TrackingFromCreation);
-        if (due) service = service.AddTrustedUsage(TimeSpan.FromHours(50), Epoch.AddHours(50));
+        service = service.AddTrustedUsage(due ? TimeSpan.FromHours(50) : TimeSpan.Zero, 7, Epoch.AddHours(50));
         var result = AirframeReliabilityAssessment.Evaluate(current, service, Clock.GetUtcNow());
         var expected = damage == AirframeDamageState.Grounding || due ? AirframeReliabilityStatus.Unavailable
             : damage == AirframeDamageState.Recorded ? AirframeReliabilityStatus.AttentionRequired : AirframeReliabilityStatus.Nominal;
@@ -81,6 +81,8 @@ public sealed partial class AirframeReliabilityTests : IDisposable
         Assert.Equal(current.Airframe.AirframeId, result.AirframeId);
         Assert.Equal(ConsequenceFixture.Model, result.CanonicalAircraftId);
         Assert.Equal(service.TotalTrackedAirborneTime, result.TotalTrackedAirborneTime);
+        Assert.Equal(service.TotalTrackedLandingCycles, result.TotalTrackedLandingCycles);
+        Assert.Equal(service.LandingCycleOrigin, result.LandingCycleOrigin);
         Assert.Equal(current.Revision, result.ConditionRevision); Assert.Equal(service.Revision, result.ServiceRevision);
         Assert.Equal(Clock.GetUtcNow(), result.EvaluatedAt);
         Assert.Equal(AirframeReliabilityEvidenceSource.OpenCareerFallback, result.Source);
@@ -163,8 +165,10 @@ public sealed partial class AirframeReliabilityTests : IDisposable
         var snapshot = (await new AirframeMaintenanceHistorySource(Store(), Store(), serviceStates: Store(), clock: Clock)
             .ReadAsync(new(a.Airframe.AirframeId))).Snapshot!;
         Assert.Equal(first, snapshot.Reliability);
+        Assert.Equal(0, snapshot.TotalTrackedLandingCycles);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromCreation, snapshot.LandingCycleOrigin);
         Assert.Equal(a, await Store().FindAsync(a.Airframe.AirframeId)); Assert.Equal(b, await Store().FindAsync(b.Airframe.AirframeId));
-        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM sqlite_master WHERE type='table' AND name LIKE '%reliability%';"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframe_maintenance_events;"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM flight_airframe_consequences;"));
@@ -184,6 +188,8 @@ public sealed partial class AirframeReliabilityTests : IDisposable
         var after = await ReadAsync(id);
         Assert.Equal(before.ServiceState, after.ServiceState);
         Assert.Equal(before.TotalTrackedAirborneTime, after.TotalTrackedAirborneTime);
+        Assert.Equal(1, before.TotalTrackedLandingCycles);
+        Assert.Equal(before.TotalTrackedLandingCycles, after.TotalTrackedLandingCycles);
         Assert.Equal(before.WearFraction, after.WearFraction);
         Assert.Equal(due ? AirframeReliabilityStatus.Unavailable : AirframeReliabilityStatus.Nominal, after.Status);
         if (due)
@@ -209,6 +215,7 @@ public sealed partial class AirframeReliabilityTests : IDisposable
         var result = await ReadAsync(id);
         Assert.Equal(expected, result.Status); Assert.Equal(damage, result.Damage); Assert.Equal(condition, result.Current);
         Assert.Equal(AirframeInspectionStatus.Current, result.InspectionStatus);
+        Assert.Equal(1, result.TotalTrackedLandingCycles);
         Assert.False(result.Reasons.HasFlag(AirframeReliabilityReason.InspectionDue));
     }
 

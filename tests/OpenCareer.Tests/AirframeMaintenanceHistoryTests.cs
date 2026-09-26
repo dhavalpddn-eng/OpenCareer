@@ -48,10 +48,12 @@ public sealed class AirframeMaintenanceHistoryTests : IDisposable
         Assert.Equal(current.Revision, snapshot.Revision);
         Assert.Equal(current.SavedAt, snapshot.SavedAt);
         Assert.Equal(serviceability, snapshot.Serviceability);
+        Assert.Equal(0, snapshot.TotalTrackedLandingCycles);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromCreation, snapshot.LandingCycleOrigin);
         Assert.Empty(snapshot.History);
         Assert.Null(snapshot.Next);
         Assert.Equal(current, await Store().FindAsync(current.Airframe.AirframeId));
-        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
     }
 
     [Fact]
@@ -111,8 +113,12 @@ public sealed class AirframeMaintenanceHistoryTests : IDisposable
         var current = await CreateAsync();
         var session = ConsequenceFixture.Session(current.Airframe.AirframeId, verticalSpeeds: [-950, -1900, -1400]);
         var applied = (await ApplyAsync(current, session)).Application;
-        var entry = Assert.Single((await ReadAsync(current.Airframe.AirframeId)).History);
+        var snapshot = await ReadAsync(current.Airframe.AirframeId);
+        var entry = Assert.Single(snapshot.History);
         Assert.Equal(2, entry.BounceCount);
+        Assert.Equal(1, snapshot.TotalTrackedLandingCycles);
+        Assert.Equal(1, snapshot.ServiceState.TotalTrackedLandingCycles);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromCreation, snapshot.LandingCycleOrigin);
         Assert.Equal(session.EffectiveLandingEpisodes[0].EffectiveContacts[1], entry.StrongestContact);
         Assert.Single(entry.Application.Consequence.Summary.LandingEpisodes);
         Assert.Equal(3, entry.Application.Consequence.Summary.LandingEpisodes[0].EffectiveContacts.Count);

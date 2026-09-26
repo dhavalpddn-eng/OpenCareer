@@ -45,6 +45,8 @@ public sealed record AirframeReliabilityAssessment
     public AirframeDamageState Damage => Current.Condition.Damage;
     public AirframeInspectionStatus InspectionStatus => ServiceState.InspectionStatus;
     public TimeSpan TotalTrackedAirborneTime => ServiceState.TotalTrackedAirborneTime;
+    public long TotalTrackedLandingCycles => ServiceState.TotalTrackedLandingCycles;
+    public AirframeUsageOrigin LandingCycleOrigin => ServiceState.LandingCycleOrigin;
     // Explicit unknowns, never numeric zeroes that could be mistaken for measured safety.
     public AirframeReliabilityDataAvailability FailureProbabilityAvailability => AirframeReliabilityDataAvailability.Unavailable;
     public AirframeReliabilityDataAvailability ComponentReliabilityAvailability => AirframeReliabilityDataAvailability.Unavailable;

@@ -95,7 +95,7 @@ public sealed partial class FlightSessionAircraftAssignmentTests : IDisposable
         Assert.Same(recovered, replay.FlightSession);
         Assert.Equal(original, await restarted.Airframes.FindAsync(original.Airframe.AirframeId));
         Assert.Equal(unrelated, await restarted.Airframes.FindAsync(unrelated.Airframe.AirframeId));
-        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(1, recovered.SchemaVersion);
     }
 

@@ -18,6 +18,8 @@ public sealed class AirframeRepairTests : IDisposable
     private AirframeMaintenanceHistorySource History() { var store = Store(); return new(store, store, store); }
     private Task<AirframeStoreRecord> CreateAsync(AirframeDamageState damage = AirframeDamageState.Recorded, double wear = 0.1234567890123456) =>
         Store().CreateAsync(new(new AirframeId(Guid.NewGuid()), ConsequenceFixture.Model, Epoch.AddDays(-1)), new(wear, damage), Epoch);
+    private async Task<AirframeServiceState> StateAsync(AirframeId id) =>
+        Assert.IsType<AirframeServiceState>(await Store().ReadServiceStateAsync(id));
     private static AirframeRepairRequest Request(AirframeStoreRecord record) =>
         new(Guid.NewGuid(), record.Airframe.AirframeId, record.Revision, record.SavedAt.AddMinutes(1));
 
@@ -30,6 +32,7 @@ public sealed class AirframeRepairTests : IDisposable
     {
         var before = await CreateAsync(damage, wear);
         var other = await CreateAsync(damage, wear);
+        var serviceBefore = await StateAsync(before.Airframe.AirframeId);
         var request = Request(before);
         var result = await Service().RepairDiscreteDamageAsync(request);
         Assert.Equal(AirframeRepairStatus.Repaired, result.Status);
@@ -50,7 +53,12 @@ public sealed class AirframeRepairTests : IDisposable
         Assert.Equal(AirframeMaintenanceEventKind.DiscreteDamageRepair, retained.Kind);
         Assert.Equal(AirframeMaintenanceEvent.DiscreteRepairRationale, retained.Rationale);
         Assert.Equal(after, await Store().FindAsync(request.AirframeId));
+        Assert.Equal(serviceBefore, await StateAsync(request.AirframeId));
+        Assert.Equal(AirframeUsageOrigin.TrackingFromCreation, serviceBefore.LandingCycleOrigin);
         Assert.Equal(other, await Store().FindAsync(other.Airframe.AirframeId));
+        Assert.Equal(1L, await ScalarAsync(
+            "SELECT payload_schema_version FROM airframe_maintenance_events WHERE maintenance_action_id='" +
+            request.MaintenanceActionId.ToString("D") + "';"));
         var snapshot = (await History().ReadAsync(new(request.AirframeId))).Snapshot!;
         Assert.Equal(AirframeServiceability.AvailableForDispatch, snapshot.Serviceability);
         Assert.True((await new PhysicalAirframeEligibilityService(Store()).EvaluateAsync(ConsequenceFixture.Model, request.AirframeId)).IsEligible);
@@ -324,7 +332,7 @@ public sealed class AirframeRepairTests : IDisposable
         var beforeRows = await ExistingRowsAsync();
         Assert.Equal(15L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Null(await Store().FindMaintenanceActionAsync(Guid.NewGuid()));
-        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(beforeRows, await ExistingRowsAsync());
         Assert.Equal(Json(applied.Application), Json((await Store().FindBySessionAsync(flight.SessionId))!));
         Assert.Equal(applied.Application.After, await Store().FindAsync(a.Airframe.AirframeId));
@@ -336,7 +344,7 @@ public sealed class AirframeRepairTests : IDisposable
     public async Task FreshSchemaHasEmptyServiceHistoryAndProductionUsesSameStore()
     {
         Assert.Null(await Store().FindMaintenanceActionAsync(Guid.NewGuid()));
-        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframe_maintenance_events;"));
         string registration = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "UiContracts", "App.xaml.cs"));
         Assert.Contains("AddSingleton<IAirframeMaintenanceStore>(provider =>", registration);

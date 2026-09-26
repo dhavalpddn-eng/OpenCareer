@@ -156,4 +156,31 @@ internal static class ConsequenceFixture
                 contacts.Count - 1, Epoch.AddHours(2.1), contacts)]
         };
     }
+
+    internal static FlightSession SessionWithLandingEpisodes(AirframeId airframe, params double[][] verticalSpeedsByEpisode)
+    {
+        if (verticalSpeedsByEpisode.Length == 0 || verticalSpeedsByEpisode.Any(speeds => speeds.Length == 0))
+            throw new ArgumentException("At least one contact is required for every fixture landing episode.", nameof(verticalSpeedsByEpisode));
+
+        var session = Session(airframe);
+        var episodes = verticalSpeedsByEpisode.Select((speeds, episodeIndex) =>
+        {
+            DateTimeOffset episodeStart = Epoch.AddHours(2).AddMinutes(episodeIndex * 10);
+            var contacts = speeds.Select((verticalSpeed, contactIndex) => new FlightLandingContactEvidence(
+                episodeStart.AddSeconds(contactIndex * 3), verticalSpeed, 1.2, 60, 55, 310, 2, 1, 150, 340)).ToImmutableList();
+            return new FlightSessionLandingEpisode(episodeIndex + 1, contacts[0].Timestamp.AddSeconds(1),
+                episodeIndex == verticalSpeedsByEpisode.Length - 1 ? FlightSessionLandingKind.FullStop : FlightSessionLandingKind.TouchAndGo,
+                contacts.Count - 1, contacts[^1].Timestamp.AddSeconds(2), contacts);
+        }).ToArray();
+        return session with
+        {
+            Tracking = session.Tracking with
+            {
+                LandingEpisodeCount = episodes.Length,
+                BounceCount = episodes.Sum(episode => episode.BounceCount),
+                TouchAndGoCount = Math.Max(0, episodes.Length - 1)
+            },
+            LandingEpisodes = episodes
+        };
+    }
 }

@@ -100,18 +100,23 @@ public sealed partial class AirframeInspectionTests
     [Fact]
     public async Task CrashInspectionThenRepairRetainsBothHistoriesAndBothIndependentGates()
     {
-        var flight = await FlyAsync(await CreateAsync(), TimeSpan.FromHours(50), FlightSessionStatus.Interrupted, crash: true);
+        var flight = await FlyAsync(await CreateAsync(), TimeSpan.FromHours(50), FlightSessionStatus.Interrupted,
+            crash: true, verticalSpeeds: [-500]);
         var a = flight.Application.After;
         var id = a.Airframe.AirframeId;
         var eligibility = new PhysicalAirframeEligibilityService(Store());
         Assert.Equal(PhysicalAirframeEligibilityStatus.Grounded, (await eligibility.EvaluateAsync(ConsequenceFixture.Model, id)).Status);
         var request = Request(a, await StateAsync(id));
         var inspection = await Service().PerformRoutineInspectionAsync(request);
+        Assert.Equal(1, inspection.ServiceState!.TotalTrackedLandingCycles);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromCreation, inspection.ServiceState.LandingCycleOrigin);
         Assert.Equal(PhysicalAirframeEligibilityStatus.Grounded, (await eligibility.EvaluateAsync(ConsequenceFixture.Model, id)).Status);
         // Equal performed times deliberately exercise the ordinal action-ID tiebreak in the shared stream.
         Guid repairId = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
         var repair = await Service().RepairDiscreteDamageAsync(new(repairId, id, a.Revision, request.PerformedAt));
         Assert.Equal(inspection.ServiceState, await StateAsync(id));
+        Assert.Equal(AirframeUsageOrigin.TrackingFromCreation,
+            (await StateAsync(id)).LandingCycleOrigin);
         Assert.True((await eligibility.EvaluateAsync(ConsequenceFixture.Model, id)).IsEligible);
         ClearPool();
         var page1 = (await History().ReadServiceHistoryAsync(new(id, 1))).Snapshot!;
@@ -131,19 +136,23 @@ public sealed partial class AirframeInspectionTests
     [Fact]
     public async Task RepairDoesNotClearInspectionDueAndNextInspectionRecursAtCumulativeBoundary()
     {
-        var a = (await FlyAsync(await CreateAsync(AirframeDamageState.Grounding), TimeSpan.FromHours(51))).Application.After;
+        var a = (await FlyAsync(await CreateAsync(AirframeDamageState.Grounding), TimeSpan.FromHours(51),
+            verticalSpeeds: [-500])).Application.After;
         var due = await StateAsync(a.Airframe.AirframeId);
+        Assert.Equal(1, due.TotalTrackedLandingCycles);
         var repair = await Service().RepairDiscreteDamageAsync(new(Guid.NewGuid(), a.Airframe.AirframeId, a.Revision, a.SavedAt.AddMinutes(1)));
         Assert.Equal(due, await StateAsync(a.Airframe.AirframeId));
         Assert.Equal(PhysicalAirframeEligibilityStatus.InspectionDue,
             (await new PhysicalAirframeEligibilityService(Store()).EvaluateAsync(ConsequenceFixture.Model, a.Airframe.AirframeId)).Status);
         var first = await Service().PerformRoutineInspectionAsync(Request(repair.Current!, due));
-        var last = (await FlyAsync(repair.Current!, TimeSpan.FromHours(50))).Application.After;
+        var last = (await FlyAsync(repair.Current!, TimeSpan.FromHours(50), verticalSpeeds: [-500])).Application.After;
         var dueAgain = await StateAsync(a.Airframe.AirframeId);
+        Assert.Equal(2, dueAgain.TotalTrackedLandingCycles);
         Assert.Equal(AirframeInspectionStatus.InspectionDue, dueAgain.InspectionStatus);
         var second = await Service().PerformRoutineInspectionAsync(Request(last, dueAgain));
         Assert.Equal(TimeSpan.FromHours(151), second.ServiceState!.NextInspectionDueAtTrackedAirborneTime);
         Assert.Equal(TimeSpan.FromHours(101), second.ServiceState.TotalTrackedAirborneTime);
+        Assert.Equal(dueAgain.TotalTrackedLandingCycles, second.ServiceState.TotalTrackedLandingCycles);
         Assert.Equal(first.ServiceState!.Revision + 2, second.ServiceState.Revision);
     }
 
@@ -157,6 +166,11 @@ public sealed partial class AirframeInspectionTests
     [InlineData("wear")]
     [InlineData("damage")]
     [InlineData("service-revision")]
+    [InlineData("landing-cycles")]
+    [InlineData("missing-cycle-count-before")]
+    [InlineData("missing-cycle-count-after")]
+    [InlineData("missing-cycle-origin-before")]
+    [InlineData("missing-cycle-origin-after")]
     [InlineData("next-due")]
     [InlineData("schedule")]
     [InlineData("rationale")]
@@ -177,6 +191,11 @@ public sealed partial class AirframeInspectionTests
             "wear" => "UPDATE airframe_maintenance_events SET payload_json=json_set(payload_json,'$.after.condition.wearFraction',0);",
             "damage" => "UPDATE airframe_maintenance_events SET payload_json=json_set(payload_json,'$.after.condition.damage',2);",
             "service-revision" => "UPDATE airframe_maintenance_events SET payload_json=json_set(payload_json,'$.serviceAfter.revision',99);",
+            "landing-cycles" => "UPDATE airframe_maintenance_events SET payload_json=json_set(payload_json,'$.serviceAfter.totalTrackedLandingCycles',99);",
+            "missing-cycle-count-before" => "UPDATE airframe_maintenance_events SET payload_json=json_remove(payload_json,'$.serviceBefore.totalTrackedLandingCycles');",
+            "missing-cycle-count-after" => "UPDATE airframe_maintenance_events SET payload_json=json_remove(payload_json,'$.serviceAfter.totalTrackedLandingCycles');",
+            "missing-cycle-origin-before" => "UPDATE airframe_maintenance_events SET payload_json=json_remove(payload_json,'$.serviceBefore.landingCycleOrigin');",
+            "missing-cycle-origin-after" => "UPDATE airframe_maintenance_events SET payload_json=json_remove(payload_json,'$.serviceAfter.landingCycleOrigin');",
             "next-due" => "UPDATE airframe_maintenance_events SET payload_json=json_set(payload_json,'$.serviceAfter.nextInspectionDueAtTrackedAirborneTime','9.00:00:00');",
             "schedule" => "UPDATE airframe_maintenance_events SET payload_json=json_set(payload_json,'$.serviceBefore.scheduleVersion',99);",
             _ => "UPDATE airframe_maintenance_events SET payload_json=json_set(payload_json,'$.rationale','engine replaced');"
@@ -198,6 +217,10 @@ public sealed partial class AirframeInspectionTests
     [InlineData("origin")]
     [InlineData("revision")]
     [InlineData("column-type")]
+    [InlineData("cycle-negative")]
+    [InlineData("cycle-type")]
+    [InlineData("cycle-origin")]
+    [InlineData("cycle-origin-type")]
     public async Task CorruptServiceStateNeverMakesPhysicalAircraftEligible(string fault)
     {
         var a = await CreateAsync();
@@ -211,7 +234,11 @@ public sealed partial class AirframeInspectionTests
             "next" => "UPDATE airframe_service_state SET next_inspection_airborne_ticks=1;",
             "origin" => "UPDATE airframe_service_state SET usage_origin=99;",
             "revision" => "UPDATE airframe_service_state SET revision=0;",
-            _ => "UPDATE airframe_service_state SET total_airborne_ticks='invalid';"
+            "column-type" => "UPDATE airframe_service_state SET total_airborne_ticks='invalid';",
+            "cycle-negative" => "UPDATE airframe_service_state SET total_landing_cycles=-1;",
+            "cycle-type" => "UPDATE airframe_service_state SET total_landing_cycles='invalid';",
+            "cycle-origin" => "UPDATE airframe_service_state SET landing_cycle_origin=99;",
+            _ => "UPDATE airframe_service_state SET landing_cycle_origin='invalid';"
         };
         await ExecuteAsync("PRAGMA ignore_check_constraints=ON; " + mutation);
         var eligibility = new PhysicalAirframeEligibilityService(Store());
@@ -252,10 +279,12 @@ public sealed partial class AirframeInspectionTests
             """);
         var rows = await ExistingRowsAsync();
         var baseline = await StateAsync(a.Airframe.AirframeId);
-        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(rows, await ExistingRowsAsync());
         Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, baseline.UsageOrigin);
         Assert.Equal(TimeSpan.Zero, baseline.TotalTrackedAirborneTime);
+        Assert.Equal(0, baseline.TotalTrackedLandingCycles);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, baseline.LandingCycleOrigin);
         Assert.Equal(TimeSpan.FromHours(50), baseline.NextInspectionDueAtTrackedAirborneTime);
         Assert.Equal(repair.Current!.SavedAt, baseline.UpdatedAt);
         Assert.Equal(1, baseline.Revision);
@@ -265,7 +294,125 @@ public sealed partial class AirframeInspectionTests
         var next = await FlyAsync(repair.Current, TimeSpan.FromHours(50));
         var inspected = await Service().PerformRoutineInspectionAsync(Request(next.Application.After, await StateAsync(a.Airframe.AirframeId)));
         Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, inspected.ServiceState!.UsageOrigin);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, inspected.ServiceState.LandingCycleOrigin);
         Assert.Equal(2, (await History().ReadServiceHistoryAsync(new(a.Airframe.AirframeId))).Snapshot!.History.Events.Count);
+    }
+
+    [Fact]
+    public async Task Schema17MigrationPreservesServiceAndLegacyInspectionHistoryWithZeroCycleBaseline()
+    {
+        var a = await CreateAsync(AirframeDamageState.Recorded);
+        var first = await FlyAsync(a, TimeSpan.FromHours(50), verticalSpeeds: [-500]);
+        var due = await StateAsync(a.Airframe.AirframeId);
+        var inspection = await Service().PerformRoutineInspectionAsync(Request(first.Application.After, due));
+        var second = await FlyAsync(first.Application.After, TimeSpan.FromHours(1), verticalSpeeds: [-600]);
+        var schema18State = await StateAsync(a.Airframe.AirframeId);
+        Assert.Equal(2, schema18State.TotalTrackedLandingCycles);
+
+        await ExecuteAsync("""
+            UPDATE airframe_maintenance_events SET payload_schema_version=2, payload_json=json_remove(
+                payload_json,
+                '$.serviceBefore.totalTrackedLandingCycles', '$.serviceAfter.totalTrackedLandingCycles',
+                '$.serviceBefore.landingCycleOrigin', '$.serviceAfter.landingCycleOrigin')
+            WHERE maintenance_action_id=$action;
+            ALTER TABLE airframe_maintenance_events RENAME TO airframe_maintenance_events_v18_source;
+            DROP INDEX ix_airframe_maintenance_events_airframe;
+            CREATE TABLE airframe_maintenance_events (
+                maintenance_action_id TEXT NOT NULL PRIMARY KEY,
+                airframe_id TEXT NOT NULL REFERENCES airframes(airframe_id),
+                event_kind INTEGER NOT NULL CHECK (event_kind IN (1, 2)),
+                performed_at_utc_ticks INTEGER NOT NULL,
+                payload_schema_version INTEGER NOT NULL CHECK (
+                    (event_kind = 1 AND payload_schema_version = 1)
+                    OR (event_kind = 2 AND payload_schema_version = 2)),
+                payload_json TEXT NOT NULL);
+            INSERT INTO airframe_maintenance_events SELECT * FROM airframe_maintenance_events_v18_source;
+            DROP TABLE airframe_maintenance_events_v18_source;
+            CREATE INDEX ix_airframe_maintenance_events_airframe
+                ON airframe_maintenance_events (airframe_id, performed_at_utc_ticks, maintenance_action_id);
+            CREATE TABLE airframe_service_state_v17 (
+                airframe_id TEXT NOT NULL PRIMARY KEY REFERENCES airframes(airframe_id),
+                schedule_id TEXT NOT NULL CHECK (length(trim(schedule_id)) > 0),
+                schedule_version INTEGER NOT NULL CHECK (schedule_version >= 1),
+                total_airborne_ticks INTEGER NOT NULL CHECK (typeof(total_airborne_ticks) = 'integer' AND total_airborne_ticks >= 0),
+                last_inspection_airborne_ticks INTEGER NOT NULL CHECK (typeof(last_inspection_airborne_ticks) = 'integer' AND last_inspection_airborne_ticks >= 0 AND last_inspection_airborne_ticks <= total_airborne_ticks),
+                next_inspection_airborne_ticks INTEGER NOT NULL CHECK (typeof(next_inspection_airborne_ticks) = 'integer' AND next_inspection_airborne_ticks > last_inspection_airborne_ticks),
+                usage_origin INTEGER NOT NULL CHECK (usage_origin IN (1, 2)),
+                revision INTEGER NOT NULL CHECK (revision >= 1),
+                updated_at_utc_ticks INTEGER NOT NULL CHECK (updated_at_utc_ticks > 0));
+            INSERT INTO airframe_service_state_v17
+                SELECT airframe_id, schedule_id, schedule_version, total_airborne_ticks,
+                    last_inspection_airborne_ticks, next_inspection_airborne_ticks, usage_origin, revision, updated_at_utc_ticks
+                FROM airframe_service_state;
+            DROP TABLE airframe_service_state;
+            ALTER TABLE airframe_service_state_v17 RENAME TO airframe_service_state;
+            PRAGMA user_version=17;
+            """, ("$action", inspection.Event!.MaintenanceActionId.ToString("D")));
+        var rows = await ExistingRowsAsync();
+
+        var migrated = await StateAsync(a.Airframe.AirframeId);
+        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(rows, await ExistingRowsAsync());
+        string migratedEventSchema = Assert.IsType<string>(await ScalarAsync(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='airframe_maintenance_events';"));
+        Assert.Contains("payload_schema_version IN (2, 3)", migratedEventSchema);
+        Assert.Equal(1L, await ScalarAsync(
+            "SELECT count(*) FROM sqlite_master WHERE type='index' AND name='ix_airframe_maintenance_events_airframe';"));
+        Assert.Equal(1L, await ScalarAsync(
+            "SELECT count(*) FROM pragma_foreign_key_list('airframe_maintenance_events') " +
+            "WHERE \"table\"='airframes' AND \"from\"='airframe_id';"));
+        Assert.Equal(schema18State with
+        {
+            TotalTrackedLandingCycles = 0,
+            LandingCycleOrigin = AirframeUsageOrigin.TrackingFromMigrationBaseline
+        }, migrated);
+        var migratedSnapshot = (await History().ReadAsync(new(a.Airframe.AirframeId))).Snapshot!;
+        Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, migratedSnapshot.LandingCycleOrigin);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, migratedSnapshot.Reliability.LandingCycleOrigin);
+        var retainedInspection = Assert.IsType<AirframeRoutineInspectionEvent>(
+            await Store().FindMaintenanceActionAsync(inspection.Event.MaintenanceActionId));
+        Assert.Equal(0, retainedInspection.ServiceBefore.TotalTrackedLandingCycles);
+        Assert.Equal(0, retainedInspection.ServiceAfter.TotalTrackedLandingCycles);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, retainedInspection.ServiceBefore.LandingCycleOrigin);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, retainedInspection.ServiceAfter.LandingCycleOrigin);
+        retainedInspection.Validate();
+        await ExecuteAsync("""
+            UPDATE airframe_maintenance_events SET payload_json=json_set(
+                payload_json,
+                '$.serviceBefore.totalTrackedLandingCycles', 99,
+                '$.serviceAfter.totalTrackedLandingCycles', 99,
+                '$.serviceBefore.landingCycleOrigin', 1,
+                '$.serviceAfter.landingCycleOrigin', 1)
+            WHERE maintenance_action_id=$action;
+            """, ("$action", inspection.Event.MaintenanceActionId.ToString("D")));
+        var normalizedV2 = Assert.IsType<AirframeRoutineInspectionEvent>(
+            await Store().FindMaintenanceActionAsync(inspection.Event.MaintenanceActionId));
+        Assert.Equal(0, normalizedV2.ServiceBefore.TotalTrackedLandingCycles);
+        Assert.Equal(0, normalizedV2.ServiceAfter.TotalTrackedLandingCycles);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, normalizedV2.ServiceBefore.LandingCycleOrigin);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, normalizedV2.ServiceAfter.LandingCycleOrigin);
+        Assert.False((await Store().ApplyAsync(second.Application.Consequence, second.Application.After,
+            second.Application.AppliedAt)).WasNewlyApplied);
+        Assert.Equal(migrated, await StateAsync(a.Airframe.AirframeId));
+
+        var twoCycles = ConsequenceFixture.SessionWithLandingEpisodes(a.Airframe.AirframeId, [-400], [-700]);
+        await ApplyFlightAsync(second.Application.After, TimeSpan.FromHours(1), twoCycles);
+        var after = await StateAsync(a.Airframe.AirframeId);
+        Assert.Equal(2, after.TotalTrackedLandingCycles);
+        Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, after.LandingCycleOrigin);
+        Assert.Equal(2L, await ScalarAsync(
+            "SELECT payload_schema_version FROM airframe_maintenance_events WHERE maintenance_action_id='" +
+            inspection.Event.MaintenanceActionId.ToString("D") + "';"));
+
+        var fresh = await CreateAsync();
+        Assert.Equal(AirframeUsageOrigin.TrackingFromCreation,
+            (await StateAsync(fresh.Airframe.AirframeId)).LandingCycleOrigin);
+        var freshDue = (await FlyAsync(fresh, TimeSpan.FromHours(50))).Application.After;
+        var currentInspection = await Service().PerformRoutineInspectionAsync(
+            Request(freshDue, await StateAsync(fresh.Airframe.AirframeId)));
+        Assert.Equal(3L, await ScalarAsync(
+            "SELECT payload_schema_version FROM airframe_maintenance_events WHERE maintenance_action_id='" +
+            currentInspection.Event!.MaintenanceActionId.ToString("D") + "';"));
     }
 
     private async Task<string> ExistingRowsAsync()
@@ -317,7 +464,14 @@ public sealed partial class AirframeInspectionTests
         Assert.Equal(prior, await StateAsync(a.Airframe.AirframeId));
         Assert.Equal(a, await Store().FindAsync(a.Airframe.AirframeId));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM flight_airframe_consequences;"));
-        await ExecuteAsync("UPDATE airframe_service_state SET total_airborne_ticks=0, updated_at_utc_ticks=$time;",
+        await ExecuteAsync("UPDATE airframe_service_state SET total_airborne_ticks=0, total_landing_cycles=$cycles;",
+            ("$cycles", long.MaxValue));
+        prior = await StateAsync(a.Airframe.AirframeId);
+        await Assert.ThrowsAsync<OverflowException>(() => FlyAsync(a, TimeSpan.FromHours(1), verticalSpeeds: [-500]));
+        Assert.Equal(prior, await StateAsync(a.Airframe.AirframeId));
+        Assert.Equal(a, await Store().FindAsync(a.Airframe.AirframeId));
+        Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM flight_airframe_consequences;"));
+        await ExecuteAsync("UPDATE airframe_service_state SET total_landing_cycles=0, updated_at_utc_ticks=$time;",
             ("$time", Epoch.AddDays(10).UtcTicks));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => FlyAsync(a, TimeSpan.FromHours(1)));
         Assert.Equal(a, await Store().FindAsync(a.Airframe.AirframeId));
