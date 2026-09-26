@@ -411,6 +411,7 @@ Chapter status: **FOUNDATION IN PROGRESS** — isolated `feature/mbl17-airframe-
 - [x] Repair discrete Recorded/Grounding damage with unchanged wear/identity, exact-once action IDs, atomic schema-16 condition/service history and separate bounded service-event reads; preserve crash evidence and restore existing physical dispatch readiness. No wear service, cost, downtime or UI.
 - [ ] Use verified simulator wear/component state only where available.
 - [x] Derive fallback physical-airframe reliability from coherent persisted condition/service evidence with explicit unknowns; expose a fail-closed future failure boundary that always returns ComponentModelUnavailable after maintenance eligibility, without probability/RNG/simulator commands.
+- [x] Add an unwired engine-1 simulator actuator on the existing serialized worker: optional SDK event/readback, bounded single-command admission, fresh authoritative acknowledgement, no ambiguous retransmit, cancellation/disconnect cleanup. No automatic failures; native C172 effects remain LIVE-ONLY.
 - [x] Persist exact physical-airframe usage and a versioned historical 50-hour gameplay inspection schedule; atomic consequence usage, explicit migration baseline, exact-once inspection history and distinct dispatch gate. Inspection leaves damage/wear unchanged; model-only KJFK remains unchanged.
 - [ ] Extend the fallback with verified aircraft-specific/component schedules.
 - [ ] Implement repair/maintenance cost and downtime.

@@ -177,6 +177,10 @@ public partial class App : Microsoft.UI.Xaml.Application
             provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ISimulatorTelemetrySource>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
+        services.AddSingleton<ISimulatorFailureActuator>(provider =>
+            provider.GetRequiredService<SimConnectConnection>());
+        services.AddSingleton<ISimulatorFailureStateSource>(provider =>
+            provider.GetRequiredService<SimConnectConnection>());
 
         services.AddOpenCareerPlanningServices();
 

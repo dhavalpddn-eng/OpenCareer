@@ -30,6 +30,8 @@ internal interface ISimConnectApi
     int AddStringToDataDefinition(nint handle, uint definitionId, string datumName);
     int RequestDataOnUserAircraft(nint handle, uint requestId, uint definitionId, SimConnectPeriod period);
     int SubscribeToSystemEvent(nint handle, uint eventId, string eventName);
+    int MapClientEventToSimEvent(nint handle, uint eventId, string eventName);
+    int TransmitClientEvent(nint handle, uint objectId, uint eventId, uint data, uint groupId, uint flags);
     int RequestSystemState(nint handle, uint requestId);
     int EnumerateSimObjectsAndLiveries(nint handle, uint requestId, SimConnectSimObjectType type);
     int AddToFacilityDefinition(nint handle, uint definitionId, string fieldName);

@@ -84,6 +84,11 @@ internal static class SimConnectMessageDecoder
         uint definitionId = unchecked((uint)Marshal.ReadInt32(data, 20));
         uint defineCount = unchecked((uint)Marshal.ReadInt32(data, 36));
 
+        // Malformed optional readback invalidates that capability's observation, not core telemetry.
+        if (definitionId == SimConnectEngineFailureDefinition.DefinitionId
+            && (defineCount != 1 || size != SimObjectDataHeaderSize + sizeof(double)))
+            return new(SimConnectMessageKind.SimObjectData, RequestId: requestId, DefinitionId: definitionId);
+
         if (definitionId == SimConnectCurrentAircraftDefinition.DefinitionId)
         {
             if (defineCount != 1)
