@@ -28,7 +28,8 @@
                     <TextBlock Text="SELECT INSTALLED AIRCRAFT"
                                Margin="0,8,0,0"
                                Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
-                    <ComboBox ItemsSource="{Binding AircraftOptions}"
+                    <ComboBox x:Name="AircraftPicker"
+                              ItemsSource="{Binding AircraftOptions}"
                               DisplayMemberPath="DisplayName"
                               SelectedValuePath="AircraftId"
                               SelectedValue="{Binding SelectedAircraftId, Mode=OneWay}"

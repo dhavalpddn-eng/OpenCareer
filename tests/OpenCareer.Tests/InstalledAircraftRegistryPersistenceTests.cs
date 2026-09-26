@@ -6,8 +6,34 @@ namespace OpenCareer.Tests;
 
 public class InstalledAircraftRegistryPersistenceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PartialAvailableSnapshotCannotEraseRetainedRequestedAircraft(bool containsOtherAircraft)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
+        string path = Path.Combine(root, "career.db");
+        const string id = AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId;
+        var retained = Observation(id, "C172SP Classic Passengers");
+        try
+        {
+            var store = new SqliteInstalledAircraftRegistryStore(path);
+            await store.ReplaceAllAsync([retained]);
+            var source = new PersistentInstalledAircraftObservationSource(new StubDiscoverySource(
+                new(InstalledAircraftDiscoveryAvailability.Available,
+                    containsOtherAircraft ? [Observation("other-aircraft", "Other Aircraft")] : [])), store);
+
+            Assert.Equal(retained, Assert.Single(await source.FindAircraftObservationsAsync(id)));
+            Assert.Equal(retained, Assert.Single(await new SqliteInstalledAircraftRegistryStore(path).FindAsync(id)));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
-    public async Task AvailableDiscoveryReplacesPersistedSnapshotAndReturnsCurrentAircraft()
+    public async Task AvailableDiscoveryPersistsCurrentAircraftWithoutErasingOtherObservations()
     {
         AircraftRegistryObservation oldAircraft = Observation("old-aircraft", "Old Aircraft");
         AircraftRegistryObservation currentAircraft = Observation("current-aircraft", "Current Aircraft");
@@ -25,9 +51,11 @@ public class InstalledAircraftRegistryPersistenceTests
 
         AircraftRegistryObservation match = Assert.Single(result);
         Assert.Equal("Current Aircraft", match.DisplayName);
-        Assert.Equal(1, store.ReplaceCount);
-        Assert.Single(store.Observations);
-        Assert.Equal("current-aircraft", store.Observations[0].CanonicalAircraftId);
+        Assert.Equal(0, store.ReplaceCount);
+        Assert.Equal(1, store.UpsertCount);
+        Assert.Equal(2, store.Observations.Count);
+        Assert.Equal(oldAircraft, Assert.Single(await store.FindAsync("old-aircraft")));
+        Assert.Equal(currentAircraft, Assert.Single(await store.FindAsync("current-aircraft")));
     }
 
     [Fact]
@@ -108,12 +136,57 @@ public class InstalledAircraftRegistryPersistenceTests
 
             await Assert.ThrowsAsync<ArgumentException>(
                 () => store.ReplaceAllAsync([observation]));
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => store.UpsertAsync([observation]));
         }
         finally
         {
             if (Directory.Exists(root))
                 Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task SqliteUpsertRetainsOtherAircraftAndUpdatesOnlyObservedProviderRecordsAcrossRestart()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
+        string path = Path.Combine(root, "career.db");
+        try
+        {
+            var store = new SqliteInstalledAircraftRegistryStore(path);
+            var a = Observation("aircraft-a", "Aircraft A");
+            var b = Observation("aircraft-b", "Aircraft B");
+            await store.UpsertAsync([a, b]);
+            var updated = b with { DisplayName = "Updated B" };
+            await store.UpsertAsync([updated]);
+            await store.UpsertAsync([]);
+            var restarted = new SqliteInstalledAircraftRegistryStore(path);
+            Assert.Equal(a, Assert.Single(await restarted.FindAsync("aircraft-a")));
+            Assert.Equal(updated, Assert.Single(await restarted.FindAsync("aircraft-b")));
+            Assert.Empty(await restarted.FindAsync("unknown-aircraft"));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PartialDiscoveryCannotMakeReferenceOnlyOrUnknownAircraftInstalled()
+    {
+        var store = new RecordingStore([]);
+        var source = new PersistentInstalledAircraftObservationSource(new StubDiscoverySource(
+            new(InstalledAircraftDiscoveryAvailability.Available, [])), store);
+        var catalog = new AircraftRegistryCatalogService(
+            [source, new PlayableLoopReferenceAircraftObservationSource()]);
+
+        var reference = await catalog.FindAircraftAsync(AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId);
+        Assert.NotNull(reference);
+        Assert.Equal(AircraftInstallationStatus.KnownOnly, reference.InstallationStatus);
+        Assert.Null(await catalog.FindAircraftAsync("unseeded-aircraft"));
+        Assert.Empty(store.Observations);
+        Assert.Equal(0, store.UpsertCount);
+        Assert.Equal(0, store.ReplaceCount);
     }
 
     private static AircraftRegistryObservation Observation(
@@ -142,6 +215,20 @@ public class InstalledAircraftRegistryPersistenceTests
             initial.ToArray();
 
         public int ReplaceCount { get; private set; }
+        public int UpsertCount { get; private set; }
+
+        public Task UpsertAsync(
+            IReadOnlyList<AircraftRegistryObservation> observations,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var retained = Observations.ToDictionary(o => (o.ProviderId, o.ProviderRecordId));
+            foreach (var observation in observations)
+                retained[(observation.ProviderId, observation.ProviderRecordId)] = observation;
+            Observations = retained.Values.ToArray();
+            UpsertCount++;
+            return Task.CompletedTask;
+        }
 
         public Task ReplaceAllAsync(
             IReadOnlyList<AircraftRegistryObservation> observations,

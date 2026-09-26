@@ -353,6 +353,7 @@ public sealed class JobsViewModelTests
             await Task.WhenAll(pickerEvents).WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.NotSame(previous, Assert.Single(viewModel.AircraftOptions));
+            Assert.Same(Assert.Single(viewModel.AircraftOptions), viewModel.SelectedAircraftOption);
             Assert.Equal("fixture-aircraft", projectedSelection);
             Assert.True(notifications.IndexOf(nameof(JobsViewModel.SelectedAircraftId))
                 > notifications.IndexOf(nameof(JobsViewModel.AircraftOptions)));
@@ -382,6 +383,7 @@ public sealed class JobsViewModelTests
         await viewModel.SelectAircraftAsync(null);
 
         Assert.Null(viewModel.SelectedAircraftId);
+        Assert.Null(viewModel.SelectedAircraftOption);
         Assert.Null(projectedSelection);
         var offer = Assert.Single(viewModel.Offers);
         Assert.False(offer.CanStart);
@@ -435,6 +437,8 @@ public sealed class JobsViewModelTests
     private static void AssertReady(JobsViewModel viewModel, string aircraftId)
     {
         Assert.Equal(aircraftId, viewModel.SelectedAircraftId);
+        Assert.Same(Assert.Single(viewModel.AircraftOptions, option => option.AircraftId == aircraftId),
+            viewModel.SelectedAircraftOption);
         var offer = Assert.Single(viewModel.Offers);
         Assert.Equal(CareerJobStartInputState.Ready, offer.StartInputState);
         Assert.Equal("READY TO START", offer.AvailabilityText);

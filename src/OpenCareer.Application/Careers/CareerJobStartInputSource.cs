@@ -467,7 +467,7 @@ public sealed class CareerJobStartInputSource
         DispatchFeasibilityResult preflight =
             await _dispatchPlanning
                 .EvaluateAsync(
-                    aircraft.AircraftId,
+                    resolution,
                     offer.OriginIcao,
                     offer.DestinationIcao,
                     dispatchAuthority.Requirements,

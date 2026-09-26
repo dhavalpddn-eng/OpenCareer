@@ -24,6 +24,24 @@ public sealed class OperationDispatchPlanningService(
     IAirportDispatchWeatherSource? weatherSource = null,
     IAircraftAvailabilityStore? aircraftAvailability = null)
 {
+    /// <summary>
+    /// Screens the exact immutable aircraft resolution already used by the caller.
+    /// Airport, weather and Fleet evidence are still read normally; aircraft evidence is not reloaded.
+    /// </summary>
+    public Task<DispatchFeasibilityResult> EvaluateAsync(
+        AircraftRegistryResolution aircraft,
+        string originIcao,
+        string destinationIcao,
+        OperationDispatchRequirements requirements,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(aircraft);
+
+        return EvaluateResolvedAsync(
+            aircraft, originIcao, destinationIcao, requirements,
+            reservationId: null, cancellationToken);
+    }
+
     public Task<DispatchFeasibilityResult> EvaluateAsync(
         string aircraftId,
         string originIcao,
@@ -74,6 +92,25 @@ public sealed class OperationDispatchPlanningService(
         AircraftRegistryResolution? aircraft = await aircraftRegistry
             .FindAircraftAsync(aircraftId, cancellationToken)
             .ConfigureAwait(false);
+
+        return await EvaluateResolvedAsync(
+            aircraft, originIcao, destinationIcao, requirements, reservationId, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<DispatchFeasibilityResult> EvaluateResolvedAsync(
+        AircraftRegistryResolution? aircraft,
+        string originIcao,
+        string destinationIcao,
+        OperationDispatchRequirements requirements,
+        string? reservationId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(originIcao);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationIcao);
+        ArgumentNullException.ThrowIfNull(requirements);
+        requirements.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (aircraft is not null
             && aircraft.InstallationStatus != AircraftInstallationStatus.Installed)

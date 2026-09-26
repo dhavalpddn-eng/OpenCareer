@@ -94,6 +94,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public IReadOnlyList<JobOfferItemViewModel> Offers => _offers;
     public IReadOnlyList<CareerJobAircraftOption> AircraftOptions => _aircraftOptions;
     public string? SelectedAircraftId => _selectedAircraftId;
+    public CareerJobAircraftOption? SelectedAircraftOption =>
+        _aircraftOptions.FirstOrDefault(option => string.Equals(
+            option.AircraftId, _selectedAircraftId, StringComparison.OrdinalIgnoreCase));
     public string AirportText => _airportText;
     public string StatusText => _statusText;
     public string AircraftStatus => _aircraftStatus;
