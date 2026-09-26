@@ -490,6 +490,70 @@ public sealed class JobsViewModelTests
             CareerRuntime("KRME"), new FixedTimeProvider(Now),
             new CareerJobAircraftSelectionSource(discovery), action ?? new FakeStartAction(), logger: null);
 
+    [Fact]
+    public async Task UnchangedAircraftRefreshDoesNotRepeatDispatchReadiness()
+    {
+        var discovery = new FakeDiscovery();
+        var action = new FakeStartAction();
+        var viewModel = SelectionViewModel(discovery, action);
+        await viewModel.RefreshAsync();
+        Assert.Equal(0, action.AvailabilityCount);
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        Assert.Equal(1, action.AvailabilityCount);
+        for (int i = 0; i < 5; i++)
+        {
+            discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
+                [Installed("fixture-aircraft", "Fixture Aircraft")]); // new instances, same facts
+            await viewModel.RefreshAircraftAndReadinessAsync();
+            AssertReady(viewModel, "fixture-aircraft");
+        }
+        Assert.Equal(1, action.AvailabilityCount);
+        discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
+            [Installed("fixture-aircraft", "Fixture Aircraft"), Installed("aircraft-b", "Aircraft B")]);
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        Assert.Equal(2, action.AvailabilityCount);
+        await viewModel.SelectAircraftAsync("aircraft-b");
+        Assert.Equal(3, action.AvailabilityCount);
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        Assert.Equal(3, action.AvailabilityCount);
+    }
+
+    [Fact]
+    public async Task TimerRefreshesQueueBehindSelectionWithoutOverlappingOrRepeatingReadiness()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var action = new FakeStartAction { BeforeRead = async () => { entered.SetResult(); await release.Task; } };
+        var viewModel = SelectionViewModel(new FakeDiscovery(), action);
+        await viewModel.RefreshAsync();
+        Task select = viewModel.SelectAircraftAsync("fixture-aircraft");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Task[] refreshes = Enumerable.Range(0, 5).Select(_ => viewModel.RefreshAircraftAndReadinessAsync()).ToArray();
+        Assert.All(refreshes, task => Assert.False(task.IsCompleted));
+        Assert.Equal(1, action.AvailabilityCount);
+        release.SetResult();
+        await Task.WhenAll(refreshes.Append(select)).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, action.AvailabilityCount);
+        AssertReady(viewModel, "fixture-aircraft");
+    }
+
+    [Fact]
+    public async Task UnchangedRefreshStillExpiresOffersWithoutDispatchIo()
+    {
+        var clock = new FixedTimeProvider(Now);
+        var action = new FakeStartAction();
+        var viewModel = new JobsViewModel(new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", false))),
+            CareerRuntime("KRME"), clock, new CareerJobAircraftSelectionSource(new FakeDiscovery()), action, logger: null);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        AssertReady(viewModel, "fixture-aircraft");
+        clock.Now = Now.AddHours(3);
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        Assert.True(Assert.Single(viewModel.Offers).IsExpired);
+        Assert.False(Assert.Single(viewModel.Offers).CanStart);
+        Assert.Equal(1, action.AvailabilityCount);
+    }
+
     private static void AssertReady(JobsViewModel viewModel, string aircraftId)
     {
         Assert.Equal(aircraftId, viewModel.SelectedAircraftId);
@@ -623,19 +687,22 @@ public sealed class JobsViewModelTests
         public Guid? LastOfferId { get; private set; }
         public string? LastAircraftId { get; private set; }
 
-        public Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
+        public Func<Task>? BeforeRead { get; init; }
+
+        public async Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
             Guid offerId,
             string aircraftId,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             AvailabilityCount++;
-            return Task.FromResult(
+            if (BeforeRead is not null) await BeforeRead();
+            return
                 new CareerJobStartActionAvailability(
                     CanStart:
                         true,
                     CareerJobStartInputState.Ready,
-                    "Authoritative start inputs are ready."));
+                    "Authoritative start inputs are ready.");
         }
 
         public Task<CareerJobPlayableStartResult> StartAsync(
@@ -709,7 +776,8 @@ public sealed class JobsViewModelTests
         DateTimeOffset now)
         : TimeProvider
     {
+        public DateTimeOffset Now { get; set; } = now;
         public override DateTimeOffset GetUtcNow() =>
-            now;
+            Now;
     }
 }

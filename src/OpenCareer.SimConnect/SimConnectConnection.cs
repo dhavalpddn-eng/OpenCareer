@@ -218,6 +218,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             uint? activeAircraftCatalogRequestId = null;
             bool aircraftCatalogEnabled = true;
             var aircraftCatalogSendIds = new HashSet<uint>();
+            var airportFacilitySendIds = new HashSet<uint>();
             long lastAircraftCatalogAttemptAt = openedAt;
             uint? aircraftCatalogPageCount = null;
             var aircraftCatalogPages = new Dictionary<uint, IReadOnlyList<SimConnectObjectLivery>>();
@@ -227,6 +228,12 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             {
                 // No managed exception may cross the unmanaged callback boundary.
                 try { messages.Add(SimConnectMessageDecoder.Decode(data, size)); }
+                catch (InvalidDataException ex) when (
+                    SimConnectMessageDecoder.TryReadFacilityRequestId(data, size, out uint requestId))
+                {
+                    messages.Add(new(SimConnectMessageKind.FacilityData,
+                        RequestId: requestId, FacilityDecodeError: ex.Message));
+                }
                 catch (Exception ex) { callbackError ??= ex; }
             };
 
@@ -370,11 +377,14 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             when acknowledged
                                 && activeAirportFacilityRequest is not null
                                 && message.RequestId == activeAirportFacilityRequest.RequestId:
-                            if (!activeAirportFacilityRequest.Accept(message))
+                            if (message.FacilityDecodeError is not null
+                                || !activeAirportFacilityRequest.Accept(message))
                             {
                                 _logger.LogWarning(
-                                    "Ignored inconsistent SimConnect airport facility response for {Icao}.",
-                                    activeAirportFacilityRequest.Query.Icao);
+                                    "SimConnect airport facility query for {Icao}, request {RequestId}, failed: {Reason}. Core connection retained.",
+                                    activeAirportFacilityRequest.Query.Icao,
+                                    message.RequestId,
+                                    message.FacilityDecodeError ?? "Inconsistent facility response");
                                 activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
                                 activeAirportFacilityRequest = null;
                             }
@@ -401,6 +411,14 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 message.ParameterIndex);
                             activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
                             activeAirportFacilityRequest = null;
+                            break;
+                        case SimConnectMessageKind.Exception
+                            when airportFacilitySendIds.Contains(message.SendId):
+                            // A late exception after cancellation/timeout still belongs to that
+                            // optional query, never to the core telemetry connection or next query.
+                            _logger.LogWarning(
+                                "Late airport facility exception {Code}, send {SendId}, parameter {Index}; core connection retained.",
+                                message.ExceptionCode, message.SendId, message.ParameterIndex);
                             break;
                         case SimConnectMessageKind.Exception
                             when aircraftCatalogSendIds.Contains(message.SendId):
@@ -480,7 +498,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                     activeAirportFacilityRequest = StartNextAirportFacilityRequest(
                         handle,
                         airportFacilityConfigured,
-                        ref nextAirportFacilityRequestId);
+                        ref nextAirportFacilityRequestId,
+                        airportFacilitySendIds);
                 }
 
                 if (acknowledged)
@@ -542,7 +561,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     private ActiveSimConnectAirportFacilityRequest? StartNextAirportFacilityRequest(
         nint handle,
         bool facilityConfigured,
-        ref uint nextRequestId)
+        ref uint nextRequestId,
+        HashSet<uint> sendIds)
     {
         while (_airportFacilityQueries.TryDequeue(out SimConnectAirportFacilityQuery? query))
         {
@@ -590,6 +610,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                 continue;
             }
 
+            sendIds.Add(sendId);
             return new(
                 query,
                 requestId,

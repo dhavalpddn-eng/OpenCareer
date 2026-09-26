@@ -289,11 +289,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
-            await RefreshAircraftLockedAsync(
-                cancellationToken);
-
-            await RebuildOffersLockedAsync(
-                cancellationToken);
+            bool changed = await RefreshAircraftLockedAsync(cancellationToken);
+            if (changed)
+                await RebuildOffersLockedAsync(cancellationToken);
+            else
+                RefreshOfferExpirationLocked();
         }
         finally
         {
@@ -455,11 +455,12 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task RefreshAircraftLockedAsync(
+    private async Task<bool> RefreshAircraftLockedAsync(
         CancellationToken cancellationToken)
     {
         if (_aircraftSelection is null)
         {
+            bool changed = _aircraftDiscoveryAvailable || _aircraftOptions.Count != 0;
             _aircraftDiscoveryAvailable = false;
             SetAircraftOptions(
                 Array.Empty<CareerJobAircraftOption>());
@@ -467,7 +468,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 ref _aircraftStatus,
                 "Aircraft selection is not connected to this view.",
                 nameof(AircraftStatus));
-            return;
+            return changed;
         }
 
         CareerJobAircraftSelectionSnapshot snapshot =
@@ -475,6 +476,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 .ReadAsync(cancellationToken)
                 .ConfigureAwait(true);
 
+        bool discoveryChanged = _aircraftDiscoveryAvailable != snapshot.IsAvailable
+            || (snapshot.IsAvailable && !_aircraftOptions.SequenceEqual(snapshot.Aircraft));
         _aircraftDiscoveryAvailable = snapshot.IsAvailable;
         // Unavailable is uncertainty, not removal. Retain the visual choice, but never
         // evaluate/start with it until authoritative current discovery is available again.
@@ -485,6 +488,21 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             ref _aircraftStatus,
             snapshot.Detail,
             nameof(AircraftStatus));
+        return discoveryChanged;
+    }
+
+    private void RefreshOfferExpirationLocked()
+    {
+        DateTimeOffset now = _timeProvider.GetUtcNow();
+        if (!_offers.Any(item => item.IsExpired != (now < item.Offer.OfferedAt || now >= item.Offer.ExpiresAt)))
+            return;
+
+        // The timer must still disable expired offers, without repeating airport/dispatch I/O.
+        SetOffers(_offers.Select(item => new JobOfferItemViewModel(
+            item.Offer, now, item.CanStart,
+            now < item.Offer.OfferedAt || now >= item.Offer.ExpiresAt
+                ? "This persisted offer is no longer active." : item.ActionText,
+            item.StartInputState)).ToArray());
     }
 
     private async Task RebuildOffersLockedAsync(

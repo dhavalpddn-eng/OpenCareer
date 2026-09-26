@@ -69,4 +69,5 @@ internal sealed record SimConnectMessage(
     uint ItemIndex = 0,
     uint ListSize = 0,
     SimConnectAirportFacilityData? AirportFacilityData = null,
-    SimConnectRunwayFacilityData? RunwayFacilityData = null);
+    SimConnectRunwayFacilityData? RunwayFacilityData = null,
+    string? FacilityDecodeError = null);

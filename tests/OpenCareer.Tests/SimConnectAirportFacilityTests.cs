@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Runtime.InteropServices;
 using OpenCareer.Application.Planning;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Airports;
@@ -9,6 +10,126 @@ namespace OpenCareer.Tests;
 
 public sealed class SimConnectAirportFacilityTests
 {
+    // Official retail MSFS 2024 SDK Core 1.7.3, SimConnect.h, lines 467 and 725-735:
+    // https://sdk.flightsimulator.com/msfs2024/files/installers/1.7.3/MSFS2024_SDK_Core_Installer_1.7.3.zip
+    // pack(1); IsListItem is DWORD. The HTML page's bool declaration is not the SDK header.
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    private struct SdkFacilityHeader
+    {
+        public uint Size, Version, Id;
+        public uint UserRequestId, UniqueRequestId, ParentUniqueRequestId, Type;
+        public uint IsListItem, ItemIndex, ListSize, Data;
+    }
+
+    [Fact]
+    public void FacilityPacketOffsetsMatchOfficialSdkHeaderAndRequestedFieldTypes()
+    {
+        Assert.Equal(28, Marshal.OffsetOf<SdkFacilityHeader>(nameof(SdkFacilityHeader.IsListItem)).ToInt32());
+        Assert.Equal(32, Marshal.OffsetOf<SdkFacilityHeader>(nameof(SdkFacilityHeader.ItemIndex)).ToInt32());
+        Assert.Equal(36, Marshal.OffsetOf<SdkFacilityHeader>(nameof(SdkFacilityHeader.ListSize)).ToInt32());
+        Assert.Equal(40, Marshal.OffsetOf<SdkFacilityHeader>(nameof(SdkFacilityHeader.Data)).ToInt32());
+        // AddToFacilityDefinition: two FLOAT64 + STRING64 + STRING8; runway:
+        // two FLOAT64 + three FLOAT32 + five INT32 + two INT8 (no trailing padding).
+        Assert.Equal(40 + 88, SimConnectPackets.AirportFacility(1, 2, "Airport", "KALB").Length);
+        Assert.Equal(40 + 50, SimConnectPackets.RunwayFacility(1, 3, 2, 0, 1, 1000, 20, 4, 1, 0, 19, 0).Length);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MalformedOrUnsupportedActiveFacilityResponseFailsOnlyAirportQuery(bool unsupportedType)
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+        await using var connection = Create(api);
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+        api.Enqueue(SimConnectPackets.StringSimObjectData(SimConnectCurrentAircraftDefinition.RequestId,
+            SimConnectCurrentAircraftDefinition.DefinitionId, "C172SP Classic Passengers"));
+        api.Enqueue(SimConnectPackets.SimObjectData(SimConnectTelemetryDefinition.RequestId,
+            SimConnectTelemetryDefinition.DefinitionId, new double[SimConnectTelemetryDefinition.ValueCount]));
+        await Until(() => connection.CurrentAircraftTitle is not null && connection.Latest is not null);
+
+        var source = new SimConnectAirportDataObservationSource(connection);
+        var query = source.FindAirportObservationAsync("KALB");
+        await Until(() => api.FacilityRequests.Count == 1);
+        uint requestId = api.FacilityRequests.Single().RequestId;
+        byte[] packet = SimConnectPackets.AirportFacility(requestId, 1, "Fixture Albany", "KALB");
+        if (unsupportedType)
+            BitConverter.GetBytes(999u).CopyTo(packet, 24);
+        else
+        {
+            Array.Resize(ref packet, packet.Length - 1);
+            BitConverter.GetBytes((uint)packet.Length).CopyTo(packet, 0);
+        }
+        api.Enqueue(packet);
+
+        Assert.Null(await query.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+        Assert.Equal(1, api.Attempts);
+        var values = new double[SimConnectTelemetryDefinition.ValueCount];
+        values[(int)SimConnectTelemetryValue.HeadingTrue] = 123;
+        api.Enqueue(SimConnectPackets.SimObjectData(SimConnectTelemetryDefinition.RequestId,
+            SimConnectTelemetryDefinition.DefinitionId, values));
+        await Until(() => connection.Latest?.HeadingDegrees == 123);
+        Assert.Equal("C172SP Classic Passengers", connection.CurrentAircraftTitle);
+        Assert.False(api.OverlapDetected);
+        Assert.Single(api.ThreadIds);
+
+        // A malformed late response/exception from the failed query must not poison its successor.
+        api.LastSentPacketId++;
+        var next = source.FindAirportObservationAsync("KJFK");
+        await Until(() => api.FacilityRequests.Count == 2);
+        uint nextId = api.FacilityRequests.Last().RequestId;
+        api.Enqueue(packet);
+        api.Enqueue(SimConnectPackets.Exception(20, api.LastSentPacketId - 1));
+        api.Enqueue(SimConnectPackets.AirportFacility(nextId, 2, "Kennedy", "KJFK"));
+        api.Enqueue(SimConnectPackets.RunwayFacility(nextId, 3, 2, 0, 1, 3000, 45, 4, 4, 1, 22, 2));
+        api.Enqueue(SimConnectPackets.FacilityDataEnd(nextId));
+        Assert.NotNull(await next.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, api.Attempts);
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+    }
+
+    [Fact]
+    public async Task MalformedCorePacketStillReconnectsWhileAirportQueryIsPending()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+        await using var connection = Create(api);
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+        var query = connection.RequestAirportFacilityAsync("KALB", CancellationToken.None);
+        await Until(() => api.FacilityRequests.Count == 1);
+        api.Enqueue(SimConnectPackets.Header(8)); // truncated core SIMOBJECT_DATA, not facility data
+        Assert.Null(await query.WaitAsync(TimeSpan.FromSeconds(5)));
+        await Until(() => api.Attempts == 2);
+        Assert.Equal(1, api.Closed);
+        api.Enqueue(SimConnectPackets.Open());
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+        Assert.Equal(2, api.Attempts);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(91)]
+    public async Task InvalidFacilityCoordinatesReturnUnavailableWithoutDisconnect(double latitude)
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+        await using var connection = Create(api);
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+        var query = new SimConnectAirportDataObservationSource(connection).FindAirportObservationAsync("KALB");
+        await Until(() => api.FacilityRequests.Count == 1);
+        uint requestId = api.FacilityRequests.Single().RequestId;
+        api.Enqueue(SimConnectPackets.AirportFacility(requestId, 1, "Airport", "KALB", latitude));
+        api.Enqueue(SimConnectPackets.FacilityDataEnd(requestId));
+        Assert.Null(await query.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+        Assert.Equal(1, api.Attempts);
+    }
+
     [Fact]
     public void DecoderReadsAirportRunwayAndEndPackets()
     {

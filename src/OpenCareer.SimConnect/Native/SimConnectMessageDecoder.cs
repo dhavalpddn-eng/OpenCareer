@@ -14,8 +14,8 @@ internal static class SimConnectMessageDecoder
     private const int CurrentAircraftTitleSize = 128;
     private const int ListHeaderSize = HeaderSize + 4 * sizeof(uint);
     private const int SimObjectLiverySize = 512;
-    // The native C++ layout pads after the 1-byte IsListItem field so ItemIndex,
-    // ListSize, and the flexible Data payload remain DWORD-aligned.
+    // MSFS 2024 SDK Core 1.7.3, SimConnect.h: pack(1), seven DWORD fields after
+    // SIMCONNECT_RECV. IsListItem is a DWORD (the HTML reference calls it bool).
     private const int FacilityDataPayloadOffset = 40;
     private const int AirportFacilityPayloadSize = 88;
     private const int RunwayFacilityPayloadSize = 50;
@@ -44,6 +44,22 @@ internal static class SimConnectMessageDecoder
                 DecodeSimObjectAndLiveryList(data, declaredSize),
             _ => new(SimConnectMessageKind.None)
         };
+    }
+
+    internal static bool TryReadFacilityRequestId(nint data, uint bufferSize, out uint requestId)
+    {
+        requestId = 0;
+        // Use the actual callback buffer, not a possibly corrupt declared length.
+        // Without both the facility kind and request ID, the error remains a core error.
+        if (data == nint.Zero || bufferSize < HeaderSize + sizeof(uint))
+            return false;
+
+        var kind = (SimConnectMessageKind)unchecked((uint)Marshal.ReadInt32(data, 8));
+        if (kind is not (SimConnectMessageKind.FacilityData or SimConnectMessageKind.FacilityDataEnd))
+            return false;
+
+        requestId = unchecked((uint)Marshal.ReadInt32(data, 12));
+        return true;
     }
 
     private static SimConnectMessage DecodeOpen(nint data, uint size)
@@ -132,7 +148,7 @@ internal static class SimConnectMessageDecoder
         uint uniqueRequestId = unchecked((uint)Marshal.ReadInt32(data, 16));
         uint parentUniqueRequestId = unchecked((uint)Marshal.ReadInt32(data, 20));
         var type = (SimConnectFacilityDataType)unchecked((uint)Marshal.ReadInt32(data, 24));
-        bool isListItem = Marshal.ReadByte(data, 28) != 0;
+        bool isListItem = Marshal.ReadInt32(data, 28) != 0;
         uint itemIndex = unchecked((uint)Marshal.ReadInt32(data, 32));
         uint listSize = unchecked((uint)Marshal.ReadInt32(data, 36));
 

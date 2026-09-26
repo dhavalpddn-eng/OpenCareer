@@ -33,6 +33,95 @@ public sealed class KjfkPlayableLoopCertificationTests
     private const string AircraftId = AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId;
 
     [Fact]
+    public async Task FailedKalbFacilityQueryKeepsC172ConnectedAndKjfkReadyWithoutTimerQueryStorm()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
+        var transport = new SimConnectTestTransport();
+        transport.FacilityRequestHandler = (id, _) =>
+        {
+            byte[] malformed = SimConnectPackets.Header(29, 16); // attributable request, truncated facility payload
+            BitConverter.GetBytes(id).CopyTo(malformed, 12);
+            transport.Enqueue(malformed);
+        };
+        transport.Enqueue(SimConnectPackets.Open());
+        await using var connection = new SimConnectConnection(transport,
+            NullLogger<SimConnectConnection>.Instance,
+            new SimConnectConnectionOptions { DispatchInterval = TimeSpan.FromMilliseconds(5) }, TimeProvider.System);
+        var live = new SimConnectInstalledAircraftObservationSource(connection);
+        try
+        {
+            connection.Start();
+            await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+            transport.Enqueue(SimConnectPackets.StringSimObjectData(SimConnectCurrentAircraftDefinition.RequestId,
+                SimConnectCurrentAircraftDefinition.DefinitionId, "C172SP Classic Passengers"));
+            await Until(() => live.Current.Availability == InstalledAircraftDiscoveryAvailability.Available);
+            var clock = new TestClock();
+            var app = new Harness(Path.Combine(root, "career.db"), live, connection, new TestTelemetry(), clock,
+                liveAirports: new SimConnectAirportDataObservationSource(connection, clock));
+            await app.Profiles.SaveAsync(PlayerCareerProfile.Start(Guid.NewGuid(), "KJFK", clock.Now),
+                expectedRevision: null, savedAt: clock.Now);
+            await app.InitializeAsync();
+            var development = await app.Development.GenerateAsync();
+            var normal = development with
+            {
+                OfferId = Guid.NewGuid(), DestinationIcao = "KALB", DistanceNm = 130,
+                ContractTerms = development.ContractTerms! with
+                {
+                    MarketId = null,
+                    AircraftRequirements = development.ContractTerms.AircraftRequirements with
+                    { MinimumRangeNauticalMiles = 130 }
+                }
+            };
+            Assert.False(DevelopmentFlight.IsDevelopment(normal));
+            var boards = new SqliteJobBoardStateStore(new OpenCareerDatabaseOptions(app.DatabasePath),
+                NullLogger<SqliteJobBoardStateStore>.Instance);
+            var board = (await boards.GetAsync("KJFK"))!;
+            await boards.SaveAsync(board with { Offers = board.Offers.Add(normal) });
+            await app.Jobs.RefreshAsync();
+            await app.Jobs.SelectAircraftAsync(AircraftId).WaitAsync(TimeSpan.FromSeconds(10));
+
+            var blocked = app.Jobs.Offers.Single(x => x.OfferId == normal.OfferId);
+            Assert.False(blocked.CanStart);
+            Assert.Equal(CareerJobStartInputState.PreflightDataInsufficient, blocked.StartInputState);
+            Assert.Contains("NoRunwayData", blocked.ActionText);
+            Assert.Single(transport.FacilityRequests, x => x.Icao == "KALB");
+            int queries = transport.FacilityRequests.Count;
+            int reads = app.RegistryReadCount;
+            for (int i = 0; i < 5; i++)
+            {
+                clock.Now = clock.Now.AddSeconds(2);
+                await app.Jobs.RefreshAircraftAndReadinessAsync();
+                var ready = app.Jobs.Offers.Single(x => x.OfferId == development.OfferId);
+                Assert.Equal(CareerJobStartInputState.Ready, ready.StartInputState);
+                Assert.Equal("READY TO START", ready.AvailabilityText);
+                Assert.True(ready.CanStart, ready.ActionText);
+                Assert.Equal(AircraftId, app.Jobs.SelectedAircraftId);
+                Assert.Equal("C172SP Classic Passengers", app.Jobs.SelectedAircraftOption!.DisplayName);
+            }
+            Assert.Equal(queries, transport.FacilityRequests.Count);
+            Assert.Equal(reads, app.RegistryReadCount);
+            Assert.Equal(1, transport.Attempts);
+            Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+            var telemetry = new double[SimConnectTelemetryDefinition.ValueCount];
+            telemetry[(int)SimConnectTelemetryValue.HeadingTrue] = 123;
+            transport.Enqueue(SimConnectPackets.SimObjectData(SimConnectTelemetryDefinition.RequestId,
+                SimConnectTelemetryDefinition.DefinitionId, telemetry));
+            await Until(() => connection.Latest?.HeadingDegrees == 123);
+            await app.Jobs.StartOfferAsync(development.OfferId).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(ContractStatus.InProgress, app.Contracts.Find(development.OfferId)!.Contract.Status);
+            Assert.Equal(development.OfferId, app.Session.ContractId);
+            Assert.NotNull(await app.ReservationAsync(development.OfferId));
+            Assert.Equal(1, transport.Attempts);
+            Assert.False(transport.OverlapDetected);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task LiveC172TrafficSurvivesMissingHeartbeatAndSilentReconnectRestoresReadyWithoutReselection()
     {
         string root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
@@ -173,7 +262,7 @@ public sealed class KjfkPlayableLoopCertificationTests
                 filteredLive.ReportUnavailable = i % 2 == 0;
                 int reads = app.RegistryReadCount;
                 var oldOption = app.Jobs.SelectedAircraftOption;
-                await app.Jobs.RefreshAircraftAndReadinessAsync(); // live evidence drops after registry resolution
+                await app.Jobs.RefreshAsync(); // explicit readiness rebuild; live evidence drops after registry resolution
                 Assert.Equal(1, app.RegistryReadCount - reads);
                 Assert.True(filteredLive.OmitAircraft);
                 Assert.Equal(filteredLive.ReportUnavailable ? InstalledAircraftDiscoveryAvailability.Unavailable
@@ -525,7 +614,8 @@ public sealed class KjfkPlayableLoopCertificationTests
         public int RegistryReadCount => _registry.ReadCount;
 
         public Harness(string path, IInstalledAircraftDiscoverySource discovery,
-            ISimulatorConnection connection, TestTelemetry telemetry, TestClock clock, Action? afterAircraftResolution = null)
+            ISimulatorConnection connection, TestTelemetry telemetry, TestClock clock, Action? afterAircraftResolution = null,
+            IAirportDataObservationSource? liveAirports = null)
         {
             DatabasePath = path; Clock = clock; Telemetry = telemetry;
             var options = new OpenCareerDatabaseOptions(path);
@@ -548,7 +638,9 @@ public sealed class KjfkPlayableLoopCertificationTests
             var installed = new PersistentInstalledAircraftObservationSource(discovery, new SqliteInstalledAircraftRegistryStore(path));
             _registry = new(new AircraftRegistryCatalogService([installed, new PlayableLoopReferenceAircraftObservationSource()]),
                 afterAircraftResolution);
-            var airports = new CachedAirportDataSource([new PlayableLoopReferenceAirportObservationSource(clock)], clock: clock);
+            var referenceAirports = new PlayableLoopReferenceAirportObservationSource(clock);
+            var airports = new CachedAirportDataSource(liveAirports is null ? [referenceAirports]
+                : [liveAirports, referenceAirports], clock: clock);
             var dispatch = new OperationDispatchPlanningService(_registry, airports, aircraftAvailability: Fleet);
             var acceptance = new JobOfferAcceptanceService(ContractStore, lifecycle, boards, Contracts);
             var fleetBridge = new JobAcceptanceFleetBridge(acceptance, ContractStore, new AircraftReservationCoordinator(_registry, Fleet));

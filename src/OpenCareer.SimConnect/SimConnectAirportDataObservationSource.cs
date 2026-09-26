@@ -61,7 +61,15 @@ public sealed class SimConnectAirportDataObservationSource(
                 Authority,
                 _clock.GetUtcNow()));
 
-        observation.Validate();
+        try
+        {
+            observation.Validate();
+        }
+        catch (ArgumentException)
+        {
+            // Invalid optional facility facts cannot outrank valid reference data.
+            return null;
+        }
         return observation;
     }
 
