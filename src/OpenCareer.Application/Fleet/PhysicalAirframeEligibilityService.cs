@@ -9,7 +9,9 @@ public enum PhysicalAirframeEligibilityStatus
     Missing = 2,
     IdentityMismatch = 3,
     ModelMismatch = 4,
-    Grounded = 5
+    Grounded = 5,
+    InspectionDue = 6,
+    ServiceStateMissing = 7
 }
 
 public sealed record PhysicalAirframeEligibility(
@@ -23,7 +25,7 @@ public sealed record PhysicalAirframeEligibility(
 /// Read-only eligibility for an explicit physical assignment. Does not select/create airframes,
 /// infer grounding from wear, or replace the existing model-level dispatch/reservation authority.
 /// </summary>
-public sealed class PhysicalAirframeEligibilityService(IAirframeStore? airframes = null)
+public sealed class PhysicalAirframeEligibilityService(IAirframeStore? airframes = null, IAirframeServiceStateStore? serviceStates = null)
 {
     public async Task<PhysicalAirframeEligibility> EvaluateAsync(
         string canonicalAircraftId,
@@ -51,7 +53,19 @@ public sealed class PhysicalAirframeEligibilityService(IAirframeStore? airframes
         if (retained.Condition.RequiresGrounding)
             return new(PhysicalAirframeEligibilityStatus.Grounded, $"Physical airframe {requestedId} is grounded and unavailable for dispatch/start.");
 
-        return new(PhysicalAirframeEligibilityStatus.Eligible, $"Physical airframe {requestedId} matches the model and does not require grounding.");
+        var serviceStore = serviceStates ?? airframes as IAirframeServiceStateStore;
+        if (serviceStore is null)
+            return new(PhysicalAirframeEligibilityStatus.AuthorityUnavailable, "Physical aircraft eligibility requires authoritative service state.");
+        var service = await serviceStore.ReadServiceStateAsync(requestedId, cancellationToken).ConfigureAwait(false);
+        if (service is null)
+            return new(PhysicalAirframeEligibilityStatus.ServiceStateMissing, "Physical aircraft service state is missing; dispatch is unavailable.");
+        service.Validate();
+        if (service.AirframeId != requestedId || service.UpdatedAt < retained.Airframe.CreatedAt)
+            throw new InvalidDataException("Service state does not match the selected physical airframe.");
+        if (service.InspectionStatus == AirframeInspectionStatus.InspectionDue)
+            return new(PhysicalAirframeEligibilityStatus.InspectionDue, $"Physical airframe {requestedId} has a routine inspection due and is unavailable for dispatch/start.");
+
+        return new(PhysicalAirframeEligibilityStatus.Eligible, $"Physical airframe {requestedId} matches the model, has current inspection status and does not require damage grounding.");
     }
 
     public async Task RequireEligibleAsync(string canonicalAircraftId, AirframeId? physicalAirframeId,

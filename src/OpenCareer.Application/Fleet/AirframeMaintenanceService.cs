@@ -30,4 +30,12 @@ public sealed class AirframeMaintenanceService(IAirframeStore airframes, IAirfra
             throw;
         }
     }
+    public Task<AirframeInspectionResult> PerformRoutineInspectionAsync(
+        AirframeInspectionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Validate();
+        // The persistence authority reads both revisions and commits the service/event pair atomically.
+        return maintenance.PerformRoutineInspectionAsync(request, cancellationToken);
+    }
 }

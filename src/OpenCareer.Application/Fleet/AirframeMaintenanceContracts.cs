@@ -4,7 +4,7 @@ using OpenCareer.Domain.Aircraft;
 
 namespace OpenCareer.Application.Fleet;
 
-public enum AirframeMaintenanceEventKind { DiscreteDamageRepair = 1 }
+public enum AirframeMaintenanceEventKind { DiscreteDamageRepair = 1, RoutineInspection = 2 }
 public enum AirframeRepairStatus { Repaired, NoRepairRequired, NotFound }
 
 /// <summary>One explicit action; expected revision identifies the condition being repaired.</summary>
@@ -39,18 +39,17 @@ public sealed record AirframeRepairRequest(
 /// <summary>Immutable factual discrete-damage repair, not an inspection or component service.</summary>
 public sealed record AirframeMaintenanceEvent(
     [property: JsonRequired] AirframeRepairRequest Request,
-    [property: JsonRequired] AirframeMaintenanceEventKind Kind,
-    [property: JsonRequired] AirframeStoreRecord Before,
-    [property: JsonRequired] AirframeStoreRecord After,
-    [property: JsonRequired] string Rationale)
+    AirframeMaintenanceEventKind Kind,
+    AirframeStoreRecord Before,
+    AirframeStoreRecord After,
+    string Rationale) : AirframeServiceEvent(Kind, Before, After, Rationale)
 {
     public const string DiscreteRepairRationale = "Cleared recorded discrete airframe damage; gradual wear unchanged. No component inspection or wear service recorded.";
-    [JsonIgnore] public Guid MaintenanceActionId => Request.MaintenanceActionId;
-    [JsonIgnore] public AirframeId AirframeId => Request.AirframeId;
-    [JsonIgnore] public string CanonicalAircraftId => Before.Airframe.CanonicalAircraftId;
-    [JsonIgnore] public DateTimeOffset PerformedAt => Request.PerformedAt;
+    [JsonIgnore] public override Guid MaintenanceActionId => Request.MaintenanceActionId;
+    [JsonIgnore] public override AirframeId AirframeId => Request.AirframeId;
+    [JsonIgnore] public override DateTimeOffset PerformedAt => Request.PerformedAt;
 
-    public void Validate()
+    public override void Validate()
     {
         ArgumentNullException.ThrowIfNull(Request);
         ArgumentNullException.ThrowIfNull(After);
@@ -65,7 +64,7 @@ public sealed record AirframeMaintenanceEvent(
             throw new InvalidDataException("Repair event does not match its retained identity, condition, revision or semantics.");
     }
 
-    public AirframeRepairResult Replay(AirframeRepairRequest request)
+    public override AirframeRepairResult Replay(AirframeRepairRequest request)
     {
         Validate();
         if (Request != request)
@@ -97,14 +96,16 @@ public sealed record AirframeServiceHistoryQuery(AirframeId AirframeId, int Limi
 }
 
 /// <summary>Newest performed UTC time first, then ordinal D-format action ID descending; separate from flight pagination.</summary>
-public sealed record AirframeServiceHistoryPage(ImmutableList<AirframeMaintenanceEvent> Events, AirframeServiceHistoryCursor? Next);
-public sealed record AirframeServiceHistorySnapshot(AirframeStoreRecord Current, AirframeServiceHistoryPage History);
+public sealed record AirframeServiceHistoryPage(ImmutableList<AirframeServiceEvent> Events, AirframeServiceHistoryCursor? Next);
+public sealed record AirframeServiceHistorySnapshot(AirframeStoreRecord Current, AirframeServiceHistoryPage History, AirframeServiceState ServiceState);
 public sealed record AirframeServiceHistoryReadResult(AirframeId AirframeId, AirframeMaintenanceReadStatus Status, AirframeServiceHistorySnapshot? Snapshot);
 
 public interface IAirframeMaintenanceStore
 {
-    Task<AirframeMaintenanceEvent?> FindMaintenanceActionAsync(Guid maintenanceActionId, CancellationToken cancellationToken = default);
+    Task<AirframeServiceEvent?> FindMaintenanceActionAsync(Guid maintenanceActionId, CancellationToken cancellationToken = default);
     Task<AirframeRepairResult> RepairDiscreteDamageAsync(AirframeRepairRequest request, AirframeStoreRecord expected,
+        CancellationToken cancellationToken = default);
+    Task<AirframeInspectionResult> PerformRoutineInspectionAsync(AirframeInspectionRequest request,
         CancellationToken cancellationToken = default);
     Task<AirframeServiceHistoryPage> ReadServiceHistoryAsync(AirframeServiceHistoryQuery query, CancellationToken cancellationToken = default);
 }

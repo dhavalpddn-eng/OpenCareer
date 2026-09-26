@@ -98,6 +98,12 @@ public sealed partial class SqliteAirframeStore : IFlightAirframeConsequenceStor
 
         if (consequence.ApplyCondition)
         {
+            var service = await ReadServiceStateAsync(connection, transaction, current.Airframe.AirframeId, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidDataException("Physical airframe has no authoritative service state.");
+            if (service.UpdatedAt < current.Airframe.CreatedAt)
+                throw new InvalidDataException("Service state predates physical airframe creation.");
+            await SaveServiceStateAsync(connection, transaction,
+                service.AddTrustedUsage(consequence.Summary.AirborneTime, appliedAt), service.Revision, cancellationToken).ConfigureAwait(false);
             await using var update = connection.CreateCommand();
             update.Transaction = transaction;
             update.CommandText = """

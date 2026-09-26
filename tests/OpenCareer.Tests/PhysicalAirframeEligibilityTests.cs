@@ -62,7 +62,7 @@ public sealed class PhysicalAirframeEligibilityTests
         new(new AirframeId(Guid.NewGuid()), ConsequenceFixture.Model, ConsequenceFixture.Epoch),
         new(wear, damage), 1, ConsequenceFixture.Epoch);
 
-    private sealed class ReadOnlyStore(AirframeStoreRecord? record) : IAirframeStore
+    private sealed class ReadOnlyStore(AirframeStoreRecord? record) : IAirframeStore, IAirframeServiceStateStore
     {
         public AirframeStoreRecord? Record { get; } = record;
         public int ReadCount { get; private set; }
@@ -72,6 +72,12 @@ public sealed class PhysicalAirframeEligibilityTests
             ReadCount++;
             if (FailRead) throw new InvalidOperationException("Model-only path must not access physical aircraft.");
             return Task.FromResult(Record);
+        }
+        public Task<AirframeServiceState?> ReadServiceStateAsync(AirframeId id, CancellationToken ct = default)
+        {
+            if (FailRead) throw new InvalidOperationException("Model-only path must not access service state.");
+            return Task.FromResult<AirframeServiceState?>(Record is null ? null
+                : AirframeServiceState.Initial(id, Record.SavedAt, AirframeUsageOrigin.TrackingFromCreation));
         }
         public Task<AirframeStoreRecord> CreateAsync(Airframe airframe, AirframeCondition condition, DateTimeOffset savedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<AirframeStoreRecord> UpdateConditionAsync(Airframe airframe, AirframeCondition condition, long expectedRevision, DateTimeOffset savedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();

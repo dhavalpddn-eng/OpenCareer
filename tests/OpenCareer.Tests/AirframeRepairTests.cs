@@ -324,7 +324,7 @@ public sealed class AirframeRepairTests : IDisposable
         var beforeRows = await ExistingRowsAsync();
         Assert.Equal(15L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Null(await Store().FindMaintenanceActionAsync(Guid.NewGuid()));
-        Assert.Equal(16L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(beforeRows, await ExistingRowsAsync());
         Assert.Equal(Json(applied.Application), Json((await Store().FindBySessionAsync(flight.SessionId))!));
         Assert.Equal(applied.Application.After, await Store().FindAsync(a.Airframe.AirframeId));
@@ -336,7 +336,7 @@ public sealed class AirframeRepairTests : IDisposable
     public async Task FreshSchemaHasEmptyServiceHistoryAndProductionUsesSameStore()
     {
         Assert.Null(await Store().FindMaintenanceActionAsync(Guid.NewGuid()));
-        Assert.Equal(16L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframe_maintenance_events;"));
         string registration = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "UiContracts", "App.xaml.cs"));
         Assert.Contains("AddSingleton<IAirframeMaintenanceStore>(provider =>", registration);

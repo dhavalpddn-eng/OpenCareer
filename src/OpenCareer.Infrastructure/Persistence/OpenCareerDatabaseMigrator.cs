@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using OpenCareer.Domain.Aircraft;
 
 namespace OpenCareer.Infrastructure.Persistence;
 
@@ -7,7 +8,7 @@ internal static class OpenCareerDatabaseMigrator
     // Career and Economy branches independently reused schema versions 1-10.
     // Version 11 was the first shared convergence point; pre-v11 user_version
     // alone cannot be used to infer which subsystem tables already exist.
-    public const int CurrentSchemaVersion = 16;
+    public const int CurrentSchemaVersion = 17;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -35,6 +36,9 @@ internal static class OpenCareerDatabaseMigrator
                 cancellationToken)
             .ConfigureAwait(false);
 
+        if (version < 17)
+            await MigrateAirframeServiceStateAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+
         await MigrateLegacyIntegrationEconomyAsync(
                 connection,
                 transaction,
@@ -58,6 +62,44 @@ internal static class OpenCareerDatabaseMigrator
             .ConfigureAwait(false);
 
         transaction.Commit();
+    }
+
+    private static async Task MigrateAirframeServiceStateAsync(SqliteConnection connection,
+        SqliteTransaction transaction, CancellationToken cancellationToken)
+    {
+        // Schema <=16 did not retain an authoritative service counter. Tracking starts at zero;
+        // historical consequences are preserved, never silently treated as complete usage history.
+        await using var baseline = connection.CreateCommand();
+        baseline.Transaction = transaction;
+        baseline.CommandText = """
+            INSERT INTO airframe_service_state (airframe_id, schedule_id, schedule_version, total_airborne_ticks,
+                last_inspection_airborne_ticks, next_inspection_airborne_ticks, usage_origin, revision, updated_at_utc_ticks)
+            SELECT airframe_id, $schedule, $version, 0, 0, $interval, $origin, 1, saved_at_utc_ticks FROM airframes
+            WHERE airframe_id NOT IN (SELECT airframe_id FROM airframe_service_state);
+            """;
+        baseline.Parameters.AddWithValue("$schedule", LightAircraftRoutineInspectionV1.ScheduleId);
+        baseline.Parameters.AddWithValue("$version", LightAircraftRoutineInspectionV1.Version);
+        baseline.Parameters.AddWithValue("$interval", LightAircraftRoutineInspectionV1.IntervalAirborneTime.Ticks);
+        baseline.Parameters.AddWithValue("$origin", (int)AirframeUsageOrigin.TrackingFromMigrationBaseline);
+        await baseline.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        // Widen the old kind=1 CHECK without rewriting any immutable repair payload or metadata.
+        await ExecuteAsync(connection, transaction, """
+            CREATE TABLE airframe_maintenance_events_v17 (
+                maintenance_action_id TEXT NOT NULL PRIMARY KEY,
+                airframe_id TEXT NOT NULL REFERENCES airframes(airframe_id),
+                event_kind INTEGER NOT NULL CHECK (event_kind IN (1, 2)),
+                performed_at_utc_ticks INTEGER NOT NULL,
+                payload_schema_version INTEGER NOT NULL CHECK (
+                    (event_kind = 1 AND payload_schema_version = 1) OR (event_kind = 2 AND payload_schema_version = 2)),
+                payload_json TEXT NOT NULL
+            );
+            INSERT INTO airframe_maintenance_events_v17 SELECT * FROM airframe_maintenance_events;
+            DROP TABLE airframe_maintenance_events;
+            ALTER TABLE airframe_maintenance_events_v17 RENAME TO airframe_maintenance_events;
+            CREATE INDEX ix_airframe_maintenance_events_airframe
+                ON airframe_maintenance_events (airframe_id, performed_at_utc_ticks, maintenance_action_id);
+            """, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task EnsureUnifiedSchemaAsync(
@@ -92,13 +134,25 @@ internal static class OpenCareerDatabaseMigrator
                 CREATE TABLE IF NOT EXISTS airframe_maintenance_events (
                     maintenance_action_id TEXT NOT NULL PRIMARY KEY,
                     airframe_id TEXT NOT NULL REFERENCES airframes(airframe_id),
-                    event_kind INTEGER NOT NULL CHECK (event_kind = 1),
+                    event_kind INTEGER NOT NULL CHECK (event_kind IN (1, 2)),
                     performed_at_utc_ticks INTEGER NOT NULL,
-                    payload_schema_version INTEGER NOT NULL CHECK (payload_schema_version = 1),
+                    payload_schema_version INTEGER NOT NULL CHECK ((event_kind = 1 AND payload_schema_version = 1) OR (event_kind = 2 AND payload_schema_version = 2)),
                     payload_json TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS ix_airframe_maintenance_events_airframe
                     ON airframe_maintenance_events (airframe_id, performed_at_utc_ticks, maintenance_action_id);
+
+                CREATE TABLE IF NOT EXISTS airframe_service_state (
+                    airframe_id TEXT NOT NULL PRIMARY KEY REFERENCES airframes(airframe_id),
+                    schedule_id TEXT NOT NULL CHECK (length(trim(schedule_id)) > 0),
+                    schedule_version INTEGER NOT NULL CHECK (schedule_version >= 1),
+                    total_airborne_ticks INTEGER NOT NULL CHECK (typeof(total_airborne_ticks) = 'integer' AND total_airborne_ticks >= 0),
+                    last_inspection_airborne_ticks INTEGER NOT NULL CHECK (typeof(last_inspection_airborne_ticks) = 'integer' AND last_inspection_airborne_ticks >= 0 AND last_inspection_airborne_ticks <= total_airborne_ticks),
+                    next_inspection_airborne_ticks INTEGER NOT NULL CHECK (typeof(next_inspection_airborne_ticks) = 'integer' AND next_inspection_airborne_ticks > last_inspection_airborne_ticks),
+                    usage_origin INTEGER NOT NULL CHECK (usage_origin IN (1, 2)),
+                    revision INTEGER NOT NULL CHECK (revision >= 1),
+                    updated_at_utc_ticks INTEGER NOT NULL CHECK (updated_at_utc_ticks > 0)
+                );
 
                 CREATE TABLE IF NOT EXISTS logbook_entries (
                     entry_id TEXT NOT NULL PRIMARY KEY,

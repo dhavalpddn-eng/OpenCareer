@@ -411,10 +411,11 @@ Chapter status: **FOUNDATION IN PROGRESS** — isolated `feature/mbl17-airframe-
 - [x] Repair discrete Recorded/Grounding damage with unchanged wear/identity, exact-once action IDs, atomic schema-16 condition/service history and separate bounded service-event reads; preserve crash evidence and restore existing physical dispatch readiness. No wear service, cost, downtime or UI.
 - [ ] Use verified simulator wear/component state only where available.
 - [ ] Add fallback OpenCareer reliability state.
-- [ ] Implement component/service schedules.
+- [x] Persist exact physical-airframe usage and a versioned historical 50-hour gameplay inspection schedule; atomic consequence usage, explicit migration baseline, exact-once inspection history and distinct dispatch gate. Inspection leaves damage/wear unchanged; model-only KJFK remains unchanged.
+- [ ] Extend the fallback with verified aircraft-specific/component schedules.
 - [ ] Implement repair/maintenance cost and downtime.
 - [ ] Implement MRO/parts availability.
-- [ ] Extend discrete repair history with future scheduled/wear-service events and Maintenance UI.
+- [ ] Extend repair/inspection history with future wear-service events and Maintenance UI.
 - [ ] Connect hard-landing/abuse evidence to appropriate damage/wear logic.
 - [ ] Keep routine management automated by default.
 - [ ] Implement evidence-backed manual-ground actions with bounded one-time rewards.

@@ -95,7 +95,7 @@ public sealed partial class FlightSessionAircraftAssignmentTests : IDisposable
         Assert.Same(recovered, replay.FlightSession);
         Assert.Equal(original, await restarted.Airframes.FindAsync(original.Airframe.AirframeId));
         Assert.Equal(unrelated, await restarted.Airframes.FindAsync(unrelated.Airframe.AirframeId));
-        Assert.Equal(16L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(1, recovered.SchemaVersion);
     }
 
@@ -378,7 +378,7 @@ public sealed partial class FlightSessionAircraftAssignmentTests : IDisposable
             Profiles = new(options, NullLogger<SqlitePlayerCareerProfileStore>.Instance);
             Contracts = new(options, NullLogger<SqliteJobContractStore>.Instance);
             Airframes = new(options, NullLogger<SqliteAirframeStore>.Instance);
-            PhysicalAirframeEligibilityService? eligibility = configureEligibility ? new(eligibilityStore?.Invoke(Airframes) ?? Airframes) : null;
+            PhysicalAirframeEligibilityService? eligibility = configureEligibility ? new(eligibilityStore?.Invoke(Airframes) ?? Airframes, Airframes) : null;
             Fleet = new(path);
             Checkpoints = new(path);
             Persistence = new(Sessions, Checkpoints, airframeConsequences: new(Airframes, Airframes, _clock));

@@ -51,7 +51,7 @@ public sealed class AirframeMaintenanceHistoryTests : IDisposable
         Assert.Empty(snapshot.History);
         Assert.Null(snapshot.Next);
         Assert.Equal(current, await Store().FindAsync(current.Airframe.AirframeId));
-        Assert.Equal(16L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(17L, await ScalarAsync("PRAGMA user_version;"));
     }
 
     [Fact]

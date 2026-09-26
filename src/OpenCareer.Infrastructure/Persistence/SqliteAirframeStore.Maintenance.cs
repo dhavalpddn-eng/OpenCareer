@@ -11,7 +11,7 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
 {
     private static readonly JsonSerializerOptions MaintenanceJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public async Task<AirframeMaintenanceEvent?> FindMaintenanceActionAsync(Guid maintenanceActionId, CancellationToken cancellationToken = default)
+    public async Task<AirframeServiceEvent?> FindMaintenanceActionAsync(Guid maintenanceActionId, CancellationToken cancellationToken = default)
     {
         if (maintenanceActionId == Guid.Empty) throw new ArgumentException("Maintenance action ID is required.", nameof(maintenanceActionId));
         await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
@@ -68,23 +68,31 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
         if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
             throw new AirframeConcurrencyException("Airframe revision changed during repair.");
 
+        await InsertMaintenanceEventAsync(connection, transaction, serviceEvent, cancellationToken).ConfigureAwait(false);
+        transaction.Commit();
+        _logger.LogInformation("Repaired discrete damage for airframe {AirframeId}, action {MaintenanceActionId}, damage {BeforeDamage}->{AfterDamage}, revision {BeforeRevision}->{AfterRevision}; wear unchanged.",
+            request.AirframeId, request.MaintenanceActionId, current.Condition.Damage, after.Condition.Damage, current.Revision, after.Revision);
+        return new(AirframeRepairStatus.Repaired, after, serviceEvent, WasNewlyApplied: true);
+    }
+
+    private static async Task InsertMaintenanceEventAsync(SqliteConnection connection, SqliteTransaction transaction,
+        AirframeServiceEvent serviceEvent, CancellationToken cancellationToken)
+    {
+        serviceEvent.Validate();
         await using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
         insert.CommandText = """
             INSERT INTO airframe_maintenance_events
                 (maintenance_action_id, airframe_id, event_kind, performed_at_utc_ticks, payload_schema_version, payload_json)
-            VALUES ($action, $airframe, $kind, $performed, 1, $payload);
+            VALUES ($action, $airframe, $kind, $performed, $schema, $payload);
             """;
-        insert.Parameters.AddWithValue("$action", request.MaintenanceActionId.ToString("D"));
-        insert.Parameters.AddWithValue("$airframe", request.AirframeId.ToString());
+        insert.Parameters.AddWithValue("$action", serviceEvent.MaintenanceActionId.ToString("D"));
+        insert.Parameters.AddWithValue("$airframe", serviceEvent.AirframeId.ToString());
         insert.Parameters.AddWithValue("$kind", (int)serviceEvent.Kind);
-        insert.Parameters.AddWithValue("$performed", request.PerformedAt.UtcTicks);
-        insert.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(serviceEvent, MaintenanceJson));
+        insert.Parameters.AddWithValue("$performed", serviceEvent.PerformedAt.UtcTicks);
+        insert.Parameters.AddWithValue("$schema", serviceEvent.Kind == AirframeMaintenanceEventKind.DiscreteDamageRepair ? 1 : 2);
+        insert.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(serviceEvent, serviceEvent.GetType(), MaintenanceJson));
         await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        transaction.Commit();
-        _logger.LogInformation("Repaired discrete damage for airframe {AirframeId}, action {MaintenanceActionId}, damage {BeforeDamage}->{AfterDamage}, revision {BeforeRevision}->{AfterRevision}; wear unchanged.",
-            request.AirframeId, request.MaintenanceActionId, current.Condition.Damage, after.Condition.Damage, current.Revision, after.Revision);
-        return new(AirframeRepairStatus.Repaired, after, serviceEvent, WasNewlyApplied: true);
     }
 
     public async Task<AirframeServiceHistoryPage> ReadServiceHistoryAsync(AirframeServiceHistoryQuery query,
@@ -108,7 +116,7 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
             command.Parameters.AddWithValue("$before", cursor.PerformedAt.UtcTicks);
             command.Parameters.AddWithValue("$action", cursor.MaintenanceActionId.ToString("D"));
         }
-        var events = ImmutableList.CreateBuilder<AirframeMaintenanceEvent>();
+        var events = ImmutableList.CreateBuilder<AirframeServiceEvent>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -127,7 +135,7 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
         return new(events.ToImmutable(), next);
     }
 
-    private static async Task<AirframeMaintenanceEvent?> ReadMaintenanceActionAsync(SqliteConnection connection,
+    private static async Task<AirframeServiceEvent?> ReadMaintenanceActionAsync(SqliteConnection connection,
         SqliteTransaction? transaction, Guid actionId, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -145,14 +153,19 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
         return serviceEvent;
     }
 
-    private static AirframeMaintenanceEvent ReadMaintenanceEvent(SqliteDataReader reader)
+    private static AirframeServiceEvent ReadMaintenanceEvent(SqliteDataReader reader)
     {
         if (reader.GetValue(0) is not string || reader.GetValue(1) is not string || reader.GetValue(2) is not long
             || reader.GetValue(3) is not long || reader.GetValue(4) is not long || reader.GetValue(5) is not string)
             throw new InvalidDataException("Invalid maintenance event column types.");
-        if (reader.GetInt64(4) != 1) throw new NotSupportedException("Unsupported maintenance event payload schema.");
-        var result = JsonSerializer.Deserialize<AirframeMaintenanceEvent>(reader.GetString(5), MaintenanceJson)
-            ?? throw new InvalidDataException("Missing maintenance event payload.");
+        AirframeServiceEvent result = (reader.GetInt64(2), reader.GetInt64(4)) switch
+        {
+            (1, 1) => JsonSerializer.Deserialize<AirframeMaintenanceEvent>(reader.GetString(5), MaintenanceJson)
+                ?? throw new InvalidDataException("Missing repair event payload."),
+            (2, 2) => JsonSerializer.Deserialize<AirframeRoutineInspectionEvent>(reader.GetString(5), MaintenanceJson)
+                ?? throw new InvalidDataException("Missing inspection event payload."),
+            _ => throw new NotSupportedException("Unsupported maintenance event kind/payload schema.")
+        };
         result.Validate();
         if (result.MaintenanceActionId.ToString("D") != reader.GetString(0) || result.AirframeId.ToString() != reader.GetString(1)
             || (int)result.Kind != reader.GetInt64(2) || result.PerformedAt.UtcTicks != reader.GetInt64(3))

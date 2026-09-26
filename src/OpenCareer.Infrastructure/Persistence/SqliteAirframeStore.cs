@@ -102,6 +102,10 @@ public sealed partial class SqliteAirframeStore : IAirframeStore
         if (await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
             throw new AirframeConcurrencyException("Airframe already exists or the condition revision changed.");
 
+        if (expectedRevision is null)
+            await SaveServiceStateAsync(connection, transaction,
+                AirframeServiceState.Initial(airframe.AirframeId, result.SavedAt, AirframeUsageOrigin.TrackingFromCreation),
+                null, cancellationToken).ConfigureAwait(false);
         transaction.Commit();
         _logger.LogInformation("Saved physical airframe {AirframeId} ({AircraftId}) at condition revision {Revision}.",
             airframe.AirframeId, airframe.CanonicalAircraftId, revision);
