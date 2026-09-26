@@ -58,6 +58,12 @@ public static class WorldSimulation
         return state;
     }
 
+    public static void ValidateCheckpoint(WorldSimulationState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        Validate(state);
+    }
+
     // All production advancement goes through this clock. The low-level numerical
     // integrators are not an application clock and do not promise arbitrary-step equivalence.
     public static WorldSimulationState Advance(WorldSimulationState state, DateTimeOffset through)

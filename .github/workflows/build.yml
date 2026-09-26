@@ -16,6 +16,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/m1-simulation-core
     paths:
       - "src/**"
       - "tests/**"
@@ -86,8 +87,10 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout
+      - name: Checkout exact head
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4

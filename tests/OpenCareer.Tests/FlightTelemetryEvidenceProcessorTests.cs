@@ -419,6 +419,46 @@ public sealed class FlightTelemetryEvidenceProcessorTests
         Assert.False(reconnectFirst.AirborneConfirmed);
     }
 
+    [Theory]
+    [InlineData(8, 1, false, true)]
+    [InlineData(18, 2, false, true)]
+    [InlineData(100, 2, false, false)]
+    [InlineData(8, 6, false, false)]
+    [InlineData(8, 1, true, false)]
+    public void BounceRequiresBoundedUninterruptedContactEvidence(
+        double bounceAgl, int airborneSeconds, bool pauseDuringBounce, bool expectedBounce)
+    {
+        var processor = new FlightTelemetryEvidenceProcessor();
+        for (int second = 0; second < 4; second++)
+            processor.Process(Observation(Telemetry(second, onGround: false, altitudeAgl: 100)));
+        var contact = processor.Process(Observation(Telemetry(4)));
+        Assert.False(contact.TouchdownConfirmed);
+        Assert.False(contact.BounceRecontact);
+        for (int second = 5; second < 5 + airborneSeconds; second++)
+            processor.Process(Observation(Telemetry(second, onGround: false,
+                altitudeAgl: bounceAgl, paused: pauseDuringBounce)));
+        var recontact = processor.Process(Observation(Telemetry(5 + airborneSeconds)));
+        Assert.False(recontact.TouchdownConfirmed);
+        Assert.False(recontact.BounceRecontact);
+        var confirmed = processor.Process(Observation(Telemetry(6 + airborneSeconds)));
+        Assert.True(confirmed.TouchdownConfirmed);
+        Assert.Equal(expectedBounce, confirmed.BounceRecontact);
+        Assert.False(processor.Process(Observation(Telemetry(7 + airborneSeconds))).BounceRecontact);
+    }
+
+    [Fact]
+    public void ReconnectDoesNotInventBounceFromTheLastGroundContact()
+    {
+        var processor = new FlightTelemetryEvidenceProcessor();
+        for (int second = 0; second < 4; second++)
+            processor.Process(Observation(Telemetry(second, onGround: false, altitudeAgl: 100)));
+        processor.Process(Observation(Telemetry(4)));
+        processor.Process(new FlightEvidenceObservation(SimulatorConnectionState.Reconnecting, null, ValidLoadedAircraft: false, ContinuityPlausible: false));
+        processor.Process(Observation(Telemetry(5, onGround: false, altitudeAgl: 8)));
+        processor.Process(Observation(Telemetry(6)));
+        Assert.False(processor.Process(Observation(Telemetry(7))).BounceRecontact);
+    }
+
     private static FlightEvidenceObservation Observation(
         AircraftTelemetrySnapshot telemetry,
         bool operationCompleteConfirmed = false) =>

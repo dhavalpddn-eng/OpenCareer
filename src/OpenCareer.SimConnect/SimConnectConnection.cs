@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Telemetry;
@@ -14,6 +15,10 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     private readonly TimeProvider _clock;
     private SimulatorConnectionSnapshot _current = new(SimulatorConnectionState.Disconnected);
     private AircraftTelemetrySnapshot? _latestTelemetry;
+    private SimConnectLocalWeatherSnapshot? _localWeather;
+    private SimConnectAircraftCatalogSnapshot _aircraftCatalog = SimConnectAircraftCatalogSnapshot.Unavailable;
+    private string? _currentAircraftTitle;
+    private readonly ConcurrentQueue<SimConnectAirportFacilityQuery> _airportFacilityQueries = new();
     private CancellationTokenSource? _stop;
     private Task _worker = Task.CompletedTask;
     private bool _disposed;
@@ -37,6 +42,31 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     public SimulatorConnectionSnapshot Current => Volatile.Read(ref _current);
     public AircraftTelemetrySnapshot? Latest => Volatile.Read(ref _latestTelemetry);
+    internal SimConnectLocalWeatherSnapshot? LocalWeather => Volatile.Read(ref _localWeather);
+    internal SimConnectAircraftCatalogSnapshot AircraftCatalog => Volatile.Read(ref _aircraftCatalog);
+    internal string? CurrentAircraftTitle => Volatile.Read(ref _currentAircraftTitle);
+
+    internal async Task<SimConnectAirportFacilitySnapshot?> RequestAirportFacilityAsync(
+        string icao,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(icao);
+
+        if (Current.State != SimulatorConnectionState.Connected)
+            return null;
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var query = new SimConnectAirportFacilityQuery(
+            icao.Trim().ToUpperInvariant(),
+            cancellationToken);
+
+        _airportFacilityQueries.Enqueue(query);
+
+        return await query.Completion.Task
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     public void Start()
     {
@@ -87,6 +117,9 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         bool everConnected = false;
         int failures = 0;
         PublishTelemetry(null);
+        PublishLocalWeather(null);
+        PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+        PublishCurrentAircraftTitle(null);
         Publish(new(SimulatorConnectionState.WaitingForSimulator));
         try
         {
@@ -97,6 +130,9 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                 {
                     var issue = RunSession(token, ref everConnected, ref failures);
                     PublishTelemetry(null);
+                    PublishLocalWeather(null);
+                    PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+                    PublishCurrentAircraftTitle(null);
                     if (token.IsCancellationRequested)
                         break;
 
@@ -110,6 +146,9 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                     or EntryPointNotFoundException or PlatformNotSupportedException)
                 {
                     PublishTelemetry(null);
+                    PublishLocalWeather(null);
+                    PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+                    PublishCurrentAircraftTitle(null);
                     var issue = ex switch
                     {
                         DllNotFoundException => SimulatorConnectionIssue.RuntimeMissing,
@@ -129,12 +168,18 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         catch (Exception ex)
         {
             PublishTelemetry(null);
+            PublishLocalWeather(null);
+            PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+            PublishCurrentAircraftTitle(null);
             _logger.LogError(ex, "SimConnect connection worker stopped unexpectedly.");
             Publish(new(SimulatorConnectionState.Faulted, SimulatorConnectionIssue.UnexpectedError));
         }
         finally
         {
             PublishTelemetry(null);
+            PublishLocalWeather(null);
+            PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+            PublishCurrentAircraftTitle(null);
             if (token.IsCancellationRequested)
                 Publish(new(SimulatorConnectionState.Disconnected));
         }
@@ -145,6 +190,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         using var notification = new AutoResetEvent(false);
         WaitHandle[] waits = [token.WaitHandle, notification];
         nint handle = nint.Zero;
+        ActiveSimConnectAirportFacilityRequest? activeAirportFacilityRequest = null;
         try
         {
             int result = _api.Open(out handle, notification.SafeWaitHandle.DangerousGetHandle());
@@ -160,16 +206,34 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             Publish(new(SimulatorConnectionState.Connecting));
             long openedAt = _clock.GetTimestamp();
             long lastHeartbeatAt = openedAt;
+            long lastInboundAt = openedAt;
             uint nextRequestId = 1;
             uint? pendingHeartbeat = null;
             bool acknowledged = false;
             bool paused = false;
+            bool localWeatherConfigured = false;
+            bool airportFacilityConfigured = false;
+            uint nextAirportFacilityRequestId = SimConnectAirportFacilityDefinition.FirstRequestId;
+            uint nextAircraftCatalogRequestId = SimConnectAircraftCatalog.FirstRequestId;
+            uint? activeAircraftCatalogRequestId = null;
+            bool aircraftCatalogEnabled = true;
+            var aircraftCatalogSendIds = new HashSet<uint>();
+            var airportFacilitySendIds = new HashSet<uint>();
+            long lastAircraftCatalogAttemptAt = openedAt;
+            uint? aircraftCatalogPageCount = null;
+            var aircraftCatalogPages = new Dictionary<uint, IReadOnlyList<SimConnectObjectLivery>>();
             var messages = new List<SimConnectMessage>();
             Exception? callbackError = null;
             DispatchCallback callback = (data, size, _) =>
             {
                 // No managed exception may cross the unmanaged callback boundary.
                 try { messages.Add(SimConnectMessageDecoder.Decode(data, size)); }
+                catch (InvalidDataException ex) when (
+                    SimConnectMessageDecoder.TryReadFacilityRequestId(data, size, out uint requestId))
+                {
+                    messages.Add(new(SimConnectMessageKind.FacilityData,
+                        RequestId: requestId, FacilityDecodeError: ex.Message));
+                }
                 catch (Exception ex) { callbackError ??= ex; }
             };
 
@@ -182,8 +246,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                     _logger.LogWarning(callbackError, "Invalid SimConnect response; reopening connection.");
                     return SimulatorConnectionIssue.InvalidResponse;
                 }
-                // Treat an empty E_FAIL conservatively; a correlated system-state request detects
-                // a silent transport loss without mistaking an empty dispatch queue for a disconnect.
+                // An empty E_FAIL is not proof of disconnection. The liveness deadline below
+                // detects silence; either valid traffic or a heartbeat reply proves liveness.
                 if (result < 0 && (result != unchecked((int)0x80004005) || messages.Count != 0))
                 {
                     _logger.LogDebug("SimConnect dispatch failed with HRESULT {HResult:X8}.", result);
@@ -194,23 +258,42 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
                 foreach (var message in messages)
                 {
+                    bool validInbound = false;
                     switch (message.Kind)
                     {
                         case SimConnectMessageKind.Open when !acknowledged:
                             if (!ConfigureTelemetry(handle))
                                 return SimulatorConnectionIssue.SimulatorError;
 
+                            if (!ConfigureCurrentAircraftTitle(handle))
+                            {
+                                _logger.LogWarning(
+                                    "Current-aircraft TITLE SimVar is unavailable; installed-aircraft discovery will rely on catalog/package sources.");
+                            }
+
+                            localWeatherConfigured = ConfigureLocalWeather(handle);
+                            airportFacilityConfigured = ConfigureAirportFacilities(handle);
                             acknowledged = true;
                             everConnected = true;
                             failures = 0;
                             lastHeartbeatAt = _clock.GetTimestamp();
+                            validInbound = true;
                             Publish(new(SimulatorConnectionState.Connected, Simulator: message.Simulator));
+                            aircraftCatalogEnabled = StartAircraftCatalogRequest(
+                                handle,
+                                ref nextAircraftCatalogRequestId,
+                                ref activeAircraftCatalogRequestId,
+                                ref lastAircraftCatalogAttemptAt,
+                                ref aircraftCatalogPageCount,
+                                aircraftCatalogPages,
+                                aircraftCatalogSendIds);
                             break;
                         case SimConnectMessageKind.Quit:
                             return SimulatorConnectionIssue.ConnectionLost;
                         case SimConnectMessageKind.Event
                             when acknowledged && message.EventId == SimConnectTelemetryDefinition.PauseEventId:
                             paused = message.EventData != 0;
+                            validInbound = true;
                             if (Latest is { } currentTelemetry)
                                 PublishTelemetry(currentTelemetry with
                                 {
@@ -227,12 +310,127 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 _clock.GetUtcNow(),
                                 paused);
                             if (telemetry is not null)
+                            {
+                                validInbound = true;
                                 PublishTelemetry(telemetry);
+                            }
                             else
                                 _logger.LogDebug("Ignored invalid aircraft telemetry packet.");
                             break;
+                        case SimConnectMessageKind.SimObjectData
+                            when acknowledged
+                                && message.RequestId == SimConnectCurrentAircraftDefinition.RequestId
+                                && message.DefinitionId == SimConnectCurrentAircraftDefinition.DefinitionId:
+                            if (!string.IsNullOrWhiteSpace(message.StringData))
+                            {
+                                validInbound = true;
+                                PublishCurrentAircraftTitle(message.StringData.Trim());
+                            }
+                            break;
+                        case SimConnectMessageKind.SimObjectData
+                            when acknowledged
+                                && localWeatherConfigured
+                                && message.RequestId == SimConnectLocalWeatherDefinition.RequestId
+                                && message.DefinitionId == SimConnectLocalWeatherDefinition.DefinitionId:
+                            var localWeather = SimConnectLocalWeatherMapper.Map(
+                                message.Data,
+                                _clock.GetUtcNow());
+                            if (localWeather is not null)
+                            {
+                                validInbound = true;
+                                PublishLocalWeather(localWeather);
+                            }
+                            else
+                                _logger.LogDebug("Ignored invalid local weather packet.");
+                            break;
                         case SimConnectMessageKind.SystemState when pendingHeartbeat == message.RequestId:
+                            validInbound = true;
                             pendingHeartbeat = null;
+                            break;
+                        case SimConnectMessageKind.EnumerateSimObjectAndLiveryList
+                            when acknowledged
+                                && activeAircraftCatalogRequestId.HasValue
+                                && message.RequestId == activeAircraftCatalogRequestId.Value:
+                            if (!AcceptAircraftCatalogPage(
+                                    message,
+                                    ref aircraftCatalogPageCount,
+                                    aircraftCatalogPages))
+                            {
+                                _logger.LogWarning(
+                                    "Discarded inconsistent installed-aircraft enumeration response; the catalog will be retried.");
+                                ResetAircraftCatalogAttempt(
+                                    ref activeAircraftCatalogRequestId,
+                                    ref aircraftCatalogPageCount,
+                                    aircraftCatalogPages);
+                            }
+                            else
+                            {
+                                validInbound = true;
+                                if (AircraftCatalog.IsAvailable)
+                                    ResetAircraftCatalogAttempt(
+                                        ref activeAircraftCatalogRequestId,
+                                        ref aircraftCatalogPageCount,
+                                        aircraftCatalogPages);
+                            }
+                            break;
+                        case SimConnectMessageKind.FacilityData
+                            when acknowledged
+                                && activeAirportFacilityRequest is not null
+                                && message.RequestId == activeAirportFacilityRequest.RequestId:
+                            if (message.FacilityDecodeError is not null
+                                || !activeAirportFacilityRequest.Accept(message))
+                            {
+                                _logger.LogWarning(
+                                    "SimConnect airport facility query for {Icao}, request {RequestId}, failed: {Reason}. Core connection retained.",
+                                    activeAirportFacilityRequest.Query.Icao,
+                                    message.RequestId,
+                                    message.FacilityDecodeError ?? "Inconsistent facility response");
+                                activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
+                                activeAirportFacilityRequest = null;
+                            }
+                            else
+                                validInbound = true;
+                            break;
+                        case SimConnectMessageKind.FacilityDataEnd
+                            when acknowledged
+                                && activeAirportFacilityRequest is not null
+                                && message.RequestId == activeAirportFacilityRequest.RequestId:
+                            validInbound = true;
+                            activeAirportFacilityRequest.Query.Completion.TrySetResult(
+                                activeAirportFacilityRequest.Build());
+                            activeAirportFacilityRequest = null;
+                            break;
+                        case SimConnectMessageKind.Exception
+                            when activeAirportFacilityRequest is not null
+                                && message.SendId == activeAirportFacilityRequest.SendId:
+                            _logger.LogWarning(
+                                "SimConnect airport facility request for {Icao} failed with exception {Code}, send {SendId}, parameter {Index}.",
+                                activeAirportFacilityRequest.Query.Icao,
+                                message.ExceptionCode,
+                                message.SendId,
+                                message.ParameterIndex);
+                            activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
+                            activeAirportFacilityRequest = null;
+                            break;
+                        case SimConnectMessageKind.Exception
+                            when airportFacilitySendIds.Contains(message.SendId):
+                            // A late exception after cancellation/timeout still belongs to that
+                            // optional query, never to the core telemetry connection or next query.
+                            _logger.LogWarning(
+                                "Late airport facility exception {Code}, send {SendId}, parameter {Index}; core connection retained.",
+                                message.ExceptionCode, message.SendId, message.ParameterIndex);
+                            break;
+                        case SimConnectMessageKind.Exception
+                            when aircraftCatalogSendIds.Contains(message.SendId):
+                            _logger.LogWarning(
+                                "Optional aircraft catalog disabled for this connection after exception {Code}, send {SendId}, parameter {Index}; core telemetry and current TITLE remain active.",
+                                message.ExceptionCode, message.SendId, message.ParameterIndex);
+                            aircraftCatalogEnabled = false;
+                            ResetAircraftCatalogAttempt(
+                                ref activeAircraftCatalogRequestId,
+                                ref aircraftCatalogPageCount,
+                                aircraftCatalogPages);
+                            PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
                             break;
                         case SimConnectMessageKind.Exception:
                             _logger.LogWarning("SimConnect exception {Code}, send {SendId}, parameter {Index}.",
@@ -240,14 +438,77 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             return message.ExceptionCode == 5
                                 ? SimulatorConnectionIssue.VersionMismatch : SimulatorConnectionIssue.SimulatorError;
                     }
+                    if (validInbound)
+                        lastInboundAt = _clock.GetTimestamp();
                 }
 
                 if (!acknowledged && _clock.GetElapsedTime(openedAt) >= _options.HandshakeTimeout)
                     return SimulatorConnectionIssue.HandshakeTimeout;
 
+                if (acknowledged && aircraftCatalogEnabled && !AircraftCatalog.IsAvailable)
+                {
+                    if (activeAircraftCatalogRequestId.HasValue
+                        && _clock.GetElapsedTime(lastAircraftCatalogAttemptAt)
+                            >= SimConnectAircraftCatalog.ResponseTimeout)
+                    {
+                        _logger.LogWarning(
+                            "Timed out waiting for the user-selectable aircraft catalog; retrying without reconnecting SimConnect.");
+                        ResetAircraftCatalogAttempt(
+                            ref activeAircraftCatalogRequestId,
+                            ref aircraftCatalogPageCount,
+                            aircraftCatalogPages);
+                    }
+
+                    if (!activeAircraftCatalogRequestId.HasValue
+                        && _clock.GetElapsedTime(lastAircraftCatalogAttemptAt)
+                            >= SimConnectAircraftCatalog.RetryDelay)
+                    {
+                        aircraftCatalogEnabled = StartAircraftCatalogRequest(
+                            handle,
+                            ref nextAircraftCatalogRequestId,
+                            ref activeAircraftCatalogRequestId,
+                            ref lastAircraftCatalogAttemptAt,
+                            ref aircraftCatalogPageCount,
+                            aircraftCatalogPages,
+                            aircraftCatalogSendIds);
+                    }
+                }
+
+                if (activeAirportFacilityRequest is not null)
+                {
+                    if (activeAirportFacilityRequest.Query.CancellationToken.IsCancellationRequested)
+                    {
+                        activeAirportFacilityRequest.Query.Completion.TrySetCanceled(
+                            activeAirportFacilityRequest.Query.CancellationToken);
+                        activeAirportFacilityRequest = null;
+                    }
+                    else if (_clock.GetElapsedTime(activeAirportFacilityRequest.StartedAt)
+                        >= SimConnectAirportFacilityDefinition.ResponseTimeout)
+                    {
+                        _logger.LogWarning(
+                            "Timed out waiting for SimConnect airport facility data for {Icao}.",
+                            activeAirportFacilityRequest.Query.Icao);
+                        activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
+                        activeAirportFacilityRequest = null;
+                    }
+                }
+
+                if (acknowledged && activeAirportFacilityRequest is null)
+                {
+                    activeAirportFacilityRequest = StartNextAirportFacilityRequest(
+                        handle,
+                        airportFacilityConfigured,
+                        ref nextAirportFacilityRequestId,
+                        airportFacilitySendIds);
+                }
+
                 if (acknowledged)
                 {
-                    if (pendingHeartbeat.HasValue && _clock.GetElapsedTime(lastHeartbeatAt) >= _options.HeartbeatTimeout)
+                    // A missing SystemState reply cannot invalidate ongoing valid telemetry/TITLE.
+                    // Outbound requests and unrecognized/invalid packets never refresh this clock.
+                    if (pendingHeartbeat.HasValue
+                        && _clock.GetElapsedTime(lastHeartbeatAt) >= _options.HeartbeatTimeout
+                        && _clock.GetElapsedTime(lastInboundAt) >= _options.HeartbeatTimeout)
                         return SimulatorConnectionIssue.ResponseTimeout;
 
                     if (!pendingHeartbeat.HasValue && _clock.GetElapsedTime(lastHeartbeatAt) >= _options.HeartbeatInterval)
@@ -267,9 +528,103 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         }
         finally
         {
+            activeAirportFacilityRequest?.Query.Completion.TrySetResult(null);
+            CompleteQueuedAirportFacilityRequestsUnavailable();
+
             if (handle != nint.Zero)
                 Close(handle);
         }
+    }
+
+    private bool ConfigureAirportFacilities(nint handle)
+    {
+        foreach (string field in SimConnectAirportFacilityDefinition.Fields)
+        {
+            int result = _api.AddToFacilityDefinition(
+                handle,
+                SimConnectAirportFacilityDefinition.DefinitionId,
+                field);
+
+            if (result < 0)
+            {
+                _logger.LogWarning(
+                    "SimConnect rejected airport facility definition field {Field} with HRESULT {HResult:X8}.",
+                    field,
+                    result);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private ActiveSimConnectAirportFacilityRequest? StartNextAirportFacilityRequest(
+        nint handle,
+        bool facilityConfigured,
+        ref uint nextRequestId,
+        HashSet<uint> sendIds)
+    {
+        while (_airportFacilityQueries.TryDequeue(out SimConnectAirportFacilityQuery? query))
+        {
+            if (query.CancellationToken.IsCancellationRequested)
+            {
+                query.Completion.TrySetCanceled(query.CancellationToken);
+                continue;
+            }
+
+            if (!facilityConfigured)
+            {
+                query.Completion.TrySetResult(null);
+                continue;
+            }
+
+            uint requestId = nextRequestId;
+            nextRequestId = nextRequestId == uint.MaxValue
+                ? SimConnectAirportFacilityDefinition.FirstRequestId
+                : nextRequestId + 1;
+
+            int result = _api.RequestFacilityData(
+                handle,
+                SimConnectAirportFacilityDefinition.DefinitionId,
+                requestId,
+                query.Icao,
+                string.Empty);
+
+            if (result < 0)
+            {
+                _logger.LogWarning(
+                    "SimConnect rejected airport facility request for {Icao} with HRESULT {HResult:X8}.",
+                    query.Icao,
+                    result);
+                query.Completion.TrySetResult(null);
+                continue;
+            }
+
+            int sendIdResult = _api.GetLastSentPacketId(handle, out uint sendId);
+            if (sendIdResult < 0 || sendId == 0)
+            {
+                _logger.LogWarning(
+                    "Could not correlate SimConnect airport facility request for {Icao}; treating local airport data as unavailable.",
+                    query.Icao);
+                query.Completion.TrySetResult(null);
+                continue;
+            }
+
+            sendIds.Add(sendId);
+            return new(
+                query,
+                requestId,
+                sendId,
+                _clock.GetTimestamp());
+        }
+
+        return null;
+    }
+
+    private void CompleteQueuedAirportFacilityRequestsUnavailable()
+    {
+        while (_airportFacilityQueries.TryDequeue(out SimConnectAirportFacilityQuery? query))
+            query.Completion.TrySetResult(null);
     }
 
     private bool ConfigureTelemetry(nint handle)
@@ -319,6 +674,155 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         return true;
     }
 
+    private bool ConfigureCurrentAircraftTitle(nint handle)
+    {
+        int definitionResult =
+            _api.AddStringToDataDefinition(
+                handle,
+                SimConnectCurrentAircraftDefinition.DefinitionId,
+                SimConnectCurrentAircraftDefinition.TitleSimVar);
+
+        if (definitionResult < 0)
+            return false;
+
+        int requestResult =
+            _api.RequestDataOnUserAircraft(
+                handle,
+                SimConnectCurrentAircraftDefinition.RequestId,
+                SimConnectCurrentAircraftDefinition.DefinitionId,
+                SimConnectPeriod.Second);
+
+        return requestResult >= 0;
+    }
+
+    private bool ConfigureLocalWeather(nint handle)
+    {
+        // MSFS 2024 ambient wind SimVars report weather at the user-aircraft
+        // position, so this optional stream is never treated as remote-airport weather.
+        foreach (var datum in SimConnectLocalWeatherDefinition.Data)
+        {
+            int result = _api.AddToDataDefinition(
+                handle,
+                SimConnectLocalWeatherDefinition.DefinitionId,
+                datum.Name,
+                datum.Units);
+
+            if (result < 0)
+            {
+                _logger.LogWarning(
+                    "SimConnect rejected optional local weather definition {Datum} with HRESULT {HResult:X8}; weather dispatch data will remain unavailable.",
+                    datum.Name,
+                    result);
+                return false;
+            }
+        }
+
+        int requestResult = _api.RequestDataOnUserAircraft(
+            handle,
+            SimConnectLocalWeatherDefinition.RequestId,
+            SimConnectLocalWeatherDefinition.DefinitionId,
+            SimConnectPeriod.Second);
+
+        if (requestResult < 0)
+        {
+            _logger.LogWarning(
+                "SimConnect rejected optional local weather request with HRESULT {HResult:X8}; weather dispatch data will remain unavailable.",
+                requestResult);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool StartAircraftCatalogRequest(
+        nint handle,
+        ref uint nextRequestId,
+        ref uint? activeRequestId,
+        ref long lastAttemptAt,
+        ref uint? expectedPageCount,
+        IDictionary<uint, IReadOnlyList<SimConnectObjectLivery>> pages,
+        ISet<uint> sendIds)
+    {
+        ResetAircraftCatalogAttempt(
+            ref activeRequestId,
+            ref expectedPageCount,
+            pages);
+
+        uint requestId = nextRequestId;
+        nextRequestId =
+            nextRequestId == uint.MaxValue
+                ? SimConnectAircraftCatalog.FirstRequestId
+                : nextRequestId + 1;
+
+        lastAttemptAt = _clock.GetTimestamp();
+
+        int result = _api.EnumerateSimObjectsAndLiveries(
+            handle,
+            requestId,
+            SimConnectSimObjectType.User);
+
+        if (result < 0)
+        {
+            _logger.LogWarning(
+                "SimConnect rejected optional aircraft enumeration with HRESULT {HResult:X8}; catalog disabled for this connection.",
+                result);
+            return false;
+        }
+
+        if (_api.GetLastSentPacketId(handle, out uint sendId) < 0 || sendId == 0)
+        {
+            _logger.LogWarning("Could not correlate optional aircraft enumeration; catalog disabled for this connection.");
+            return false;
+        }
+
+        // Retain older attempt IDs too: a delayed exception must not tear down core telemetry.
+        sendIds.Add(sendId);
+        activeRequestId = requestId;
+        return true;
+    }
+
+    private static void ResetAircraftCatalogAttempt(
+        ref uint? activeRequestId,
+        ref uint? expectedPageCount,
+        IDictionary<uint, IReadOnlyList<SimConnectObjectLivery>> pages)
+    {
+        activeRequestId = null;
+        expectedPageCount = null;
+        pages.Clear();
+    }
+
+    private bool AcceptAircraftCatalogPage(
+        SimConnectMessage message,
+        ref uint? expectedPageCount,
+        IDictionary<uint, IReadOnlyList<SimConnectObjectLivery>> pages)
+    {
+        if (message.ObjectLiveries is null
+            || (expectedPageCount.HasValue && expectedPageCount.Value != message.ListOutOf)
+            || pages.ContainsKey(message.ListEntryNumber))
+        {
+            _logger.LogWarning("Ignored inconsistent installed-aircraft enumeration page.");
+            return false;
+        }
+
+        expectedPageCount ??= message.ListOutOf;
+        pages.Add(message.ListEntryNumber, message.ObjectLiveries);
+
+        if (pages.Count != expectedPageCount.Value)
+            return true;
+
+        string[] titles = pages
+            .OrderBy(static pair => pair.Key)
+            .SelectMany(static pair => pair.Value)
+            .Select(static item => item.AircraftTitle)
+            .Where(static title => !string.IsNullOrWhiteSpace(title))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static title => title, StringComparer.Ordinal)
+            .ToArray();
+
+        PublishAircraftCatalog(new(true, titles));
+        return true;
+    }
+
     private void Close(nint handle)
     {
         try
@@ -344,4 +848,13 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     private void PublishTelemetry(AircraftTelemetrySnapshot? snapshot) =>
         Volatile.Write(ref _latestTelemetry, snapshot);
+
+    private void PublishLocalWeather(SimConnectLocalWeatherSnapshot? snapshot) =>
+        Volatile.Write(ref _localWeather, snapshot);
+
+    private void PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot snapshot) =>
+        Volatile.Write(ref _aircraftCatalog, snapshot);
+
+    private void PublishCurrentAircraftTitle(string? title) =>
+        Volatile.Write(ref _currentAircraftTitle, title);
 }

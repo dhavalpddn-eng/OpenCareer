@@ -110,8 +110,12 @@ public sealed class FlightContinuityPolicy
 
         if (anchor.OnGround)
         {
-            if (!telemetry.OnGround)
+            if (!telemetry.OnGround
+                && !CanContinueAirborneAfterGroundContact(
+                    session))
+            {
                 return false;
+            }
 
             return distance
                     <= _options.GroundMaximumDistanceNauticalMiles
@@ -164,6 +168,21 @@ public sealed class FlightContinuityPolicy
             == FlightTrackingState.TakeoffRoll
         || session.Tracking.SuspendedFrom
             == FlightTrackingState.TakeoffRoll;
+
+    private static bool CanContinueAirborneAfterGroundContact(
+        FlightSession session)
+    {
+        FlightTrackingState? phase =
+            session.Tracking.State
+                == FlightTrackingState.Suspended
+            ? session.Tracking.SuspendedFrom
+            : session.Tracking.State;
+
+        return phase
+            is FlightTrackingState.Airborne
+                or FlightTrackingState.Approach
+                or FlightTrackingState.LandingEpisode;
+    }
 
     private static bool IsGroundPhase(
         FlightSession session) =>

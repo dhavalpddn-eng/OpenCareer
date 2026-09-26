@@ -7,6 +7,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
     private const string SimConnectLibraryName = "SimConnect.dll";
     private const uint SimConnectObjectIdUser = 0;
     private const uint SimConnectDataTypeFloat64 = 4;
+    private const uint SimConnectDataTypeString128 = 8;
     private const uint SimConnectUnused = uint.MaxValue;
 
     static NativeSimConnectApi()
@@ -51,6 +52,19 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         SimConnect_AddToDataDefinition(handle, definitionId, datumName, unitsName,
             SimConnectDataTypeFloat64, 0, SimConnectUnused);
 
+    public int AddStringToDataDefinition(
+        nint handle,
+        uint definitionId,
+        string datumName) =>
+        SimConnect_AddToDataDefinition(
+            handle,
+            definitionId,
+            datumName,
+            null,
+            SimConnectDataTypeString128,
+            0,
+            SimConnectUnused);
+
     public int RequestDataOnUserAircraft(
         nint handle,
         uint requestId,
@@ -73,6 +87,29 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
     public int RequestSystemState(nint handle, uint requestId) =>
         SimConnect_RequestSystemState(handle, requestId, "Sim");
 
+    public int EnumerateSimObjectsAndLiveries(
+        nint handle,
+        uint requestId,
+        SimConnectSimObjectType type) =>
+        SimConnect_EnumerateSimObjectsAndLiveries(handle, requestId, (uint)type);
+
+    public int AddToFacilityDefinition(
+        nint handle,
+        uint definitionId,
+        string fieldName) =>
+        SimConnect_AddToFacilityDefinition(handle, definitionId, fieldName);
+
+    public int RequestFacilityData(
+        nint handle,
+        uint definitionId,
+        uint requestId,
+        string icao,
+        string region) =>
+        SimConnect_RequestFacilityData(handle, definitionId, requestId, icao, region);
+
+    public int GetLastSentPacketId(nint handle, out uint sendId) =>
+        SimConnect_GetLastSentPacketID(handle, out sendId);
+
     public int Close(nint handle) => SimConnect_Close(handle);
 
     // Official native ABI; no dependency on the legacy .NET Framework managed wrapper.
@@ -94,7 +131,7 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         nint handle,
         uint definitionId,
         string datumName,
-        string unitsName,
+        string? unitsName,
         uint datumType,
         float epsilon,
         uint datumId);
@@ -122,6 +159,37 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
     private static extern int SimConnect_RequestSystemState(nint handle, uint requestId, string state);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_EnumerateSimObjectsAndLiveries(
+        nint handle,
+        uint requestId,
+        uint type);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
+        CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_AddToFacilityDefinition(
+        nint handle,
+        uint definitionId,
+        string fieldName);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
+        CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_RequestFacilityData(
+        nint handle,
+        uint definitionId,
+        uint requestId,
+        string icao,
+        string region);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_GetLastSentPacketID(
+        nint handle,
+        out uint sendId);
 
     [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]

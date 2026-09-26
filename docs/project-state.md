@@ -2,7 +2,7 @@
 
 **Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
 
-Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
+Updated: 2026-09-20. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
@@ -15,6 +15,7 @@ Updated: 2026-09-19. **Read this after `AGENTS.md` when deeper implementation co
 - Tutorial-engine CI at `f6b1cc7`: **118/118 xUnit + 29/29 SimLab passed**, and the Windows WinUI app/live-probe build passed. Automated UI compilation does not replace local interactive/visual acceptance or live MSFS verification.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
 - UI visual language: `docs/ui-design-language.md` is canonical for palette/material/aesthetic; implementation tokens/layout remain in `docs/ui-design-system.md`, and screen behavior in `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
+- Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. The campaign-core completion boundary is reached: ground/air conflict, all current military mission families, authorization, fictional theater generation, deterministic operation/faction identity and phase-driven posture evolution, SQLite recovery/startup resume, strategic evolution, logistics recovery/control cycles, finite replacement reserves, terminal outcomes, persistent history, successor planning/decisions, SQLite-consistent backup/restore, production Military/Government UI, and production-wired deterministic operation resolution/consequences are implemented. Operation consequences persist in SQLite schema v5 with restart-safe duplicate protection, failure rollback and reconnect replay safety. Verified head `16cda14981bc6284e4f33833e88aa8289ff46149` is green in exact-head Linux PR CI and exact-head Windows CI. See `docs/conflict-system.md`.
 - Verify remote branch head before edits because other chats may change it.
 
 ## Fixed direction
@@ -50,6 +51,51 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Fictional aircraft dealers, seeded offers/discounts, stock validation and cash/finance eligibility.
 - Domain baseline remains **35 xUnit tests** plus **29 deterministic SimLab scenarios**. Connection/telemetry/decoder/ViewModel, flight-core, trace-analysis and tutorial-engine coverage bring the current total to **118 passing in CI**, plus **29/29 SimLab**.
 
+## Military/conflict implementation (parallel PR #10)
+
+- `OpenCareer.Domain/Conflict` contains versioned deterministic conflict state with ground units, simulated air units, sectors, derived front snapshots, linked threats and support requests.
+- The world engine advances ground pressure/control and simulated air movement deterministically.
+- Battlefield state can generate CAS, suppression, reconnaissance, logistics, patrol, escort and intercept requests.
+- Support requests have Open/Reserved/Completed/Failed/Cancelled/Expired lifecycle state so one active need cannot be accepted twice.
+- `AirSupportMissionEngine` handles CAS/suppression; `AreaSupportMissionEngine` handles recon/logistics/patrol; `AirOperationMissionEngine` handles escort/intercept.
+- All player flight evidence comes from normalized `AircraftTelemetrySnapshot`; pause/slew and invalid ground/air states cannot advance objectives.
+- Precision, suppression, reconnaissance and intercept effects are abstract deterministic OpenCareer effects; no native MSFS weapons/hits/damage are assumed.
+- `ThreatExposureEvaluator` and `ThreatEngagementResolver` model simulated air-defense/interceptor threats and OpenCareer-only player damage.
+- `MilitaryAuthorizationPolicy` separates affiliation, qualifications, aircraft assignment, aircraft capability/access and damage state. Installing/owning a military-capable aircraft never grants mission access by itself.
+- The new operation-resolution pipeline converts simulator-agnostic `OperationResolutionInput` into deterministic Success / PartialSuccess / Failure / Aborted `OperationOutcome` values, protected by a stable operation+mission resolution key.
+- `OperationConsequenceOrchestrator` applies isolated faction-influence, campaign-progress, thresholded territory-pressure, military-reputation and conflict-resource effects and returns one validated immutable result.
+- `PersistedOperationConsequenceCoordinator` + `SqliteOperationConsequenceStore` persist that result exactly once in SQLite schema v5; persisted duplicates are rejected before the resolver runs, reconnect/replay is a no-op, and failed saves release in-memory reservations for a clean retry.
+- The persisted consequence pipeline is wired into authoritative military mission completion/failure, including latest campaign/sector consequence-state lookup and replacement of the legacy direct trust/reputation update. Integration coverage exercises success, partial success, failure, abort, invalid input, duplicate/already-resolved operation, restart reload and rollback/retry.
+- `ConflictTheaterGenerator` creates repeatable fictional theater state from a seed/template; current wars never become authoritative gameplay state.
+- Military campaign persistence now auto-recovers the most recently saved campaign at app launch through `ConflictCampaignRuntimeState`; recovery failures are logged without blocking the rest of OpenCareer startup.
+- OpenCareer backup now creates a SQLite-consistent snapshot instead of copying the live database/WAL files directly, so persisted military campaign state and logbook state are captured coherently.
+- Backup restore now validates the manifest and SQLite image before staging, applies the staged database at the next app launch before military/logbook SQLite state is recovered, removes stale WAL/SHM artifacts, and keeps a rollback snapshot during replacement.
+- Windows CI exposed a pooled temporary SQLite handle that prevented immediate backup-file reads; production snapshot connections now disable pooling and the rerun passed.
+- Campaigns now persist a deterministic fictional operation identity plus distinct friendly/hostile faction names and short codes; old checkpoints without identity remain valid and gain the same deterministic identity when advanced.
+- The Military/Government application snapshot now exposes operation/faction identity for future UI use without changing the generic Friendly/Hostile simulation model.
+- Long-term campaign advancement now includes bounded logistics-based ground recovery, theater-logistics air readiness recovery, momentum-based sector consolidation and linked-threat severity resynchronization before the strategic director evaluates the next campaign state.
+- Campaign logistics now includes finite replacement reserves for each side; replacements require operational logistics and cannot regenerate units indefinitely.
+- Campaigns now terminate deterministically as Victory, Defeat, Stalemate or Ceasefire. Secured states must persist across evaluations, mutual exhaustion can produce ceasefire, prolonged balanced low-momentum state can produce stalemate, and terminal campaigns cannot accept new operations.
+- Mission telemetry synchronization no longer counts as a strategic campaign evaluation, preventing rapid telemetry saves from manufacturing stalemate/victory progress.
+- Completed campaigns now archive operation/faction identity, theater, outcome and final strategic state into checkpoint history. Successor campaigns retain that history plus military career state and simulated player damage, while starting fresh strategic counters/replacement reserves and a new world.
+- `ConflictCampaignTransitionPlanner` deterministically proposes the next fictional campaign from candidate theaters and avoids an immediate theater repeat when alternatives exist; accepting the offer reproduces its previewed operation identity.
+- Completed-operation history persists through SQLite and is projected to the future Military/Government UI.
+- `MilitaryCampaignTransitionService` now owns successor offer projection and accept/decline/reconsider behavior, validates offers against the current campaign revision/catalog before acceptance, rejects stale offers and replaces the in-memory runtime record after successor creation. The future ViewModel can stay free of seed/theater-generation logic.
+- The built-in successor theater set is behind `IConflictTheaterCatalog`; it is replaceable by later authoritative world/career selection without changing transition behavior.
+- Fictional factions now carry a deterministic operational posture: Defensive, Aggressive, LogisticsFocused or AirFocused. Posture is persisted as part of campaign identity and projected to the future Military/Government UI.
+- Posture subtly biases deterministic behavior rather than acting as AI authority: battlefield/resupply request thresholds, request urgency, intercept/escort range and replacement-role priority can differ by posture. Both sides use posture for replacement priority; player-facing request generation follows the friendly faction posture.
+- The Military/Government navigation destination now opens a production WinUI page rather than a placeholder. It projects active operation, factions/postures, phase/outcome, control/momentum, replacement reserves, military trust, OpenCareer damage, front/threat summary, support requests and strategic objectives through `MilitaryGovernmentViewModel`.
+- Military/Government now includes persisted completed-operation history plus a read-only schematic Operational Map. The map projects snapshot units, threats and support targets into normalized presentation coordinates only; it is labeled not for navigation and keeps conflict authority outside the UI.
+- Military/Government now includes a deterministic Communications feed built from the current application snapshot. It emits command status, active-flight status, dispatch support requests and threat advisories with bounded stable ordering; it does not use AI to decide or alter game state and does not invent historical events.
+- Completed campaigns expose the deterministic successor offer directly in that page; Accept / Decline for now / Reconsider call `MilitaryCampaignTransitionService` rather than duplicating campaign-generation logic in the ViewModel.
+- Successor acceptance now handles expected storage failures and cancellation without escaping the UI event handler, preserves user-facing results across polling, and refreshes the full campaign after stale-offer rejection. Eight new test cases cover safe retry, duplicate actions, decline/reconsider, cancellation, stale state and SQLite restart recovery. Local Linux testing was blocked by MSBuild socket restrictions; hosted Linux and Windows CI verified code head `4c63e365` (see `docs/conflict-system.md` for runs). Next bounded military UI slice: read-only completed-operation history using the existing projection. Local visual/MSFS acceptance remains open.
+- Code head `69337761` is green: Linux 373/373 xUnit + 29/29 SimLab; Windows WinUI/live-probe builds at 0 errors + 373/373 xUnit.
+- The military branch is synchronized with current `feature/m1-simulation-core` FlightSession/OpenAI work. Shared SQLite migration is now schema v5: legacy parallel-v2 shapes are reconciled, schema v4 adds the military career profile, and schema v5 adds immutable `military_operation_consequences` persistence.
+- Code head `4c63e365` is green: Linux 368/368 xUnit + 29/29 SimLab; Windows WinUI/live-probe builds at 0 errors + 368/368 xUnit.
+- Code head `b95e8f2e` is green: Linux 260/260 xUnit + 29/29 SimLab; Windows WinUI/live-probe builds at 0 errors + 260/260 xUnit.
+- Completed-operation drill-down is implemented and verified: archived rows are selectable, the detail projection is read-only and persisted-fact-driven, selection survives polling/current-campaign replacement/successor activation, stale history clears safely, native keyboard/focus behavior is preserved, and SQLite restart tests prove identical terminal detail with no database writes caused by viewing.
+- Campaign-core completion boundary is reached at `16cda14981bc6284e4f33833e88aa8289ff46149`; the 96-step deterministic stress test is exact-head Linux/Windows CI green. No further standalone campaign mechanics slice is queued. Dependency-driven work remains: authoritative career onboarding/profile integration (MBL-13), aircraft assignment issuance/revocation through registry/dispatch (MBL-08/09), authoritative mission/job/economy settlement (MBL-10/14), and representative live gameplay verification after MBL-06/07 plus local MSFS runtime. Local visual/accessibility acceptance and broader balance/tuning remain later product-validation work.
+
 ## Tutorial engine implementation
 
 - `OpenCareer.Application/Tutorials` now contains generic versioned tutorial models, catalog/readiness/progress boundaries and a coordinator.
@@ -77,8 +123,9 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Settings exposes live simulator connection state/issue, simulator and SimConnect versions when reported, telemetry freshness, last sample time and pause/slew/on-ground/airborne state.
 - OpenCareer now writes an application log under `Logs/opencareer.log` with bounded rotation.
 - Diagnostic export creates a ZIP with environment, connection state, non-coordinate telemetry diagnostics, preferences and local logs/settings. Exact aircraft latitude/longitude are intentionally excluded.
-- Current local-data backup creates a ZIP plus manifest while excluding backup/export recursion. It is suitable for currently implemented settings/tutorial/log data.
-- **Do not treat the current backup as SQLite career-save consistency.** MBL-07 owns authoritative FlightSession/SQLite checkpoint/recovery and must integrate its own safe backup semantics.
+- Current local-data backup creates a ZIP plus manifest while excluding backup/export recursion. The shared SQLite database is captured through SQLite backup semantics, so current Logbook and military-campaign data are internally consistent even with WAL enabled.
+- A validated SQLite restore backend stages a backup archive first and applies it on the next app startup with rollback protection; Settings still needs the user-facing archive picker/confirmation.
+- **This does not make FlightSession recovery complete.** MBL-07 still owns authoritative FlightSession/FlightLeg persistence, checkpoints and interrupted-flight recovery.
 - **Do not treat input-hint preference as binding discovery.** MBL-05 owns actual controller/keyboard profile resolution.
 - MBL-23 is code-complete but remains unremoved until Windows build and local interactive persistence/backup/export verification are available. GitHub Actions currently fails before runner steps are created, so those failures are not compiler/test evidence.
 
@@ -170,6 +217,7 @@ Do **not** expand finance complexity before the playable flight foundation unles
 ## Detail only when needed
 
 - `docs/development-master-checklist.md` — live master roadmap/checklist and progress graphics.
+- `docs/conflict-system.md` — deterministic military/conflict implementation boundary and current remaining work.
 - `docs/ui-concept.md` — short UI direction and level policy.
 - `docs/ui-design-system.md` — canonical shell, tokens, layout/adaptive/accessibility rules.
 - `docs/ui-screen-spec.md` — target UX for all 15 current navigation destinations, including Conflict Operations.
