@@ -154,10 +154,6 @@ public sealed class OpenCareerDevelopmentDataProfileTests
             reservationId,
             expectedPresent: true);
 
-        // A reset launch is a new application process; release this test
-        // process's SQLite pools to model that process boundary faithfully.
-        SqliteConnection.ClearAllPools();
-
         OpenCareerDataProfileSelection cleanLaunch =
             OpenCareerDataProfileSelection.Resolve(
                 [
@@ -343,20 +339,37 @@ public sealed class OpenCareerDevelopmentDataProfileTests
         FlightSession? checkpoint = await checkpoints.LoadAsync();
         JobBoardState? board = await boards.GetAsync("KJFK");
 
-        if (expectedPresent)
+        try
         {
-            Assert.NotNull(contract);
-            Assert.Equal(ContractStatus.InProgress, contract.Contract.Status);
-            Assert.Equal(aircraftId, reservation?.CanonicalAircraftId);
-            Assert.Equal(sessionId, checkpoint?.SessionId);
-            Assert.NotNull(board);
-            return;
+            if (expectedPresent)
+            {
+                Assert.NotNull(contract);
+                Assert.Equal(ContractStatus.InProgress, contract.Contract.Status);
+                Assert.Equal(aircraftId, reservation?.CanonicalAircraftId);
+                Assert.Equal(sessionId, checkpoint?.SessionId);
+                Assert.NotNull(board);
+            }
+            else
+            {
+                Assert.Null(contract);
+                Assert.Null(reservation);
+                Assert.Null(checkpoint);
+                Assert.Null(board);
+            }
         }
-
-        Assert.Null(contract);
-        Assert.Null(reservation);
-        Assert.Null(checkpoint);
-        Assert.Null(board);
+        finally
+        {
+            // A profile launch is a process boundary in production. Clear only
+            // this test database's idle shared pool before reset or teardown.
+            using var pooledConnection = new SqliteConnection(
+                new SqliteConnectionStringBuilder
+                {
+                    DataSource = databasePath,
+                    Mode = SqliteOpenMode.ReadWriteCreate,
+                    Cache = SqliteCacheMode.Shared
+                }.ToString());
+            SqliteConnection.ClearPool(pooledConnection);
+        }
     }
 
     private static JobContract CreateContract(Guid contractId, DateTimeOffset offeredAt) =>
