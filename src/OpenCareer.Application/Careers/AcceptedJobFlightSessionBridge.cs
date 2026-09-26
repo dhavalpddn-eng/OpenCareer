@@ -1,4 +1,6 @@
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Flights;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 
@@ -14,13 +16,15 @@ public sealed class AcceptedJobFlightSessionBridge
     private readonly IJobContractStore _contractStore;
     private readonly FlightSessionPersistenceService _flightSessionPersistence;
     private readonly FlightSessionCoordinator _flightSessionCoordinator;
+    private readonly IAirframeStore? _airframes;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public AcceptedJobFlightSessionBridge(
         AcceptedJobStartBridge contractStart,
         IJobContractStore contractStore,
         FlightSessionPersistenceService flightSessionPersistence,
-        FlightSessionCoordinator flightSessionCoordinator)
+        FlightSessionCoordinator flightSessionCoordinator,
+        IAirframeStore? airframes = null)
     {
         _contractStart =
             contractStart
@@ -34,12 +38,14 @@ public sealed class AcceptedJobFlightSessionBridge
         _flightSessionCoordinator =
             flightSessionCoordinator
             ?? throw new ArgumentNullException(nameof(flightSessionCoordinator));
+        _airframes = airframes;
     }
 
     public async Task<StartedJobFlightSessionResult> StartAsync(
         AcceptedJobDispatchResult acceptedDispatch,
         ContractDispatchContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AirframeId? physicalAirframeId = null)
     {
         ArgumentNullException.ThrowIfNull(acceptedDispatch);
         ArgumentNullException.ThrowIfNull(context);
@@ -74,6 +80,15 @@ public sealed class AcceptedJobFlightSessionBridge
                 retainedAccepted.Contract,
                 authoritative.Contract);
 
+            // Fleet has already resolved provider aliases to the model actually reserved for dispatch.
+            // Validate any explicit physical assignment before Accepted can become InProgress.
+            FlightSessionAircraftIdentity aircraftIdentity =
+                await ResolveAircraftIdentityAsync(
+                        acceptedDispatch.FleetResult.CanonicalAircraftId,
+                        physicalAirframeId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
             FlightSession? current =
                 _flightSessionCoordinator.Current;
 
@@ -90,6 +105,15 @@ public sealed class AcceptedJobFlightSessionBridge
                 {
                     throw new InvalidOperationException(
                         "A different active FlightSession already owns the simulator operation.");
+                }
+
+                // Legacy checkpoints have no aircraft identity. Keep that absence rather than inventing
+                // history; only a model-only replay is compatible with such a checkpoint.
+                if (current.AircraftIdentity != aircraftIdentity
+                    && (current.AircraftIdentity is not null || physicalAirframeId is not null))
+                {
+                    throw new InvalidOperationException(
+                        "The active FlightSession has a different aircraft assignment.");
                 }
             }
 
@@ -143,7 +167,8 @@ public sealed class AcceptedJobFlightSessionBridge
                         sessionId:
                             GetFlightSessionId(contractId),
                         plan,
-                        cancellationToken)
+                        cancellationToken,
+                        aircraftIdentity: aircraftIdentity)
                     .ConfigureAwait(false);
 
             return new(
@@ -168,6 +193,34 @@ public sealed class AcceptedJobFlightSessionBridge
 
         // The current playable loop owns one FlightSession per JobContract.
         return contractId;
+    }
+
+    private async Task<FlightSessionAircraftIdentity> ResolveAircraftIdentityAsync(
+        string? canonicalAircraftId,
+        AirframeId? physicalAirframeId,
+        CancellationToken cancellationToken)
+    {
+        var identity = new FlightSessionAircraftIdentity(
+            canonicalAircraftId ?? throw new InvalidOperationException("Fleet reservation has no canonical aircraft identity."),
+            physicalAirframeId);
+
+        if (physicalAirframeId is not { } requestedId)
+            return identity;
+
+        IAirframeStore store = _airframes
+            ?? throw new InvalidOperationException("Physical aircraft assignment requires the authoritative airframe store.");
+        AirframeStoreRecord retained = await store.FindAsync(requestedId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("The explicitly assigned physical airframe does not exist.");
+        retained.Validate();
+
+        if (retained.Airframe.AirframeId != requestedId
+            || !string.Equals(retained.Airframe.CanonicalAircraftId, identity.CanonicalAircraftId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The assigned physical airframe does not match the reserved canonical aircraft.");
+        }
+
+        // Assignment neither changes condition nor introduces a new grounding/dispatch policy.
+        return identity;
     }
 
     private static void ValidateSameAcceptedContract(

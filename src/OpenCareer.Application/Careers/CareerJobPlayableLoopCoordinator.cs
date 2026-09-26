@@ -1,5 +1,6 @@
 using OpenCareer.Application.Economy;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
@@ -10,7 +11,8 @@ namespace OpenCareer.Application.Careers;
 public sealed record CareerJobPlayableStartRequest(
     JobContractCreationRequest Contract,
     ContractDispatchContext DispatchContext,
-    OperationDispatchRequirements DispatchRequirements);
+    OperationDispatchRequirements DispatchRequirements,
+    AirframeId? PhysicalAirframeId = null);
 
 public sealed record CareerJobPlayableStartResult(
     AcceptedJobDispatchResult Dispatch,
@@ -78,6 +80,7 @@ public sealed class CareerJobPlayableLoopCoordinator
         ArgumentNullException.ThrowIfNull(request.Contract);
         ArgumentNullException.ThrowIfNull(request.DispatchContext);
         ArgumentNullException.ThrowIfNull(request.DispatchRequirements);
+        request.PhysicalAirframeId?.Validate();
 
         AcceptedJobDispatchResult dispatch =
             await _dispatch
@@ -93,7 +96,8 @@ public sealed class CareerJobPlayableLoopCoordinator
                 .StartAsync(
                     dispatch,
                     request.DispatchContext,
-                    cancellationToken)
+                    cancellationToken,
+                    physicalAirframeId: request.PhysicalAirframeId)
                 .ConfigureAwait(false);
 
         return new(

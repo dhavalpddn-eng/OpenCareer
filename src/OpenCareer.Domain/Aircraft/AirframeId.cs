@@ -1,8 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace OpenCareer.Domain.Aircraft;
 
 /// <summary>Permanent OpenCareer identity of one physical aircraft, not a model or ownership tenure.</summary>
 public readonly record struct AirframeId
 {
+    [JsonConstructor]
     public AirframeId(Guid value)
     {
         if (value == Guid.Empty)

@@ -39,7 +39,8 @@ public sealed class FlightSessionPersistenceService
         Guid? contractId = null,
         Guid? sessionId = null,
         FlightSessionPlan? plan = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        FlightSessionAircraftIdentity? aircraftIdentity = null)
     {
         await _mutationGate
             .WaitAsync(cancellationToken)
@@ -58,7 +59,8 @@ public sealed class FlightSessionPersistenceService
                     timestamp,
                     contractId,
                     sessionId,
-                    plan);
+                    plan,
+                    aircraftIdentity);
 
             await _store
                 .SaveAsync(session, cancellationToken)
