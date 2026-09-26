@@ -5,7 +5,7 @@ using OpenCareer.Domain.Aircraft;
 
 namespace OpenCareer.Infrastructure.Persistence;
 
-public sealed class SqliteAirframeStore : IAirframeStore
+public sealed partial class SqliteAirframeStore : IAirframeStore
 {
     private readonly OpenCareerDatabaseOptions _options;
     private readonly ILogger<SqliteAirframeStore> _logger;

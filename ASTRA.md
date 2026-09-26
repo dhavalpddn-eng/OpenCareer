@@ -8,6 +8,8 @@
 
 **MBL-17 slice 3:** new career FlightSessions retain `FlightSessionAircraftIdentity` with Fleet's canonical model and optional explicitly supplied `PhysicalAirframeId`. The start bridge reads `IAirframeStore` and rejects missing/mismatched physical assignments before the contract enters InProgress. Model-only Jobs/KJFK remain unassigned; no title-based airframe creation, condition mutation or grounding gate. Additive checkpoint JSON retains identity across recovery; legacy missing identity stays unknown, and replay cannot replace an existing assignment. SQLite 14 / session schema 1, model-level reservations, landing evidence and the frozen live candidate are unchanged.
 
+**MBL-17 slice 4 (2026-09-26):** explicitly assigned terminal sessions now persist deterministic physical-airframe consequences before checkpoint clear. SQLite schema 15 atomically inserts history keyed by SessionId and updates the exact airframe revision. Confirmed contact descent uses historical 900/1300/1800 ft/min gameplay bands; routine structural wear is the verified historical 0.0008 fraction/airborne-hour. No new G thresholds or component percentages. Completed/Cancelled retain trusted usage; crash Interrupted => Severe/Grounding; non-crash Interrupted records a no-mutation decision. Conflicting replay fails closed; failed application keeps terminal evidence. Model-only KJFK, Fleet reservations, economy and landing detection are unchanged. PR #106 remains draft; keep the frozen schema-13 candidate/database isolated.
+
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/m1-simulation-core`  
 **PR:** #2 draft; keep `main` stable.  

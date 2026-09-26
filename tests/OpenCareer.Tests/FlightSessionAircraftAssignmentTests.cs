@@ -95,7 +95,7 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
         Assert.Same(recovered, replay.FlightSession);
         Assert.Equal(original, await restarted.Airframes.FindAsync(original.Airframe.AirframeId));
         Assert.Equal(unrelated, await restarted.Airframes.FindAsync(unrelated.Airframe.AirframeId));
-        Assert.Equal(14L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(15L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(1, recovered.SchemaVersion);
     }
 
@@ -112,8 +112,61 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
         Assert.NotEqual(first.StartedFlight.FlightSession.SessionId, second.StartedFlight.FlightSession.SessionId);
         Assert.Equal(a.Airframe.AirframeId, first.StartedFlight.FlightSession.AircraftIdentity!.PhysicalAirframeId);
         Assert.Equal(b.Airframe.AirframeId, second.StartedFlight.FlightSession.AircraftIdentity!.PhysicalAirframeId);
-        Assert.Equal(a, await app.Airframes.FindAsync(a.Airframe.AirframeId));
+        var cancelled = Assert.IsType<FlightAirframeApplication>(await app.Airframes.FindBySessionAsync(first.StartedFlight.FlightSession.SessionId));
+        Assert.Equal(FlightSessionStatus.Cancelled, cancelled.Consequence.Summary.TerminalStatus);
+        Assert.Equal(a.Condition, cancelled.After.Condition); // zero-hour cancellation has no invented wear
+        Assert.Equal(2, cancelled.After.Revision);
+        Assert.Equal(cancelled.After, await app.Airframes.FindAsync(a.Airframe.AirframeId));
         Assert.Equal(b, await app.Airframes.FindAsync(b.Airframe.AirframeId));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PhysicalFlightAbandonAppliesTerminalPolicyWithoutSettlementAndKeepsRetrySafe(bool interrupt, bool crash)
+    {
+        var app = await CreateAsync();
+        var before = await app.CreateAirframeAsync();
+        var unrelated = await app.CreateAirframeAsync();
+        var result = await app.Loop.AcceptAndStartAsync((await app.RequestAsync()) with { PhysicalAirframeId = before.Airframe.AirframeId });
+        var started = result.StartedFlight.FlightSession;
+        var evidence = ConsequenceFixture.Session(before.Airframe.AirframeId, status: FlightSessionStatus.Active, verticalSpeeds: [-1500]);
+        var flying = started with
+        {
+            UpdatedAt = evidence.UpdatedAt, Tracking = evidence.Tracking,
+            TimeLedger = evidence.TimeLedger, LandingEpisodes = evidence.LandingEpisodes,
+            OperationState = FlightOperationState.Airborne
+        };
+        await app.Checkpoints.SaveAsync(flying);
+        app.Sessions.CommitPersisted(flying);
+        if (interrupt)
+        {
+            await app.Persistence.AdvanceAsync(new(new FlightStateEvidence(flying.UpdatedAt.AddSeconds(1), Connected: false)));
+            await app.Persistence.AdvanceAsync(new(new FlightStateEvidence(flying.UpdatedAt.AddSeconds(2),
+                Connected: true, StableTelemetry: true, ValidLoadedAircraft: true, ContinuityPlausible: false, CrashReported: crash)));
+            Assert.Equal(FlightSessionStatus.Interrupted, app.Sessions.Current!.Status);
+        }
+        var terminalStatus = interrupt ? FlightSessionStatus.Interrupted : FlightSessionStatus.Cancelled;
+        var profile = await app.Profiles.LoadAsync();
+        await app.Abandon.AbandonAsync(started.SessionId, started.ContractId!.Value);
+        var applied = Assert.IsType<FlightAirframeApplication>(await app.Airframes.FindBySessionAsync(started.SessionId));
+        Assert.Equal(terminalStatus, applied.Consequence.Summary.TerminalStatus);
+        Assert.Equal(!interrupt || crash, applied.Consequence.ApplyCondition);
+        Assert.Equal(crash ? AirframeDamageState.Grounding : interrupt ? AirframeDamageState.None : AirframeDamageState.Recorded,
+            applied.After.Condition.Damage);
+        Assert.Equal(interrupt && !crash ? 1 : 2, applied.After.Revision);
+        Assert.Equal(unrelated, await app.Airframes.FindAsync(unrelated.Airframe.AirframeId));
+        Assert.Null(app.Sessions.Current);
+        Assert.Null(await app.Checkpoints.LoadAsync());
+        Assert.Null(await app.Fleet.FindByReservationIdAsync(result.Dispatch.FleetResult.ReservationId));
+        Assert.Equal(ContractStatus.Cancelled, (await app.Contracts.ReadJobContractAsync(started.ContractId.Value))!.Contract.Status);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(profile), System.Text.Json.JsonSerializer.Serialize(await app.Profiles.LoadAsync()));
+        Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM economy_ledger_transactions;"));
+        Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM logbook_entries;"));
+        Assert.Equal(CareerFlightAbandonStatus.NoActiveSession,
+            (await app.Abandon.AbandonAsync(started.SessionId, started.ContractId.Value)).Status);
+        Assert.Equal(1L, await ScalarAsync("SELECT count(*) FROM flight_airframe_consequences;"));
     }
 
     [Theory]
@@ -326,7 +379,7 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
             Airframes = new(options, NullLogger<SqliteAirframeStore>.Instance);
             Fleet = new(path);
             Checkpoints = new(path);
-            Persistence = new(Sessions, Checkpoints);
+            Persistence = new(Sessions, Checkpoints, airframeConsequences: new(Airframes, Airframes, _clock));
             _career = new(Profiles);
             var recovery = new SqliteJobContractRecoverySource(options, NullLogger<SqliteJobContractRecoverySource>.Instance);
             _contracts = new(new JobContractRecoveryService(recovery, Contracts));

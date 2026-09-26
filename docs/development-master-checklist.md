@@ -402,9 +402,10 @@ Exit gate: cash and financed aircraft purchases survive reload and cannot duplic
 
 Chapter status: **FOUNDATION IN PROGRESS** — isolated `feature/mbl17-airframe-condition`; the frozen KJFK live-test candidate is unchanged.
 
-- [x] Persist gradual wear separately from discrete damage, keyed by permanent physical AirframeId (schema 14). Accumulation and consequences remain deferred.
-- [x] Persist normalized first-contact landing telemetry with confirmed episode/bounce evidence in FlightSession checkpoints; no condition consequences or hard-landing thresholds yet.
+- [x] Persist gradual wear separately from discrete damage, keyed by permanent physical AirframeId (schema 14 foundation; schema 15 adds consequence history).
+- [x] Persist normalized first-contact landing telemetry with confirmed episode/bounce evidence in FlightSession checkpoints.
 - [x] Retain canonical aircraft identity plus optional explicitly validated physical AirframeId on career FlightSessions; preserve model-only KJFK operation, legacy checkpoints and model-level reservations without condition mutation.
+- [x] Apply confirmed-contact/crash consequences plus historical routine structural wear exactly once to explicitly assigned airframes; atomic condition/history, terminal cleanup retry and no-mutation non-crash interruption. Gameplay calibration still requires live validation.
 - [ ] Use verified simulator wear/component state only where available.
 - [ ] Add fallback OpenCareer reliability state.
 - [ ] Implement component/service schedules.
