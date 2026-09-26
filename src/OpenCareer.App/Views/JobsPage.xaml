@@ -30,6 +30,8 @@
                                Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                     <ComboBox ItemsSource="{Binding AircraftOptions}"
                               DisplayMemberPath="DisplayName"
+                              SelectedValuePath="AircraftId"
+                              SelectedValue="{Binding SelectedAircraftId, Mode=OneWay}"
                               PlaceholderText="Choose aircraft for dispatch"
                               SelectionChanged="AircraftSelection_Changed"
                               HorizontalAlignment="Stretch" />

@@ -312,6 +312,19 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     ? null
                     : aircraftId.Trim();
 
+            // ItemsSource replacement can queue a null SelectionChanged behind this gate.
+            // Discovery removes unavailable selections; a picker reset must not remove a valid one.
+            if (normalized is null
+                && _selectedAircraftId is not null
+                && _aircraftOptions.Any(
+                    item => string.Equals(
+                        item.AircraftId,
+                        _selectedAircraftId,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
             if (normalized is not null
                 && !_aircraftOptions.Any(
                     item => string.Equals(
@@ -323,16 +336,19 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     "Selected aircraft is not present in the authoritative installed-aircraft catalog.");
             }
 
-            if (!string.Equals(
+            // Restoring SelectedValue can echo the retained ID through SelectionChanged.
+            if (string.Equals(
                     _selectedAircraftId,
                     normalized,
                     StringComparison.OrdinalIgnoreCase))
             {
-                _selectedAircraftId =
-                    normalized;
-                OnPropertyChanged(
-                    nameof(SelectedAircraftId));
+                return;
             }
+
+            _selectedAircraftId =
+                normalized;
+            OnPropertyChanged(
+                nameof(SelectedAircraftId));
 
             await RebuildOffersLockedAsync(
                 cancellationToken);
@@ -443,19 +459,6 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             ref _aircraftStatus,
             snapshot.Detail,
             nameof(AircraftStatus));
-
-        if (_selectedAircraftId is not null
-            && !_aircraftOptions.Any(
-                item => string.Equals(
-                    item.AircraftId,
-                    _selectedAircraftId,
-                    StringComparison.OrdinalIgnoreCase)))
-        {
-            _selectedAircraftId =
-                null;
-            OnPropertyChanged(
-                nameof(SelectedAircraftId));
-        }
     }
 
     private async Task RebuildOffersLockedAsync(
@@ -582,8 +585,18 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     {
         _aircraftOptions =
             aircraft;
+        _selectedAircraftId =
+            aircraft.FirstOrDefault(
+                item => string.Equals(
+                    item.AircraftId,
+                    _selectedAircraftId,
+                    StringComparison.OrdinalIgnoreCase))?.AircraftId;
         OnPropertyChanged(
             nameof(AircraftOptions));
+        // Reapply the ID after the new items arrive, even when the ID did not change.
+        // This restores the visual selection without relying on refreshed object identity.
+        OnPropertyChanged(
+            nameof(SelectedAircraftId));
     }
 
     private void SetField(
