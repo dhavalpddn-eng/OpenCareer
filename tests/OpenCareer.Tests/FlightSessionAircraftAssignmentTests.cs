@@ -284,6 +284,15 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
 
     public void Dispose()
     {
+        // The production profile/contract/board stores share this pooled connection string.
+        // Release only this test database's idle handles before Windows directory deletion.
+        using var pool = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = DatabasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Cache = SqliteCacheMode.Shared
+        }.ToString());
+        SqliteConnection.ClearPool(pool);
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 
