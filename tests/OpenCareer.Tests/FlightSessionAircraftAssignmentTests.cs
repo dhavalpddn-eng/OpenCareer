@@ -18,7 +18,7 @@ using OpenCareer.Infrastructure.Persistence;
 
 namespace OpenCareer.Tests;
 
-public sealed class FlightSessionAircraftAssignmentTests : IDisposable
+public sealed partial class FlightSessionAircraftAssignmentTests : IDisposable
 {
     private const string Model = AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId;
     private static readonly DateTimeOffset Epoch = new(2026, 9, 26, 12, 0, 0, TimeSpan.Zero);
@@ -69,8 +69,8 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
 
     [Theory]
     [InlineData(AirframeDamageState.None)]
-    [InlineData(AirframeDamageState.Grounding)]
-    public async Task ExplicitAssignmentPersistsAndRecoversWithoutMutatingConditionOrAddingGroundingPolicy(AirframeDamageState damage)
+    [InlineData(AirframeDamageState.Recorded)]
+    public async Task EligibleExplicitAssignmentPersistsAndRecoversWithoutMutatingCondition(AirframeDamageState damage)
     {
         Harness app = await CreateAsync();
         AirframeStoreRecord original = await app.CreateAirframeAsync(damage: damage);
@@ -187,8 +187,8 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
         Assert.Null(app.Sessions.Current);
         Assert.Null(await app.Checkpoints.LoadAsync());
         PersistedJobContract? retained = await app.Contracts.ReadJobContractAsync(request.Contract.Offer.OfferId);
-        if (reason == "default") Assert.Null(retained);
-        else Assert.Equal(ContractStatus.Accepted, retained!.Contract.Status);
+        Assert.Null(retained);
+        Assert.Null(await app.Fleet.FindByReservationIdAsync(JobAcceptanceFleetBridge.GetReservationId(request.Contract.Offer.OfferId)));
         Assert.Equal(unrelated, await app.Airframes.FindAsync(unrelated.Airframe.AirframeId));
         if (mismatch is not null) Assert.Equal(mismatch, await app.Airframes.FindAsync(mismatch.Airframe.AirframeId));
         Assert.Equal(mismatch is null ? 1L : 2L, await ScalarAsync("SELECT count(*) FROM airframes;"));
@@ -206,7 +206,7 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
         AcceptedJobDispatchResult dispatch = await app.Dispatch.AcceptReserveAndEvaluateAsync(
             request.Contract, request.DispatchContext, request.DispatchRequirements);
         var bridge = new AcceptedJobFlightSessionBridge(new AcceptedJobStartBridge(app.Lifecycle), app.Contracts,
-            app.Persistence, app.Sessions, reason == "missing-store" ? null : new WrongRecordStore(b));
+            app.Persistence, app.Sessions, reason == "missing-store" ? null : new PhysicalAirframeEligibilityService(new WrongRecordStore(b)));
         await Assert.ThrowsAsync<InvalidOperationException>(() => bridge.StartAsync(dispatch,
             request.DispatchContext, physicalAirframeId: a.Airframe.AirframeId));
         Assert.Equal(ContractStatus.Accepted, (await app.Contracts.ReadJobContractAsync(request.Contract.Offer.OfferId))!.Contract.Status);
@@ -305,9 +305,9 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
         Assert.Same(started, coordinator.Current);
     }
 
-    private async Task<Harness> CreateAsync()
+    private async Task<Harness> CreateAsync(Func<SqliteAirframeStore, IAirframeStore>? eligibilityStore = null, bool configureEligibility = true)
     {
-        var app = new Harness(DatabasePath);
+        var app = new Harness(DatabasePath, eligibilityStore, configureEligibility);
         await app.Profiles.SaveAsync(PlayerCareerProfile.Start(Guid.NewGuid(), "KJFK", Epoch), null, Epoch);
         await app.InitializeAsync();
         return app;
@@ -368,15 +368,17 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
         private readonly PlayerCareerRuntimeState _career;
         private readonly JobContractRuntimeState _contracts;
         private readonly DevelopmentFlightService _development;
-        private readonly CareerJobStartInputSource _inputs;
+        public CareerJobStartInputSource Inputs { get; }
+        public ICareerJobStartAction StartAction { get; }
         private readonly Clock _clock = new();
 
-        public Harness(string path)
+        public Harness(string path, Func<SqliteAirframeStore, IAirframeStore>? eligibilityStore = null, bool configureEligibility = true)
         {
             var options = new OpenCareerDatabaseOptions(path);
             Profiles = new(options, NullLogger<SqlitePlayerCareerProfileStore>.Instance);
             Contracts = new(options, NullLogger<SqliteJobContractStore>.Instance);
             Airframes = new(options, NullLogger<SqliteAirframeStore>.Instance);
+            PhysicalAirframeEligibilityService? eligibility = configureEligibility ? new(eligibilityStore?.Invoke(Airframes) ?? Airframes) : null;
             Fleet = new(path);
             Checkpoints = new(path);
             Persistence = new(Sessions, Checkpoints, airframeConsequences: new(Airframes, Airframes, _clock));
@@ -391,7 +393,7 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
             var planning = new OperationDispatchPlanningService(registry, airports, aircraftAvailability: Fleet);
             Dispatch = new(new JobAcceptanceFleetBridge(new JobOfferAcceptanceService(Contracts, Lifecycle, boards, _contracts),
                 Contracts, new AircraftReservationCoordinator(registry, Fleet)), planning);
-            StartBridge = new(new AcceptedJobStartBridge(Lifecycle), Contracts, Persistence, Sessions, Airframes);
+            StartBridge = new(new AcceptedJobStartBridge(Lifecycle), Contracts, Persistence, Sessions, eligibility);
             var ledger = new SqliteEconomyLedgerStore(options, NullLogger<SqliteEconomyLedgerStore>.Instance);
             var logbook = new SqliteLogbookStore(options, NullLogger<SqliteLogbookStore>.Instance);
             var terminal = new CareerFlightTerminalWorkflowCoordinator(
@@ -402,12 +404,13 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
             Loop = new(Dispatch, StartBridge,
                 new JobFlightSessionCompletionBridge(new JobFlightCompletionEvidenceTracker(Sessions, new NoFlightEvidence()), Sessions,
                     new FlightSessionCompletionService(Sessions, Persistence)),
-                new CompletedJobContractBridge(Contracts, Lifecycle, Sessions), Contracts, terminal);
+                new CompletedJobContractBridge(Contracts, Lifecycle, Sessions), Contracts, terminal, eligibility);
             Abandon = new(Sessions, Persistence, Contracts, Lifecycle, _contracts, Fleet, Fleet, _clock,
                 NullLogger<CareerFlightAbandonCoordinator>.Instance);
             _development = new(new JobBoardGenerationService(boards), _career, recovery, Checkpoints, _clock, location);
-            _inputs = new(boards, _career, Contracts, registry, planning, [new PersistedJobContractTermsSource()],
-                [new StandardCivilianPointToPointDispatchAuthoritySource()], _clock);
+            Inputs = new(boards, _career, Contracts, registry, planning, [new PersistedJobContractTermsSource()],
+                [new StandardCivilianPointToPointDispatchAuthoritySource()], _clock, eligibility);
+            StartAction = new CareerJobStartActionService(Inputs, Loop);
         }
 
         public async Task InitializeAsync()
@@ -423,7 +426,7 @@ public sealed class FlightSessionAircraftAssignmentTests : IDisposable
             var offer = await _development.GenerateAsync();
             Assert.Equal("KJFK", offer.OriginIcao);
             Assert.Equal("KJFK", offer.DestinationIcao);
-            var ready = await _inputs.ReadAsync(offer.OfferId, Model);
+            var ready = await Inputs.ReadAsync(offer.OfferId, Model);
             Assert.Equal(CareerJobStartInputState.Ready, ready.State);
             Assert.True(ready.IsReady);
             return Assert.IsType<CareerJobPlayableStartRequest>(ready.Request);

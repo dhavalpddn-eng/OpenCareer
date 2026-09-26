@@ -67,6 +67,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<WorldSimulationPersistenceService>();
         services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
         services.AddSingleton<IAirframeStore, SqliteAirframeStore>();
+        services.AddSingleton<PhysicalAirframeEligibilityService>();
         services.AddSingleton<IFlightAirframeConsequenceStore>(provider =>
             (SqliteAirframeStore)provider.GetRequiredService<IAirframeStore>());
         services.AddSingleton<FlightAirframeConsequenceCoordinator>();

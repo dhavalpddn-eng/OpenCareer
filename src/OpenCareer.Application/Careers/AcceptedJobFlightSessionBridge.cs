@@ -16,7 +16,7 @@ public sealed class AcceptedJobFlightSessionBridge
     private readonly IJobContractStore _contractStore;
     private readonly FlightSessionPersistenceService _flightSessionPersistence;
     private readonly FlightSessionCoordinator _flightSessionCoordinator;
-    private readonly IAirframeStore? _airframes;
+    private readonly PhysicalAirframeEligibilityService _physicalAirframes;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public AcceptedJobFlightSessionBridge(
@@ -24,7 +24,7 @@ public sealed class AcceptedJobFlightSessionBridge
         IJobContractStore contractStore,
         FlightSessionPersistenceService flightSessionPersistence,
         FlightSessionCoordinator flightSessionCoordinator,
-        IAirframeStore? airframes = null)
+        PhysicalAirframeEligibilityService? physicalAirframes = null)
     {
         _contractStart =
             contractStart
@@ -38,7 +38,7 @@ public sealed class AcceptedJobFlightSessionBridge
         _flightSessionCoordinator =
             flightSessionCoordinator
             ?? throw new ArgumentNullException(nameof(flightSessionCoordinator));
-        _airframes = airframes;
+        _physicalAirframes = physicalAirframes ?? new();
     }
 
     public async Task<StartedJobFlightSessionResult> StartAsync(
@@ -204,22 +204,10 @@ public sealed class AcceptedJobFlightSessionBridge
             canonicalAircraftId ?? throw new InvalidOperationException("Fleet reservation has no canonical aircraft identity."),
             physicalAirframeId);
 
-        if (physicalAirframeId is not { } requestedId)
-            return identity;
-
-        IAirframeStore store = _airframes
-            ?? throw new InvalidOperationException("Physical aircraft assignment requires the authoritative airframe store.");
-        AirframeStoreRecord retained = await store.FindAsync(requestedId, cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("The explicitly assigned physical airframe does not exist.");
-        retained.Validate();
-
-        if (retained.Airframe.AirframeId != requestedId
-            || !string.Equals(retained.Airframe.CanonicalAircraftId, identity.CanonicalAircraftId, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException("The assigned physical airframe does not match the reserved canonical aircraft.");
-        }
-
-        // Assignment neither changes condition nor introduces a new grounding/dispatch policy.
+        // Re-read after acceptance/dispatch, against Fleet's actual reserved canonical model.
+        // A newly grounded assignment leaves Accepted recovery state; it cannot start a session.
+        await _physicalAirframes.RequireEligibleAsync(identity.CanonicalAircraftId, physicalAirframeId,
+            cancellationToken).ConfigureAwait(false);
         return identity;
     }
 

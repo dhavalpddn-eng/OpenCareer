@@ -701,13 +701,15 @@ public sealed class CareerJobStartInputSourceTests
         public async Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
             Guid offerId,
             string aircraftId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            AirframeId? physicalAirframeId = null)
         {
             CareerJobStartInputSnapshot snapshot =
                 await inputs.ReadAsync(
                     offerId,
                     aircraftId,
-                    cancellationToken);
+                    cancellationToken,
+                    physicalAirframeId);
 
             return new(
                 snapshot.IsReady,
@@ -718,7 +720,8 @@ public sealed class CareerJobStartInputSourceTests
         public Task<CareerJobPlayableStartResult> StartAsync(
             Guid offerId,
             string aircraftId,
-            CancellationToken cancellationToken = default) =>
+            CancellationToken cancellationToken = default,
+            AirframeId? physicalAirframeId = null) =>
             throw new NotSupportedException(
                 "This fixture verifies the production readiness boundary only.");
     }

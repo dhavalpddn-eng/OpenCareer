@@ -10,6 +10,8 @@
 
 **MBL-17 slice 4 (2026-09-26):** explicitly assigned terminal sessions now persist deterministic physical-airframe consequences before checkpoint clear. SQLite schema 15 atomically inserts history keyed by SessionId and updates the exact airframe revision. Confirmed contact descent uses historical 900/1300/1800 ft/min gameplay bands; routine structural wear is the verified historical 0.0008 fraction/airborne-hour. No new G thresholds or component percentages. Completed/Cancelled retain trusted usage; crash Interrupted => Severe/Grounding; non-crash Interrupted records a no-mutation decision. Conflicting replay fails closed; failed application keeps terminal evidence. Model-only KJFK, Fleet reservations, economy and landing detection are unchanged. PR #106 remains draft; keep the frozen schema-13 candidate/database isolated.
 
+**MBL-17 slice 5:** shared `PhysicalAirframeEligibilityService` checks exact physical ID/model/existence and only `RequiresGrounding`. Optional physical selection is forwarded through start readiness/action APIs; unavailable physical aircraft produce `PhysicalAirframeUnavailable`. `CareerJobPlayableLoopCoordinator` checks before acceptance/reservation; the start bridge re-reads against Fleet canonical identity before InProgress/session creation. Grounding that races after acceptance leaves recoverable Accepted/model-level reservation state, with no fallback or session. Null selection needs no physical store lookup. SQLite 15, consequences, KJFK source and frozen candidate remain unchanged; no selector, repair or wear-grounding threshold.
+
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/m1-simulation-core`  
 **PR:** #2 draft; keep `main` stable.  

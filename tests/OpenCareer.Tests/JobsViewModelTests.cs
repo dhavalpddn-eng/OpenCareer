@@ -436,7 +436,8 @@ public sealed class JobsViewModelTests
         public Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
             Guid offerId,
             string aircraftId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            AirframeId? physicalAirframeId = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -451,7 +452,8 @@ public sealed class JobsViewModelTests
         public Task<CareerJobPlayableStartResult> StartAsync(
             Guid offerId,
             string aircraftId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            AirframeId? physicalAirframeId = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             StartCount++;
