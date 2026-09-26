@@ -50,7 +50,8 @@ public sealed record AirframeMaintenanceReadResult(
     AirframeMaintenanceSnapshot? Snapshot);
 
 /// <summary>Read-only condition/history authority for an explicitly requested physical airframe.</summary>
-public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, IFlightAirframeConsequenceStore consequences)
+public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, IFlightAirframeConsequenceStore consequences,
+    IAirframeMaintenanceStore? maintenance = null)
 {
     public async Task<AirframeMaintenanceReadResult> ReadAsync(
         FlightAirframeHistoryQuery query, CancellationToken cancellationToken = default)
@@ -80,5 +81,30 @@ public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, I
         }
         return new(query.AirframeId, AirframeMaintenanceReadStatus.Available,
             new(current, page.Entries.Select(a => new AirframeMaintenanceHistoryEntry(a)).ToImmutableList(), page.Next));
+    }
+
+    public async Task<AirframeServiceHistoryReadResult> ReadServiceHistoryAsync(
+        AirframeServiceHistoryQuery query, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        query.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
+        var current = await airframes.FindAsync(query.AirframeId, cancellationToken).ConfigureAwait(false);
+        if (current is null) return new(query.AirframeId, AirframeMaintenanceReadStatus.NotFound, null);
+        current.Validate();
+        if (current.Airframe.AirframeId != query.AirframeId)
+            throw new InvalidDataException("Service history returned a different physical airframe.");
+        if (maintenance is null) throw new InvalidOperationException("Authoritative maintenance history store is required.");
+        var history = await maintenance.ReadServiceHistoryAsync(query, cancellationToken).ConfigureAwait(false);
+        if (current != await airframes.FindAsync(query.AirframeId, cancellationToken).ConfigureAwait(false))
+            throw new AirframeConcurrencyException("Airframe condition changed during service history read; refresh the snapshot.");
+        foreach (var serviceEvent in history.Events)
+        {
+            serviceEvent.Validate();
+            if (serviceEvent.Before.Airframe != current.Airframe || serviceEvent.After.Revision > current.Revision
+                || serviceEvent.After.Revision == current.Revision && serviceEvent.After != current)
+                throw new InvalidDataException("Retained service event does not match the current physical airframe/model/revision.");
+        }
+        return new(query.AirframeId, AirframeMaintenanceReadStatus.Available, new(current, history));
     }
 }

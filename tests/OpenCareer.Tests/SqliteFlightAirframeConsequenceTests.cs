@@ -232,7 +232,7 @@ public sealed class SqliteFlightAirframeConsequenceTests : IDisposable
     }
 
     [Fact]
-    public async Task Schema14MigrationPreservesPhysicalAndPlayableDataAndFreshSchemaIs15()
+    public async Task Schema14MigrationPreservesPhysicalAndPlayableDataAndFreshSchemaIsCurrent()
     {
         var before = await CreateAsync();
         var session = ConsequenceFixture.Session(before.Airframe.AirframeId);
@@ -245,7 +245,7 @@ public sealed class SqliteFlightAirframeConsequenceTests : IDisposable
             """);
         string rows = await AllRowsAsync();
         Assert.Null(await Store().FindBySessionAsync(session.SessionId));
-        Assert.Equal(15L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(16L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(rows, await AllRowsAsync());
         Assert.Equal(before, await Store().FindAsync(before.Airframe.AirframeId));
         Assert.Equal(session.SessionId, (await Checkpoints().LoadAsync())!.SessionId);

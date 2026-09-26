@@ -226,7 +226,7 @@ public sealed class LandingContactEvidenceTests
         Assert.Equal(1, app.Session.Tracking.BounceCount);
         Assert.Equal(1, app.Session.Tracking.LandingEpisodeCount);
         Assert.Equal(new[] { Contact(first), Contact(second) }, Assert.Single(app.Session.EffectiveLandingEpisodes).EffectiveContacts);
-        Assert.Equal(15L, await app.ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(16L, await app.ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(1, app.Session.SchemaVersion);
     }
 

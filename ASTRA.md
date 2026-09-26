@@ -14,6 +14,8 @@
 
 **MBL-17 slice 6:** `AirframeMaintenanceHistorySource` exposes a read-only physical-airframe snapshot with current condition/revision/save time, descriptive serviceability from `RequiresGrounding`, and retained consequence/application history. Schema-15 indexed keyset pages are newest-first by AppliedAt UTC then ordinal D-format SessionId (both descending), default 100/max 1000. Reads validate retained payload/metadata and physical identity/model; a concurrent condition change rejects the mixed snapshot for refresh. Missing airframes return NotFound. No recalculation using default calibration, writes, repairs, UI, schema change or frozen-candidate change. Exact-head Windows evidence remains on draft PR #106.
 
+**MBL-17 slice 7:** `AirframeMaintenanceService.RepairDiscreteDamageAsync` clears Recorded/Grounding damage only; wear and identity are unchanged. Schema 16 atomically updates condition revision/save time and inserts an immutable DiscreteDamageRepair event keyed by MaintenanceActionId. Identical replay returns the retained event without re-repairing newer damage; conflicting requests/before state, stale revision and non-advancing time fail closed. None returns NoRepairRequired without a write/event. Service history has its own bounded newest-first cursor stream on the existing read source, separate from flight history. Crash -> grounded -> repair -> explicit job Ready/start is covered. No wear service, costs, downtime, parts, UI or frozen-candidate changes; PR #106 stays draft.
+
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/m1-simulation-core`  
 **PR:** #2 draft; keep `main` stable.  

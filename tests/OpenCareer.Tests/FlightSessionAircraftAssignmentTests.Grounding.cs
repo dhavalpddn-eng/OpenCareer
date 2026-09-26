@@ -180,7 +180,7 @@ public sealed partial class FlightSessionAircraftAssignmentTests
         Assert.Equal(healthy, await app.Airframes.FindAsync(healthy.Airframe.AirframeId));
         Assert.False((await consequences.ApplyAsync(crashSession))!.WasNewlyApplied);
         Assert.Equal(1L, await ScalarAsync("SELECT count(*) FROM flight_airframe_consequences;"));
-        Assert.Equal(15L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(16L, await ScalarAsync("PRAGMA user_version;"));
     }
 
     [Fact]
