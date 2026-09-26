@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
+using OpenCareer.SimConnect;
 using OpenCareer.SimConnect.Native;
 
 namespace OpenCareer.Tests;
@@ -44,6 +45,14 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
     internal int FacilityRequestResult { get; set; }
     internal int GetLastSentPacketIdResult { get; set; }
     internal uint LastSentPacketId { get; set; } = 700;
+    internal ConcurrentQueue<(uint EventId, string EventName, uint SendId)> EventMappings { get; } = new();
+    internal ConcurrentQueue<(uint ObjectId, uint EventId, uint Data, uint GroupId, uint Flags, uint SendId)> Transmissions { get; } = new();
+    internal int MapEventResult { get; set; }
+    internal int TransmitResult { get; set; }
+    internal Exception? MapEventException { get; set; }
+    internal Exception? TransmitException { get; set; }
+    internal HashSet<uint> FailedRequestDefinitionIds { get; } = [];
+    internal ConcurrentQueue<(string Operation, uint SendId)> FailureSetupPackets { get; } = new();
 
     internal void Enqueue(byte[]? packet = null, int result = 0, Action? action = null) =>
         _dispatch.Enqueue((packet, result, action));
@@ -92,7 +101,9 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         Enter();
         try
         {
+            LastSentPacketId++;
             DataDefinitions.Enqueue((definitionId, datumName, unitsName));
+            if (definitionId == SimConnectEngineFailureDefinition.DefinitionId) FailureSetupPackets.Enqueue(("definition", LastSentPacketId));
             return FailedDataDefinitionIds.Contains(definitionId)
                 ? Failure
                 : AddDefinitionResult;
@@ -108,6 +119,7 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         Enter();
         try
         {
+            LastSentPacketId++;
             StringDataDefinitions.Enqueue((definitionId, datumName));
             return AddStringDefinitionResult;
         }
@@ -123,8 +135,10 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         Enter();
         try
         {
+            LastSentPacketId++;
             TelemetryRequests.Enqueue((requestId, definitionId, period));
-            return TelemetryRequestResult;
+            if (definitionId == SimConnectEngineFailureDefinition.DefinitionId) FailureSetupPackets.Enqueue(("request", LastSentPacketId));
+            return FailedRequestDefinitionIds.Contains(definitionId) ? Failure : TelemetryRequestResult;
         }
         finally { Exit(); }
     }
@@ -134,6 +148,7 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         Enter();
         try
         {
+            LastSentPacketId++;
             SystemEvents.Enqueue((eventId, eventName));
             return SubscribeResult;
         }
@@ -148,6 +163,7 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         Enter();
         try
         {
+            LastSentPacketId++;
             AircraftEnumerations.Enqueue((requestId, type));
             return AircraftEnumerationResult;
         }
@@ -162,6 +178,7 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         Enter();
         try
         {
+            LastSentPacketId++;
             FacilityDefinitions.Enqueue((definitionId, fieldName));
             return FacilityDefinitionResult;
         }
@@ -178,6 +195,7 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         Enter();
         try
         {
+            LastSentPacketId++;
             FacilityRequests.Enqueue((definitionId, requestId, icao, region));
             return FacilityRequestResult;
         }
@@ -212,8 +230,34 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         Enter();
         try
         {
+            LastSentPacketId++;
             Heartbeats.Enqueue(requestId);
             return HeartbeatResult;
+        }
+        finally { Exit(); }
+    }
+
+    public int MapClientEventToSimEvent(nint handle, uint eventId, string eventName)
+    {
+        Enter();
+        try
+        {
+            if (MapEventException is not null) throw MapEventException;
+            EventMappings.Enqueue((eventId, eventName, ++LastSentPacketId));
+            FailureSetupPackets.Enqueue(("mapping", LastSentPacketId));
+            return MapEventResult;
+        }
+        finally { Exit(); }
+    }
+
+    public int TransmitClientEvent(nint handle, uint objectId, uint eventId, uint data, uint groupId, uint flags)
+    {
+        Enter();
+        try
+        {
+            if (TransmitException is not null) throw TransmitException;
+            Transmissions.Enqueue((objectId, eventId, data, groupId, flags, ++LastSentPacketId));
+            return TransmitResult;
         }
         finally { Exit(); }
     }

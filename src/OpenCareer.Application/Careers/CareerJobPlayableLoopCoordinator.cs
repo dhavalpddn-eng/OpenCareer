@@ -1,5 +1,7 @@
 using OpenCareer.Application.Economy;
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
@@ -10,7 +12,8 @@ namespace OpenCareer.Application.Careers;
 public sealed record CareerJobPlayableStartRequest(
     JobContractCreationRequest Contract,
     ContractDispatchContext DispatchContext,
-    OperationDispatchRequirements DispatchRequirements);
+    OperationDispatchRequirements DispatchRequirements,
+    AirframeId? PhysicalAirframeId = null);
 
 public sealed record CareerJobPlayableStartResult(
     AcceptedJobDispatchResult Dispatch,
@@ -40,6 +43,7 @@ public sealed class CareerJobPlayableLoopCoordinator
     private readonly CompletedJobContractBridge _contractCompletion;
     private readonly IJobContractStore _contractStore;
     private readonly CareerFlightTerminalWorkflowCoordinator _terminal;
+    private readonly PhysicalAirframeEligibilityService _physicalAirframes;
     private readonly SemaphoreSlim _completionGate = new(1, 1);
 
     public CareerJobPlayableLoopCoordinator(
@@ -48,7 +52,8 @@ public sealed class CareerJobPlayableLoopCoordinator
         JobFlightSessionCompletionBridge flightCompletion,
         CompletedJobContractBridge contractCompletion,
         IJobContractStore contractStore,
-        CareerFlightTerminalWorkflowCoordinator terminal)
+        CareerFlightTerminalWorkflowCoordinator terminal,
+        PhysicalAirframeEligibilityService? physicalAirframes = null)
     {
         _dispatch =
             dispatch
@@ -68,6 +73,7 @@ public sealed class CareerJobPlayableLoopCoordinator
         _terminal =
             terminal
             ?? throw new ArgumentNullException(nameof(terminal));
+        _physicalAirframes = physicalAirframes ?? new();
     }
 
     public async Task<CareerJobPlayableStartResult> AcceptAndStartAsync(
@@ -78,6 +84,13 @@ public sealed class CareerJobPlayableLoopCoordinator
         ArgumentNullException.ThrowIfNull(request.Contract);
         ArgumentNullException.ThrowIfNull(request.DispatchContext);
         ArgumentNullException.ThrowIfNull(request.DispatchRequirements);
+        if (request.PhysicalAirframeId is not null)
+        {
+            ArgumentNullException.ThrowIfNull(request.DispatchContext.Aircraft);
+            // Must precede every NEW acceptance/reservation. Readiness may have become stale.
+            await _physicalAirframes.RequireEligibleAsync(request.DispatchContext.Aircraft.AircraftId,
+                request.PhysicalAirframeId, cancellationToken).ConfigureAwait(false);
+        }
 
         AcceptedJobDispatchResult dispatch =
             await _dispatch
@@ -93,7 +106,8 @@ public sealed class CareerJobPlayableLoopCoordinator
                 .StartAsync(
                     dispatch,
                     request.DispatchContext,
-                    cancellationToken)
+                    cancellationToken,
+                    physicalAirframeId: request.PhysicalAirframeId)
                 .ConfigureAwait(false);
 
         return new(

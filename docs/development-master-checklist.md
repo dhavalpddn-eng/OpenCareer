@@ -400,15 +400,23 @@ Exit gate: cash and financed aircraft purchases survive reload and cannot duplic
 
 # Chapter 9 — Maintenance, company growth, bases and route expansion
 
-Chapter status: **PLANNED**
+Chapter status: **FOUNDATION IN PROGRESS** — isolated `feature/mbl17-airframe-condition`; the frozen KJFK live-test candidate is unchanged.
 
-- [ ] Persist gradual wear separately from discrete damage.
+- [x] Persist gradual wear separately from discrete damage, keyed by permanent physical AirframeId (schema 14 foundation; schema 15 adds consequence history).
+- [x] Persist normalized first-contact landing telemetry with confirmed episode/bounce evidence in FlightSession checkpoints.
+- [x] Retain canonical aircraft identity plus optional explicitly validated physical AirframeId on career FlightSessions; preserve model-only KJFK operation, legacy checkpoints and model-level reservations without condition mutation.
+- [x] Apply confirmed-contact/crash consequences plus historical routine structural wear exactly once to explicitly assigned airframes; atomic condition/history, terminal cleanup retry and no-mutation non-crash interruption. Gameplay calibration still requires live validation.
+- [x] Block explicit grounded physical assignments before career acceptance/reservation and recheck before InProgress/session creation; preserve model-only operation, exact identity and recoverable race state without wear thresholds.
+- [x] Expose read-only physical-airframe condition/serviceability and validated immutable consequence history through bounded schema-15 indexed queries; retain original calibration/evidence and exact identity. Local history/regression tests pass; exact-head Windows results belong to PR #106.
+- [x] Repair discrete Recorded/Grounding damage with unchanged wear/identity, exact-once action IDs, atomic schema-16 condition/service history and separate bounded service-event reads; preserve crash evidence and restore existing physical dispatch readiness. No wear service, cost, downtime or UI.
 - [ ] Use verified simulator wear/component state only where available.
-- [ ] Add fallback OpenCareer reliability state.
-- [ ] Implement component/service schedules.
+- [x] Derive fallback physical-airframe reliability from coherent persisted condition/service evidence with explicit unknowns; expose a fail-closed future failure boundary that always returns ComponentModelUnavailable after maintenance eligibility, without probability/RNG/simulator commands.
+- [x] Add an unwired engine-1 simulator actuator on the existing serialized worker: optional SDK event/readback, bounded single-command admission, fresh authoritative acknowledgement, no ambiguous retransmit, cancellation/disconnect cleanup. No automatic failures; native C172 effects remain LIVE-ONLY.
+- [x] Persist exact physical-airframe usage and a versioned historical 50-hour gameplay inspection schedule; atomic consequence usage, explicit migration baseline, exact-once inspection history and distinct dispatch gate. Inspection leaves damage/wear unchanged; model-only KJFK remains unchanged.
+- [ ] Extend the fallback with verified aircraft-specific/component schedules.
 - [ ] Implement repair/maintenance cost and downtime.
 - [ ] Implement MRO/parts availability.
-- [ ] Implement maintenance history.
+- [ ] Extend repair/inspection history with future wear-service events and Maintenance UI.
 - [ ] Connect hard-landing/abuse evidence to appropriate damage/wear logic.
 - [ ] Keep routine management automated by default.
 - [ ] Implement evidence-backed manual-ground actions with bounded one-time rewards.

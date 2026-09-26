@@ -27,6 +27,17 @@ public sealed record FlightSessionAdvance(
 
         Observation?.Validate();
 
+        DateTimeOffset? previousContact = null;
+        foreach (FlightLandingContactEvidence contact in Evidence.LandingContacts ?? [])
+        {
+            ArgumentNullException.ThrowIfNull(contact);
+            contact.Validate();
+            if (contact.Timestamp > Evidence.Timestamp
+                || previousContact is { } previous && contact.Timestamp <= previous)
+                throw new ArgumentException("Contact evidence must be ordered and cannot be newer than its confirmation.", nameof(Evidence));
+            previousContact = contact.Timestamp;
+        }
+
         if (Observation is not null
             && Observation.Timestamp > Evidence.Timestamp)
         {

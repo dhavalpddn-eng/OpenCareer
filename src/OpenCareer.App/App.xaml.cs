@@ -9,6 +9,7 @@ using OpenCareer.Application.Careers;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Economy;
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Military;
 using OpenCareer.Application.Planning;
@@ -65,6 +66,19 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ICommodityMarketSnapshotStore, SqliteCommodityMarketSnapshotStore>();
         services.AddSingleton<WorldSimulationPersistenceService>();
         services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
+        services.AddSingleton<IAirframeStore, SqliteAirframeStore>();
+        services.AddSingleton<IAirframeServiceStateStore>(provider =>
+            (SqliteAirframeStore)provider.GetRequiredService<IAirframeStore>());
+        services.AddSingleton<PhysicalAirframeEligibilityService>();
+        services.AddSingleton<IFlightAirframeConsequenceStore>(provider =>
+            (SqliteAirframeStore)provider.GetRequiredService<IAirframeStore>());
+        services.AddSingleton<FlightAirframeConsequenceCoordinator>();
+        services.AddSingleton<AirframeMaintenanceHistorySource>();
+        services.AddSingleton<AirframeReliabilitySource>();
+        services.AddSingleton<AirframeFailureEligibilityService>();
+        services.AddSingleton<IAirframeMaintenanceStore>(provider =>
+            (SqliteAirframeStore)provider.GetRequiredService<IAirframeStore>());
+        services.AddSingleton<AirframeMaintenanceService>();
         services.AddSingleton<JobBoardGenerationService>();
         services.AddSingleton<IJobContractStore, SqliteJobContractStore>();
         services.AddSingleton<IJobContractRecoverySource, SqliteJobContractRecoverySource>();
@@ -162,6 +176,10 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ISimulatorConnection>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ISimulatorTelemetrySource>(provider =>
+            provider.GetRequiredService<SimConnectConnection>());
+        services.AddSingleton<ISimulatorFailureActuator>(provider =>
+            provider.GetRequiredService<SimConnectConnection>());
+        services.AddSingleton<ISimulatorFailureStateSource>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
 
         services.AddOpenCareerPlanningServices();

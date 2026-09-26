@@ -6,7 +6,8 @@ using OpenCareer.SimConnect.Native;
 
 namespace OpenCareer.SimConnect;
 
-public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelemetrySource
+public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelemetrySource,
+    ISimulatorFailureActuator, ISimulatorFailureStateSource
 {
     private readonly object _lifecycleGate = new();
     private readonly ISimConnectApi _api;
@@ -18,6 +19,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     private SimConnectLocalWeatherSnapshot? _localWeather;
     private SimConnectAircraftCatalogSnapshot _aircraftCatalog = SimConnectAircraftCatalogSnapshot.Unavailable;
     private string? _currentAircraftTitle;
+    private SimConnectEngineFailureSession? _failureSession;
     private readonly ConcurrentQueue<SimConnectAirportFacilityQuery> _airportFacilityQueries = new();
     private CancellationTokenSource? _stop;
     private Task _worker = Task.CompletedTask;
@@ -45,6 +47,22 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     internal SimConnectLocalWeatherSnapshot? LocalWeather => Volatile.Read(ref _localWeather);
     internal SimConnectAircraftCatalogSnapshot AircraftCatalog => Volatile.Read(ref _aircraftCatalog);
     internal string? CurrentAircraftTitle => Volatile.Read(ref _currentAircraftTitle);
+
+    public SimulatorFailureStateSnapshot FailureState => Current.State == SimulatorConnectionState.Connected
+        ? Volatile.Read(ref _failureSession)?.Snapshot ?? SimulatorFailureStateSnapshot.Unavailable
+        : SimulatorFailureStateSnapshot.Unavailable;
+
+    public Task<SimulatorFailureActuationResult> EnsureEngineFailedAsync(int engineIndex, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (engineIndex != 1)
+            return Task.FromResult(new SimulatorFailureActuationResult(SimulatorFailureActuationStatus.UnsupportedEngine, FailureState));
+        if (Current.State == SimulatorConnectionState.Connected && _stop?.IsCancellationRequested == false
+            && Volatile.Read(ref _failureSession) is { } session)
+            return session.Enqueue(cancellationToken);
+        return Task.FromResult(new SimulatorFailureActuationResult(SimulatorFailureActuationStatus.SimulatorUnavailable,
+            SimulatorFailureStateSnapshot.Unavailable));
+    }
 
     internal async Task<SimConnectAirportFacilitySnapshot?> RequestAirportFacilityAsync(
         string icao,
@@ -191,6 +209,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         WaitHandle[] waits = [token.WaitHandle, notification];
         nint handle = nint.Zero;
         ActiveSimConnectAirportFacilityRequest? activeAirportFacilityRequest = null;
+        SimConnectEngineFailureSession? failureSession = null;
         try
         {
             int result = _api.Open(out handle, notification.SafeWaitHandle.DangerousGetHandle());
@@ -262,6 +281,9 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
                             localWeatherConfigured = ConfigureLocalWeather(handle);
                             airportFacilityConfigured = ConfigureAirportFacilities(handle);
+                            failureSession = new(_api, handle, _clock, _logger);
+                            failureSession.Configure();
+                            Volatile.Write(ref _failureSession, failureSession);
                             acknowledged = true;
                             everConnected = true;
                             failures = 0;
@@ -286,6 +308,9 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                     Timestamp = _clock.GetUtcNow(),
                                     Paused = paused
                                 });
+                            break;
+                        case SimConnectMessageKind.SimObjectData
+                            when acknowledged && failureSession?.Receive(message) == true:
                             break;
                         case SimConnectMessageKind.SimObjectData
                             when acknowledged
@@ -380,6 +405,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
                             activeAirportFacilityRequest = null;
                             break;
+                        case SimConnectMessageKind.Exception when failureSession?.Receive(message) == true:
+                            break;
                         case SimConnectMessageKind.Exception:
                             _logger.LogWarning("SimConnect exception {Code}, send {SendId}, parameter {Index}.",
                                 message.ExceptionCode, message.SendId, message.ParameterIndex);
@@ -446,6 +473,9 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                         ref nextAirportFacilityRequestId);
                 }
 
+                if (acknowledged && !token.IsCancellationRequested)
+                    failureSession?.Tick();
+
                 if (acknowledged)
                 {
                     if (pendingHeartbeat.HasValue && _clock.GetElapsedTime(lastHeartbeatAt) >= _options.HeartbeatTimeout)
@@ -468,6 +498,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         }
         finally
         {
+            Volatile.Write(ref _failureSession, null);
+            failureSession?.Close();
             activeAirportFacilityRequest?.Query.Completion.TrySetResult(null);
             CompleteQueuedAirportFacilityRequestsUnavailable();
 
