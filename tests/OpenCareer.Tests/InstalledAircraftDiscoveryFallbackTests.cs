@@ -296,6 +296,22 @@ public sealed class InstalledAircraftDiscoveryFallbackTests
             aircraft);
     }
 
+    [Theory]
+    [InlineData(false, false, InstalledAircraftDiscoveryAvailability.Available)]
+    [InlineData(false, true, InstalledAircraftDiscoveryAvailability.Unavailable)]
+    [InlineData(true, false, InstalledAircraftDiscoveryAvailability.Unavailable)]
+    [InlineData(true, true, InstalledAircraftDiscoveryAvailability.Unavailable)]
+    public void EmptyCompositeIsAuthoritativeOnlyWhenEveryProviderIsAvailable(
+        bool firstUnavailable, bool secondUnavailable, InstalledAircraftDiscoveryAvailability expected)
+    {
+        InstalledAircraftDiscoverySnapshot empty = new(InstalledAircraftDiscoveryAvailability.Available, []);
+        var composite = new CompositeInstalledAircraftDiscoverySource(
+            new StubDiscovery(firstUnavailable ? InstalledAircraftDiscoverySnapshot.Unavailable : empty),
+            new StubDiscovery(secondUnavailable ? InstalledAircraftDiscoverySnapshot.Unavailable : empty));
+        Assert.Equal(expected, composite.Current.Availability);
+        Assert.Empty(composite.Current.Observations);
+    }
+
     [Fact]
     public void CompositeMergesLiveAndLocalEvidenceWithoutDuplicatingProviderRecord()
     {

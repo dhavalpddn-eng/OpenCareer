@@ -27,6 +27,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private IReadOnlyList<CareerJobAircraftOption> _aircraftOptions =
         Array.Empty<CareerJobAircraftOption>();
     private string? _selectedAircraftId;
+    private bool _aircraftDiscoveryAvailable;
     private string _airportText = "Career location unavailable";
     private string _statusText = "Jobs have not been loaded yet.";
     private string _aircraftStatus =
@@ -380,6 +381,24 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
+            // CanStart is a UI projection, not permission to use retained discovery after
+            // a disconnect between timer ticks. Recheck before invoking the start authority.
+            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                await RefreshAircraftLockedAsync(cancellationToken);
+                if (!_aircraftDiscoveryAvailable
+                    || !string.Equals(aircraftId, _selectedAircraftId, StringComparison.OrdinalIgnoreCase))
+                {
+                    await RebuildOffersLockedAsync(cancellationToken);
+                    return;
+                }
+            }
+            finally
+            {
+                _refreshGate.Release();
+            }
+
             SetField(
                 ref _acceptanceStatus,
                 "Accepting offer, reserving aircraft, verifying dispatch, and starting the persistent FlightSession…",
@@ -441,6 +460,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     {
         if (_aircraftSelection is null)
         {
+            _aircraftDiscoveryAvailable = false;
             SetAircraftOptions(
                 Array.Empty<CareerJobAircraftOption>());
             SetField(
@@ -455,8 +475,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 .ReadAsync(cancellationToken)
                 .ConfigureAwait(true);
 
-        SetAircraftOptions(
-            snapshot.Aircraft);
+        _aircraftDiscoveryAvailable = snapshot.IsAvailable;
+        // Unavailable is uncertainty, not removal. Retain the visual choice, but never
+        // evaluate/start with it until authoritative current discovery is available again.
+        if (snapshot.IsAvailable)
+            SetAircraftOptions(snapshot.Aircraft);
 
         SetField(
             ref _aircraftStatus,
@@ -504,11 +527,14 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                         ? "This persisted offer is no longer active."
                         : _selectedAircraftId is null
                             ? "Select an installed aircraft to verify this offer."
+                            : !_aircraftDiscoveryAvailable
+                                ? "Aircraft discovery is temporarily unavailable. Waiting for current installed-aircraft evidence."
                             : _startAction is null
                                 ? "Accept & Start is not connected to the playable-loop action."
                                 : "Checking authoritative dispatch readiness…";
 
             if (active
+                && _aircraftDiscoveryAvailable
                 && _selectedAircraftId is not null
                 && _startAction is not null)
             {
@@ -566,6 +592,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             ref _acceptanceStatus,
             _selectedAircraftId is null
                 ? "Select an installed aircraft to verify an active offer for dispatch."
+                : !_aircraftDiscoveryAvailable
+                    ? "Aircraft selection retained. Start is disabled until current installed-aircraft evidence returns."
                 : projected.Any(static offer => offer.CanStart)
                     ? "Selected aircraft has at least one verified startable career offer."
                     : firstBlocked is not null

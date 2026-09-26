@@ -429,10 +429,66 @@ public sealed class JobsViewModelTests
         AssertReady(viewModel, "fixture-aircraft");
     }
 
-    private static JobsViewModel SelectionViewModel(FakeDiscovery discovery) =>
+    [Fact]
+    public async Task UnavailableDiscoveryRetainsPickerButBlocksReadinessAndStartUntilLiveEvidenceReturns()
+    {
+        var discovery = new FakeDiscovery();
+        var action = new FakeStartAction();
+        var viewModel = SelectionViewModel(discovery, action);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        AssertReady(viewModel, "fixture-aircraft");
+        var retained = viewModel.SelectedAircraftOption;
+        int reads = action.AvailabilityCount;
+        discovery.Current = InstalledAircraftDiscoverySnapshot.Unavailable;
+
+        for (int i = 0; i < 3; i++)
+        {
+            await viewModel.RefreshAircraftAndReadinessAsync();
+            await viewModel.SelectAircraftAsync(null);
+            Assert.Equal("fixture-aircraft", viewModel.SelectedAircraftId);
+            Assert.Same(retained, viewModel.SelectedAircraftOption);
+            Assert.False(Assert.Single(viewModel.Offers).CanStart);
+        }
+        await viewModel.StartOfferAsync(Assert.Single(viewModel.Offers).OfferId);
+        Assert.Equal(0, action.StartCount);
+        Assert.Equal(reads, action.AvailabilityCount); // no evaluation of retained installation history
+
+        discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
+            [Installed("fixture-aircraft", "Returned Aircraft")]);
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        AssertReady(viewModel, "fixture-aircraft");
+        Assert.Equal("Returned Aircraft", viewModel.SelectedAircraftOption!.DisplayName);
+        await viewModel.StartOfferAsync(Assert.Single(viewModel.Offers).OfferId);
+        Assert.Equal(1, action.StartCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartRechecksDiscoveryEvenBeforeNextPeriodicRefresh(bool authoritativeRemoval)
+    {
+        var discovery = new FakeDiscovery();
+        var action = new FakeStartAction();
+        var viewModel = SelectionViewModel(discovery, action);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        AssertReady(viewModel, "fixture-aircraft");
+        discovery.Current = authoritativeRemoval
+            ? new(InstalledAircraftDiscoveryAvailability.Available, [])
+            : InstalledAircraftDiscoverySnapshot.Unavailable;
+
+        await viewModel.StartOfferAsync(Assert.Single(viewModel.Offers).OfferId);
+
+        Assert.Equal(0, action.StartCount);
+        Assert.False(Assert.Single(viewModel.Offers).CanStart);
+        Assert.Equal(authoritativeRemoval ? null : "fixture-aircraft", viewModel.SelectedAircraftId);
+    }
+
+    private static JobsViewModel SelectionViewModel(FakeDiscovery discovery, FakeStartAction? action = null) =>
         new(new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", locked: false))),
             CareerRuntime("KRME"), new FixedTimeProvider(Now),
-            new CareerJobAircraftSelectionSource(discovery), new FakeStartAction(), logger: null);
+            new CareerJobAircraftSelectionSource(discovery), action ?? new FakeStartAction(), logger: null);
 
     private static void AssertReady(JobsViewModel viewModel, string aircraftId)
     {
@@ -562,6 +618,7 @@ public sealed class JobsViewModelTests
     private sealed class FakeStartAction
         : ICareerJobStartAction
     {
+        public int AvailabilityCount { get; private set; }
         public int StartCount { get; private set; }
         public Guid? LastOfferId { get; private set; }
         public string? LastAircraftId { get; private set; }
@@ -572,7 +629,7 @@ public sealed class JobsViewModelTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
+            AvailabilityCount++;
             return Task.FromResult(
                 new CareerJobStartActionAvailability(
                     CanStart:

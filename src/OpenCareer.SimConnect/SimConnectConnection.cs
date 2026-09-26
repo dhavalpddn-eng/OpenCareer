@@ -206,6 +206,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             Publish(new(SimulatorConnectionState.Connecting));
             long openedAt = _clock.GetTimestamp();
             long lastHeartbeatAt = openedAt;
+            long lastInboundAt = openedAt;
             uint nextRequestId = 1;
             uint? pendingHeartbeat = null;
             bool acknowledged = false;
@@ -215,6 +216,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
             uint nextAirportFacilityRequestId = SimConnectAirportFacilityDefinition.FirstRequestId;
             uint nextAircraftCatalogRequestId = SimConnectAircraftCatalog.FirstRequestId;
             uint? activeAircraftCatalogRequestId = null;
+            bool aircraftCatalogEnabled = true;
+            var aircraftCatalogSendIds = new HashSet<uint>();
             long lastAircraftCatalogAttemptAt = openedAt;
             uint? aircraftCatalogPageCount = null;
             var aircraftCatalogPages = new Dictionary<uint, IReadOnlyList<SimConnectObjectLivery>>();
@@ -236,8 +239,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                     _logger.LogWarning(callbackError, "Invalid SimConnect response; reopening connection.");
                     return SimulatorConnectionIssue.InvalidResponse;
                 }
-                // Treat an empty E_FAIL conservatively; a correlated system-state request detects
-                // a silent transport loss without mistaking an empty dispatch queue for a disconnect.
+                // An empty E_FAIL is not proof of disconnection. The liveness deadline below
+                // detects silence; either valid traffic or a heartbeat reply proves liveness.
                 if (result < 0 && (result != unchecked((int)0x80004005) || messages.Count != 0))
                 {
                     _logger.LogDebug("SimConnect dispatch failed with HRESULT {HResult:X8}.", result);
@@ -248,6 +251,7 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
                 foreach (var message in messages)
                 {
+                    bool validInbound = false;
                     switch (message.Kind)
                     {
                         case SimConnectMessageKind.Open when !acknowledged:
@@ -266,20 +270,23 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             everConnected = true;
                             failures = 0;
                             lastHeartbeatAt = _clock.GetTimestamp();
+                            validInbound = true;
                             Publish(new(SimulatorConnectionState.Connected, Simulator: message.Simulator));
-                            StartAircraftCatalogRequest(
+                            aircraftCatalogEnabled = StartAircraftCatalogRequest(
                                 handle,
                                 ref nextAircraftCatalogRequestId,
                                 ref activeAircraftCatalogRequestId,
                                 ref lastAircraftCatalogAttemptAt,
                                 ref aircraftCatalogPageCount,
-                                aircraftCatalogPages);
+                                aircraftCatalogPages,
+                                aircraftCatalogSendIds);
                             break;
                         case SimConnectMessageKind.Quit:
                             return SimulatorConnectionIssue.ConnectionLost;
                         case SimConnectMessageKind.Event
                             when acknowledged && message.EventId == SimConnectTelemetryDefinition.PauseEventId:
                             paused = message.EventData != 0;
+                            validInbound = true;
                             if (Latest is { } currentTelemetry)
                                 PublishTelemetry(currentTelemetry with
                                 {
@@ -296,7 +303,10 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 _clock.GetUtcNow(),
                                 paused);
                             if (telemetry is not null)
+                            {
+                                validInbound = true;
                                 PublishTelemetry(telemetry);
+                            }
                             else
                                 _logger.LogDebug("Ignored invalid aircraft telemetry packet.");
                             break;
@@ -305,7 +315,10 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 && message.RequestId == SimConnectCurrentAircraftDefinition.RequestId
                                 && message.DefinitionId == SimConnectCurrentAircraftDefinition.DefinitionId:
                             if (!string.IsNullOrWhiteSpace(message.StringData))
+                            {
+                                validInbound = true;
                                 PublishCurrentAircraftTitle(message.StringData.Trim());
+                            }
                             break;
                         case SimConnectMessageKind.SimObjectData
                             when acknowledged
@@ -316,11 +329,15 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 message.Data,
                                 _clock.GetUtcNow());
                             if (localWeather is not null)
+                            {
+                                validInbound = true;
                                 PublishLocalWeather(localWeather);
+                            }
                             else
                                 _logger.LogDebug("Ignored invalid local weather packet.");
                             break;
                         case SimConnectMessageKind.SystemState when pendingHeartbeat == message.RequestId:
+                            validInbound = true;
                             pendingHeartbeat = null;
                             break;
                         case SimConnectMessageKind.EnumerateSimObjectAndLiveryList
@@ -339,12 +356,14 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                     ref aircraftCatalogPageCount,
                                     aircraftCatalogPages);
                             }
-                            else if (AircraftCatalog.IsAvailable)
+                            else
                             {
-                                ResetAircraftCatalogAttempt(
-                                    ref activeAircraftCatalogRequestId,
-                                    ref aircraftCatalogPageCount,
-                                    aircraftCatalogPages);
+                                validInbound = true;
+                                if (AircraftCatalog.IsAvailable)
+                                    ResetAircraftCatalogAttempt(
+                                        ref activeAircraftCatalogRequestId,
+                                        ref aircraftCatalogPageCount,
+                                        aircraftCatalogPages);
                             }
                             break;
                         case SimConnectMessageKind.FacilityData
@@ -359,11 +378,14 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                                 activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
                                 activeAirportFacilityRequest = null;
                             }
+                            else
+                                validInbound = true;
                             break;
                         case SimConnectMessageKind.FacilityDataEnd
                             when acknowledged
                                 && activeAirportFacilityRequest is not null
                                 && message.RequestId == activeAirportFacilityRequest.RequestId:
+                            validInbound = true;
                             activeAirportFacilityRequest.Query.Completion.TrySetResult(
                                 activeAirportFacilityRequest.Build());
                             activeAirportFacilityRequest = null;
@@ -380,18 +402,32 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                             activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
                             activeAirportFacilityRequest = null;
                             break;
+                        case SimConnectMessageKind.Exception
+                            when aircraftCatalogSendIds.Contains(message.SendId):
+                            _logger.LogWarning(
+                                "Optional aircraft catalog disabled for this connection after exception {Code}, send {SendId}, parameter {Index}; core telemetry and current TITLE remain active.",
+                                message.ExceptionCode, message.SendId, message.ParameterIndex);
+                            aircraftCatalogEnabled = false;
+                            ResetAircraftCatalogAttempt(
+                                ref activeAircraftCatalogRequestId,
+                                ref aircraftCatalogPageCount,
+                                aircraftCatalogPages);
+                            PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
+                            break;
                         case SimConnectMessageKind.Exception:
                             _logger.LogWarning("SimConnect exception {Code}, send {SendId}, parameter {Index}.",
                                 message.ExceptionCode, message.SendId, message.ParameterIndex);
                             return message.ExceptionCode == 5
                                 ? SimulatorConnectionIssue.VersionMismatch : SimulatorConnectionIssue.SimulatorError;
                     }
+                    if (validInbound)
+                        lastInboundAt = _clock.GetTimestamp();
                 }
 
                 if (!acknowledged && _clock.GetElapsedTime(openedAt) >= _options.HandshakeTimeout)
                     return SimulatorConnectionIssue.HandshakeTimeout;
 
-                if (acknowledged && !AircraftCatalog.IsAvailable)
+                if (acknowledged && aircraftCatalogEnabled && !AircraftCatalog.IsAvailable)
                 {
                     if (activeAircraftCatalogRequestId.HasValue
                         && _clock.GetElapsedTime(lastAircraftCatalogAttemptAt)
@@ -409,13 +445,14 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
                         && _clock.GetElapsedTime(lastAircraftCatalogAttemptAt)
                             >= SimConnectAircraftCatalog.RetryDelay)
                     {
-                        StartAircraftCatalogRequest(
+                        aircraftCatalogEnabled = StartAircraftCatalogRequest(
                             handle,
                             ref nextAircraftCatalogRequestId,
                             ref activeAircraftCatalogRequestId,
                             ref lastAircraftCatalogAttemptAt,
                             ref aircraftCatalogPageCount,
-                            aircraftCatalogPages);
+                            aircraftCatalogPages,
+                            aircraftCatalogSendIds);
                     }
                 }
 
@@ -448,7 +485,11 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
                 if (acknowledged)
                 {
-                    if (pendingHeartbeat.HasValue && _clock.GetElapsedTime(lastHeartbeatAt) >= _options.HeartbeatTimeout)
+                    // A missing SystemState reply cannot invalidate ongoing valid telemetry/TITLE.
+                    // Outbound requests and unrecognized/invalid packets never refresh this clock.
+                    if (pendingHeartbeat.HasValue
+                        && _clock.GetElapsedTime(lastHeartbeatAt) >= _options.HeartbeatTimeout
+                        && _clock.GetElapsedTime(lastInboundAt) >= _options.HeartbeatTimeout)
                         return SimulatorConnectionIssue.ResponseTimeout;
 
                     if (!pendingHeartbeat.HasValue && _clock.GetElapsedTime(lastHeartbeatAt) >= _options.HeartbeatInterval)
@@ -672,13 +713,14 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         return true;
     }
 
-    private void StartAircraftCatalogRequest(
+    private bool StartAircraftCatalogRequest(
         nint handle,
         ref uint nextRequestId,
         ref uint? activeRequestId,
         ref long lastAttemptAt,
         ref uint? expectedPageCount,
-        IDictionary<uint, IReadOnlyList<SimConnectObjectLivery>> pages)
+        IDictionary<uint, IReadOnlyList<SimConnectObjectLivery>> pages,
+        ISet<uint> sendIds)
     {
         ResetAircraftCatalogAttempt(
             ref activeRequestId,
@@ -701,12 +743,21 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         if (result < 0)
         {
             _logger.LogWarning(
-                "SimConnect rejected installed-aircraft enumeration with HRESULT {HResult:X8}; the catalog will be retried.",
+                "SimConnect rejected optional aircraft enumeration with HRESULT {HResult:X8}; catalog disabled for this connection.",
                 result);
-            return;
+            return false;
         }
 
+        if (_api.GetLastSentPacketId(handle, out uint sendId) < 0 || sendId == 0)
+        {
+            _logger.LogWarning("Could not correlate optional aircraft enumeration; catalog disabled for this connection.");
+            return false;
+        }
+
+        // Retain older attempt IDs too: a delayed exception must not tear down core telemetry.
+        sendIds.Add(sendId);
         activeRequestId = requestId;
+        return true;
     }
 
     private static void ResetAircraftCatalogAttempt(

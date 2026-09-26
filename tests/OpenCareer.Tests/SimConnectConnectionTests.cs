@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenCareer.Application.Planning;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.SimConnect;
 
 namespace OpenCareer.Tests;
@@ -305,6 +307,97 @@ public sealed class SimConnectConnectionTests
     private static SimConnectConnection Create(SimConnectTestTransport api,
         SimConnectConnectionOptions? options = null, TimeProvider? clock = null) =>
         new(api, NullLogger<SimConnectConnection>.Instance, options ?? FastOptions(), clock ?? TimeProvider.System);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidTrafficKeepsDiscoveryConnectedBeyondMissingHeartbeatTimeout(bool titleTraffic)
+    {
+        var api = new SimConnectTestTransport();
+        var clock = new TestClock();
+        api.Enqueue(SimConnectPackets.Open());
+        await using var connection = Create(api, clock: clock);
+        var discovery = new SimConnectInstalledAircraftObservationSource(connection);
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+        api.Enqueue(TitlePacket());
+        await Until(() => connection.CurrentAircraftTitle is not null);
+        api.Enqueue(action: () => clock.Advance(TimeSpan.FromSeconds(6)));
+        await Until(() => api.Heartbeats.Count == 1);
+
+        // No SystemState response. Advance 36 simulated seconds with genuine decoded traffic.
+        for (int i = 0; i < 6; i++)
+        {
+            await DispatchAsync(api, titleTraffic ? TitlePacket() : TelemetryPacket(),
+                () => clock.Advance(TimeSpan.FromSeconds(6)));
+            Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+            Assert.Equal(1, api.Attempts);
+            Assert.Equal(InstalledAircraftDiscoveryAvailability.Available, discovery.Current.Availability);
+            Assert.Equal(AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId,
+                Assert.Single(discovery.Current.Observations).CanonicalAircraftId);
+        }
+        Assert.False(api.OverlapDetected);
+        Assert.Single(api.ThreadIds);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CatalogExceptionDisablesOnlyCatalogUntilNextConnection(bool delayedException)
+    {
+        var api = new SimConnectTestTransport();
+        var clock = new TestClock();
+        api.Enqueue(SimConnectPackets.Open());
+        await using var connection = Create(api, clock: clock);
+        connection.Start();
+        await Until(() => api.AircraftEnumerations.Count == 1);
+        api.Enqueue(TitlePacket());
+        await Until(() => connection.CurrentAircraftTitle is not null);
+        uint catalogSendId = api.LastSentPacketId;
+        if (delayedException)
+        {
+            // An error from an older request must still be isolated after a retry.
+            api.LastSentPacketId++;
+            await DispatchAsync(api, TitlePacket(),
+                () => clock.Advance(SimConnectAircraftCatalog.ResponseTimeout));
+            Assert.Equal(2, api.AircraftEnumerations.Count);
+        }
+        await DispatchAsync(api, SimConnectPackets.Exception(20, catalogSendId));
+        int attempts = api.AircraftEnumerations.Count;
+        for (int i = 0; i < 13; i++)
+            await DispatchAsync(api, TitlePacket(), () => clock.Advance(TimeSpan.FromSeconds(6)));
+        Assert.Equal(attempts, api.AircraftEnumerations.Count);
+        Assert.Equal(1, api.Attempts);
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+        Assert.False(connection.AircraftCatalog.IsAvailable);
+        Assert.Single(new SimConnectInstalledAircraftObservationSource(connection).Current.Observations);
+        await DispatchAsync(api, TelemetryPacket());
+        Assert.NotNull(connection.Latest);
+
+        api.Enqueue(SimConnectPackets.Header(3));
+        await Until(() => api.Attempts == 2);
+        api.Enqueue(SimConnectPackets.Open());
+        await Until(() => api.AircraftEnumerations.Count == attempts + 1);
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+        Assert.False(api.OverlapDetected);
+        Assert.Single(api.ThreadIds);
+    }
+
+    private static byte[] TitlePacket() => SimConnectPackets.StringSimObjectData(
+        SimConnectCurrentAircraftDefinition.RequestId, SimConnectCurrentAircraftDefinition.DefinitionId,
+        "C172SP Classic Passengers");
+
+    private static byte[] TelemetryPacket() => SimConnectPackets.SimObjectData(
+        SimConnectTelemetryDefinition.RequestId, SimConnectTelemetryDefinition.DefinitionId,
+        new double[SimConnectTelemetryDefinition.ValueCount]);
+
+    private static async Task DispatchAsync(SimConnectTestTransport api, byte[] packet, Action? action = null)
+    {
+        var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        api.Enqueue(packet, action: action);
+        api.Enqueue(action: () => processed.SetResult());
+        await processed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
 
     [Fact]
     public async Task EmptyDispatchDoesNotDisconnectAndMenuHeartbeatConfirmsLiveness()
