@@ -39,8 +39,11 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         var services = new ServiceCollection();
 
-        var dataPaths = new OpenCareerDataPaths();
-        dataPaths.EnsureDirectories();
+        OpenCareerDataProfileSelection dataProfile =
+            OpenCareerDataProfileSelection.Resolve(
+                Environment.GetCommandLineArgs());
+        dataProfile.Prepare();
+        OpenCareerDataPaths dataPaths = dataProfile.Paths;
         var fileLogger = new OpenCareerFileLoggerProvider(dataPaths);
 
         services.AddSingleton(dataPaths);
@@ -255,6 +258,19 @@ public partial class App : Microsoft.UI.Xaml.Application
     {
         var logger = _services.GetRequiredService<ILogger<App>>();
 
+        OpenCareerDataPaths dataPaths =
+            _services.GetRequiredService<OpenCareerDataPaths>();
+        if (dataPaths.IsDevelopmentLiveTest)
+        {
+            logger.LogWarning(
+                "DEVELOPMENT / TEST KJFK data profile active at {DataRoot}. Normal OpenCareer data is not loaded. Startup reset requested: {ResetRequested}.",
+                dataPaths.Root,
+                Environment.GetCommandLineArgs().Any(argument => string.Equals(
+                    argument,
+                    OpenCareerDataProfileSelection.ResetArgument,
+                    StringComparison.OrdinalIgnoreCase)));
+        }
+
         try
         {
             await _services
@@ -440,6 +456,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         }
 
         _window = _services.GetRequiredService<MainWindow>();
+        if (dataPaths.IsDevelopmentLiveTest)
+            _window.Title = "OpenCareer — DEVELOPMENT / TEST — KJFK";
         _window.AppWindow.Closing += OnMainWindowClosing;
         _window.Activate();
 
