@@ -31,6 +31,7 @@ public sealed record FlightAirframeApplyResult(FlightAirframeApplication Applica
 public interface IFlightAirframeConsequenceStore
 {
     Task<FlightAirframeApplication?> FindBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
+    Task<FlightAirframeHistoryPage> ReadHistoryAsync(FlightAirframeHistoryQuery query, CancellationToken cancellationToken = default);
     Task<FlightAirframeApplyResult> ApplyAsync(FlightAirframeConsequence consequence, AirframeStoreRecord expected,
         DateTimeOffset appliedAt, CancellationToken cancellationToken = default);
 }

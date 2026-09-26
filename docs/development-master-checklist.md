@@ -407,12 +407,13 @@ Chapter status: **FOUNDATION IN PROGRESS** — isolated `feature/mbl17-airframe-
 - [x] Retain canonical aircraft identity plus optional explicitly validated physical AirframeId on career FlightSessions; preserve model-only KJFK operation, legacy checkpoints and model-level reservations without condition mutation.
 - [x] Apply confirmed-contact/crash consequences plus historical routine structural wear exactly once to explicitly assigned airframes; atomic condition/history, terminal cleanup retry and no-mutation non-crash interruption. Gameplay calibration still requires live validation.
 - [x] Block explicit grounded physical assignments before career acceptance/reservation and recheck before InProgress/session creation; preserve model-only operation, exact identity and recoverable race state without wear thresholds.
+- [x] Expose read-only physical-airframe condition/serviceability and validated immutable consequence history through bounded schema-15 indexed queries; retain original calibration/evidence and exact identity. Local history/regression tests pass; exact-head Windows results belong to PR #106.
 - [ ] Use verified simulator wear/component state only where available.
 - [ ] Add fallback OpenCareer reliability state.
 - [ ] Implement component/service schedules.
 - [ ] Implement repair/maintenance cost and downtime.
 - [ ] Implement MRO/parts availability.
-- [ ] Implement maintenance history.
+- [ ] Extend retained consequence history with future repair/service events and Maintenance UI.
 - [ ] Connect hard-landing/abuse evidence to appropriate damage/wear logic.
 - [ ] Keep routine management automated by default.
 - [ ] Implement evidence-backed manual-ground actions with bounded one-time rewards.

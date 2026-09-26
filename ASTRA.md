@@ -12,6 +12,8 @@
 
 **MBL-17 slice 5:** shared `PhysicalAirframeEligibilityService` checks exact physical ID/model/existence and only `RequiresGrounding`. Optional physical selection is forwarded through start readiness/action APIs; unavailable physical aircraft produce `PhysicalAirframeUnavailable`. `CareerJobPlayableLoopCoordinator` checks before acceptance/reservation; the start bridge re-reads against Fleet canonical identity before InProgress/session creation. Grounding that races after acceptance leaves recoverable Accepted/model-level reservation state, with no fallback or session. Null selection needs no physical store lookup. SQLite 15, consequences, KJFK source and frozen candidate remain unchanged; no selector, repair or wear-grounding threshold.
 
+**MBL-17 slice 6:** `AirframeMaintenanceHistorySource` exposes a read-only physical-airframe snapshot with current condition/revision/save time, descriptive serviceability from `RequiresGrounding`, and retained consequence/application history. Schema-15 indexed keyset pages are newest-first by AppliedAt UTC then ordinal D-format SessionId (both descending), default 100/max 1000. Reads validate retained payload/metadata and physical identity/model; a concurrent condition change rejects the mixed snapshot for refresh. Missing airframes return NotFound. No recalculation using default calibration, writes, repairs, UI, schema change or frozen-candidate change. Exact-head Windows evidence remains on draft PR #106.
+
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/m1-simulation-core`  
 **PR:** #2 draft; keep `main` stable.  

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Collections.Immutable;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Fleet;
@@ -17,6 +18,51 @@ public sealed partial class SqliteAirframeStore : IFlightAirframeConsequenceStor
         await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         return await ReadConsequenceAsync(connection, null, sessionId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<FlightAirframeHistoryPage> ReadHistoryAsync(FlightAirframeHistoryQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        query.Validate();
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        // The schema-15 (airframe_id, applied_at_utc_ticks, session_id) index supports both
+        // the exact-airframe filter and keyset pagination without scanning other airframes.
+        command.CommandText = """
+            SELECT airframe_id, payload_schema_version, applied_at_utc_ticks, payload_json, session_id
+            FROM flight_airframe_consequences WHERE airframe_id=$airframe
+            """ + (query.Before is null ? "" : " AND (applied_at_utc_ticks, session_id) < ($before, $session)") + """
+             ORDER BY applied_at_utc_ticks DESC, session_id DESC LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$airframe", query.AirframeId.ToString());
+        command.Parameters.AddWithValue("$limit", query.Limit + 1);
+        if (query.Before is { } cursor)
+        {
+            command.Parameters.AddWithValue("$before", cursor.AppliedAt.UtcTicks);
+            command.Parameters.AddWithValue("$session", cursor.SessionId.ToString("D"));
+        }
+        var applications = ImmutableList.CreateBuilder<FlightAirframeApplication>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (reader.GetValue(4) is not string sessionText || !Guid.TryParseExact(sessionText, "D", out var sessionId)
+                || sessionText != sessionId.ToString("D"))
+                throw new InvalidDataException("Invalid retained history session identity.");
+            var application = ReadRetainedApplication(reader, sessionId);
+            if (application.Consequence.Summary.AirframeId != query.AirframeId)
+                throw new InvalidDataException("History belongs to a different physical airframe.");
+            applications.Add(application);
+        }
+        FlightAirframeHistoryCursor? next = null;
+        if (applications.Count > query.Limit)
+        {
+            applications.RemoveAt(query.Limit);
+            var last = applications[^1];
+            next = new(last.AppliedAt, last.Consequence.Summary.SessionId);
+        }
+        return new(applications.ToImmutable(), next);
     }
 
     public async Task<FlightAirframeApplyResult> ApplyAsync(FlightAirframeConsequence consequence, AirframeStoreRecord expected,
@@ -98,6 +144,11 @@ public sealed partial class SqliteAirframeStore : IFlightAirframeConsequenceStor
         command.Parameters.AddWithValue("$id", sessionId.ToString("D"));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return null;
+        return ReadRetainedApplication(reader, sessionId);
+    }
+
+    private static FlightAirframeApplication ReadRetainedApplication(SqliteDataReader reader, Guid sessionId)
+    {
         if (reader.GetValue(0) is not string || reader.GetValue(1) is not long || reader.GetValue(2) is not long || reader.GetValue(3) is not string)
             throw new InvalidDataException("Invalid airframe consequence column types.");
         if (reader.GetInt64(1) != 1) throw new NotSupportedException("Unsupported airframe consequence schema.");
