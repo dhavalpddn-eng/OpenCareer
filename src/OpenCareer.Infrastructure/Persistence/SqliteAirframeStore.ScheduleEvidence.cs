@@ -210,7 +210,7 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
 
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = ScheduleEvidenceSelect + """
+        command.CommandText = ScheduleEvidenceSelect + " " + """
             WHERE airframe_id = $airframe
             ORDER BY component, schedule_id, schedule_version, evidence_id;
             """;
@@ -268,7 +268,7 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = ScheduleEvidenceSelect + """
+        command.CommandText = ScheduleEvidenceSelect + " " + """
             WHERE airframe_id = $airframe AND schedule_id = $schedule AND schedule_version = $version;
             """;
         command.Parameters.AddWithValue("$airframe", airframeId.ToString());
