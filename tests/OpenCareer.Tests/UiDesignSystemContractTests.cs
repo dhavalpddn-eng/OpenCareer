@@ -77,6 +77,8 @@ public sealed class UiDesignSystemContractTests
         string[] required =
         [
             "OpenCareerPageTitleStyle",
+            "OpenCareerPaperTitleStyle",
+            "OpenCareerPaperBodyStyle",
             "OpenCareerPaperCardStyle",
             "OpenCareerMetalCardStyle",
             "OpenCareerPrimaryButtonStyle",
@@ -108,13 +110,16 @@ public sealed class UiDesignSystemContractTests
     [InlineData("PrimaryButtonStates.xaml")]
     [InlineData("SecondaryButtonStates.xaml")]
     [InlineData("DangerButtonStates.xaml")]
+    [InlineData("ButtonStateRuntimeProbePage.xaml")]
     public void ResourceDictionariesDoNotContainDuplicateKeys(string fileName)
     {
         XDocument document = XDocument.Load(GetDesignFilePath(fileName));
 
         foreach (XElement dictionary in document.Root!
                      .DescendantsAndSelf()
-                     .Where(static element => element.Name.LocalName == "ResourceDictionary"))
+                     .Where(static element =>
+                         element.Name.LocalName == "ResourceDictionary" ||
+                         element.Name.LocalName.EndsWith(".Resources", StringComparison.Ordinal)))
         {
             string[] duplicates = dictionary
                 .Elements()
@@ -248,6 +253,7 @@ public sealed class UiDesignSystemContractTests
             GetDesignFilePath("App.xaml"),
             GetDesignFilePath("DesignTokens.xaml"),
             GetDesignFilePath("ComponentStyles.xaml"),
+            GetDesignFilePath("ButtonStateRuntimeProbePage.xaml"),
             .. GetProductionButtonXamlPaths()
         ];
 
@@ -339,6 +345,8 @@ public sealed class UiDesignSystemContractTests
     {
         string probeSource =
             File.ReadAllText(GetDesignFilePath("ButtonStateRuntimeProbe.cs"));
+        string probeXaml =
+            File.ReadAllText(GetDesignFilePath("ButtonStateRuntimeProbePage.xaml"));
         string appSource =
             File.ReadAllText(Path.Combine(
                 AppContext.BaseDirectory,
@@ -349,16 +357,92 @@ public sealed class UiDesignSystemContractTests
                 "run-button-state-runtime-certification.ps1"));
         string workflow =
             File.ReadAllText(GetDesignFilePath("winui-build.yml"));
+        XDocument probeDocument = XDocument.Parse(probeXaml);
 
-        Assert.Contains("XamlApplication.Current.Resources", probeSource, StringComparison.Ordinal);
-        Assert.Contains("dictionary.MergedDictionaries", probeSource, StringComparison.Ordinal);
-        Assert.Contains("dictionary.TryGetValue", probeSource, StringComparison.Ordinal);
-        Assert.Contains("OpenCareerPrimaryButtonStyle", probeSource, StringComparison.Ordinal);
-        Assert.Contains("OpenCareerSecondaryButtonStyle", probeSource, StringComparison.Ordinal);
-        Assert.Contains("OpenCareerDangerButtonStyle", probeSource, StringComparison.Ordinal);
-        Assert.Contains("DefaultButtonStyle", probeSource, StringComparison.Ordinal);
-        Assert.Contains("OpenCareerShellBackgroundBrush", probeSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("OpenCareerShellBrush", probeSource, StringComparison.Ordinal);
+        Assert.Equal(
+            "OpenCareer.App.Diagnostics.ButtonStateRuntimeProbePage",
+            probeDocument.Root?.Attribute(XamlNamespace + "Class")?.Value);
+
+        IReadOnlyDictionary<string, string> probeButtonStyles = probeDocument
+            .Descendants()
+            .Where(static element => element.Name.LocalName == "Button")
+            .Where(element => element.Attribute(XamlNamespace + "Name") is not null)
+            .ToDictionary(
+                element => element.Attribute(XamlNamespace + "Name")!.Value,
+                element => element.Attribute("Style")?.Value
+                    ?? throw new InvalidDataException("Probe Button must use a compiled style."),
+                StringComparer.Ordinal);
+        Assert.Equal(
+            "{StaticResource OpenCareerPrimaryButtonStyle}",
+            probeButtonStyles["PrimaryProbeButton"]);
+        Assert.Equal(
+            "{StaticResource OpenCareerSecondaryButtonStyle}",
+            probeButtonStyles["SecondaryProbeButton"]);
+        Assert.Equal(
+            "{StaticResource OpenCareerDangerButtonStyle}",
+            probeButtonStyles["DangerProbeButton"]);
+        Assert.Equal(
+            "{StaticResource DefaultButtonStyle}",
+            probeButtonStyles["StockLightProbeButton"]);
+        Assert.Equal(
+            "{StaticResource DefaultButtonStyle}",
+            probeButtonStyles["StockDarkProbeButton"]);
+
+        Dictionary<string, string> probeAliases = probeDocument
+            .Descendants()
+            .Where(static element => element.Name.LocalName == "StaticResource")
+            .ToDictionary(
+                element => element.Attribute(XamlNamespace + "Key")?.Value
+                    ?? throw new InvalidDataException("Probe resource alias lacks x:Key."),
+                element => element.Attribute("ResourceKey")?.Value
+                    ?? throw new InvalidDataException("Probe resource alias lacks ResourceKey."),
+                StringComparer.Ordinal);
+        Assert.NotEmpty(probeAliases);
+        Assert.All(
+            probeAliases,
+            pair => Assert.Equal($"Probe{pair.Value}", pair.Key));
+        Assert.Equal(probeAliases.Count, probeAliases.Keys.Distinct(StringComparer.Ordinal).Count());
+        string[] expectedProbeTokens = probeSource
+            .Split('"', StringSplitOptions.RemoveEmptyEntries)
+            .Where(static value =>
+                value.StartsWith("OpenCareer", StringComparison.Ordinal) &&
+                value.EndsWith("Brush", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            expectedProbeTokens,
+            probeAliases.Values
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+
+        XElement[] stockProbeButtons = probeDocument
+            .Descendants()
+            .Where(element =>
+                element.Attribute(XamlNamespace + "Name")?.Value.StartsWith(
+                    "Stock",
+                    StringComparison.Ordinal) == true)
+            .ToArray();
+        Assert.Equal(2, stockProbeButtons.Length);
+        Assert.All(stockProbeButtons, stockProbeButton =>
+        {
+            Assert.Equal("False", stockProbeButton.Attribute("IsTabStop")?.Value);
+            Assert.Equal(
+                "Raw",
+                stockProbeButton.Attributes().Single(attribute =>
+                    attribute.Name.LocalName == "AutomationProperties.AccessibilityView").Value);
+        });
+
+        Assert.Contains("InitializeComponent", probeSource, StringComparison.Ordinal);
+        Assert.Contains("OpenCareerShellBackgroundBrush", probeXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenCareerShellBrush", probeXaml, StringComparison.Ordinal);
+        Assert.Equal(
+            "OpenCareerNavyBrush",
+            probeAliases["ProbeOpenCareerNavyBrush"]);
+        Assert.Contains("page.GetExpectedBrush", probeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("XamlApplication.Current.Resources", probeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetApplicationResource", probeSource, StringComparison.Ordinal);
         Assert.Contains("VisualStateManager.GoToState", probeSource, StringComparison.Ordinal);
         Assert.Contains("Task.Delay(TimeSpan.FromMilliseconds(100))", probeSource, StringComparison.Ordinal);
         Assert.Contains("FindStockContentPresenter", probeSource, StringComparison.Ordinal);
@@ -366,9 +450,13 @@ public sealed class UiDesignSystemContractTests
         Assert.Contains("ButtonAutomationPeer", probeSource, StringComparison.Ordinal);
         Assert.Contains("ButtonStateResources.SetVariant", probeSource, StringComparison.Ordinal);
         Assert.DoesNotContain("new ControlTemplate", probeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ControlTemplate", probeXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("PointerEntered", probeSource, StringComparison.Ordinal);
         Assert.DoesNotContain("PointerExited", probeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("PointerEntered", probeXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PointerExited", probeXaml, StringComparison.Ordinal);
         Assert.DoesNotMatch("#[0-9A-Fa-f]{6,8}", probeSource);
+        Assert.DoesNotMatch("#[0-9A-Fa-f]{6,8}", probeXaml);
 
         int probeModeIndex = appSource.IndexOf(
             "ButtonStateRuntimeProbeOptions.TryParse",

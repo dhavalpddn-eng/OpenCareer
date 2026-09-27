@@ -53,6 +53,9 @@
     <None Include="../../src/OpenCareer.App/Diagnostics/ButtonStateRuntimeProbe.cs"
           Link="UiDesign/ButtonStateRuntimeProbe.cs"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/Diagnostics/ButtonStateRuntimeProbePage.xaml"
+          Link="UiDesign/ButtonStateRuntimeProbePage.xaml"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../tools/run-button-state-runtime-certification.ps1"
           Link="UiDesign/run-button-state-runtime-certification.ps1"
           CopyToOutputDirectory="PreserveNewest" />

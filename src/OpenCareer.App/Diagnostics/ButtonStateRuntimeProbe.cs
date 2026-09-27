@@ -66,164 +66,46 @@ internal sealed record ButtonStateRuntimeProbeOptions(
     }
 }
 
-internal sealed class ButtonStateRuntimeProbePage : Page
+public sealed partial class ButtonStateRuntimeProbePage : Page
 {
     public ButtonStateRuntimeProbePage()
     {
-        PrimaryButton = CreateButton(
-            "Primary — hover and press",
-            "OpenCareerPrimaryButtonStyle");
-        SecondaryButton = CreateButton(
-            "Secondary — hover and press",
-            "OpenCareerSecondaryButtonStyle");
-        DangerButton = CreateButton(
-            "Danger — hover and press",
-            "OpenCareerDangerButtonStyle");
-        StockButton = CreateButton(
-            "Stock template reference",
-            "DefaultButtonStyle");
-        StockButton.Opacity = 0;
-        StockButton.IsHitTestVisible = false;
-        StockButton.Width = 1;
-        StockButton.Height = 1;
-
-        StatusText = new TextBlock
-        {
-            Text = "Runtime certification pending.",
-            TextWrapping = TextWrapping.Wrap
-        };
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 12
-        };
-        buttonRow.Children.Add(PrimaryButton);
-        buttonRow.Children.Add(SecondaryButton);
-        buttonRow.Children.Add(DangerButton);
-
-        var disabledToggle = new ToggleSwitch
-        {
-            Header = "Visual state",
-            OffContent = "Enabled",
-            OnContent = "Disabled"
-        };
-        disabledToggle.Toggled += (_, _) =>
-        {
-            bool isEnabled = !disabledToggle.IsOn;
-            PrimaryButton.IsEnabled = isEnabled;
-            SecondaryButton.IsEnabled = isEnabled;
-            DangerButton.IsEnabled = isEnabled;
-        };
-
-        var paperContent = new StackPanel
-        {
-            Spacing = 16
-        };
-        paperContent.Children.Add(new TextBlock
-        {
-            Text = "DEVELOPMENT / TEST — BUTTON STATE PROBE",
-            FontSize = 22,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        });
-        paperContent.Children.Add(new TextBlock
-        {
-            Text = "These are real OpenCareer buttons using the compiled App resources and stock WinUI template."
-        });
-        paperContent.Children.Add(buttonRow);
-        paperContent.Children.Add(disabledToggle);
-        paperContent.Children.Add(StatusText);
-        paperContent.Children.Add(StockButton);
-
-        var paper = new Border
-        {
-            Background = GetApplicationBrush("OpenCareerPaperBrush"),
-            BorderBrush = GetApplicationBrush("OpenCareerPaperRuleBrush"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(24),
-            Child = paperContent,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        Content = new Grid
-        {
-            Background = GetApplicationBrush("OpenCareerShellBackgroundBrush"),
-            Padding = new Thickness(32),
-            Children =
-            {
-                paper
-            }
-        };
+        InitializeComponent();
     }
 
-    public Button PrimaryButton { get; }
-    public Button SecondaryButton { get; }
-    public Button DangerButton { get; }
-    public Button StockButton { get; }
-    public TextBlock StatusText { get; }
+    public Button PrimaryButton => PrimaryProbeButton;
+    public Button SecondaryButton => SecondaryProbeButton;
+    public Button DangerButton => DangerProbeButton;
+    public Button StockLightButton => StockLightProbeButton;
+    public Button StockDarkButton => StockDarkProbeButton;
+    public TextBlock StatusText => ProbeStatusText;
 
-    public void ShowResult(ButtonStateRuntimeProbeReport report)
+    internal SolidColorBrush GetExpectedBrush(string token)
+    {
+        string alias = $"Probe{token}";
+        if (Resources.TryGetValue(alias, out object? value) &&
+            value is SolidColorBrush brush)
+        {
+            return brush;
+        }
+
+        throw new InvalidDataException(
+            $"Compiled probe resource alias '{alias}' did not resolve to a SolidColorBrush.");
+    }
+
+    internal void ShowResult(ButtonStateRuntimeProbeReport report)
     {
         StatusText.Text = report.Success
             ? "PASS — runtime resources, stock template, and all four visual states resolved."
             : $"FAIL — {report.Failure}";
     }
 
-    private static Button CreateButton(string content, string styleKey) =>
-        new()
-        {
-            Content = content,
-            Style = GetApplicationResource<Style>(styleKey)
-        };
-
-    private static SolidColorBrush GetApplicationBrush(string key) =>
-        GetApplicationResource<SolidColorBrush>(key);
-
-    internal static T GetApplicationResource<T>(string key)
-        where T : class
+    private void DisabledToggle_Toggled(object sender, RoutedEventArgs e)
     {
-        if (!TryGetApplicationResource(
-                XamlApplication.Current.Resources,
-                key,
-                out object? value))
-        {
-            throw new InvalidDataException(
-                $"Application resource '{key}' was not found in the compiled App resource dictionaries.");
-        }
-
-        return value as T
-            ?? throw new InvalidDataException(
-                $"Application resource '{key}' is not {typeof(T).Name}.");
-    }
-
-    private static bool TryGetApplicationResource(
-        ResourceDictionary dictionary,
-        string key,
-        out object? value)
-    {
-        if (dictionary.TryGetValue(key, out value))
-            return true;
-
-        // ResourceDictionary's code indexer addresses its own map. Walk the
-        // actual compiled App.xaml merge graph explicitly, in XAML lookup
-        // precedence order, instead of copying resources into the probe.
-        for (int index = dictionary.MergedDictionaries.Count - 1;
-             index >= 0;
-             index--)
-        {
-            if (TryGetApplicationResource(
-                    dictionary.MergedDictionaries[index],
-                    key,
-                    out value))
-            {
-                return true;
-            }
-        }
-
-        value = null;
-        return false;
+        bool isEnabled = !DisabledToggle.IsOn;
+        PrimaryButton.IsEnabled = isEnabled;
+        SecondaryButton.IsEnabled = isEnabled;
+        DangerButton.IsEnabled = isEnabled;
     }
 }
 
@@ -351,7 +233,8 @@ internal static class ButtonStateRuntimeProbe
                 page.PrimaryButton,
                 page.SecondaryButton,
                 page.DangerButton,
-                page.StockButton
+                page.StockLightButton,
+                page.StockDarkButton
             ];
 
             foreach (Button button in buttons)
@@ -365,32 +248,37 @@ internal static class ButtonStateRuntimeProbe
 
             IReadOnlyList<ButtonVariantRuntimeProbeResult> variants =
             [
-                await CertifyVariantAsync(page.PrimaryButton, Expectations[0]),
-                await CertifyVariantAsync(page.SecondaryButton, Expectations[1]),
-                await CertifyVariantAsync(page.DangerButton, Expectations[2])
+                await CertifyVariantAsync(page, page.PrimaryButton, Expectations[0]),
+                await CertifyVariantAsync(page, page.SecondaryButton, Expectations[1]),
+                await CertifyVariantAsync(page, page.DangerButton, Expectations[2])
             ];
 
             AssertVariantsAreIsolated(variants);
-            await AssertVariantSwitchDoesNotLeakAsync(page.PrimaryButton);
+            await AssertVariantSwitchDoesNotLeakAsync(page, page.PrimaryButton);
 
-            Style stockStyle =
-                ButtonStateRuntimeProbePage.GetApplicationResource<Style>(
-                    "DefaultButtonStyle");
+            Style stockStyle = page.StockLightButton.Style
+                ?? throw new InvalidDataException(
+                    "Compiled probe XAML did not apply DefaultButtonStyle to its stock reference Button.");
+            if (!ReferenceEquals(stockStyle, page.StockDarkButton.Style))
+            {
+                throw new InvalidDataException(
+                    "The light and dark stock reference Buttons did not resolve the same DefaultButtonStyle.");
+            }
             AssertStockStyleChain(page.PrimaryButton, stockStyle);
             AssertStockStyleChain(page.SecondaryButton, stockStyle);
             AssertStockStyleChain(page.DangerButton, stockStyle);
 
-            if (!ReferenceEquals(page.PrimaryButton.Template, page.StockButton.Template) ||
-                !ReferenceEquals(page.SecondaryButton.Template, page.StockButton.Template) ||
-                !ReferenceEquals(page.DangerButton.Template, page.StockButton.Template))
+            if (!ReferenceEquals(page.PrimaryButton.Template, page.StockDarkButton.Template) ||
+                !ReferenceEquals(page.SecondaryButton.Template, page.StockLightButton.Template) ||
+                !ReferenceEquals(page.DangerButton.Template, page.StockDarkButton.Template))
             {
                 throw new InvalidDataException(
                     "An OpenCareer Button does not retain the stock DefaultButtonStyle template.");
             }
 
-            AssertFocusBehaviorMatchesStock(page.PrimaryButton, page.StockButton);
-            AssertFocusBehaviorMatchesStock(page.SecondaryButton, page.StockButton);
-            AssertFocusBehaviorMatchesStock(page.DangerButton, page.StockButton);
+            AssertFocusBehaviorMatchesStock(page.PrimaryButton, page.StockDarkButton);
+            AssertFocusBehaviorMatchesStock(page.SecondaryButton, page.StockLightButton);
+            AssertFocusBehaviorMatchesStock(page.DangerButton, page.StockDarkButton);
 
             AssertNativeButtonAutomation(page.PrimaryButton);
             AssertNativeButtonAutomation(page.SecondaryButton);
@@ -454,6 +342,7 @@ internal static class ButtonStateRuntimeProbe
     }
 
     private static async Task<ButtonVariantRuntimeProbeResult> CertifyVariantAsync(
+        ButtonStateRuntimeProbePage page,
         Button button,
         VariantExpectation expectation)
     {
@@ -499,18 +388,21 @@ internal static class ButtonStateRuntimeProbe
                 RequireSolidBrush(presenter.BorderBrush, expectation.Variant, state, "BorderBrush");
 
             AssertBrushMatchesToken(
+                page,
                 actualBackground,
                 brushes.BackgroundToken,
                 expectation.Variant,
                 state,
                 "Background");
             AssertBrushMatchesToken(
+                page,
                 actualForeground,
                 brushes.ForegroundToken,
                 expectation.Variant,
                 state,
                 "Foreground");
             AssertBrushMatchesToken(
+                page,
                 actualBorder,
                 brushes.BorderToken,
                 expectation.Variant,
@@ -555,7 +447,9 @@ internal static class ButtonStateRuntimeProbe
         }
     }
 
-    private static async Task AssertVariantSwitchDoesNotLeakAsync(Button button)
+    private static async Task AssertVariantSwitchDoesNotLeakAsync(
+        ButtonStateRuntimeProbePage page,
+        Button button)
     {
         OpenCareerButtonVariant[] sequence =
         [
@@ -588,7 +482,7 @@ internal static class ButtonStateRuntimeProbe
         }
 
         button.ApplyTemplate();
-        _ = await CertifyVariantAsync(button, Expectations[0]);
+        _ = await CertifyVariantAsync(page, button, Expectations[0]);
     }
 
     private static void AssertOnlyVariantDictionary(
@@ -650,8 +544,11 @@ internal static class ButtonStateRuntimeProbe
 
     private static void AssertNativeButtonAutomation(Button button)
     {
-        var peer = new ButtonAutomationPeer(button);
-        if (peer.GetAutomationControlType() != AutomationControlType.Button ||
+        AutomationPeer? peer =
+            FrameworkElementAutomationPeer.CreatePeerForElement(button);
+        if (peer is not ButtonAutomationPeer ||
+            peer.GetAutomationControlType() != AutomationControlType.Button ||
+            string.IsNullOrWhiteSpace(peer.GetName()) ||
             peer.GetPattern(PatternInterface.Invoke) is null)
         {
             throw new InvalidDataException(
@@ -694,15 +591,14 @@ internal static class ButtonStateRuntimeProbe
     }
 
     private static void AssertBrushMatchesToken(
+        ButtonStateRuntimeProbePage page,
         SolidColorBrush actual,
         string expectedToken,
         OpenCareerButtonVariant variant,
         string state,
         string property)
     {
-        SolidColorBrush expected =
-            ButtonStateRuntimeProbePage.GetApplicationResource<SolidColorBrush>(
-                expectedToken);
+        SolidColorBrush expected = page.GetExpectedBrush(expectedToken);
 
         if (actual.Color != expected.Color || actual.Opacity != expected.Opacity)
         {
