@@ -72,6 +72,48 @@ public sealed class SqliteLogbookStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task IdempotencyLookupRoundTripsStoredEntry()
+    {
+        SqliteLogbookStore first =
+            CreateStore();
+
+        LogbookEntry expected =
+            ManualEntry(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Cessna 172",
+                "KAAA",
+                "KBBB",
+                "Boxes");
+
+        const string idempotencyKey =
+            "manual:idempotency-lookup";
+
+        await first.TryAppendAsync(
+            expected,
+            idempotencyKey);
+
+        SqliteLogbookStore reopened =
+            CreateStore();
+
+        LogbookEntry? recovered =
+            await reopened.FindByIdempotencyKeyAsync(
+                idempotencyKey);
+
+        Assert.NotNull(recovered);
+        Assert.Equal(
+            expected.EntryId,
+            recovered.EntryId);
+        Assert.Equal(
+            expected.Debrief.DebriefId,
+            recovered.Debrief.DebriefId);
+
+        Assert.Null(
+            await reopened.FindByIdempotencyKeyAsync(
+                "manual:missing"));
+    }
+
+    [Fact]
     public async Task RepeatedIdempotencyKeyReturnsOriginalEntry()
     {
         SqliteLogbookStore store = CreateStore();

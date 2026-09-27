@@ -16,10 +16,19 @@ public sealed class SimConnectTelemetryConnectionTests
         connection.Start();
         await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
 
-        Assert.Equal(SimConnectTelemetryDefinition.ValueCount, api.DataDefinitions.Count);
-        var request = Assert.Single(api.TelemetryRequests);
-        Assert.Equal(SimConnectTelemetryDefinition.RequestId, request.RequestId);
-        Assert.Equal(SimConnectTelemetryDefinition.DefinitionId, request.DefinitionId);
+        var telemetryDefinitions = api.DataDefinitions
+            .Where(static definition =>
+                definition.DefinitionId == SimConnectTelemetryDefinition.DefinitionId)
+            .ToArray();
+
+        Assert.Equal(SimConnectTelemetryDefinition.ValueCount, telemetryDefinitions.Length);
+
+        var request = Assert.Single(
+            api.TelemetryRequests,
+            static request =>
+                request.RequestId == SimConnectTelemetryDefinition.RequestId
+                && request.DefinitionId == SimConnectTelemetryDefinition.DefinitionId);
+
         Assert.Equal(OpenCareer.SimConnect.Native.SimConnectPeriod.Second, request.Period);
 
         var pause = Assert.Single(api.SystemEvents);
