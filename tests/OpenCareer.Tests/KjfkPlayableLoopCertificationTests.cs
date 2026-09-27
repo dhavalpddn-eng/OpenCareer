@@ -455,9 +455,13 @@ public sealed class KjfkPlayableLoopCertificationTests
                 Assert.True(authoritativeNewerShutdown.UpdatedAt > capturedShutdown.UpdatedAt);
                 Assert.Equal(authoritativeNewerShutdown.UpdatedAt, terminal.UpdatedAt);
                 Assert.Equal(authoritativeNewerShutdown.UpdatedAt, terminal.Milestones.CompletedAt);
-                Assert.Equal(authoritativeNewerShutdown.EffectiveStatistics, terminal.EffectiveStatistics);
+                Assert.Equal(
+                    System.Text.Json.JsonSerializer.Serialize(authoritativeNewerShutdown.EffectiveStatistics),
+                    System.Text.Json.JsonSerializer.Serialize(terminal.EffectiveStatistics));
                 Assert.Equal(authoritativeNewerShutdown.TimeLedger, terminal.TimeLedger);
-                Assert.Equal(authoritativeNewerShutdown.EffectiveLandingEpisodes, terminal.EffectiveLandingEpisodes);
+                Assert.Equal(
+                    System.Text.Json.JsonSerializer.Serialize(authoritativeNewerShutdown.EffectiveLandingEpisodes),
+                    System.Text.Json.JsonSerializer.Serialize(terminal.EffectiveLandingEpisodes));
                 Assert.Equal(FlightSessionStatus.Completed, terminal.Status);
                 Assert.Equal(ContractStatus.Completed, (await app.ContractStore.ReadJobContractAsync(first))!.Contract.Status);
                 Assert.Null(await app.ReservationAsync(first));
