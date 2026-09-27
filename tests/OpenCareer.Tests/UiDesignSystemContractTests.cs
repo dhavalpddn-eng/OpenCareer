@@ -355,6 +355,8 @@ public sealed class UiDesignSystemContractTests
         Assert.Contains("OpenCareerSecondaryButtonStyle", probeSource, StringComparison.Ordinal);
         Assert.Contains("OpenCareerDangerButtonStyle", probeSource, StringComparison.Ordinal);
         Assert.Contains("DefaultButtonStyle", probeSource, StringComparison.Ordinal);
+        Assert.Contains("OpenCareerShellBackgroundBrush", probeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenCareerShellBrush", probeSource, StringComparison.Ordinal);
         Assert.Contains("VisualStateManager.GoToState", probeSource, StringComparison.Ordinal);
         Assert.Contains("Task.Delay(TimeSpan.FromMilliseconds(100))", probeSource, StringComparison.Ordinal);
         Assert.Contains("FindStockContentPresenter", probeSource, StringComparison.Ordinal);

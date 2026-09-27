@@ -48,6 +48,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         {
             // The runtime probe must not open normal career data, recovery, or SimConnect.
             _services = new ServiceCollection().BuildServiceProvider();
+            UnhandledException += OnButtonStateRuntimeProbeUnhandledException;
             return;
         }
 
@@ -277,7 +278,17 @@ public partial class App : Microsoft.UI.Xaml.Application
     {
         if (_buttonStateRuntimeProbeOptions is not null)
         {
-            LaunchButtonStateRuntimeProbe(_buttonStateRuntimeProbeOptions);
+            try
+            {
+                LaunchButtonStateRuntimeProbe(_buttonStateRuntimeProbeOptions);
+            }
+            catch (Exception ex)
+            {
+                CompleteButtonStateRuntimeProbe(
+                    _buttonStateRuntimeProbeOptions,
+                    ButtonStateRuntimeProbe.CreateFailureReport(ex));
+            }
+
             return;
         }
 
@@ -532,34 +543,56 @@ public partial class App : Microsoft.UI.Xaml.Application
             ButtonStateRuntimeProbeReport report =
                 await ButtonStateRuntimeProbe.RunAsync(page);
             page.ShowResult(report);
+            CompleteButtonStateRuntimeProbe(options, report, page);
+        }
+    }
 
-            try
+    private void OnButtonStateRuntimeProbeUnhandledException(
+        object sender,
+        Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        e.Handled = true;
+
+        if (_buttonStateRuntimeProbeOptions is not null)
+        {
+            CompleteButtonStateRuntimeProbe(
+                _buttonStateRuntimeProbeOptions,
+                ButtonStateRuntimeProbe.CreateFailureReport(e.Exception));
+        }
+    }
+
+    private void CompleteButtonStateRuntimeProbe(
+        ButtonStateRuntimeProbeOptions options,
+        ButtonStateRuntimeProbeReport report,
+        ButtonStateRuntimeProbePage? page = null)
+    {
+        try
+        {
+            ButtonStateRuntimeProbe.WriteReport(options.OutputPath, report);
+        }
+        catch (Exception ex)
+        {
+            Environment.ExitCode = 1;
+            if (page is not null)
             {
-                ButtonStateRuntimeProbe.WriteReport(
-                    options.OutputPath,
-                    report);
-            }
-            catch (Exception ex)
-            {
-                Environment.ExitCode = 1;
                 page.StatusText.Text =
                     $"FAIL — runtime report could not be written: {ex}";
-
-                if (options.AutoClose)
-                {
-                    _buttonStateRuntimeProbeWindow?.Close();
-                    Exit();
-                }
-
-                return;
             }
 
-            Environment.ExitCode = report.Success ? 0 : 1;
             if (options.AutoClose)
             {
                 _buttonStateRuntimeProbeWindow?.Close();
                 Exit();
             }
+
+            return;
+        }
+
+        Environment.ExitCode = report.Success ? 0 : 1;
+        if (options.AutoClose)
+        {
+            _buttonStateRuntimeProbeWindow?.Close();
+            Exit();
         }
     }
 

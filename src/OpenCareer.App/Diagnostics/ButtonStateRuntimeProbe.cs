@@ -149,7 +149,7 @@ internal sealed class ButtonStateRuntimeProbePage : Page
 
         Content = new Grid
         {
-            Background = GetApplicationBrush("OpenCareerShellBrush"),
+            Background = GetApplicationBrush("OpenCareerShellBackgroundBrush"),
             Padding = new Thickness(32),
             Children =
             {
@@ -373,17 +373,26 @@ internal static class ButtonStateRuntimeProbe
         }
         catch (Exception ex)
         {
-            return new ButtonStateRuntimeProbeReport(
-                ReportSchemaVersion,
-                false,
-                windowsAppSdkVersion,
-                [],
-                VariantResourcesIsolated: false,
-                StockTemplatePreserved: false,
-                SystemFocusBehaviorPreserved: false,
-                NativeButtonAutomationPreserved: false,
-                Failure: ex.ToString());
+            return CreateFailureReport(ex, windowsAppSdkVersion);
         }
+    }
+
+    public static ButtonStateRuntimeProbeReport CreateFailureReport(
+        Exception exception,
+        string windowsAppSdkVersion = "unavailable")
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        return new ButtonStateRuntimeProbeReport(
+            ReportSchemaVersion,
+            false,
+            windowsAppSdkVersion,
+            [],
+            VariantResourcesIsolated: false,
+            StockTemplatePreserved: false,
+            SystemFocusBehaviorPreserved: false,
+            NativeButtonAutomationPreserved: false,
+            Failure: exception.ToString());
     }
 
     public static void WriteReport(
