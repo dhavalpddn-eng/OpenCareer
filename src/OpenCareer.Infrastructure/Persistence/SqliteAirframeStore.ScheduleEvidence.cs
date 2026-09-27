@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Domain.Aircraft;
 
