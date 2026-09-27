@@ -231,6 +231,16 @@ public sealed class UiDesignSystemContractTests
                  })
         {
             XDocument stateDocument = XDocument.Load(GetDesignFilePath(fileName));
+            string[] mergedSources = stateDocument
+                .Descendants()
+                .Where(static element => element.Name.LocalName == "ResourceDictionary")
+                .Select(element => element.Attribute("Source")?.Value)
+                .Where(static source => source is not null)
+                .Select(static source => source!)
+                .ToArray();
+            Assert.Equal(
+                ["ms-appx:///Styles/DesignTokens.xaml"],
+                mergedSources);
             Assert.DoesNotContain(
                 stateDocument.Descendants(),
                 static element =>
@@ -445,7 +455,7 @@ public sealed class UiDesignSystemContractTests
         Assert.All(stockProbeButtons, stockProbeButton =>
         {
             Assert.Equal("False", stockProbeButton.Attribute("IsTabStop")?.Value);
-            Assert.Equal("Collapsed", stockProbeButton.Attribute("Visibility")?.Value);
+            Assert.Equal("0", stockProbeButton.Attribute("Opacity")?.Value);
         });
 
         Assert.Contains("InitializeComponent", probeSource, StringComparison.Ordinal);
