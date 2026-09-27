@@ -416,6 +416,7 @@ Chapter status: **FOUNDATION IN PROGRESS** — isolated `feature/mbl17-airframe-
 - [x] Persist exact physical-airframe landing cycles and independent tracking provenance from authoritative `FlightAirframeSummary.LandingEpisodeCount` inside the exact-once consequence transaction; schema 18 gives migrated rows an explicit zero baseline without historical backfill, confirmed cycles survive a later non-crash interruption, and all bounce contacts in one landing episode remain one cycle. Condition/calibration, dispatch, economy and failure actuation are unchanged.
 - [ ] Extend the fallback with verified aircraft-specific/component schedules.
   - [x] Add a versioned FAA/Lycoming 172S + IO-360-L2A 50-hour engine-inspection candidate with exact provenance, explicit physical applicability/baseline requirements and deterministic tracked-usage assessment; keep it unavailable until those facts are persisted. Do not map landing episodes to documented takeoff-cycle rules.
+  - [x] Persist explicit exact-AirframeId certified-model/component evidence and versioned tracked-usage baselines (schema 19); activate a verified assessment only on an exact retained match, with no TITLE inference or migration backfill and no change to the generic operational fallback.
 - [ ] Implement repair/maintenance cost and downtime.
 - [ ] Implement MRO/parts availability.
 - [ ] Extend repair/inspection history with future wear-service events and Maintenance UI.

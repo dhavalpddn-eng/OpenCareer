@@ -265,6 +265,7 @@ public sealed partial class AirframeInspectionTests
             INSERT INTO economy_ledger_postings VALUES ('inspection-ledger',0,0,500,0,'debit');
             INSERT INTO economy_ledger_postings VALUES ('inspection-ledger',1,1,0,500,'credit');
             INSERT INTO logbook_entries VALUES ('inspection-log','inspection-log-key',1,100,100,0,0,0,'C172','KJFK','KJFK','inspection-contract','preserve','{"preserve":"logbook"}');
+            DROP TABLE airframe_maintenance_schedule_evidence;
             DROP TABLE airframe_service_state;
             ALTER TABLE airframe_maintenance_events RENAME TO events_copy;
             DROP INDEX ix_airframe_maintenance_events_airframe;
@@ -279,7 +280,7 @@ public sealed partial class AirframeInspectionTests
             """);
         var rows = await ExistingRowsAsync();
         var baseline = await StateAsync(a.Airframe.AirframeId);
-        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(rows, await ExistingRowsAsync());
         Assert.Equal(AirframeUsageOrigin.TrackingFromMigrationBaseline, baseline.UsageOrigin);
         Assert.Equal(TimeSpan.Zero, baseline.TotalTrackedAirborneTime);
@@ -330,6 +331,7 @@ public sealed partial class AirframeInspectionTests
             DROP TABLE airframe_maintenance_events_v18_source;
             CREATE INDEX ix_airframe_maintenance_events_airframe
                 ON airframe_maintenance_events (airframe_id, performed_at_utc_ticks, maintenance_action_id);
+            DROP TABLE airframe_maintenance_schedule_evidence;
             CREATE TABLE airframe_service_state_v17 (
                 airframe_id TEXT NOT NULL PRIMARY KEY REFERENCES airframes(airframe_id),
                 schedule_id TEXT NOT NULL CHECK (length(trim(schedule_id)) > 0),
@@ -351,7 +353,7 @@ public sealed partial class AirframeInspectionTests
         var rows = await ExistingRowsAsync();
 
         var migrated = await StateAsync(a.Airframe.AirframeId);
-        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(rows, await ExistingRowsAsync());
         string migratedEventSchema = Assert.IsType<string>(await ScalarAsync(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='airframe_maintenance_events';"));
@@ -421,7 +423,7 @@ public sealed partial class AirframeInspectionTests
         var tables = new List<string>();
         await using (var command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name <> 'airframe_service_state' ORDER BY name;";
+            command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('airframe_service_state','airframe_maintenance_schedule_evidence') ORDER BY name;";
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync()) tables.Add(reader.GetString(0));
         }

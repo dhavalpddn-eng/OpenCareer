@@ -9,7 +9,7 @@ Canonical aircraft identity or simulator TITLE alone cannot activate a component
 
 | Candidate | Version | Required applicability evidence | Component | Documented interval | Runtime status |
 | --- | ---: | --- | --- | --- | --- |
-| `Cessna172S.LycomingIo360L2A.EngineInspection` | 1 | Exact AirframeId; certified Model 172S; installed IO-360-L2A; component usage baseline | Engine | 50 operating hours | Unavailable until all evidence is explicit |
+| `Cessna172S.LycomingIo360L2A.EngineInspection` | 1 | Exact AirframeId; certified Model 172S; installed IO-360-L2A; component usage baseline | Engine | 50 operating hours | Activates only for an explicitly registered exact match |
 
 The broad canonical `msfs-title:Cessna 172 Skyhawk` identity can expose this candidate but
 cannot prove its applicability. When explicit evidence is supplied, due assessment compares
@@ -18,11 +18,15 @@ an OpenCareer proxy; manufacturer documentation does not establish equivalence b
 game's airborne counter and an engine operating-time meter. Persisted landing cycles are also
 shown factually, but do not trigger this task because no landing-cycle interval was verified.
 
-Existing and new production airframes therefore remain on the generic 50-hour fallback.
-Existing inspection exact-once behavior, dispatch gates and history remain unchanged.
-Applicability evidence is not yet persisted; the production maintenance snapshot exposes this
-candidate as `ApplicabilityEvidenceRequired`. `TrackedProxyCurrent`/`TrackedProxyDue` is available only to an explicit
-caller that supplies matching physical configuration and component-baseline evidence.
+Existing and new production airframes remain on the generic 50-hour fallback unless an external
+authoritative physical-aircraft record is explicitly registered for the exact AirframeId. Schema 19
+retains certified-model/component evidence and requires separate authoritative maintenance-record
+provenance before capturing the current exact tracked-usage baseline from the service-state authority.
+It does not infer or backfill either fact from canonical identity, TITLE, livery, flight history or
+migration. Missing evidence remains `ApplicabilityEvidenceRequired`; a
+retained mismatch remains `ApplicabilityMismatch`; only an exact 172S/IO-360-L2A match yields
+`TrackedProxyCurrent`/`TrackedProxyDue`. Existing inspection exact-once behavior, dispatch gates and
+history remain unchanged, and the component assessment has no service action in this slice.
 
 ## Primary-source ledger
 
@@ -41,5 +45,5 @@ caller that supplies matching physical configuration and component-baseline evid
   evaluate the hour/calendar limits safely.
 - Initial 25-hour inspection applicability is not inferred. Prior component life and service
   history are not reconstructed from the time the airframe was registered in OpenCareer.
-- There are no costs, downtime, parts, UI, automatic failures, wear thresholds, active
-  aircraft-specific dispatch gates or schema changes in this slice.
+- There are no costs, downtime, parts, UI, automatic failures, wear thresholds or active
+  aircraft-specific dispatch gates in this slice.

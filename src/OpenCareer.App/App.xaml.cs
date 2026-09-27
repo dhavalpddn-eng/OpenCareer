@@ -73,6 +73,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<IAirframeStore, SqliteAirframeStore>();
         services.AddSingleton<IAirframeServiceStateStore>(provider =>
             (SqliteAirframeStore)provider.GetRequiredService<IAirframeStore>());
+        services.AddSingleton<IAirframeMaintenanceScheduleEvidenceStore>(provider =>
+            (SqliteAirframeStore)provider.GetRequiredService<IAirframeStore>());
         services.AddSingleton<PhysicalAirframeEligibilityService>();
         services.AddSingleton<IFlightAirframeConsequenceStore>(provider =>
             (SqliteAirframeStore)provider.GetRequiredService<IAirframeStore>());

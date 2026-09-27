@@ -8,7 +8,7 @@ internal static class OpenCareerDatabaseMigrator
     // Career and Economy branches independently reused schema versions 1-10.
     // Version 11 was the first shared convergence point; pre-v11 user_version
     // alone cannot be used to infer which subsystem tables already exist.
-    public const int CurrentSchemaVersion = 18;
+    public const int CurrentSchemaVersion = 19;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -40,6 +40,8 @@ internal static class OpenCareerDatabaseMigrator
             await MigrateAirframeServiceStateAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
         if (version < 18)
             await MigrateAirframeLandingCyclesAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+        if (version < 19)
+            await MigrateAirframeMaintenanceScheduleEvidenceAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
 
         await MigrateLegacyIntegrationEconomyAsync(
                 connection,
@@ -156,6 +158,54 @@ internal static class OpenCareerDatabaseMigrator
                 ON airframe_maintenance_events (airframe_id, performed_at_utc_ticks, maintenance_action_id);
             """, cancellationToken).ConfigureAwait(false);
     }
+
+    private static Task MigrateAirframeMaintenanceScheduleEvidenceAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken) =>
+        // Schema 18 has no authoritative physical component record. Deliberately create an
+        // empty authority: canonical model, simulator TITLE, and retained flights cannot prove
+        // which certified model/component is installed or establish its prior service baseline.
+        ExecuteAsync(connection, transaction, """
+            CREATE TABLE airframe_maintenance_schedule_evidence (
+                evidence_id TEXT NOT NULL PRIMARY KEY,
+                airframe_id TEXT NOT NULL REFERENCES airframes(airframe_id),
+                canonical_aircraft_id TEXT NOT NULL CHECK (length(trim(canonical_aircraft_id)) > 0),
+                component INTEGER NOT NULL CHECK (component = 1),
+                certified_aircraft_model TEXT NOT NULL CHECK (length(trim(certified_aircraft_model)) > 0),
+                installed_component_model TEXT NOT NULL CHECK (length(trim(installed_component_model)) > 0),
+                applicability_authority INTEGER NOT NULL CHECK (applicability_authority = 1),
+                source_reference TEXT NOT NULL CHECK (length(trim(source_reference)) > 0),
+                applicability_revision INTEGER NOT NULL CHECK (applicability_revision = 1),
+                schedule_id TEXT NOT NULL CHECK (length(trim(schedule_id)) > 0),
+                schedule_version INTEGER NOT NULL CHECK (schedule_version >= 1),
+                baseline_airborne_ticks INTEGER NOT NULL CHECK (
+                    typeof(baseline_airborne_ticks) = 'integer' AND baseline_airborne_ticks >= 0),
+                baseline_landing_cycles INTEGER NOT NULL CHECK (
+                    typeof(baseline_landing_cycles) = 'integer' AND baseline_landing_cycles >= 0),
+                airborne_time_origin INTEGER NOT NULL CHECK (airborne_time_origin IN (1, 2)),
+                landing_cycle_origin INTEGER NOT NULL CHECK (landing_cycle_origin IN (1, 2)),
+                baseline_authority INTEGER NOT NULL CHECK (baseline_authority = 1),
+                baseline_source_reference TEXT NOT NULL CHECK (length(trim(baseline_source_reference)) > 0),
+                source_service_revision INTEGER NOT NULL CHECK (source_service_revision >= 1),
+                source_service_updated_at_utc_ticks INTEGER NOT NULL CHECK (source_service_updated_at_utc_ticks > 0),
+                baseline_revision INTEGER NOT NULL CHECK (baseline_revision = 1),
+                recorded_at_utc_ticks INTEGER NOT NULL CHECK (recorded_at_utc_ticks > 0),
+                established_at_utc_ticks INTEGER NOT NULL CHECK (
+                    established_at_utc_ticks > 0 AND established_at_utc_ticks = recorded_at_utc_ticks),
+                payload_schema_version INTEGER NOT NULL CHECK (payload_schema_version = 1),
+                payload_json TEXT NOT NULL CHECK (length(payload_json) > 0),
+                UNIQUE (airframe_id, schedule_id, schedule_version)
+            );
+            CREATE INDEX ix_airframe_maintenance_schedule_evidence_airframe
+                ON airframe_maintenance_schedule_evidence (
+                    airframe_id,
+                    component,
+                    schedule_id,
+                    schedule_version,
+                    evidence_id
+                );
+            """, cancellationToken);
 
     private static async Task EnsureUnifiedSchemaAsync(
         SqliteConnection connection,

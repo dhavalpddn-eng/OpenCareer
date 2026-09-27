@@ -36,7 +36,8 @@ public sealed record AirframeMaintenanceSnapshot(
     ImmutableList<AirframeMaintenanceHistoryEntry> History,
     FlightAirframeHistoryCursor? Next,
     AirframeServiceState ServiceState,
-    DateTimeOffset EvaluatedAt)
+    DateTimeOffset EvaluatedAt,
+    ImmutableArray<AirframeMaintenanceScheduleAssessment> VerifiedScheduleCandidates)
 {
     // Uses the very same revision-checked records; no independent reliability-store reads.
     public AirframeReliabilityAssessment Reliability => AirframeReliabilityAssessment.Evaluate(Current, ServiceState, EvaluatedAt);
@@ -54,8 +55,6 @@ public sealed record AirframeMaintenanceSnapshot(
     public double HoursUntilInspection => ServiceState.TimeUntilInspection.TotalHours;
     public string ScheduleId => ServiceState.ScheduleId;
     public int ScheduleVersion => ServiceState.ScheduleVersion;
-    public ImmutableArray<AirframeMaintenanceScheduleAssessment> VerifiedScheduleCandidates =>
-        AirframeMaintenanceScheduleCatalog.AssessCandidates(Airframe, ServiceState);
 }
 
 public sealed record AirframeMaintenanceReadResult(
@@ -65,7 +64,8 @@ public sealed record AirframeMaintenanceReadResult(
 
 /// <summary>Read-only condition/history authority for an explicitly requested physical airframe.</summary>
 public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, IFlightAirframeConsequenceStore consequences,
-    IAirframeMaintenanceStore? maintenance = null, IAirframeServiceStateStore? serviceStates = null, TimeProvider? clock = null)
+    IAirframeMaintenanceStore? maintenance = null, IAirframeServiceStateStore? serviceStates = null, TimeProvider? clock = null,
+    IAirframeMaintenanceScheduleEvidenceStore? scheduleEvidence = null)
 {
     public async Task<AirframeMaintenanceReadResult> ReadAsync(
         FlightAirframeHistoryQuery query, CancellationToken cancellationToken = default)
@@ -79,13 +79,20 @@ public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, I
         if (current.Airframe.AirframeId != query.AirframeId)
             throw new InvalidDataException("Maintenance snapshot returned a different physical airframe.");
 
+        var evidence = await ReadScheduleEvidenceAsync(current, cancellationToken).ConfigureAwait(false);
         var service = await ReadServiceAsync(current, cancellationToken).ConfigureAwait(false);
+        ValidateScheduleEvidence(current, service, evidence);
         var page = await consequences.ReadHistoryAsync(query, cancellationToken).ConfigureAwait(false);
         // The stores need not share a transaction. Fail closed rather than combine an older
         // condition with history written concurrently; the caller can request a fresh snapshot.
-        if (service != await ReadServiceAsync(current, cancellationToken).ConfigureAwait(false)
-            || current != await airframes.FindAsync(query.AirframeId, cancellationToken).ConfigureAwait(false))
-            throw new AirframeConcurrencyException("Airframe condition/service state changed during maintenance read; refresh the snapshot.");
+        var finalCurrent = await airframes.FindAsync(query.AirframeId, cancellationToken).ConfigureAwait(false);
+        if (finalCurrent is null) throw new AirframeConcurrencyException("Airframe was removed during maintenance read; refresh the snapshot.");
+        finalCurrent.Validate();
+        var finalEvidence = await ReadScheduleEvidenceAsync(finalCurrent, cancellationToken).ConfigureAwait(false);
+        var finalService = await ReadServiceAsync(finalCurrent, cancellationToken).ConfigureAwait(false);
+        ValidateScheduleEvidence(finalCurrent, finalService, finalEvidence);
+        if (!evidence.SequenceEqual(finalEvidence) || service != finalService || current != finalCurrent)
+            throw new AirframeConcurrencyException("Airframe condition/service/evidence state changed during maintenance read; refresh the snapshot.");
 
         foreach (var application in page.Entries)
         {
@@ -95,8 +102,11 @@ public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, I
                 || application.After.Revision == current.Revision && application.After != current)
                 throw new InvalidDataException("Retained maintenance history does not match the current physical airframe/model/revision.");
         }
+        ImmutableArray<AirframeMaintenanceScheduleAssessment> assessments =
+            AirframeMaintenanceScheduleCatalog.AssessCandidates(current.Airframe, service, evidence);
         return new(query.AirframeId, AirframeMaintenanceReadStatus.Available,
-            new(current, page.Entries.Select(a => new AirframeMaintenanceHistoryEntry(a)).ToImmutableList(), page.Next, service, (clock ?? TimeProvider.System).GetUtcNow()));
+            new(current, page.Entries.Select(a => new AirframeMaintenanceHistoryEntry(a)).ToImmutableList(), page.Next,
+                service, (clock ?? TimeProvider.System).GetUtcNow(), assessments));
     }
 
     public async Task<AirframeServiceHistoryReadResult> ReadServiceHistoryAsync(
@@ -140,5 +150,31 @@ public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, I
         if (service.AirframeId != current.Airframe.AirframeId || service.UpdatedAt < current.Airframe.CreatedAt)
             throw new InvalidDataException("Service state does not match the requested physical airframe.");
         return service;
+    }
+
+    private async Task<ImmutableArray<AirframeMaintenanceScheduleEvidenceRecord>> ReadScheduleEvidenceAsync(
+        AirframeStoreRecord current,
+        CancellationToken cancellationToken)
+    {
+        var store = scheduleEvidence ?? airframes as IAirframeMaintenanceScheduleEvidenceStore;
+        if (store is null) return [];
+        ImmutableArray<AirframeMaintenanceScheduleEvidenceRecord> evidence =
+            await store.ReadForAirframeAsync(current.Airframe.AirframeId, cancellationToken).ConfigureAwait(false);
+        if (evidence.IsDefault)
+            throw new InvalidDataException("Maintenance schedule evidence store returned an uninitialized result.");
+        return evidence
+            .OrderBy(record => record.Baseline.ScheduleId, StringComparer.Ordinal)
+            .ThenBy(record => record.Baseline.ScheduleVersion)
+            .ThenBy(record => record.EvidenceId)
+            .ToImmutableArray();
+    }
+
+    private static void ValidateScheduleEvidence(
+        AirframeStoreRecord current,
+        AirframeServiceState service,
+        ImmutableArray<AirframeMaintenanceScheduleEvidenceRecord> evidence)
+    {
+        foreach (AirframeMaintenanceScheduleEvidenceRecord record in evidence)
+            record.Validate(current.Airframe, service);
     }
 }

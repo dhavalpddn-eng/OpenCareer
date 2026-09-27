@@ -9,13 +9,18 @@ public sealed partial class SqliteAirframeStore : IAirframeStore
 {
     private readonly OpenCareerDatabaseOptions _options;
     private readonly ILogger<SqliteAirframeStore> _logger;
+    private readonly TimeProvider _clock;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
     private int _initialized;
 
-    public SqliteAirframeStore(OpenCareerDatabaseOptions options, ILogger<SqliteAirframeStore> logger)
+    public SqliteAirframeStore(
+        OpenCareerDatabaseOptions options,
+        ILogger<SqliteAirframeStore> logger,
+        TimeProvider? clock = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _clock = clock ?? TimeProvider.System;
     }
 
     public async Task<AirframeStoreRecord?> FindAsync(AirframeId airframeId, CancellationToken cancellationToken = default)

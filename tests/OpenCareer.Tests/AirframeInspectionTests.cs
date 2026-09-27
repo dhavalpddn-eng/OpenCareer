@@ -60,7 +60,7 @@ public sealed partial class AirframeInspectionTests : IDisposable
         Assert.Equal(1, (await StateAsync(a.Airframe.AirframeId)).TotalTrackedLandingCycles);
         Assert.Equal(other, await StateAsync(b.Airframe.AirframeId));
         Assert.Equal(b, await Store().FindAsync(b.Airframe.AirframeId));
-        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
         await ExecuteAsync("CREATE TRIGGER fail_init BEFORE INSERT ON airframe_service_state BEGIN SELECT RAISE(ABORT, 'injected'); END;");
         await Assert.ThrowsAsync<SqliteException>(() => CreateAsync());
         Assert.Equal(2L, await ScalarAsync("SELECT count(*) FROM airframes;"));

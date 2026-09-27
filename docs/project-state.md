@@ -4,6 +4,13 @@
 
 ## MBL-17 physical-airframe foundation — 2026-09-25
 
+Slice 13 persists verified-schedule activation evidence on the same branch / draft PR #106:
+- SQLite schema 19 adds an empty-by-default exact-AirframeId authority for immutable certified-model/component applicability evidence and its versioned service baseline. Migration never infers component identity or prior service from canonical AircraftId, MSFS TITLE, livery, flight history or retained usage.
+- Explicit registration requires a stable evidence ID, exact physical identity, verified catalog schedule/version/component, separate authoritative physical-aircraft and maintenance-record provenance, and the expected current service revision. The SQLite transaction captures exact tracked airborne ticks, landing cycles, both origins and source service revision/time; caller-supplied usage counters are not accepted and registration time alone cannot establish a baseline.
+- Identical replay returns the retained record without moving its baseline; conflicting evidence ID/schedule reuse and stale revisions fail closed. Strict typed metadata duplicates the versioned JSON payload so malformed payloads, unsupported schemas and metadata/payload identity drift cannot silently activate a schedule.
+- The maintenance snapshot brackets evidence reads with its existing condition/service coherence checks. Exact retained 172S + IO-360-L2A facts activate only `TrackedProxyCurrent`/`TrackedProxyDue`; missing or mismatched facts do not activate the candidate. The generic `LightAircraftRoutineInspectionV1` remains the operational inspection and dispatch gate, and completing it does not reset the component baseline.
+- No production flow auto-registers evidence. There is no TITLE inference, UI, component service action, cost, downtime, parts, wear threshold or automatic failure. The frozen playable-loop branch remains untouched.
+
 Slice 11 adds exact physical-airframe landing-cycle tracking on the same branch / draft PR #106:
 - SQLite schema 18 additively extends physical-airframe service state with a nonnegative landing-cycle counter and independent origin. New records track from creation; migrated schema-17 records start at an explicit zero migration baseline. Migration does not infer prior cycles or backfill them from retained flight-consequence history.
 - The existing exact-once consequence transaction derives the cycle increment from authoritative `FlightAirframeSummary.LandingEpisodeCount`. History and landing cycles commit or roll back together; retry/replay of the retained consequence cannot increment cycles again. A reducer-confirmed cycle remains factual on a later non-crash interruption while uncertain airborne time and condition remain unapplied.

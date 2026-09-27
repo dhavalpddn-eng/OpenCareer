@@ -326,13 +326,14 @@ public sealed class AirframeRepairTests : IDisposable
             INSERT INTO economy_ledger_postings VALUES ('repair-ledger-sentinel', 0, 0, 500, 0, 'debit');
             INSERT INTO economy_ledger_postings VALUES ('repair-ledger-sentinel', 1, 1, 0, 500, 'credit');
             INSERT INTO logbook_entries VALUES ('repair-log-sentinel', 'repair-log-key', 1, 100, 100, 0, 0, 0, 'C172', 'KJFK', 'KJFK', 'repair-contract-sentinel', 'preserve', '{"preserve":"logbook"}');
+            DROP TABLE airframe_maintenance_schedule_evidence;
             DROP TABLE airframe_maintenance_events;
             PRAGMA user_version=15;
             """);
         var beforeRows = await ExistingRowsAsync();
         Assert.Equal(15L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Null(await Store().FindMaintenanceActionAsync(Guid.NewGuid()));
-        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(beforeRows, await ExistingRowsAsync());
         Assert.Equal(Json(applied.Application), Json((await Store().FindBySessionAsync(flight.SessionId))!));
         Assert.Equal(applied.Application.After, await Store().FindAsync(a.Airframe.AirframeId));
@@ -344,7 +345,7 @@ public sealed class AirframeRepairTests : IDisposable
     public async Task FreshSchemaHasEmptyServiceHistoryAndProductionUsesSameStore()
     {
         Assert.Null(await Store().FindMaintenanceActionAsync(Guid.NewGuid()));
-        Assert.Equal(18L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframe_maintenance_events;"));
         string registration = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "UiContracts", "App.xaml.cs"));
         Assert.Contains("AddSingleton<IAirframeMaintenanceStore>(provider =>", registration);
@@ -358,7 +359,7 @@ public sealed class AirframeRepairTests : IDisposable
         var tables = new List<string>();
         await using (var command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name <> 'airframe_maintenance_events' ORDER BY name;";
+            command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('airframe_maintenance_events','airframe_maintenance_schedule_evidence') ORDER BY name;";
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync()) tables.Add(reader.GetString(0));
         }

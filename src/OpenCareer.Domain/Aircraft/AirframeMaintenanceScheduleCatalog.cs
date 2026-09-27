@@ -184,14 +184,43 @@ public static class AirframeMaintenanceScheduleCatalog
     public static ImmutableArray<AirframeMaintenanceScheduleAssessment> AssessCandidates(
         Airframe airframe,
         AirframeServiceState serviceState)
+        => AssessCandidates(airframe, serviceState, []);
+
+    /// <summary>
+    /// Evaluates catalog candidates using only retained exact-airframe evidence. Missing or
+    /// mismatched evidence cannot activate a verified schedule and does not alter the fallback.
+    /// </summary>
+    public static ImmutableArray<AirframeMaintenanceScheduleAssessment> AssessCandidates(
+        Airframe airframe,
+        AirframeServiceState serviceState,
+        IEnumerable<AirframeMaintenanceScheduleEvidenceRecord> retainedEvidence)
     {
         ArgumentNullException.ThrowIfNull(airframe);
         ArgumentNullException.ThrowIfNull(serviceState);
+        ArgumentNullException.ThrowIfNull(retainedEvidence);
         serviceState.Validate();
         if (serviceState.AirframeId != airframe.AirframeId)
             throw new InvalidDataException("Maintenance schedule inputs belong to different physical airframes.");
-        return FindCandidates(airframe.CanonicalAircraftId)
-            .Select(definition => AssessDefinition(airframe, serviceState, definition, evidence: null))
+
+        ImmutableArray<AirframeMaintenanceScheduleDefinition> candidates = FindCandidates(airframe.CanonicalAircraftId);
+        ImmutableArray<AirframeMaintenanceScheduleEvidenceRecord> evidence = retainedEvidence.ToImmutableArray();
+        foreach (AirframeMaintenanceScheduleEvidenceRecord record in evidence) record.Validate(airframe, serviceState);
+        if (evidence.GroupBy(record => (record.Baseline.ScheduleId, record.Baseline.ScheduleVersion))
+            .Any(group => group.Count() != 1))
+            throw new InvalidDataException("Multiple retained evidence records claim the same maintenance schedule/version.");
+        if (evidence.Any(record => !candidates.Any(candidate =>
+                candidate.ScheduleId == record.Baseline.ScheduleId
+                && candidate.Version == record.Baseline.ScheduleVersion)))
+            throw new InvalidDataException("Retained evidence does not belong to a verified candidate for this airframe model.");
+
+        return candidates
+            .Select(definition =>
+            {
+                AirframeMaintenanceScheduleEvidenceRecord? retained = evidence.SingleOrDefault(record =>
+                    record.Baseline.ScheduleId == definition.ScheduleId
+                    && record.Baseline.ScheduleVersion == definition.Version);
+                return AssessDefinition(airframe, serviceState, definition, retained?.ToApplicabilityEvidence());
+            })
             .ToImmutableArray();
     }
 
