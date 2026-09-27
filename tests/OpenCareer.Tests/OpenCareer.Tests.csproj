@@ -50,6 +50,15 @@
     <None Include="../../src/OpenCareer.App/Styles/ButtonStateResources.cs"
           Link="UiDesign/ButtonStateResources.cs"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/Diagnostics/ButtonStateRuntimeProbe.cs"
+          Link="UiDesign/ButtonStateRuntimeProbe.cs"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../tools/run-button-state-runtime-certification.ps1"
+          Link="UiDesign/run-button-state-runtime-certification.ps1"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../.github/workflows/winui-build.yml"
+          Link="UiDesign/winui-build.yml"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/OpenCareer.App/App.xaml"
           Link="UiDesign/App.xaml"
           CopyToOutputDirectory="PreserveNewest" />

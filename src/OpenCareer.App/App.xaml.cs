@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
+using OpenCareer.App.Diagnostics;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Ai;
@@ -29,7 +30,9 @@ namespace OpenCareer.App;
 public partial class App : Microsoft.UI.Xaml.Application
 {
     private readonly ServiceProvider _services;
+    private readonly ButtonStateRuntimeProbeOptions? _buttonStateRuntimeProbeOptions;
     private MainWindow? _window;
+    private Window? _buttonStateRuntimeProbeWindow;
     private KjfkLiveTestDiagnosticsService? _liveTestDiagnostics;
     private bool _isShuttingDown;
     private bool _shutdownComplete;
@@ -37,6 +40,16 @@ public partial class App : Microsoft.UI.Xaml.Application
     public App()
     {
         InitializeComponent();
+
+        _buttonStateRuntimeProbeOptions =
+            ButtonStateRuntimeProbeOptions.TryParse(
+                Environment.GetCommandLineArgs());
+        if (_buttonStateRuntimeProbeOptions is not null)
+        {
+            // The runtime probe must not open normal career data, recovery, or SimConnect.
+            _services = new ServiceCollection().BuildServiceProvider();
+            return;
+        }
 
         var services = new ServiceCollection();
 
@@ -262,6 +275,12 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (_buttonStateRuntimeProbeOptions is not null)
+        {
+            LaunchButtonStateRuntimeProbe(_buttonStateRuntimeProbeOptions);
+            return;
+        }
+
         var logger = _services.GetRequiredService<ILogger<App>>();
 
         OpenCareerDataPaths dataPaths =
@@ -486,6 +505,62 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         _services.GetRequiredService<ISimulatorConnection>().Start();
         logger.LogInformation("OpenCareer application launched.");
+    }
+
+    private void LaunchButtonStateRuntimeProbe(
+        ButtonStateRuntimeProbeOptions options)
+    {
+        var page = new ButtonStateRuntimeProbePage();
+        bool executed = false;
+
+        page.Loaded += OnProbeLoaded;
+        _buttonStateRuntimeProbeWindow = new Window
+        {
+            Content = page,
+            Title = "OpenCareer — DEVELOPMENT / TEST — Button State Probe"
+        };
+        _buttonStateRuntimeProbeWindow.Activate();
+
+        async void OnProbeLoaded(object sender, RoutedEventArgs args)
+        {
+            if (executed)
+                return;
+
+            executed = true;
+            page.Loaded -= OnProbeLoaded;
+
+            ButtonStateRuntimeProbeReport report =
+                await ButtonStateRuntimeProbe.RunAsync(page);
+            page.ShowResult(report);
+
+            try
+            {
+                ButtonStateRuntimeProbe.WriteReport(
+                    options.OutputPath,
+                    report);
+            }
+            catch (Exception ex)
+            {
+                Environment.ExitCode = 1;
+                page.StatusText.Text =
+                    $"FAIL — runtime report could not be written: {ex}";
+
+                if (options.AutoClose)
+                {
+                    _buttonStateRuntimeProbeWindow?.Close();
+                    Exit();
+                }
+
+                return;
+            }
+
+            Environment.ExitCode = report.Success ? 0 : 1;
+            if (options.AutoClose)
+            {
+                _buttonStateRuntimeProbeWindow?.Close();
+                Exit();
+            }
+        }
     }
 
     private async void OnMainWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)

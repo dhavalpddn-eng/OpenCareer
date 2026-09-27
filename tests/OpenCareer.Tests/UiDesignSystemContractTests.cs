@@ -334,6 +334,62 @@ public sealed class UiDesignSystemContractTests
         }
     }
 
+    [Fact]
+    public void RuntimeProbeUsesCompiledAppResourcesAndStockButtonTemplate()
+    {
+        string probeSource =
+            File.ReadAllText(GetDesignFilePath("ButtonStateRuntimeProbe.cs"));
+        string appSource =
+            File.ReadAllText(Path.Combine(
+                AppContext.BaseDirectory,
+                "UiContracts",
+                "App.xaml.cs"));
+        string script =
+            File.ReadAllText(GetDesignFilePath(
+                "run-button-state-runtime-certification.ps1"));
+        string workflow =
+            File.ReadAllText(GetDesignFilePath("winui-build.yml"));
+
+        Assert.Contains("Application.Current.Resources[key]", probeSource, StringComparison.Ordinal);
+        Assert.Contains("OpenCareerPrimaryButtonStyle", probeSource, StringComparison.Ordinal);
+        Assert.Contains("OpenCareerSecondaryButtonStyle", probeSource, StringComparison.Ordinal);
+        Assert.Contains("OpenCareerDangerButtonStyle", probeSource, StringComparison.Ordinal);
+        Assert.Contains("DefaultButtonStyle", probeSource, StringComparison.Ordinal);
+        Assert.Contains("VisualStateManager.GoToState", probeSource, StringComparison.Ordinal);
+        Assert.Contains("Task.Delay(TimeSpan.FromMilliseconds(100))", probeSource, StringComparison.Ordinal);
+        Assert.Contains("FindStockContentPresenter", probeSource, StringComparison.Ordinal);
+        Assert.Contains("UseSystemFocusVisuals", probeSource, StringComparison.Ordinal);
+        Assert.Contains("ButtonAutomationPeer", probeSource, StringComparison.Ordinal);
+        Assert.Contains("ButtonStateResources.SetVariant", probeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("new ControlTemplate", probeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("PointerEntered", probeSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("PointerExited", probeSource, StringComparison.Ordinal);
+        Assert.DoesNotMatch("#[0-9A-Fa-f]{6,8}", probeSource);
+
+        int probeModeIndex = appSource.IndexOf(
+            "ButtonStateRuntimeProbeOptions.TryParse",
+            StringComparison.Ordinal);
+        int dataProfileIndex = appSource.IndexOf(
+            "OpenCareerDataProfileSelection.Resolve",
+            StringComparison.Ordinal);
+        Assert.True(probeModeIndex >= 0);
+        Assert.True(dataProfileIndex > probeModeIndex);
+        Assert.Contains("LaunchButtonStateRuntimeProbe", appSource, StringComparison.Ordinal);
+
+        Assert.Contains("WindowsAppSDKSelfContained=true", script, StringComparison.Ordinal);
+        Assert.Contains("WaitForExit", script, StringComparison.Ordinal);
+        Assert.Contains("report.success", script, StringComparison.Ordinal);
+        Assert.Contains("[switch]$Interactive", script, StringComparison.Ordinal);
+        Assert.Contains(
+            "Certify compiled WinUI button states",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "run-button-state-runtime-certification.ps1",
+            workflow,
+            StringComparison.Ordinal);
+    }
+
     private static void AssertVariantSetter(XDocument document, string styleKey, string expectedVariant)
     {
         XElement style = FindStyle(document, styleKey);

@@ -15,6 +15,7 @@ on:
       - "tools/OpenCareer.LiveProbe/**"
       - "tools/run-live-probe.ps1"
       - "tools/run-kjfk-live-test.ps1"
+      - "tools/run-button-state-runtime-certification.ps1"
       - "Directory.Build.props"
       - "Directory.Packages.props"
       - ".github/workflows/winui-build.yml"
@@ -66,7 +67,7 @@ jobs:
           FILES="$(git diff --name-only "$RANGE")"
           printf '%s\n' "$FILES"
 
-          if printf '%s\n' "$FILES" | grep -Eq '^(src/OpenCareer\.App/|src/OpenCareer\.Application/|src/OpenCareer\.Domain/|src/OpenCareer\.Infrastructure/|src/OpenCareer\.SimConnect/|tests/OpenCareer\.Tests/|tools/OpenCareer\.LiveProbe/|tools/run-live-probe\.ps1$|tools/run-kjfk-live-test\.ps1$|Directory\.Build\.props$|Directory\.Packages\.props$|\.github/workflows/winui-build\.yml$)'; then
+          if printf '%s\n' "$FILES" | grep -Eq '^(src/OpenCareer\.App/|src/OpenCareer\.Application/|src/OpenCareer\.Domain/|src/OpenCareer\.Infrastructure/|src/OpenCareer\.SimConnect/|tests/OpenCareer\.Tests/|tools/OpenCareer\.LiveProbe/|tools/run-live-probe\.ps1$|tools/run-kjfk-live-test\.ps1$|tools/run-button-state-runtime-certification\.ps1$|Directory\.Build\.props$|Directory\.Packages\.props$|\.github/workflows/winui-build\.yml$)'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
@@ -103,6 +104,10 @@ jobs:
 
       - name: Build WinUI app
         run: dotnet build src/OpenCareer.App/OpenCareer.App.csproj --configuration Release --no-restore -p:Platform=x64
+
+      - name: Certify compiled WinUI button states
+        shell: pwsh
+        run: .\tools\run-button-state-runtime-certification.ps1
 
       - name: Build live SimConnect probe
         run: dotnet build tools/OpenCareer.LiveProbe/OpenCareer.LiveProbe.csproj --configuration Release -p:Platform=x64
