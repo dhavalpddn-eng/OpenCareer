@@ -205,7 +205,9 @@ public sealed class UiDesignSystemContractTests
         AssertVariantSetter(document, "OpenCareerSecondaryButtonStyle", "Secondary");
         AssertVariantSetter(document, "OpenCareerDangerButtonStyle", "Danger");
 
-        Assert.Empty(document.Descendants().Where(static element => element.Name.LocalName == "ControlTemplate"));
+        Assert.DoesNotContain(
+            document.Descendants(),
+            static element => element.Name.LocalName == "ControlTemplate");
         Assert.DoesNotContain(
             document.Descendants().Where(static element => element.Name.LocalName == "Setter"),
             static setter => string.Equals(setter.Attribute("Property")?.Value, "Template", StringComparison.Ordinal));
