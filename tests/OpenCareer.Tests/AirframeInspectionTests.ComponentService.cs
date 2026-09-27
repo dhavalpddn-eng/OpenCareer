@@ -363,7 +363,7 @@ public sealed partial class AirframeInspectionTests
 
         AirframeComponentInspectionResult[] results = await Task.WhenAll(calls);
 
-        Assert.Single(results.Where(result => result.WasNewlyApplied));
+        Assert.Single(results, result => result.WasNewlyApplied);
         Assert.All(results, result =>
         {
             Assert.Equal(AirframeComponentInspectionResultStatus.Inspected, result.Status);
