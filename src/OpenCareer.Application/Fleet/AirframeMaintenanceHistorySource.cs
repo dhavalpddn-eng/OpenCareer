@@ -54,6 +54,8 @@ public sealed record AirframeMaintenanceSnapshot(
     public double HoursUntilInspection => ServiceState.TimeUntilInspection.TotalHours;
     public string ScheduleId => ServiceState.ScheduleId;
     public int ScheduleVersion => ServiceState.ScheduleVersion;
+    public ImmutableArray<AirframeMaintenanceScheduleAssessment> VerifiedScheduleCandidates =>
+        AirframeMaintenanceScheduleCatalog.AssessCandidates(Airframe, ServiceState);
 }
 
 public sealed record AirframeMaintenanceReadResult(
