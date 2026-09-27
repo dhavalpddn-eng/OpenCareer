@@ -388,20 +388,24 @@ public sealed class UiDesignSystemContractTests
             "{StaticResource DefaultButtonStyle}",
             probeButtonStyles["StockDarkProbeButton"]);
 
-        Dictionary<string, string> probeAliases = probeDocument
+        Dictionary<string, string> expectedBrushBindings = probeDocument
             .Descendants()
-            .Where(static element => element.Name.LocalName == "StaticResource")
+            .Where(element =>
+                element.Name.LocalName == "Border" &&
+                element.Attribute(XamlNamespace + "Name")?.Value.StartsWith(
+                    "ExpectedOpenCareer",
+                    StringComparison.Ordinal) == true)
             .ToDictionary(
-                element => element.Attribute(XamlNamespace + "Key")?.Value
-                    ?? throw new InvalidDataException("Probe resource alias lacks x:Key."),
-                element => element.Attribute("ResourceKey")?.Value
-                    ?? throw new InvalidDataException("Probe resource alias lacks ResourceKey."),
+                element => element.Attribute(XamlNamespace + "Name")!.Value,
+                element => element.Attribute("Background")?.Value
+                    ?? throw new InvalidDataException("Expected brush probe lacks Background."),
                 StringComparer.Ordinal);
-        Assert.NotEmpty(probeAliases);
+        Assert.NotEmpty(expectedBrushBindings);
         Assert.All(
-            probeAliases,
-            pair => Assert.Equal($"Probe{pair.Value}", pair.Key));
-        Assert.Equal(probeAliases.Count, probeAliases.Keys.Distinct(StringComparer.Ordinal).Count());
+            expectedBrushBindings,
+            pair => Assert.Equal(
+                $"{{StaticResource {pair.Key["Expected".Length..]}}}",
+                pair.Value));
         string[] expectedProbeTokens = probeSource
             .Split('"', StringSplitOptions.RemoveEmptyEntries)
             .Where(static value =>
@@ -412,8 +416,8 @@ public sealed class UiDesignSystemContractTests
             .ToArray();
         Assert.Equal(
             expectedProbeTokens,
-            probeAliases.Values
-                .Distinct(StringComparer.Ordinal)
+            expectedBrushBindings.Keys
+                .Select(static key => key["Expected".Length..])
                 .Order(StringComparer.Ordinal)
                 .ToArray());
 
@@ -438,8 +442,8 @@ public sealed class UiDesignSystemContractTests
         Assert.Contains("OpenCareerShellBackgroundBrush", probeXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenCareerShellBrush", probeXaml, StringComparison.Ordinal);
         Assert.Equal(
-            "OpenCareerNavyBrush",
-            probeAliases["ProbeOpenCareerNavyBrush"]);
+            "{StaticResource OpenCareerNavyBrush}",
+            expectedBrushBindings["ExpectedOpenCareerNavyBrush"]);
         Assert.Contains("page.GetExpectedBrush", probeSource, StringComparison.Ordinal);
         Assert.DoesNotContain("XamlApplication.Current.Resources", probeSource, StringComparison.Ordinal);
         Assert.DoesNotContain("GetApplicationResource", probeSource, StringComparison.Ordinal);

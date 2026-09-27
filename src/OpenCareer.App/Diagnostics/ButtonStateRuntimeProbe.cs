@@ -82,15 +82,15 @@ public sealed partial class ButtonStateRuntimeProbePage : Page
 
     internal SolidColorBrush GetExpectedBrush(string token)
     {
-        string alias = $"Probe{token}";
-        if (Resources.TryGetValue(alias, out object? value) &&
-            value is SolidColorBrush brush)
+        string elementName = $"Expected{token}";
+        if (FindName(elementName) is Border border &&
+            border.Background is SolidColorBrush brush)
         {
             return brush;
         }
 
         throw new InvalidDataException(
-            $"Compiled probe resource alias '{alias}' did not resolve to a SolidColorBrush.");
+            $"Compiled probe element '{elementName}' did not resolve to a SolidColorBrush.");
     }
 
     internal void ShowResult(ButtonStateRuntimeProbeReport report)

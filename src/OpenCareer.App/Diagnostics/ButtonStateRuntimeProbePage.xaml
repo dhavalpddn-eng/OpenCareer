@@ -3,34 +3,34 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Page.Resources>
-        <!--
-            Alias the compiled application palette into the probe's own resource
-            scope. Runtime assertions compare against these real resources; no
-            test palette is copied into code or XAML.
-        -->
-        <StaticResource x:Key="ProbeOpenCareerNavyBrush" ResourceKey="OpenCareerNavyBrush" />
-        <StaticResource x:Key="ProbeOpenCareerShellTextBrush" ResourceKey="OpenCareerShellTextBrush" />
-        <StaticResource x:Key="ProbeOpenCareerSteelBorderBrush" ResourceKey="OpenCareerSteelBorderBrush" />
-        <StaticResource x:Key="ProbeOpenCareerNavyRaisedBrush" ResourceKey="OpenCareerNavyRaisedBrush" />
-        <StaticResource x:Key="ProbeOpenCareerSteelHighlightBrush" ResourceKey="OpenCareerSteelHighlightBrush" />
-        <StaticResource x:Key="ProbeOpenCareerNavyPressedBrush" ResourceKey="OpenCareerNavyPressedBrush" />
-        <StaticResource x:Key="ProbeOpenCareerInkMutedBrush" ResourceKey="OpenCareerInkMutedBrush" />
-        <StaticResource x:Key="ProbeOpenCareerPaperMutedBrush" ResourceKey="OpenCareerPaperMutedBrush" />
-        <StaticResource x:Key="ProbeOpenCareerDisabledBrush" ResourceKey="OpenCareerDisabledBrush" />
-        <StaticResource x:Key="ProbeOpenCareerPaperAltBrush" ResourceKey="OpenCareerPaperAltBrush" />
-        <StaticResource x:Key="ProbeOpenCareerInkBrush" ResourceKey="OpenCareerInkBrush" />
-        <StaticResource x:Key="ProbeOpenCareerPaperRuleBrush" ResourceKey="OpenCareerPaperRuleBrush" />
-        <StaticResource x:Key="ProbeOpenCareerSelectionBrush" ResourceKey="OpenCareerSelectionBrush" />
-        <StaticResource x:Key="ProbeOpenCareerSecondaryPressedBrush" ResourceKey="OpenCareerSecondaryPressedBrush" />
-        <StaticResource x:Key="ProbeOpenCareerDangerBrush" ResourceKey="OpenCareerDangerBrush" />
-        <StaticResource x:Key="ProbeOpenCareerDangerRaisedBrush" ResourceKey="OpenCareerDangerRaisedBrush" />
-        <StaticResource x:Key="ProbeOpenCareerDangerPressedBrush" ResourceKey="OpenCareerDangerPressedBrush" />
-        <StaticResource x:Key="ProbeOpenCareerDangerDisabledBrush" ResourceKey="OpenCareerDangerDisabledBrush" />
-    </Page.Resources>
-
     <Grid Background="{StaticResource OpenCareerShellBackgroundBrush}"
           Padding="32">
+        <!--
+            Resolve expected colors through normal compiled XAML lookup. These
+            hidden elements bind directly to the real App palette; the probe
+            does not copy or reconstruct any color value.
+        -->
+        <Grid Visibility="Collapsed">
+            <Border x:Name="ExpectedOpenCareerNavyBrush" Background="{StaticResource OpenCareerNavyBrush}" />
+            <Border x:Name="ExpectedOpenCareerShellTextBrush" Background="{StaticResource OpenCareerShellTextBrush}" />
+            <Border x:Name="ExpectedOpenCareerSteelBorderBrush" Background="{StaticResource OpenCareerSteelBorderBrush}" />
+            <Border x:Name="ExpectedOpenCareerNavyRaisedBrush" Background="{StaticResource OpenCareerNavyRaisedBrush}" />
+            <Border x:Name="ExpectedOpenCareerSteelHighlightBrush" Background="{StaticResource OpenCareerSteelHighlightBrush}" />
+            <Border x:Name="ExpectedOpenCareerNavyPressedBrush" Background="{StaticResource OpenCareerNavyPressedBrush}" />
+            <Border x:Name="ExpectedOpenCareerInkMutedBrush" Background="{StaticResource OpenCareerInkMutedBrush}" />
+            <Border x:Name="ExpectedOpenCareerPaperMutedBrush" Background="{StaticResource OpenCareerPaperMutedBrush}" />
+            <Border x:Name="ExpectedOpenCareerDisabledBrush" Background="{StaticResource OpenCareerDisabledBrush}" />
+            <Border x:Name="ExpectedOpenCareerPaperAltBrush" Background="{StaticResource OpenCareerPaperAltBrush}" />
+            <Border x:Name="ExpectedOpenCareerInkBrush" Background="{StaticResource OpenCareerInkBrush}" />
+            <Border x:Name="ExpectedOpenCareerPaperRuleBrush" Background="{StaticResource OpenCareerPaperRuleBrush}" />
+            <Border x:Name="ExpectedOpenCareerSelectionBrush" Background="{StaticResource OpenCareerSelectionBrush}" />
+            <Border x:Name="ExpectedOpenCareerSecondaryPressedBrush" Background="{StaticResource OpenCareerSecondaryPressedBrush}" />
+            <Border x:Name="ExpectedOpenCareerDangerBrush" Background="{StaticResource OpenCareerDangerBrush}" />
+            <Border x:Name="ExpectedOpenCareerDangerRaisedBrush" Background="{StaticResource OpenCareerDangerRaisedBrush}" />
+            <Border x:Name="ExpectedOpenCareerDangerPressedBrush" Background="{StaticResource OpenCareerDangerPressedBrush}" />
+            <Border x:Name="ExpectedOpenCareerDangerDisabledBrush" Background="{StaticResource OpenCareerDangerDisabledBrush}" />
+        </Grid>
+
         <Border Background="{StaticResource OpenCareerPaperBrush}"
                 BorderBrush="{StaticResource OpenCareerPaperRuleBrush}"
                 BorderThickness="1"
