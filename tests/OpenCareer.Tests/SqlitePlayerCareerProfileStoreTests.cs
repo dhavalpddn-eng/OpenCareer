@@ -283,7 +283,7 @@ public sealed class SqlitePlayerCareerProfileStoreTests
                 await using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}");
                 await connection.OpenAsync();
                 await using var command = connection.CreateCommand();
-                command.CommandText = "ALTER TABLE player_career_profile DROP COLUMN saved_at_utc_ticks; DROP TABLE airframe_maintenance_schedule_evidence; PRAGMA user_version = 12;";
+                command.CommandText = "ALTER TABLE player_career_profile DROP COLUMN saved_at_utc_ticks; DROP TABLE airframe_component_service_baselines; DROP TABLE airframe_maintenance_schedule_evidence; PRAGMA user_version = 12;";
                 await command.ExecuteNonQueryAsync();
             }
             var migrated = (await CreateStore(options).LoadAsync())!;

@@ -27,7 +27,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                19);
+                20);
 
             await AssertTablesExistAsync(
                 path,
@@ -39,7 +39,8 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 "commodity_market_snapshots",
                 "installed_aircraft_observations",
                 "aircraft_availability",
-                "airframe_maintenance_schedule_evidence");
+                "airframe_maintenance_schedule_evidence",
+                "airframe_component_service_baselines");
         }
         finally
         {
@@ -70,7 +71,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                19);
+                20);
 
             await AssertTablesExistAsync(
                 path,
@@ -143,7 +144,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                19);
+                20);
 
             await AssertTablesExistAsync(
                 path,
@@ -209,7 +210,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                19);
+                20);
 
             await using SqliteConnection connection =
                 await OpenReadOnlyAsync(path);
@@ -319,7 +320,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                19);
+                20);
 
             await using SqliteConnection verification =
                 await OpenReadOnlyAsync(path);
@@ -339,6 +340,87 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 Convert.ToInt64(
                     await column.ExecuteScalarAsync(),
                     System.Globalization.CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentStoreInitializersSerializeSchema19To20Migration()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            string path = Path.Combine(directory, "opencareer.db");
+            Assert.Equal(0m, await CreateLedgerStore(path).ReadCashBalanceAsync());
+            await using (SqliteConnection connection = await OpenReadWriteAsync(path))
+            await using (SqliteCommand downgrade = connection.CreateCommand())
+            {
+                downgrade.CommandText = """
+                    DROP TABLE airframe_component_service_baselines;
+                    PRAGMA user_version = 19;
+                    """;
+                await downgrade.ExecuteNonQueryAsync();
+            }
+
+            const int initializerCount = 8;
+            using var ready = new CountdownEvent(initializerCount);
+            var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Task<decimal>[] initializers = Enumerable.Range(0, initializerCount)
+                .Select(_ => Task.Run(async () =>
+                {
+                    SqliteEconomyLedgerStore store = CreateLedgerStore(path);
+                    ready.Signal();
+                    await start.Task;
+                    return await store.ReadCashBalanceAsync();
+                }))
+                .ToArray();
+            Assert.True(ready.Wait(TimeSpan.FromSeconds(10)));
+            start.SetResult();
+
+            decimal[] balances = await Task.WhenAll(initializers);
+
+            Assert.All(balances, balance => Assert.Equal(0m, balance));
+            await AssertSchemaVersionAsync(path, 20);
+            await AssertTablesExistAsync(path, "airframe_component_service_baselines");
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
+    public async Task CurrentSchemaMissingComponentBaselineAuthorityFailsClosed()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            string path = Path.Combine(directory, "opencareer.db");
+            Assert.Equal(0m, await CreateLedgerStore(path).ReadCashBalanceAsync());
+            await using (SqliteConnection connection = await OpenReadWriteAsync(path))
+            await using (SqliteCommand corrupt = connection.CreateCommand())
+            {
+                corrupt.CommandText = "DROP TABLE airframe_component_service_baselines;";
+                await corrupt.ExecuteNonQueryAsync();
+            }
+
+            await Assert.ThrowsAsync<InvalidDataException>(
+                () => CreateLedgerStore(path).ReadCashBalanceAsync());
+            await AssertSchemaVersionAsync(path, 20);
+            await using SqliteConnection verification = await OpenReadOnlyAsync(path);
+            await using SqliteCommand table = verification.CreateCommand();
+            table.CommandText = """
+                SELECT COUNT(*) FROM sqlite_master
+                WHERE type='table' AND name='airframe_component_service_baselines';
+                """;
+            Assert.Equal(0L, Convert.ToInt64(
+                await table.ExecuteScalarAsync(),
+                System.Globalization.CultureInfo.InvariantCulture));
         }
         finally
         {

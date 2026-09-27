@@ -53,6 +53,8 @@ public abstract record AirframeServiceEvent(
         throw new InvalidOperationException("Maintenance action ID belongs to a different service action kind.");
     public virtual AirframeInspectionResult Replay(AirframeInspectionRequest request) =>
         throw new InvalidOperationException("Maintenance action ID belongs to a different service action kind.");
+    public virtual AirframeComponentInspectionResult Replay(AirframeComponentInspectionRequest request) =>
+        throw new InvalidOperationException("Maintenance action ID belongs to a different service action kind.");
 }
 
 /// <summary>Inspection acknowledges a usage interval; it makes no repair/component claim.</summary>

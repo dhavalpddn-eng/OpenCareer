@@ -90,6 +90,13 @@ public sealed partial class SqliteAirframeStore : IFlightAirframeConsequenceStor
             ?? throw new AirframeConcurrencyException("The consequence's physical airframe no longer exists.");
         if (current != expected) throw new AirframeConcurrencyException("Airframe condition changed before consequence application; retry with current state.");
         appliedAt = appliedAt.ToUniversalTime();
+        await EnsureAfterLatestComponentServiceAsync(
+                connection,
+                transaction,
+                current.Airframe.AirframeId,
+                appliedAt,
+                cancellationToken)
+            .ConfigureAwait(false);
         var after = consequence.ApplyCondition
             ? new AirframeStoreRecord(current.Airframe, consequence.ApplyTo(current.Condition), checked(current.Revision + 1), appliedAt)
             : current;

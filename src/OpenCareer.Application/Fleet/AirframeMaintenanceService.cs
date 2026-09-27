@@ -38,4 +38,15 @@ public sealed class AirframeMaintenanceService(IAirframeStore airframes, IAirfra
         // The persistence authority reads both revisions and commits the service/event pair atomically.
         return maintenance.PerformRoutineInspectionAsync(request, cancellationToken);
     }
+
+    public Task<AirframeComponentInspectionResult> PerformVerifiedComponentInspectionAsync(
+        AirframeComponentInspectionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Validate();
+        // SQLite resolves global action replay first, then captures authoritative usage and appends
+        // the component baseline revision and immutable history event atomically.
+        return maintenance.PerformVerifiedComponentInspectionAsync(request, cancellationToken);
+    }
 }

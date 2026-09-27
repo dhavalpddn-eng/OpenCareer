@@ -4,6 +4,13 @@
 
 ## MBL-17 physical-airframe foundation — 2026-09-25
 
+Slice 14 adds exact-once verified component inspection/service on the same branch / draft PR #106:
+- SQLite schema 20 keeps schema-19 registration evidence immutable and seeds an append-only component-baseline revision chain by exact copy. Migration never recaptures a baseline from later usage and creates no synthetic action/history.
+- A component action requires the exact AirframeId, canonical/certified/installed model evidence, component, schedule/version and expected applicability/baseline/condition/service revisions. Fresh actions are admitted only when that verified proxy schedule is due; no caller supplies usage counters.
+- One transaction appends baseline N+1 from authoritative current service ticks/cycles/origins/revision/time and an immutable payload-v4 history event under the existing global MaintenanceActionId authority. Replay is state-independent and idempotent; cross-kind reuse, stale/concurrent writes, corrupt chains and partial persistence fail closed.
+- The latest component-baseline timestamp is a monotonic physical-state fence: a consequence, generic inspection, repair, direct condition save or later component service cannot commit behind already-retained component service chronology.
+- Component inspection changes neither condition nor the generic fallback `AirframeServiceState`. The gameplay 50-hour inspection/dispatch gate remains independently due until its existing routine-inspection action is performed. There is no TITLE inference, cost, downtime, parts, UI or automatic failure orchestration.
+
 Slice 13 persists verified-schedule activation evidence on the same branch / draft PR #106:
 - SQLite schema 19 adds an empty-by-default exact-AirframeId authority for immutable certified-model/component applicability evidence and its versioned service baseline. Migration never infers component identity or prior service from canonical AircraftId, MSFS TITLE, livery, flight history or retained usage.
 - Explicit registration requires a stable evidence ID, exact physical identity, verified catalog schedule/version/component, separate authoritative physical-aircraft and maintenance-record provenance, and the expected current service revision. The SQLite transaction captures exact tracked airborne ticks, landing cycles, both origins and source service revision/time; caller-supplied usage counters are not accepted and registration time alone cannot establish a baseline.

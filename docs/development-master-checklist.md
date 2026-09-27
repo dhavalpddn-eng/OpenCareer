@@ -417,6 +417,7 @@ Chapter status: **FOUNDATION IN PROGRESS** — isolated `feature/mbl17-airframe-
 - [ ] Extend the fallback with verified aircraft-specific/component schedules.
   - [x] Add a versioned FAA/Lycoming 172S + IO-360-L2A 50-hour engine-inspection candidate with exact provenance, explicit physical applicability/baseline requirements and deterministic tracked-usage assessment; keep it unavailable until those facts are persisted. Do not map landing episodes to documented takeoff-cycle rules.
   - [x] Persist explicit exact-AirframeId certified-model/component evidence and versioned tracked-usage baselines (schema 19); activate a verified assessment only on an exact retained match, with no TITLE inference or migration backfill and no change to the generic operational fallback.
+  - [x] Append exact-once verified component-inspection baseline revisions and immutable service history (schema 20), capturing authoritative current usage only for the matching due AirframeId/model/component/schedule/version while preserving original evidence and the independent generic fallback.
 - [ ] Implement repair/maintenance cost and downtime.
 - [ ] Implement MRO/parts availability.
 - [ ] Extend repair/inspection history with future wear-service events and Maintenance UI.

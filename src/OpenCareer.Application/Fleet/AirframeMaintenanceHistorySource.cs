@@ -121,11 +121,20 @@ public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, I
         if (current.Airframe.AirframeId != query.AirframeId)
             throw new InvalidDataException("Service history returned a different physical airframe.");
         if (maintenance is null) throw new InvalidOperationException("Authoritative maintenance history store is required.");
+        var evidence = await ReadScheduleEvidenceAsync(current, cancellationToken).ConfigureAwait(false);
         var service = await ReadServiceAsync(current, cancellationToken).ConfigureAwait(false);
+        ValidateScheduleEvidence(current, service, evidence);
         var history = await maintenance.ReadServiceHistoryAsync(query, cancellationToken).ConfigureAwait(false);
-        if (service != await ReadServiceAsync(current, cancellationToken).ConfigureAwait(false)
-            || current != await airframes.FindAsync(query.AirframeId, cancellationToken).ConfigureAwait(false))
-            throw new AirframeConcurrencyException("Airframe condition/service state changed during service history read; refresh the snapshot.");
+        var finalCurrent = await airframes.FindAsync(query.AirframeId, cancellationToken).ConfigureAwait(false);
+        if (finalCurrent is null)
+            throw new AirframeConcurrencyException(
+                "Airframe was removed during service history read; refresh the snapshot.");
+        var finalEvidence = await ReadScheduleEvidenceAsync(finalCurrent, cancellationToken).ConfigureAwait(false);
+        var finalService = await ReadServiceAsync(finalCurrent, cancellationToken).ConfigureAwait(false);
+        ValidateScheduleEvidence(finalCurrent, finalService, finalEvidence);
+        if (service != finalService || current != finalCurrent || !evidence.SequenceEqual(finalEvidence))
+            throw new AirframeConcurrencyException(
+                "Airframe condition/service/component baseline changed during service history read; refresh the snapshot.");
         foreach (var serviceEvent in history.Events)
         {
             serviceEvent.Validate();
@@ -136,6 +145,22 @@ public sealed class AirframeMaintenanceHistorySource(IAirframeStore airframes, I
                 && (inspection.ServiceAfter.Revision > service.Revision
                     || inspection.ServiceAfter.Revision == service.Revision && inspection.ServiceAfter != service))
                 throw new InvalidDataException("Retained inspection does not match the current service revision/state.");
+            if (serviceEvent is AirframeComponentInspectionEvent componentInspection)
+            {
+                AirframeMaintenanceScheduleEvidenceRecord retained = evidence.SingleOrDefault(record =>
+                        record.EvidenceId == componentInspection.ScheduleAfter.EvidenceId)
+                    ?? throw new InvalidDataException(
+                        "Retained component inspection has no current schedule evidence.");
+                if (componentInspection.ScheduleAfter.Applicability != retained.Applicability
+                    || componentInspection.ScheduleAfter.Baseline.Revision > retained.Baseline.Revision
+                    || componentInspection.ScheduleAfter.Baseline.Revision == retained.Baseline.Revision
+                    && componentInspection.ScheduleAfter != retained
+                    || componentInspection.AuthoritativeServiceState.Revision > service.Revision
+                    || componentInspection.AuthoritativeServiceState.Revision == service.Revision
+                    && componentInspection.AuthoritativeServiceState != service)
+                    throw new InvalidDataException(
+                        "Retained component inspection does not match current schedule/service evidence.");
+            }
         }
         return new(query.AirframeId, AirframeMaintenanceReadStatus.Available, new(current, history, service));
     }

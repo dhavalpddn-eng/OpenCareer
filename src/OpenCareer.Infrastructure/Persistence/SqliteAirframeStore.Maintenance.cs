@@ -16,7 +16,24 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
         if (maintenanceActionId == Guid.Empty) throw new ArgumentException("Maintenance action ID is required.", nameof(maintenanceActionId));
         await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        return await ReadMaintenanceActionAsync(connection, null, maintenanceActionId, cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
+        AirframeServiceEvent? retained = await ReadMaintenanceActionAsync(
+                connection,
+                transaction,
+                maintenanceActionId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (retained is AirframeComponentInspectionEvent componentInspection)
+        {
+            await ValidateRetainedComponentInspectionAsync(
+                    connection,
+                    transaction,
+                    componentInspection,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        transaction.Commit();
+        return retained;
     }
 
     public async Task<AirframeRepairResult> RepairDiscreteDamageAsync(AirframeRepairRequest request,
@@ -42,6 +59,13 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
         if (current != expected) throw new AirframeConcurrencyException("Airframe identity/condition changed before repair.");
         request.ValidateBefore(current);
         if (!current.Condition.HasDamage) return new(AirframeRepairStatus.NoRepairRequired, current, null, false);
+        await EnsureAfterLatestComponentServiceAsync(
+                connection,
+                transaction,
+                request.AirframeId,
+                request.PerformedAt,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         request = request with { PerformedAt = request.PerformedAt.ToUniversalTime() };
         var after = new AirframeStoreRecord(current.Airframe,
@@ -90,7 +114,14 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
         insert.Parameters.AddWithValue("$airframe", serviceEvent.AirframeId.ToString());
         insert.Parameters.AddWithValue("$kind", (int)serviceEvent.Kind);
         insert.Parameters.AddWithValue("$performed", serviceEvent.PerformedAt.UtcTicks);
-        insert.Parameters.AddWithValue("$schema", serviceEvent.Kind == AirframeMaintenanceEventKind.DiscreteDamageRepair ? 1 : 3);
+        int payloadSchemaVersion = serviceEvent.Kind switch
+        {
+            AirframeMaintenanceEventKind.DiscreteDamageRepair => 1,
+            AirframeMaintenanceEventKind.RoutineInspection => 3,
+            AirframeMaintenanceEventKind.VerifiedComponentInspection => 4,
+            _ => throw new NotSupportedException("Unsupported maintenance event kind.")
+        };
+        insert.Parameters.AddWithValue("$schema", payloadSchemaVersion);
         insert.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(serviceEvent, serviceEvent.GetType(), MaintenanceJson));
         await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -102,7 +133,9 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
         query.Validate();
         await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             SELECT maintenance_action_id, airframe_id, event_kind, performed_at_utc_ticks, payload_schema_version, payload_json
             FROM airframe_maintenance_events WHERE airframe_id=$airframe
@@ -117,13 +150,25 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
             command.Parameters.AddWithValue("$action", cursor.MaintenanceActionId.ToString("D"));
         }
         var events = ImmutableList.CreateBuilder<AirframeServiceEvent>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
-            var serviceEvent = ReadMaintenanceEvent(reader);
-            if (serviceEvent.AirframeId != query.AirframeId)
-                throw new InvalidDataException("Service history belongs to a different physical airframe.");
-            events.Add(serviceEvent);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var serviceEvent = ReadMaintenanceEvent(reader);
+                if (serviceEvent.AirframeId != query.AirframeId)
+                    throw new InvalidDataException("Service history belongs to a different physical airframe.");
+                events.Add(serviceEvent);
+            }
+        }
+        foreach (AirframeComponentInspectionEvent componentInspection in
+                 events.OfType<AirframeComponentInspectionEvent>())
+        {
+            await ValidateRetainedComponentInspectionAsync(
+                    connection,
+                    transaction,
+                    componentInspection,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         AirframeServiceHistoryCursor? next = null;
         if (events.Count > query.Limit)
@@ -132,6 +177,7 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
             var last = events[^1];
             next = new(last.PerformedAt, last.MaintenanceActionId);
         }
+        transaction.Commit();
         return new(events.ToImmutable(), next);
     }
 
@@ -164,6 +210,7 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
                 ?? throw new InvalidDataException("Missing repair event payload."),
             (2, 2) => DeserializeLegacyInspection(reader.GetString(5)),
             (2, 3) => DeserializeCurrentInspection(reader.GetString(5)),
+            (3, 4) => DeserializeCurrentComponentInspection(reader.GetString(5)),
             _ => throw new NotSupportedException("Unsupported maintenance event kind/payload schema.")
         };
         result.Validate();
@@ -202,6 +249,16 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceStore
             throw new InvalidDataException("Current inspection payload is missing required landing-cycle evidence.");
         return JsonSerializer.Deserialize<AirframeRoutineInspectionEvent>(payload, MaintenanceJson)
             ?? throw new InvalidDataException("Missing inspection event payload.");
+    }
+
+    private static AirframeComponentInspectionEvent DeserializeCurrentComponentInspection(string payload)
+    {
+        using var document = JsonDocument.Parse(payload);
+        if (!HasCurrentLandingCycleEvidence(document.RootElement, "authoritativeServiceState"))
+            throw new InvalidDataException(
+                "Current component inspection payload is missing required landing-cycle evidence.");
+        return JsonSerializer.Deserialize<AirframeComponentInspectionEvent>(payload, MaintenanceJson)
+            ?? throw new InvalidDataException("Missing component inspection event payload.");
     }
 
     private static bool HasCurrentLandingCycleEvidence(JsonElement root, string serviceProperty) =>

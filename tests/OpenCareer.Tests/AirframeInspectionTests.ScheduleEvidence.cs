@@ -290,6 +290,7 @@ public sealed partial class AirframeInspectionTests
         AirframeStoreRecord airframe = await CreateAsync(AirframeDamageState.Recorded);
         AirframeServiceState service = await StateAsync(airframe.Airframe.AirframeId);
         await ExecuteAsync("""
+            DROP TABLE airframe_component_service_baselines;
             DROP TABLE airframe_maintenance_schedule_evidence;
             PRAGMA user_version=18;
             """);
@@ -297,12 +298,17 @@ public sealed partial class AirframeInspectionTests
 
         Assert.Empty(await Store().ReadForAirframeAsync(airframe.Airframe.AirframeId));
 
-        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(20L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(1L, await ScalarAsync(
             "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='airframe_maintenance_schedule_evidence';"));
         Assert.Equal(1L, await ScalarAsync(
             "SELECT count(*) FROM sqlite_master WHERE type='index' AND name='ix_airframe_maintenance_schedule_evidence_airframe';"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframe_maintenance_schedule_evidence;"));
+        Assert.Equal(1L, await ScalarAsync(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='airframe_component_service_baselines';"));
+        Assert.Equal(1L, await ScalarAsync(
+            "SELECT count(*) FROM sqlite_master WHERE type='index' AND name='ix_airframe_component_service_baselines_airframe';"));
+        Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframe_component_service_baselines;"));
         Assert.Equal(airframe, await Store().FindAsync(airframe.Airframe.AirframeId));
         Assert.Equal(service, await StateAsync(airframe.Airframe.AirframeId));
         Assert.Equal(AirframeMaintenanceScheduleStatus.ApplicabilityEvidenceRequired,

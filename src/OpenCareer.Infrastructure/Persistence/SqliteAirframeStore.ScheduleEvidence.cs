@@ -179,6 +179,14 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
             return new(AirframeMaintenanceScheduleEvidenceStatus.Registered, conflict, WasNewlyApplied: false);
         }
 
+        await InsertComponentServiceBaselineAsync(
+                connection,
+                transaction,
+                record,
+                maintenanceActionId: null,
+                cancellationToken)
+            .ConfigureAwait(false);
+
         transaction.Commit();
         _logger.LogInformation(
             "Registered component applicability and service baseline {EvidenceId} for airframe {AirframeId}, component {Component}, schedule {ScheduleId}/{ScheduleVersion}, service revision {ServiceRevision}.",
@@ -210,12 +218,12 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
 
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = ScheduleEvidenceSelect + " " + """
+        command.CommandText = ScheduleEvidenceSelectFrom("airframe_maintenance_schedule_evidence") + " " + """
             WHERE airframe_id = $airframe
             ORDER BY component, schedule_id, schedule_version, evidence_id;
             """;
         command.Parameters.AddWithValue("$airframe", airframeId.ToString());
-        var results = ImmutableArray.CreateBuilder<AirframeMaintenanceScheduleEvidenceRecord>();
+        var immutableEvidence = new List<AirframeMaintenanceScheduleEvidenceRecord>();
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -224,15 +232,35 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
                 if (record.Applicability.AirframeId != airframeId)
                     throw new InvalidDataException("Maintenance schedule evidence belongs to a different physical airframe.");
                 record.Validate(airframe.Airframe, serviceState);
-                results.Add(record);
+                immutableEvidence.Add(record);
             }
         }
+
+        var results = ImmutableArray.CreateBuilder<AirframeMaintenanceScheduleEvidenceRecord>();
+        foreach (AirframeMaintenanceScheduleEvidenceRecord initial in immutableEvidence)
+        {
+            ImmutableArray<ComponentServiceBaselineRevision> revisions =
+                await ReadAndValidateComponentServiceBaselineChainAsync(
+                        connection,
+                        transaction,
+                        initial,
+                        airframe.Airframe,
+                        serviceState,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            results.Add(revisions[^1].Record);
+        }
         transaction.Commit();
-        return results.ToImmutable();
+        return results
+            .OrderBy(record => record.Baseline.Component)
+            .ThenBy(record => record.Baseline.ScheduleId, StringComparer.Ordinal)
+            .ThenBy(record => record.Baseline.ScheduleVersion)
+            .ThenBy(record => record.EvidenceId)
+            .ToImmutableArray();
     }
 
-    private const string ScheduleEvidenceSelect = """
-        SELECT evidence_id, airframe_id, canonical_aircraft_id, component,
+    private const string ScheduleEvidenceColumns = """
+        evidence_id, airframe_id, canonical_aircraft_id, component,
                certified_aircraft_model, installed_component_model,
                applicability_authority, source_reference, applicability_revision,
                schedule_id, schedule_version, baseline_airborne_ticks,
@@ -241,8 +269,10 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
                source_service_revision, source_service_updated_at_utc_ticks,
                baseline_revision, recorded_at_utc_ticks, established_at_utc_ticks,
                payload_schema_version, payload_json
-        FROM airframe_maintenance_schedule_evidence
         """;
+
+    private static string ScheduleEvidenceSelectFrom(string tableName) =>
+        $"SELECT {ScheduleEvidenceColumns} FROM {tableName}";
 
     private static async Task<AirframeMaintenanceScheduleEvidenceRecord?> ReadScheduleEvidenceByIdAsync(
         SqliteConnection connection,
@@ -252,7 +282,8 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = ScheduleEvidenceSelect + " WHERE evidence_id = $evidence;";
+        command.CommandText = ScheduleEvidenceSelectFrom("airframe_maintenance_schedule_evidence")
+            + " WHERE evidence_id = $evidence;";
         command.Parameters.AddWithValue("$evidence", evidenceId.ToString("D"));
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadScheduleEvidence(reader) : null;
@@ -268,7 +299,7 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = ScheduleEvidenceSelect + " " + """
+        command.CommandText = ScheduleEvidenceSelectFrom("airframe_maintenance_schedule_evidence") + " " + """
             WHERE airframe_id = $airframe AND schedule_id = $schedule AND schedule_version = $version;
             """;
         command.Parameters.AddWithValue("$airframe", airframeId.ToString());
@@ -276,6 +307,235 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
         command.Parameters.AddWithValue("$version", scheduleVersion);
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadScheduleEvidence(reader) : null;
+    }
+
+    private sealed record ComponentServiceBaselineRevision(
+        AirframeMaintenanceScheduleEvidenceRecord Record,
+        Guid? MaintenanceActionId);
+
+    private static async Task<ImmutableArray<ComponentServiceBaselineRevision>>
+        ReadAndValidateComponentServiceBaselineChainAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        AirframeMaintenanceScheduleEvidenceRecord initial,
+        Airframe airframe,
+        AirframeServiceState currentService,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"SELECT {ScheduleEvidenceColumns}, maintenance_action_id " + """
+            FROM airframe_component_service_baselines
+            WHERE evidence_id = $evidence
+            ORDER BY baseline_revision;
+            """;
+        command.Parameters.AddWithValue("$evidence", initial.EvidenceId.ToString("D"));
+        var revisions = ImmutableArray.CreateBuilder<ComponentServiceBaselineRevision>();
+        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                AirframeMaintenanceScheduleEvidenceRecord record = ReadScheduleEvidence(reader);
+                record.Validate(airframe, currentService);
+                object actionValue = reader.GetValue(24);
+                Guid? actionId = actionValue switch
+                {
+                    DBNull => null,
+                    string text when Guid.TryParseExact(text, "D", out Guid parsed)
+                        && parsed != Guid.Empty && parsed.ToString("D") == text => parsed,
+                    _ => throw new InvalidDataException(
+                        "Component service baseline has an invalid maintenance action identity.")
+                };
+                revisions.Add(new(record, actionId));
+            }
+        }
+
+        if (revisions.Count == 0)
+            throw new InvalidDataException(
+                "Immutable schedule evidence has no retained component service baseline.");
+        ValidateComponentServiceBaselineChain(initial, revisions.Select(revision => revision.Record).ToArray());
+        for (int index = 0; index < revisions.Count; index++)
+        {
+            ComponentServiceBaselineRevision revision = revisions[index];
+            if (index == 0)
+            {
+                if (revision.MaintenanceActionId is not null)
+                    throw new InvalidDataException(
+                        "Initial component service baseline cannot claim a maintenance action.");
+                continue;
+            }
+
+            Guid actionId = revision.MaintenanceActionId
+                ?? throw new InvalidDataException(
+                    "Advanced component service baseline is missing its maintenance action.");
+            AirframeComponentInspectionEvent serviceEvent =
+                await ReadMaintenanceActionAsync(connection, transaction, actionId, cancellationToken)
+                    .ConfigureAwait(false) as AirframeComponentInspectionEvent
+                ?? throw new InvalidDataException(
+                    "Advanced component service baseline references the wrong maintenance event kind.");
+            serviceEvent.Validate();
+            if (serviceEvent.ScheduleBefore != revisions[index - 1].Record
+                || serviceEvent.ScheduleAfter != revision.Record)
+                throw new InvalidDataException(
+                    "Component service baseline does not match its immutable maintenance event.");
+        }
+
+        // The action table is the immutable global history authority. Prove the reverse edge as
+        // well, so deleting a latest baseline cannot silently make its still-retained action
+        // disappear and allow the same usage interval to be serviced again.
+        await using SqliteCommand eventsCommand = connection.CreateCommand();
+        eventsCommand.Transaction = transaction;
+        eventsCommand.CommandText = """
+            SELECT maintenance_action_id, airframe_id, event_kind, performed_at_utc_ticks,
+                   payload_schema_version, payload_json
+            FROM airframe_maintenance_events
+            WHERE airframe_id = $airframe AND event_kind = $kind;
+            """;
+        eventsCommand.Parameters.AddWithValue("$airframe", initial.Applicability.AirframeId.ToString());
+        eventsCommand.Parameters.AddWithValue("$kind", (int)AirframeMaintenanceEventKind.VerifiedComponentInspection);
+        var componentEvents = new List<AirframeComponentInspectionEvent>();
+        await using (SqliteDataReader eventsReader =
+                     await eventsCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await eventsReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                componentEvents.Add(ReadMaintenanceEvent(eventsReader) as AirframeComponentInspectionEvent
+                    ?? throw new InvalidDataException(
+                        "Component service history contains the wrong maintenance event kind."));
+            }
+        }
+        foreach (AirframeComponentInspectionEvent serviceEvent in componentEvents.Where(candidate =>
+                     candidate.ScheduleAfter.EvidenceId == initial.EvidenceId))
+        {
+            if (serviceEvent.Before.Airframe != airframe
+                || serviceEvent.After.Airframe != airframe
+                || serviceEvent.AuthoritativeServiceState.Revision > currentService.Revision
+                || serviceEvent.AuthoritativeServiceState.Revision == currentService.Revision
+                && serviceEvent.AuthoritativeServiceState != currentService)
+                throw new InvalidDataException(
+                    "Component inspection history does not match current physical-airframe authority.");
+            ComponentServiceBaselineRevision linked = revisions.SingleOrDefault(revision =>
+                    revision.MaintenanceActionId == serviceEvent.MaintenanceActionId)
+                ?? throw new InvalidDataException(
+                    "Component inspection history has no matching service-baseline revision.");
+            if (linked.Record != serviceEvent.ScheduleAfter)
+                throw new InvalidDataException(
+                    "Component inspection history does not match its service-baseline revision.");
+        }
+        return revisions.ToImmutable();
+    }
+
+    private static async Task InsertComponentServiceBaselineAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        AirframeMaintenanceScheduleEvidenceRecord record,
+        Guid? maintenanceActionId,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand insert = connection.CreateCommand();
+        insert.Transaction = transaction;
+        insert.CommandText = """
+            INSERT INTO airframe_component_service_baselines (
+                evidence_id, maintenance_action_id, airframe_id, canonical_aircraft_id, component,
+                certified_aircraft_model, installed_component_model,
+                applicability_authority, source_reference, applicability_revision,
+                schedule_id, schedule_version, baseline_airborne_ticks,
+                baseline_landing_cycles, airborne_time_origin, landing_cycle_origin,
+                baseline_authority, baseline_source_reference,
+                source_service_revision, source_service_updated_at_utc_ticks,
+                baseline_revision, recorded_at_utc_ticks, established_at_utc_ticks,
+                payload_schema_version, payload_json)
+            VALUES ($evidence, $action, $airframe, $aircraft, $component,
+                $certified, $installed, $authority, $source, $applicabilityRevision,
+                $schedule, $version, $airborne, $cycles, $airborneOrigin, $cycleOrigin,
+                $baselineAuthority, $baselineSource,
+                $serviceRevision, $serviceUpdated, $baselineRevision, $recorded, $established,
+                $schema, $payload);
+            """;
+        insert.Parameters.AddWithValue("$evidence", record.EvidenceId.ToString("D"));
+        insert.Parameters.AddWithValue("$action", maintenanceActionId?.ToString("D") ?? (object)DBNull.Value);
+        insert.Parameters.AddWithValue("$airframe", record.Applicability.AirframeId.ToString());
+        insert.Parameters.AddWithValue("$aircraft", record.Applicability.CanonicalAircraftId);
+        insert.Parameters.AddWithValue("$component", (int)record.Applicability.Component);
+        insert.Parameters.AddWithValue("$certified", record.Applicability.CertifiedAircraftModel);
+        insert.Parameters.AddWithValue("$installed", record.Applicability.InstalledComponentModel);
+        insert.Parameters.AddWithValue("$authority", (int)record.Applicability.Authority);
+        insert.Parameters.AddWithValue("$source", record.Applicability.SourceReference);
+        insert.Parameters.AddWithValue("$applicabilityRevision", record.Applicability.Revision);
+        insert.Parameters.AddWithValue("$schedule", record.Baseline.ScheduleId);
+        insert.Parameters.AddWithValue("$version", record.Baseline.ScheduleVersion);
+        insert.Parameters.AddWithValue("$airborne", record.Baseline.TrackedAirborneTime.Ticks);
+        insert.Parameters.AddWithValue("$cycles", record.Baseline.TrackedLandingCycles);
+        insert.Parameters.AddWithValue("$airborneOrigin", (int)record.Baseline.AirborneTimeOrigin);
+        insert.Parameters.AddWithValue("$cycleOrigin", (int)record.Baseline.LandingCycleOrigin);
+        insert.Parameters.AddWithValue("$baselineAuthority", (int)record.Baseline.Authority);
+        insert.Parameters.AddWithValue("$baselineSource", record.Baseline.SourceReference);
+        insert.Parameters.AddWithValue("$serviceRevision", record.Baseline.SourceServiceRevision);
+        insert.Parameters.AddWithValue("$serviceUpdated", record.Baseline.SourceServiceUpdatedAt.UtcTicks);
+        insert.Parameters.AddWithValue("$baselineRevision", record.Baseline.Revision);
+        insert.Parameters.AddWithValue("$recorded", record.Applicability.RecordedAt.UtcTicks);
+        insert.Parameters.AddWithValue("$established", record.Baseline.EstablishedAt.UtcTicks);
+        insert.Parameters.AddWithValue("$schema", record.PayloadSchemaVersion);
+        insert.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(record, ScheduleEvidenceJson));
+        if (await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new AirframeConcurrencyException("Component service baseline revision was not appended.");
+    }
+
+    private static async Task EnsureAfterLatestComponentServiceAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        AirframeId airframeId,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT MAX(established_at_utc_ticks)
+            FROM airframe_component_service_baselines
+            WHERE airframe_id = $airframe;
+            """;
+        command.Parameters.AddWithValue("$airframe", airframeId.ToString());
+        object? value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (value is null or DBNull)
+            return;
+        if (value is not long retainedTicks || retainedTicks <= 0)
+            throw new InvalidDataException(
+                "Latest component service baseline has an invalid timestamp.");
+        if (occurredAt.ToUniversalTime().UtcTicks <= retainedTicks)
+            throw new AirframeConcurrencyException(
+                "Physical-airframe state cannot be changed at or before its latest component service baseline; refresh authoritative state and chronology.");
+    }
+
+    private static void ValidateComponentServiceBaselineChain(
+        AirframeMaintenanceScheduleEvidenceRecord initial,
+        IReadOnlyList<AirframeMaintenanceScheduleEvidenceRecord> revisions)
+    {
+        if (revisions.Count == 0 || revisions[0] != initial)
+            throw new InvalidDataException("Component service baseline revision 1 does not match immutable registration evidence.");
+        for (int index = 1; index < revisions.Count; index++)
+        {
+            AirframeMaintenanceScheduleEvidenceRecord previous = revisions[index - 1];
+            AirframeMaintenanceScheduleEvidenceRecord current = revisions[index];
+            if (current.EvidenceId != initial.EvidenceId
+                || current.Applicability != initial.Applicability
+                || current.PayloadSchemaVersion != initial.PayloadSchemaVersion
+                || current.Baseline.AirframeId != previous.Baseline.AirframeId
+                || current.Baseline.ScheduleId != previous.Baseline.ScheduleId
+                || current.Baseline.ScheduleVersion != previous.Baseline.ScheduleVersion
+                || current.Baseline.Component != previous.Baseline.Component
+                || current.Baseline.ApplicabilityRevision != previous.Baseline.ApplicabilityRevision
+                || current.Baseline.Authority != previous.Baseline.Authority
+                || current.Baseline.Revision != checked(previous.Baseline.Revision + 1)
+                || current.Baseline.SourceServiceRevision <= previous.Baseline.SourceServiceRevision
+                || current.Baseline.SourceServiceUpdatedAt < previous.Baseline.SourceServiceUpdatedAt
+                || current.Baseline.TrackedAirborneTime < previous.Baseline.TrackedAirborneTime
+                || current.Baseline.TrackedLandingCycles < previous.Baseline.TrackedLandingCycles
+                || current.Baseline.AirborneTimeOrigin != previous.Baseline.AirborneTimeOrigin
+                || current.Baseline.LandingCycleOrigin != previous.Baseline.LandingCycleOrigin
+                || current.Baseline.EstablishedAt <= previous.Baseline.EstablishedAt)
+                throw new InvalidDataException("Component service baseline revision chain is invalid.");
+        }
     }
 
     private static async Task ValidateRetainedScheduleEvidenceAsync(
@@ -299,6 +559,14 @@ public sealed partial class SqliteAirframeStore : IAirframeMaintenanceScheduleEv
             .ConfigureAwait(false)
             ?? throw new InvalidDataException("Maintenance schedule evidence references missing service state.");
         record.Validate(airframe.Airframe, serviceState);
+        await ReadAndValidateComponentServiceBaselineChainAsync(
+                connection,
+                transaction,
+                record,
+                airframe.Airframe,
+                serviceState,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static AirframeMaintenanceScheduleEvidenceRecord ReadScheduleEvidence(SqliteDataReader reader)

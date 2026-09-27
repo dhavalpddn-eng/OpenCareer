@@ -57,9 +57,9 @@ public sealed record AirframeComponentApplicabilityEvidence(
 }
 
 /// <summary>
-/// Immutable OpenCareer tracked-usage baseline for one versioned schedule. Tracked airborne time
-/// remains a documented proxy for manufacturer operating time; landing cycles are factual context
-/// only unless the referenced schedule defines a cycle interval.
+/// Immutable OpenCareer tracked-usage baseline revision for one versioned schedule. Tracked
+/// airborne time remains a documented proxy for manufacturer operating time; landing cycles are
+/// factual context only unless the referenced schedule defines a cycle interval.
 /// </summary>
 public sealed record AirframeMaintenanceServiceBaseline(
     [property: JsonRequired] AirframeId AirframeId,
@@ -100,10 +100,11 @@ public sealed record AirframeMaintenanceServiceBaseline(
             || !Enum.IsDefined(AirborneTimeOrigin) || !Enum.IsDefined(LandingCycleOrigin)
             || !Enum.IsDefined(Authority)
             || Authority != AirframeMaintenanceBaselineAuthority.AuthoritativeMaintenanceRecord
-            || SourceServiceRevision < 1 || Revision != 1
+            || SourceServiceRevision < 1 || Revision < 1
             || SourceServiceUpdatedAt == default || EstablishedAt == default
             || SourceServiceUpdatedAt < airframe.CreatedAt || EstablishedAt < SourceServiceUpdatedAt
-            || EstablishedAt != applicability.RecordedAt)
+            || (Revision == 1 && EstablishedAt != applicability.RecordedAt)
+            || (Revision > 1 && EstablishedAt <= applicability.RecordedAt))
             throw new InvalidDataException("Invalid versioned maintenance service baseline.");
         if (SourceServiceRevision > currentService.Revision
             || SourceServiceUpdatedAt > currentService.UpdatedAt
@@ -118,11 +119,49 @@ public sealed record AirframeMaintenanceServiceBaseline(
                 || TrackedLandingCycles != currentService.TotalTrackedLandingCycles))
             throw new InvalidDataException("Maintenance service baseline does not match its retained source revision.");
     }
+
+    public AirframeMaintenanceServiceBaseline Advance(
+        AirframeServiceState authoritativeService,
+        string sourceReference,
+        DateTimeOffset establishedAt)
+    {
+        ArgumentNullException.ThrowIfNull(authoritativeService);
+        authoritativeService.Validate();
+        AirframeComponentApplicabilityEvidence.ValidateText(
+            sourceReference,
+            "Component service baseline source reference");
+        establishedAt = establishedAt.ToUniversalTime();
+        if (authoritativeService.AirframeId != AirframeId)
+            throw new InvalidDataException("Component service usage belongs to a different physical airframe.");
+        if (authoritativeService.Revision <= SourceServiceRevision
+            || authoritativeService.TotalTrackedAirborneTime < TrackedAirborneTime
+            || authoritativeService.TotalTrackedLandingCycles < TrackedLandingCycles
+            || authoritativeService.UsageOrigin != AirborneTimeOrigin
+            || authoritativeService.LandingCycleOrigin != LandingCycleOrigin)
+            throw new InvalidOperationException(
+                "Authoritative usage has not advanced consistently beyond the component service baseline.");
+        if (establishedAt <= EstablishedAt || establishedAt <= authoritativeService.UpdatedAt)
+            throw new ArgumentOutOfRangeException(
+                nameof(establishedAt),
+                "Component service time must advance both the baseline and authoritative usage timestamp.");
+
+        return this with
+        {
+            TrackedAirborneTime = authoritativeService.TotalTrackedAirborneTime,
+            TrackedLandingCycles = authoritativeService.TotalTrackedLandingCycles,
+            SourceReference = sourceReference,
+            SourceServiceRevision = authoritativeService.Revision,
+            SourceServiceUpdatedAt = authoritativeService.UpdatedAt,
+            Revision = checked(Revision + 1),
+            EstablishedAt = establishedAt
+        };
+    }
 }
 
 /// <summary>
-/// Create-only evidence binding exact physical configuration to one exact schedule version and
-/// its captured service baseline. It does not replace the generic operational inspection schedule.
+/// Exact physical configuration bound to one immutable service-baseline revision. Persistence
+/// retains the registration evidence and every later baseline revision separately. This does not
+/// replace the generic operational inspection schedule.
 /// </summary>
 public sealed record AirframeMaintenanceScheduleEvidenceRecord(
     [property: JsonRequired] Guid EvidenceId,

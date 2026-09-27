@@ -24,6 +24,14 @@ public sealed partial class SqliteAirframeStore
         if (service.InspectionStatus != AirframeInspectionStatus.InspectionDue)
             return new(AirframeInspectionResultStatus.InspectionNotDue, condition, service, null, false);
 
+        await EnsureAfterLatestComponentServiceAsync(
+                connection,
+                transaction,
+                request.AirframeId,
+                request.PerformedAt,
+                cancellationToken)
+            .ConfigureAwait(false);
+
         request = request with { PerformedAt = request.PerformedAt.ToUniversalTime() };
         var after = service.Inspect(request.PerformedAt);
         var serviceEvent = new AirframeRoutineInspectionEvent(request, AirframeMaintenanceEventKind.RoutineInspection,

@@ -14,7 +14,10 @@ public sealed partial class AirframeInspectionTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
     private string DatabasePath => Path.Combine(_root, "inspection.db");
     private static DateTimeOffset Epoch => ConsequenceFixture.Epoch;
-    private SqliteAirframeStore Store() => new(new(DatabasePath), NullLogger<SqliteAirframeStore>.Instance);
+    private SqliteAirframeStore Store() => new(
+        new(DatabasePath),
+        NullLogger<SqliteAirframeStore>.Instance,
+        new InspectionClock());
     private AirframeMaintenanceService Service() { var store = Store(); return new(store, store); }
     private AirframeMaintenanceHistorySource History() { var store = Store(); return new(store, store, store); }
     private Task<AirframeStoreRecord> CreateAsync(AirframeDamageState damage = AirframeDamageState.None, double wear = 0.1234567890123456) =>
@@ -60,7 +63,7 @@ public sealed partial class AirframeInspectionTests : IDisposable
         Assert.Equal(1, (await StateAsync(a.Airframe.AirframeId)).TotalTrackedLandingCycles);
         Assert.Equal(other, await StateAsync(b.Airframe.AirframeId));
         Assert.Equal(b, await Store().FindAsync(b.Airframe.AirframeId));
-        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(20L, await ScalarAsync("PRAGMA user_version;"));
         await ExecuteAsync("CREATE TRIGGER fail_init BEFORE INSERT ON airframe_service_state BEGIN SELECT RAISE(ABORT, 'injected'); END;");
         await Assert.ThrowsAsync<SqliteException>(() => CreateAsync());
         Assert.Equal(2L, await ScalarAsync("SELECT count(*) FROM airframes;"));
@@ -347,6 +350,10 @@ public sealed partial class AirframeInspectionTests : IDisposable
         using var pool = new SqliteConnection(new SqliteConnectionStringBuilder
         { DataSource = DatabasePath, Mode = SqliteOpenMode.ReadWriteCreate, Cache = SqliteCacheMode.Shared }.ToString());
         SqliteConnection.ClearPool(pool);
+    }
+    private sealed class InspectionClock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => Epoch.AddDays(30);
     }
     public void Dispose() { ClearPool(); if (Directory.Exists(_root)) Directory.Delete(_root, true); }
 }

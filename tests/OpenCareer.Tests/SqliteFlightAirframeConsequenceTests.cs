@@ -247,13 +247,14 @@ public sealed class SqliteFlightAirframeConsequenceTests : IDisposable
         await ExecuteAsync("""
             INSERT INTO job_contracts VALUES ('contract-sentinel', 1, 1, 3, 100, '{"preserve":"contract"}');
             INSERT INTO economy_ledger_transactions VALUES ('ledger-sentinel', 'idempotency-sentinel', 100, 'preserve', 'contract', 'contract-sentinel');
+            DROP TABLE airframe_component_service_baselines;
             DROP TABLE airframe_maintenance_schedule_evidence;
             DROP TABLE flight_airframe_consequences;
             PRAGMA user_version = 14;
             """);
         string rows = await AllRowsAsync();
         Assert.Null(await Store().FindBySessionAsync(session.SessionId));
-        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(20L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(rows, await AllRowsAsync());
         Assert.Equal(before, await Store().FindAsync(before.Airframe.AirframeId));
         Assert.Equal(session.SessionId, (await Checkpoints().LoadAsync())!.SessionId);
@@ -317,7 +318,7 @@ public sealed class SqliteFlightAirframeConsequenceTests : IDisposable
         var tables = new List<string>();
         await using (var command = db.CreateCommand())
         {
-            command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('flight_airframe_consequences','airframe_maintenance_schedule_evidence') ORDER BY name;";
+            command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('flight_airframe_consequences','airframe_maintenance_schedule_evidence','airframe_component_service_baselines') ORDER BY name;";
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync()) tables.Add(reader.GetString(0));
         }

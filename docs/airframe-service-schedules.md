@@ -20,13 +20,20 @@ shown factually, but do not trigger this task because no landing-cycle interval 
 
 Existing and new production airframes remain on the generic 50-hour fallback unless an external
 authoritative physical-aircraft record is explicitly registered for the exact AirframeId. Schema 19
-retains certified-model/component evidence and requires separate authoritative maintenance-record
-provenance before capturing the current exact tracked-usage baseline from the service-state authority.
-It does not infer or backfill either fact from canonical identity, TITLE, livery, flight history or
-migration. Missing evidence remains `ApplicabilityEvidenceRequired`; a
-retained mismatch remains `ApplicabilityMismatch`; only an exact 172S/IO-360-L2A match yields
-`TrackedProxyCurrent`/`TrackedProxyDue`. Existing inspection exact-once behavior, dispatch gates and
-history remain unchanged, and the component assessment has no service action in this slice.
+retains immutable certified-model/component evidence and its original authoritative maintenance
+baseline. Schema 20 copies that baseline exactly into an append-only revision chain. It does not infer
+or backfill either fact from canonical identity, TITLE, livery, flight history or migration. Missing
+evidence remains `ApplicabilityEvidenceRequired`; a retained mismatch remains
+`ApplicabilityMismatch`; only an exact 172S/IO-360-L2A match yields `TrackedProxyCurrent` or
+`TrackedProxyDue`.
+
+When that verified proxy schedule is due, an explicit component-inspection action captures the exact
+current tracked airborne ticks, landing cycles, origins and service revision from the authoritative
+physical-airframe service state. Baseline N+1 and its immutable global-action history event commit
+atomically. Original applicability/baseline rows and all prior revisions remain retained. This action
+does not change condition or the generic fallback inspection markers, so fallback service and its
+dispatch gate remain independent. The latest retained component-baseline timestamp fences later
+physical condition, tracked usage, repair and inspection writes against stale pre-service chronology.
 
 ## Primary-source ledger
 

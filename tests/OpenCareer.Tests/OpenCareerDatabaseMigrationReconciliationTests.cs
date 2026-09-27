@@ -348,7 +348,8 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
             "commodity_market_snapshots",
             "installed_aircraft_observations",
             "aircraft_availability",
-            "airframe_maintenance_schedule_evidence"
+            "airframe_maintenance_schedule_evidence",
+            "airframe_component_service_baselines"
         })
         {
             Assert.True(
@@ -364,7 +365,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            19L,
+            20L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));

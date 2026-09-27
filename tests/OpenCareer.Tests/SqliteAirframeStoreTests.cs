@@ -155,7 +155,7 @@ public sealed class SqliteAirframeStoreTests : IDisposable
     public async Task FreshMigrationCreatesAnEmptyPhysicalFleetAndRegistersProductionStore()
     {
         Assert.Null(await Store().FindAsync(Aircraft().AirframeId));
-        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(20L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframes;"));
         string registration = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "UiContracts", "App.xaml.cs"));
         Assert.Contains("AddSingleton<IAirframeStore, SqliteAirframeStore>()", registration);
@@ -179,6 +179,7 @@ public sealed class SqliteAirframeStoreTests : IDisposable
             INSERT INTO economy_ledger_postings VALUES ('ledger-sentinel', 0, 0, 500, 0, 'debit');
             INSERT INTO economy_ledger_postings VALUES ('ledger-sentinel', 1, 1, 0, 500, 'credit');
             INSERT INTO logbook_entries VALUES ('log-sentinel', 'log-key', 1, 100, 100, 0, 0, 0, 'C172', 'KJFK', 'KJFK', 'contract-sentinel', 'preserve', '{"preserve":"logbook"}');
+            DROP TABLE airframe_component_service_baselines;
             DROP TABLE airframe_maintenance_schedule_evidence;
             DROP TABLE airframes;
             PRAGMA user_version = 13;
@@ -187,7 +188,7 @@ public sealed class SqliteAirframeStoreTests : IDisposable
         string before = await PlayableRowsAsync();
         Assert.Equal(13L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Null(await Store().FindAsync(Aircraft().AirframeId));
-        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(20L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(before, await PlayableRowsAsync());
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframes;"));
         Assert.Equal(profile.CareerId, (await profiles.LoadAsync())!.Profile.CareerId);

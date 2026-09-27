@@ -75,6 +75,13 @@ public sealed partial class SqliteAirframeStore : IAirframeStore
                 throw new AirframeConcurrencyException("Airframe identity or condition revision does not match the retained record.");
             if (result.SavedAt < current.SavedAt)
                 throw new ArgumentOutOfRangeException(nameof(savedAt), "Condition save time cannot move backwards.");
+            await EnsureAfterLatestComponentServiceAsync(
+                    connection,
+                    transaction,
+                    airframe.AirframeId,
+                    result.SavedAt,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         await using SqliteCommand command = connection.CreateCommand();

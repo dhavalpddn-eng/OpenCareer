@@ -4,7 +4,12 @@ using OpenCareer.Domain.Aircraft;
 
 namespace OpenCareer.Application.Fleet;
 
-public enum AirframeMaintenanceEventKind { DiscreteDamageRepair = 1, RoutineInspection = 2 }
+public enum AirframeMaintenanceEventKind
+{
+    DiscreteDamageRepair = 1,
+    RoutineInspection = 2,
+    VerifiedComponentInspection = 3
+}
 public enum AirframeRepairStatus { Repaired, NoRepairRequired, NotFound }
 
 /// <summary>One explicit action; expected revision identifies the condition being repaired.</summary>
@@ -106,6 +111,9 @@ public interface IAirframeMaintenanceStore
     Task<AirframeRepairResult> RepairDiscreteDamageAsync(AirframeRepairRequest request, AirframeStoreRecord expected,
         CancellationToken cancellationToken = default);
     Task<AirframeInspectionResult> PerformRoutineInspectionAsync(AirframeInspectionRequest request,
+        CancellationToken cancellationToken = default);
+    Task<AirframeComponentInspectionResult> PerformVerifiedComponentInspectionAsync(
+        AirframeComponentInspectionRequest request,
         CancellationToken cancellationToken = default);
     Task<AirframeServiceHistoryPage> ReadServiceHistoryAsync(AirframeServiceHistoryQuery query, CancellationToken cancellationToken = default);
 }

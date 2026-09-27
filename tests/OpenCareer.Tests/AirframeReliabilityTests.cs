@@ -168,7 +168,7 @@ public sealed partial class AirframeReliabilityTests : IDisposable
         Assert.Equal(0, snapshot.TotalTrackedLandingCycles);
         Assert.Equal(AirframeUsageOrigin.TrackingFromCreation, snapshot.LandingCycleOrigin);
         Assert.Equal(a, await Store().FindAsync(a.Airframe.AirframeId)); Assert.Equal(b, await Store().FindAsync(b.Airframe.AirframeId));
-        Assert.Equal(19L, await ScalarAsync("PRAGMA user_version;"));
+        Assert.Equal(20L, await ScalarAsync("PRAGMA user_version;"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM sqlite_master WHERE type='table' AND name LIKE '%reliability%';"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM airframe_maintenance_events;"));
         Assert.Equal(0L, await ScalarAsync("SELECT count(*) FROM flight_airframe_consequences;"));
