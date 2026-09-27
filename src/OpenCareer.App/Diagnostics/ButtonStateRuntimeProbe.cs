@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using OpenCareer.App.Styles;
+using XamlApplication = Microsoft.UI.Xaml.Application;
 
 namespace OpenCareer.App.Diagnostics;
 
@@ -183,7 +184,7 @@ internal sealed class ButtonStateRuntimeProbePage : Page
     internal static T GetApplicationResource<T>(string key)
         where T : class
     {
-        object value = Application.Current.Resources[key];
+        object value = XamlApplication.Current.Resources[key];
         return value as T
             ?? throw new InvalidDataException(
                 $"Application resource '{key}' is not {typeof(T).Name}.");
@@ -299,10 +300,10 @@ internal static class ButtonStateRuntimeProbe
         ArgumentNullException.ThrowIfNull(page);
 
         string windowsAppSdkVersion =
-            typeof(Application).Assembly
+            typeof(XamlApplication).Assembly
                 .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
                 ?.InformationalVersion
-            ?? typeof(Application).Assembly.GetName().Version?.ToString()
+            ?? typeof(XamlApplication).Assembly.GetName().Version?.ToString()
             ?? "unknown";
 
         try
