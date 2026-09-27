@@ -116,6 +116,97 @@ public sealed class FlightSessionPersistenceService
         }
     }
 
+    public async Task<FlightSession> CompleteAsync(
+        Guid expectedSessionId,
+        Guid? expectedContractId,
+        DateTimeOffset requestedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (expectedSessionId == Guid.Empty)
+            throw new ArgumentException("Session ID is required.", nameof(expectedSessionId));
+
+        if (expectedContractId is { } contractId
+            && contractId == Guid.Empty)
+            throw new ArgumentException("Contract ID is required.", nameof(expectedContractId));
+
+        if (requestedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(requestedAt));
+
+        await _mutationGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            FlightSession current =
+                _coordinator.Current
+                ?? throw new InvalidOperationException(
+                    "No flight session is active.");
+
+            ValidateExpectedCompletionIdentity(
+                current,
+                expectedSessionId,
+                expectedContractId);
+
+            if (requestedAt < current.CreatedAt)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(requestedAt),
+                    "Completion cannot predate the FlightSession.");
+            }
+
+            if (current.IsTerminal)
+            {
+                if (current.Status == FlightSessionStatus.Completed)
+                    return current;
+
+                throw new InvalidOperationException(
+                    "Interrupted or cancelled flights cannot be completed.");
+            }
+
+            if (current.Tracking.State != FlightTrackingState.Parked)
+            {
+                throw new InvalidOperationException(
+                    "FlightSession must be parked before completion.");
+            }
+
+            if (current.OperationState != FlightOperationState.Shutdown)
+            {
+                throw new InvalidOperationException(
+                    "FlightSession must be shut down before completion.");
+            }
+
+            DateTimeOffset completedAt =
+                requestedAt < current.UpdatedAt
+                    ? current.UpdatedAt
+                    : requestedAt;
+
+            FlightSession completed =
+                FlightSessionEngine.Advance(
+                    current,
+                    new FlightSessionAdvance(
+                        new FlightStateEvidence(
+                            completedAt,
+                            Connected: true,
+                            StableTelemetry: true,
+                            ContinuityPlausible: true,
+                            OperationCompleteConfirmed: true),
+                        ShutdownConfirmed: true));
+
+            await _store
+                .SaveAsync(completed, cancellationToken)
+                .ConfigureAwait(false);
+
+            _lastPersisted = completed;
+            _coordinator.CommitPersisted(completed);
+            return completed;
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
     public async Task<FlightSession> CancelAsync(
         Guid expectedSessionId,
         Guid expectedContractId,
@@ -360,6 +451,19 @@ public sealed class FlightSessionPersistenceService
         {
             throw new InvalidOperationException(
                 "Current FlightSession identity does not match the requested career-flight operation.");
+        }
+    }
+
+    private static void ValidateExpectedCompletionIdentity(
+        FlightSession current,
+        Guid expectedSessionId,
+        Guid? expectedContractId)
+    {
+        if (current.SessionId != expectedSessionId
+            || current.ContractId != expectedContractId)
+        {
+            throw new InvalidOperationException(
+                "Current FlightSession identity does not match the requested completion operation.");
         }
     }
 }

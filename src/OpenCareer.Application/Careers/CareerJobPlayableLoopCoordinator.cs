@@ -120,6 +120,25 @@ public sealed class CareerJobPlayableLoopCoordinator
         ArgumentNullException.ThrowIfNull(
             request.LogbookContext);
 
+        if (request.FlightCompletionTime == default
+            || request.SettledAt == default
+            || request.LogbookCommittedAt == default
+            || request.ExperienceSavedAt == default)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(request),
+                "Career-flight terminal timestamps are required.");
+        }
+
+        if (request.SettledAt < request.FlightCompletionTime
+            || request.LogbookCommittedAt < request.SettledAt
+            || request.ExperienceSavedAt < request.LogbookCommittedAt)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(request),
+                "Career-flight terminal timestamps must be monotonic.");
+        }
+
         request.ActualCosts.Validate();
 
         await _completionGate
@@ -170,6 +189,17 @@ public sealed class CareerJobPlayableLoopCoordinator
                 ContractSettlementEngine.GetIdempotencyKey(
                     completedContract.Contract.ContractId);
 
+            DateTimeOffset completedAt =
+                completedContract.Contract.CompletedAt
+                ?? throw new InvalidOperationException(
+                    "Completed career contract has no authoritative completion timestamp.");
+            DateTimeOffset settledAt =
+                Latest(request.SettledAt, completedAt);
+            DateTimeOffset logbookCommittedAt =
+                Latest(request.LogbookCommittedAt, settledAt);
+            DateTimeOffset experienceSavedAt =
+                Latest(request.ExperienceSavedAt, logbookCommittedAt);
+
             var terminalRequest =
                 new CareerFlightTerminalWorkflowRequest(
                     new SettlementPendingContractRequest(
@@ -177,10 +207,10 @@ public sealed class CareerJobPlayableLoopCoordinator
                             completedContract,
                             settlementKey),
                         request.ActualCosts,
-                        request.SettledAt),
+                        settledAt),
                     request.LogbookContext,
-                    request.LogbookCommittedAt,
-                    request.ExperienceSavedAt);
+                    logbookCommittedAt,
+                    experienceSavedAt);
 
             CareerFlightTerminalWorkflowResult terminal =
                 await _terminal
@@ -211,6 +241,13 @@ public sealed class CareerJobPlayableLoopCoordinator
     }
 
     private FlightSession? _lastCompletedFlight;
+
+    private static DateTimeOffset Latest(
+        DateTimeOffset first,
+        DateTimeOffset second) =>
+        first >= second
+            ? first
+            : second;
 
     private async Task<PersistedJobContract> CompleteInProgressAsync(
         CareerJobPlayableCompletionRequest request,

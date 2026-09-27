@@ -317,11 +317,16 @@ public sealed class KjfkPlayableLoopCertificationTests
     private sealed class ObservedRegistry(IAircraftRegistrySource source, Action? afterResolution) : IAircraftRegistrySource
     {
         public int ReadCount { get; private set; }
+        public Func<Task>? AfterResolutionAsync { get; set; }
         public async Task<AircraftRegistryResolution?> FindAircraftAsync(string aircraftId, CancellationToken cancellationToken = default)
         {
             var result = await source.FindAircraftAsync(aircraftId, cancellationToken);
             ReadCount++;
             afterResolution?.Invoke();
+            Func<Task>? afterResolutionAsync = AfterResolutionAsync;
+            AfterResolutionAsync = null;
+            if (afterResolutionAsync is not null)
+                await afterResolutionAsync();
             return result;
         }
     }
@@ -422,9 +427,37 @@ public sealed class KjfkPlayableLoopCertificationTests
             Assert.True(app.Shell.CanCompleteCareerFlight);
             Assert.Equal("Complete Career Flight", app.Shell.CareerCompletionActionText);
 
+            // Capture completion input, then advance trustworthy shutdown telemetry while
+            // that input is still being assembled. Completion must use the authoritative
+            // session at the serialized mutation boundary without losing its newer evidence.
+            FlightSession capturedShutdown = app.Session;
+            FlightSession? newerShutdown = null;
+            app.AfterRegistryResolutionAsync = async () =>
+            {
+                await app.SamplesAsync(
+                    1,
+                    true,
+                    0,
+                    0,
+                    engines: 0,
+                    parking: true,
+                    fuel: 168,
+                    payload: 20);
+                newerShutdown = app.Session;
+            };
+
             // Inspect durable state at the actual checkpoint-delete boundary, without replacing stores.
             app.Checkpoints.BeforeClear = async terminal =>
             {
+                FlightSession authoritativeNewerShutdown =
+                    Assert.IsType<FlightSession>(newerShutdown);
+                Assert.Equal(capturedShutdown.SessionId, authoritativeNewerShutdown.SessionId);
+                Assert.True(authoritativeNewerShutdown.UpdatedAt > capturedShutdown.UpdatedAt);
+                Assert.Equal(authoritativeNewerShutdown.UpdatedAt, terminal.UpdatedAt);
+                Assert.Equal(authoritativeNewerShutdown.UpdatedAt, terminal.Milestones.CompletedAt);
+                Assert.Equal(authoritativeNewerShutdown.EffectiveStatistics, terminal.EffectiveStatistics);
+                Assert.Equal(authoritativeNewerShutdown.TimeLedger, terminal.TimeLedger);
+                Assert.Equal(authoritativeNewerShutdown.EffectiveLandingEpisodes, terminal.EffectiveLandingEpisodes);
                 Assert.Equal(FlightSessionStatus.Completed, terminal.Status);
                 Assert.Equal(ContractStatus.Completed, (await app.ContractStore.ReadJobContractAsync(first))!.Contract.Status);
                 Assert.Null(await app.ReservationAsync(first));
@@ -612,6 +645,11 @@ public sealed class KjfkPlayableLoopCertificationTests
         private readonly PlayerCareerRuntimeState _career;
         private readonly ObservedRegistry _registry;
         public int RegistryReadCount => _registry.ReadCount;
+        public Func<Task>? AfterRegistryResolutionAsync
+        {
+            get => _registry.AfterResolutionAsync;
+            set => _registry.AfterResolutionAsync = value;
+        }
 
         public Harness(string path, IInstalledAircraftDiscoverySource discovery,
             ISimulatorConnection connection, TestTelemetry telemetry, TestClock clock, Action? afterAircraftResolution = null,
@@ -754,14 +792,15 @@ public sealed class KjfkPlayableLoopCertificationTests
         }
 
         public async Task SamplesAsync(int count, bool ground, double agl, double speed,
-            int engines = 1, bool parking = false, double descent = 0, double latitude = 40.63993)
+            int engines = 1, bool parking = false, double descent = 0, double latitude = 40.63993,
+            double fuel = 170, double payload = 0)
         {
             for (int i = 0; i < count; i++)
             {
                 Clock.Now = Clock.Now.AddSeconds(1);
                 Telemetry.Latest = new(Clock.Now, latitude, -73.77869, 13 + agl, agl,
                     speed, speed, descent, 31, 0, 0, 1, ground, parking, engines,
-                    170, 0, 0, true, false, false);
+                    fuel, payload, 0, true, false, false);
                 await Runtime.RefreshAsync();
             }
         }

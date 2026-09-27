@@ -197,6 +197,74 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             context.ProfileStore.SaveCount);
     }
 
+    [Fact]
+    public async Task CapturedTerminalRequestAdvancesFromNewerAuthoritativeShutdownState()
+    {
+        TestContext context =
+            CreateContext(
+                development: true);
+
+        FlightSession captured =
+            Assert.IsType<FlightSession>(context.Sessions.Current);
+
+        CareerJobPlayableCompletionRequest staleRequest =
+            context.Request with
+            {
+                FlightCompletionTime = captured.UpdatedAt,
+                SettledAt = captured.UpdatedAt,
+                LogbookCommittedAt = captured.UpdatedAt,
+                ExperienceSavedAt = captured.UpdatedAt
+            };
+
+        FlightSession newer =
+            await context.FlightPersistence.AdvanceAsync(
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        captured.UpdatedAt.AddSeconds(1),
+                        Connected: true,
+                        StableTelemetry: true,
+                        ContinuityPlausible: true,
+                        ParkingConfirmed: true),
+                    ShutdownConfirmed: true,
+                    Observation:
+                        new FlightSessionObservation(
+                            captured.UpdatedAt.AddSeconds(1),
+                            LatitudeDegrees: 40.64,
+                            LongitudeDegrees: -73.78,
+                            AltitudeMslFeet: 13,
+                            IndicatedAirspeedKnots: 0,
+                            GroundSpeedKnots: 0,
+                            FuelTotalPounds: 120,
+                            PayloadPounds: 340,
+                            CaptureTrackPoint: true)));
+
+        CareerJobPlayableCompletionResult result =
+            await context.Coordinator.CompleteAsync(
+                staleRequest);
+
+        FlightSession completed =
+            Assert.IsType<FlightSession>(result.CompletedFlight);
+
+        Assert.Equal(newer.UpdatedAt, completed.UpdatedAt);
+        Assert.Equal(newer.EffectiveStatistics, completed.EffectiveStatistics);
+        Assert.Equal(newer.UpdatedAt, result.CompletedContract.Contract.CompletedAt);
+        Assert.Equal(newer.UpdatedAt, result.Terminal.Settlement.Settlement.Transaction.OccurredAt);
+        Assert.Equal(newer.UpdatedAt, result.Terminal.Logbook.Entry.CommittedAt);
+        Assert.Equal(newer.UpdatedAt, result.Terminal.CareerProfile.SavedAt);
+
+        CareerJobPlayableCompletionResult replay =
+            await context.Coordinator.CompleteAsync(
+                staleRequest);
+
+        Assert.Null(replay.CompletedFlight);
+        Assert.False(replay.Terminal.Settlement.WasNewlyPosted);
+        Assert.Equal(LogbookAppendDisposition.AlreadyExists, replay.Terminal.Logbook.Disposition);
+        Assert.Equal(1, context.Ledger.UniquePostCount);
+        Assert.Single(context.Logbook.Entries);
+        Assert.Equal(1, context.Fleet.ReleaseCount);
+        Assert.Equal(1, context.CheckpointStore.ClearCount);
+    }
+
     private static TestContext CreateContext(
         bool development = false)
     {
@@ -526,7 +594,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             profileStore,
             fleet,
             checkpointStore,
-            sessions);
+            sessions,
+            flightPersistence);
     }
 
     private static PersistedJobContract InProgressContract(
@@ -719,7 +788,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         FakeProfileStore ProfileStore,
         FakeFleetStore Fleet,
         MemoryCheckpointStore CheckpointStore,
-        FlightSessionCoordinator Sessions);
+        FlightSessionCoordinator Sessions,
+        FlightSessionPersistenceService FlightPersistence);
 
     private sealed class FakeContractStore(
         PersistedJobContract current)
