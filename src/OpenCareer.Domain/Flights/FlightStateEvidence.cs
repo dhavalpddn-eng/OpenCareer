@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace OpenCareer.Domain.Flights;
 
 public sealed record FlightStateEvidence(
@@ -21,4 +23,5 @@ public sealed record FlightStateEvidence(
     bool LandingRolloutConfirmed = false,
     bool ParkingConfirmed = false,
     bool OperationCompleteConfirmed = false,
-    bool CrashReported = false);
+    bool CrashReported = false,
+    ImmutableList<FlightLandingContactEvidence>? LandingContacts = null);

@@ -1,4 +1,5 @@
 using OpenCareer.Application.Planning;
+using OpenCareer.Application.Fleet;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Events;
@@ -135,7 +136,8 @@ public enum CareerJobStartInputState
     PreflightInfeasible = 13,
     PreflightDataInsufficient = 14,
     DomainDispatchGateRejected = 15,
-    Ready = 16
+    Ready = 16,
+    PhysicalAirframeUnavailable = 17
 }
 
 public sealed record CareerJobStartInputSnapshot(
@@ -159,6 +161,7 @@ public sealed class CareerJobStartInputSource
     private readonly ICareerJobContractTermsSource[] _contractTermSources;
     private readonly ICareerJobDispatchAuthoritySource[] _dispatchAuthoritySources;
     private readonly TimeProvider _timeProvider;
+    private readonly PhysicalAirframeEligibilityService _physicalAirframes;
 
     public CareerJobStartInputSource(
         IJobBoardStateStore jobBoards,
@@ -168,7 +171,8 @@ public sealed class CareerJobStartInputSource
         OperationDispatchPlanningService dispatchPlanning,
         IEnumerable<ICareerJobContractTermsSource> contractTermSources,
         IEnumerable<ICareerJobDispatchAuthoritySource> dispatchAuthoritySources,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        PhysicalAirframeEligibilityService? physicalAirframes = null)
     {
         _jobBoards =
             jobBoards
@@ -194,6 +198,7 @@ public sealed class CareerJobStartInputSource
         _timeProvider =
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
+        _physicalAirframes = physicalAirframes ?? new();
 
         if (_contractTermSources.Any(static source => source is null))
         {
@@ -213,12 +218,14 @@ public sealed class CareerJobStartInputSource
     public async Task<CareerJobStartInputSnapshot> ReadAsync(
         Guid offerId,
         string aircraftId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AirframeId? physicalAirframeId = null)
     {
         if (offerId == Guid.Empty)
             throw new ArgumentException("Offer ID is required.", nameof(offerId));
 
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftId);
+        physicalAirframeId?.Validate();
 
         PlayerCareerProfileStoreRecord? careerRecord =
             await _career
@@ -411,6 +418,11 @@ public sealed class CareerJobStartInputSource
 
         aircraft.Validate();
 
+        PhysicalAirframeEligibility physical = await _physicalAirframes
+            .EvaluateAsync(aircraft.AircraftId, physicalAirframeId, cancellationToken).ConfigureAwait(false);
+        if (!physical.IsEligible)
+            return Blocked(CareerJobStartInputState.PhysicalAirframeUnavailable, offerId, physical.Detail);
+
         CareerJobDispatchAuthorityEvidence? dispatchAuthority =
             await ReadSingleDispatchAuthorityAsync(
                     offer,
@@ -527,7 +539,8 @@ public sealed class CareerJobStartInputSource
             new CareerJobPlayableStartRequest(
                 creationRequest,
                 context,
-                dispatchAuthority.Requirements),
+                dispatchAuthority.Requirements,
+                physicalAirframeId),
             "Authoritative contract terms, selected aircraft, dispatch authority, and physical preflight are ready.");
     }
 

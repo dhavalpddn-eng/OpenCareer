@@ -1,3 +1,5 @@
+using OpenCareer.Domain.Aircraft;
+
 namespace OpenCareer.Application.Careers;
 
 public sealed record CareerJobStartActionAvailability(
@@ -10,12 +12,14 @@ public interface ICareerJobStartAction
     Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
         Guid offerId,
         string aircraftId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        AirframeId? physicalAirframeId = null);
 
     Task<CareerJobPlayableStartResult> StartAsync(
         Guid offerId,
         string aircraftId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        AirframeId? physicalAirframeId = null);
 }
 
 public sealed class CareerJobStartActionService
@@ -39,14 +43,16 @@ public sealed class CareerJobStartActionService
     public async Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
         Guid offerId,
         string aircraftId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AirframeId? physicalAirframeId = null)
     {
         CareerJobStartInputSnapshot snapshot =
             await _inputs
                 .ReadAsync(
                     offerId,
                     aircraftId,
-                    cancellationToken)
+                    cancellationToken,
+                    physicalAirframeId)
                 .ConfigureAwait(false);
 
         return new(
@@ -58,14 +64,16 @@ public sealed class CareerJobStartActionService
     public async Task<CareerJobPlayableStartResult> StartAsync(
         Guid offerId,
         string aircraftId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AirframeId? physicalAirframeId = null)
     {
         CareerJobStartInputSnapshot snapshot =
             await _inputs
                 .ReadAsync(
                     offerId,
                     aircraftId,
-                    cancellationToken)
+                    cancellationToken,
+                    physicalAirframeId)
                 .ConfigureAwait(false);
 
         if (!snapshot.IsReady

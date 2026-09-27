@@ -340,6 +340,34 @@ public sealed class SimConnectConnectionTests
         Assert.Single(api.ThreadIds);
     }
 
+    [Fact]
+    public async Task ValidFailureReadbackKeepsConnectionAliveBeyondMissingHeartbeatTimeout()
+    {
+        var api = new SimConnectTestTransport();
+        var clock = new TestClock();
+        api.Enqueue(SimConnectPackets.Open());
+        await using var connection = Create(api, clock: clock);
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+        await DispatchAsync(api, FailureStatePacket(), () => clock.Advance(TimeSpan.FromSeconds(6)));
+        await Until(() => api.Heartbeats.Count == 1);
+
+        // Failure-state readback is a valid configured stream. A missing SystemState
+        // response must not reconnect while that authoritative traffic remains live.
+        for (int i = 0; i < 6; i++)
+        {
+            await DispatchAsync(api, FailureStatePacket(),
+                () => clock.Advance(TimeSpan.FromSeconds(6)));
+            Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+            Assert.Equal(1, api.Attempts);
+            Assert.True(connection.FailureState.IsAvailable);
+            Assert.False(connection.FailureState.Engine1Failed);
+        }
+
+        Assert.False(api.OverlapDetected);
+        Assert.Single(api.ThreadIds);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -390,6 +418,11 @@ public sealed class SimConnectConnectionTests
     private static byte[] TelemetryPacket() => SimConnectPackets.SimObjectData(
         SimConnectTelemetryDefinition.RequestId, SimConnectTelemetryDefinition.DefinitionId,
         new double[SimConnectTelemetryDefinition.ValueCount]);
+
+    private static byte[] FailureStatePacket() => SimConnectPackets.SimObjectData(
+        SimConnectEngineFailureDefinition.RequestId,
+        SimConnectEngineFailureDefinition.DefinitionId,
+        [0]);
 
     private static async Task DispatchAsync(SimConnectTestTransport api, byte[] packet, Action? action = null)
     {

@@ -7,6 +7,7 @@ public sealed class FlightSessionPersistenceService
     private readonly FlightSessionCoordinator _coordinator;
     private readonly IFlightSessionCheckpointStore _store;
     private readonly FlightSessionCheckpointPolicy _checkpointPolicy;
+    private readonly FlightAirframeConsequenceCoordinator? _airframeConsequences;
     private readonly SemaphoreSlim _mutationGate = new(1, 1);
     private FlightSession? _lastPersisted;
 
@@ -17,7 +18,8 @@ public sealed class FlightSessionPersistenceService
     public FlightSessionPersistenceService(
         FlightSessionCoordinator coordinator,
         IFlightSessionCheckpointStore store,
-        FlightSessionCheckpointPolicy? checkpointPolicy = null)
+        FlightSessionCheckpointPolicy? checkpointPolicy = null,
+        FlightAirframeConsequenceCoordinator? airframeConsequences = null)
     {
         _coordinator =
             coordinator
@@ -32,6 +34,7 @@ public sealed class FlightSessionPersistenceService
             ?? FlightSessionCheckpointPolicy.Default;
 
         _checkpointPolicy.Validate();
+        _airframeConsequences = airframeConsequences;
     }
 
     public async Task<FlightSession> StartAsync(
@@ -39,7 +42,8 @@ public sealed class FlightSessionPersistenceService
         Guid? contractId = null,
         Guid? sessionId = null,
         FlightSessionPlan? plan = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        FlightSessionAircraftIdentity? aircraftIdentity = null)
     {
         await _mutationGate
             .WaitAsync(cancellationToken)
@@ -58,7 +62,8 @@ public sealed class FlightSessionPersistenceService
                     timestamp,
                     contractId,
                     sessionId,
-                    plan);
+                    plan,
+                    aircraftIdentity);
 
             await _store
                 .SaveAsync(session, cancellationToken)
@@ -334,6 +339,15 @@ public sealed class FlightSessionPersistenceService
             {
                 throw new InvalidOperationException(
                     "An active flight session cannot be cleared.");
+            }
+
+            // All terminal workflows converge here. Physical consequences must commit before their
+            // evidence disappears; failures leave the checkpoint/runtime intact for exact-once retry.
+            if (current.AircraftIdentity?.PhysicalAirframeId is not null)
+            {
+                var consequences = _airframeConsequences
+                    ?? throw new InvalidOperationException("Physical FlightSession cleanup requires the airframe consequence authority.");
+                await consequences.ApplyAsync(current, cancellationToken).ConfigureAwait(false);
             }
 
             await _store

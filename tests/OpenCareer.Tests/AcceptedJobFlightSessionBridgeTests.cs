@@ -60,6 +60,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             coordinator.Current);
         Assert.Equal(1, contractStore.UpdateCount);
         Assert.Equal(1, sessionStore.SaveCount);
+        Assert.Equal("canonical-aircraft", result.FlightSession.AircraftIdentity?.CanonicalAircraftId);
+        Assert.Null(result.FlightSession.AircraftIdentity!.PhysicalAirframeId);
     }
 
     [Fact]

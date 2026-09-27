@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
@@ -18,6 +19,8 @@ public sealed class FlightTelemetryEvidenceProcessor
     private bool _landingContactObserved;
     private DateTimeOffset? _bounceAirborneAt;
     private bool _pendingBounceRecontact;
+    private bool _previousContactSampleTrustworthy;
+    private ImmutableList<FlightLandingContactEvidence> _pendingContacts = [];
 
     public FlightTelemetryEvidenceProcessor(
         FlightEvidenceProcessorOptions? options = null)
@@ -152,7 +155,20 @@ public sealed class FlightTelemetryEvidenceProcessor
             _takeoffCandidateActive = false;
         }
 
-        ObserveLandingContact(telemetry, operationalSample && observation.ContinuityPlausible);
+        bool contactSampleTrustworthy = operationalSample
+            && stableTelemetry
+            && observation.ValidLoadedAircraft
+            && observation.ContinuityPlausible
+            && telemetry.Timestamp != default
+            && telemetry.IndicatedAirspeedKnots >= 0
+            && telemetry.GroundSpeedKnots >= 0
+            && telemetry.FuelTotalPounds >= 0
+            && telemetry.PayloadPounds >= 0;
+
+        if (!contactSampleTrustworthy)
+            _pendingContacts = [];
+
+        ObserveLandingContact(telemetry, operationalSample && observation.ContinuityPlausible, contactSampleTrustworthy);
 
         bool touchdownConfirmed =
             operationalSample
@@ -163,8 +179,12 @@ public sealed class FlightTelemetryEvidenceProcessor
 
         bool wasLandingEpisodeActive = _landingEpisodeActive;
         bool bounceRecontact = touchdownConfirmed && _pendingBounceRecontact;
+        ImmutableList<FlightLandingContactEvidence>? confirmedContacts = null;
         if (touchdownConfirmed)
         {
+            if (contactSampleTrustworthy && _pendingContacts.Count > 0)
+                confirmedContacts = _pendingContacts;
+            _pendingContacts = [];
             _landingEpisodeActive = true;
             _pendingBounceRecontact = false;
         }
@@ -243,9 +263,12 @@ public sealed class FlightTelemetryEvidenceProcessor
                 OperationCompleteConfirmed:
                     operationComplete,
                 CrashReported:
-                    observation.CrashReported);
+                    observation.CrashReported,
+                LandingContacts:
+                    confirmedContacts);
 
         _previous = telemetry;
+        _previousContactSampleTrustworthy = contactSampleTrustworthy;
 
         return evidence;
     }
@@ -280,6 +303,7 @@ public sealed class FlightTelemetryEvidenceProcessor
     public void Reset()
     {
         _previous = null;
+        _previousContactSampleTrustworthy = false;
         _stableSampleCount = 0;
         _airborneSampleCount = 0;
         _groundSampleCount = 0;
@@ -291,6 +315,7 @@ public sealed class FlightTelemetryEvidenceProcessor
 
     private void ResetTransientEvidence()
     {
+        _previousContactSampleTrustworthy = false;
         _stableSampleCount = 0;
         _airborneSampleCount = 0;
         _groundSampleCount = 0;
@@ -298,7 +323,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         ResetLandingContact();
     }
 
-    private void ObserveLandingContact(AircraftTelemetrySnapshot telemetry, bool trustworthy)
+    private void ObserveLandingContact(AircraftTelemetrySnapshot telemetry, bool trustworthy, bool captureTrustworthy)
     {
         // Contact evidence belongs to this processor; continuity still owns spatial plausibility.
         // No recontact is inferred across a disconnect, pause, slew or missing observation interval.
@@ -330,6 +355,17 @@ public sealed class FlightTelemetryEvidenceProcessor
             {
                 _pendingBounceRecontact = true;
             }
+            if (captureTrustworthy && _previousContactSampleTrustworthy
+                && telemetry.Timestamp > _previous.Timestamp)
+            {
+                // Retain the edge sample, including provisional contact before a short bounce.
+                // Publish only when ground confirmation succeeds; gaps discard these candidates.
+                _pendingContacts = _pendingContacts.Add(new FlightLandingContactEvidence(
+                    telemetry.Timestamp, telemetry.VerticalSpeedFeetPerMinute, telemetry.NormalAccelerationG,
+                    telemetry.IndicatedAirspeedKnots, telemetry.GroundSpeedKnots,
+                    telemetry.HeadingDegrees, telemetry.PitchDegrees, telemetry.BankDegrees,
+                    telemetry.FuelTotalPounds, telemetry.PayloadPounds));
+            }
             _landingContactObserved = true;
             _bounceAirborneAt = null;
         }
@@ -337,6 +373,7 @@ public sealed class FlightTelemetryEvidenceProcessor
 
     private void ResetLandingContact()
     {
+        _pendingContacts = [];
         _landingContactObserved = false;
         _bounceAirborneAt = null;
         _pendingBounceRecontact = false;

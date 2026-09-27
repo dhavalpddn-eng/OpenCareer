@@ -84,6 +84,12 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
     public int SubscribeToSystemEvent(nint handle, uint eventId, string eventName) =>
         SimConnect_SubscribeToSystemEvent(handle, eventId, eventName);
 
+    public int MapClientEventToSimEvent(nint handle, uint eventId, string eventName) =>
+        SimConnect_MapClientEventToSimEvent(handle, eventId, eventName);
+
+    public int TransmitClientEvent(nint handle, uint objectId, uint eventId, uint data, uint groupId, uint flags) =>
+        SimConnect_TransmitClientEvent(handle, objectId, eventId, data, groupId, flags);
+
     public int RequestSystemState(nint handle, uint requestId) =>
         SimConnect_RequestSystemState(handle, requestId, "Sim");
 
@@ -154,6 +160,16 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
     [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
     private static extern int SimConnect_SubscribeToSystemEvent(
         nint handle, uint eventId, string eventName);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
+        CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_MapClientEventToSimEvent(nint handle, uint eventId, string eventName);
+
+    [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+    private static extern int SimConnect_TransmitClientEvent(
+        nint handle, uint objectId, uint eventId, uint data, uint groupId, uint flags);
 
     [DllImport(SimConnectLibraryName, ExactSpelling = true, CallingConvention = CallingConvention.StdCall,
         CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]

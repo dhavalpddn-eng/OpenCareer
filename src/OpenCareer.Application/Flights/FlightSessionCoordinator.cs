@@ -11,7 +11,8 @@ public sealed class FlightSessionCoordinator
     public FlightSession Start(
         DateTimeOffset timestamp,
         Guid? contractId = null,
-        Guid? sessionId = null)
+        Guid? sessionId = null,
+        FlightSessionAircraftIdentity? aircraftIdentity = null)
     {
         if (Current is { IsTerminal: false })
         {
@@ -23,7 +24,8 @@ public sealed class FlightSessionCoordinator
             FlightSession.Start(
                 timestamp,
                 contractId,
-                sessionId);
+                sessionId,
+                aircraftIdentity: aircraftIdentity);
 
         Publish();
         return Current;
@@ -84,6 +86,12 @@ public sealed class FlightSessionCoordinator
         {
             throw new InvalidOperationException(
                 "Cannot replace the current flight session with an older checkpoint.");
+        }
+
+        if (session.AircraftIdentity != Current.AircraftIdentity)
+        {
+            throw new InvalidOperationException(
+                "Cannot replace the current flight session's aircraft assignment.");
         }
 
         Current = session;

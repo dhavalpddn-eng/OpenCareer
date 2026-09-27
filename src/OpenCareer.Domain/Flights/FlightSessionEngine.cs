@@ -69,7 +69,8 @@ public static class FlightSessionEngine
                 current.EffectiveLandingEpisodes,
                 previousTracking,
                 nextTracking,
-                update.Evidence.Timestamp);
+                update.Evidence,
+                current.CreatedAt);
 
         if (update.ShutdownConfirmed
             && nextTracking.State == FlightTrackingState.Parked)
@@ -351,8 +352,10 @@ public static class FlightSessionEngine
         IReadOnlyList<FlightSessionLandingEpisode> current,
         FlightTrackingSnapshot previous,
         FlightTrackingSnapshot next,
-        DateTimeOffset timestamp)
+        FlightStateEvidence evidence,
+        DateTimeOffset sessionCreatedAt)
     {
+        DateTimeOffset timestamp = evidence.Timestamp;
         var episodes =
             current.ToList();
 
@@ -389,6 +392,25 @@ public static class FlightSessionEngine
                     BounceCount =
                         last.BounceCount + bounceDelta
                 };
+        }
+
+        // Event classification remains the reducer's authority. Never turn a provisional or
+        // rejected sample into a landing just because it carries telemetry values.
+        if ((next.LandingEpisodeCount > previous.LandingEpisodeCount || bounceDelta > 0)
+            && evidence.Connected && evidence.StableTelemetry && evidence.ValidLoadedAircraft
+            && evidence.ContinuityPlausible && evidence.LandingContacts is { Count: > 0 }
+            && episodes.Count > 0)
+        {
+            FlightSessionLandingEpisode last = episodes[^1];
+            var contacts = last.EffectiveContacts;
+            foreach (FlightLandingContactEvidence contact in evidence.LandingContacts)
+            {
+                if (contact.Timestamp < sessionCreatedAt)
+                    throw new ArgumentException("Landing contact predates the active FlightSession.", nameof(evidence));
+                if (contacts.Count == 0 || contact.Timestamp > contacts[^1].Timestamp)
+                    contacts = contacts.Add(contact);
+            }
+            episodes[^1] = last with { Contacts = contacts };
         }
 
         if (next.TouchAndGoCount

@@ -53,6 +53,7 @@ public sealed class SimConnectAirportFacilityTests
         var source = new SimConnectAirportDataObservationSource(connection);
         var query = source.FindAirportObservationAsync("KALB");
         await Until(() => api.FacilityRequests.Count == 1);
+        uint firstSendId = api.LastSentPacketId;
         uint requestId = api.FacilityRequests.Single().RequestId;
         byte[] packet = SimConnectPackets.AirportFacility(requestId, 1, "Fixture Albany", "KALB");
         if (unsupportedType)
@@ -77,12 +78,11 @@ public sealed class SimConnectAirportFacilityTests
         Assert.Single(api.ThreadIds);
 
         // A malformed late response/exception from the failed query must not poison its successor.
-        api.LastSentPacketId++;
         var next = source.FindAirportObservationAsync("KJFK");
         await Until(() => api.FacilityRequests.Count == 2);
         uint nextId = api.FacilityRequests.Last().RequestId;
         api.Enqueue(packet);
-        api.Enqueue(SimConnectPackets.Exception(20, api.LastSentPacketId - 1));
+        api.Enqueue(SimConnectPackets.Exception(20, firstSendId));
         api.Enqueue(SimConnectPackets.AirportFacility(nextId, 2, "Kennedy", "KJFK"));
         api.Enqueue(SimConnectPackets.RunwayFacility(nextId, 3, 2, 0, 1, 3000, 45, 4, 4, 1, 22, 2));
         api.Enqueue(SimConnectPackets.FacilityDataEnd(nextId));
