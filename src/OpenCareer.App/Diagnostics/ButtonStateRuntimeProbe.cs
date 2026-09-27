@@ -184,10 +184,46 @@ internal sealed class ButtonStateRuntimeProbePage : Page
     internal static T GetApplicationResource<T>(string key)
         where T : class
     {
-        object value = XamlApplication.Current.Resources[key];
+        if (!TryGetApplicationResource(
+                XamlApplication.Current.Resources,
+                key,
+                out object? value))
+        {
+            throw new InvalidDataException(
+                $"Application resource '{key}' was not found in the compiled App resource dictionaries.");
+        }
+
         return value as T
             ?? throw new InvalidDataException(
                 $"Application resource '{key}' is not {typeof(T).Name}.");
+    }
+
+    private static bool TryGetApplicationResource(
+        ResourceDictionary dictionary,
+        string key,
+        out object? value)
+    {
+        if (dictionary.TryGetValue(key, out value))
+            return true;
+
+        // ResourceDictionary's code indexer addresses its own map. Walk the
+        // actual compiled App.xaml merge graph explicitly, in XAML lookup
+        // precedence order, instead of copying resources into the probe.
+        for (int index = dictionary.MergedDictionaries.Count - 1;
+             index >= 0;
+             index--)
+        {
+            if (TryGetApplicationResource(
+                    dictionary.MergedDictionaries[index],
+                    key,
+                    out value))
+            {
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
     }
 }
 

@@ -350,7 +350,9 @@ public sealed class UiDesignSystemContractTests
         string workflow =
             File.ReadAllText(GetDesignFilePath("winui-build.yml"));
 
-        Assert.Contains("XamlApplication.Current.Resources[key]", probeSource, StringComparison.Ordinal);
+        Assert.Contains("XamlApplication.Current.Resources", probeSource, StringComparison.Ordinal);
+        Assert.Contains("dictionary.MergedDictionaries", probeSource, StringComparison.Ordinal);
+        Assert.Contains("dictionary.TryGetValue", probeSource, StringComparison.Ordinal);
         Assert.Contains("OpenCareerPrimaryButtonStyle", probeSource, StringComparison.Ordinal);
         Assert.Contains("OpenCareerSecondaryButtonStyle", probeSource, StringComparison.Ordinal);
         Assert.Contains("OpenCareerDangerButtonStyle", probeSource, StringComparison.Ordinal);
