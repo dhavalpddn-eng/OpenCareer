@@ -130,6 +130,9 @@ public sealed class SimConnectAircraftDiscoveryTests
         Assert.Equal(
             "C172SP Classic Passengers",
             aircraft.DisplayName);
+        Assert.Equal(
+            "C172SP Classic Passengers",
+            source.CurrentAircraftTitle);
         Assert.True(aircraft.IsInstalled);
         Assert.Equal(
             AircraftDataConfidence.Verified,

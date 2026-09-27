@@ -31,6 +31,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 {
     private readonly ServiceProvider _services;
     private MainWindow? _window;
+    private KjfkLiveTestDiagnosticsService? _liveTestDiagnostics;
     private bool _isShuttingDown;
     private bool _shutdownComplete;
 
@@ -40,8 +41,11 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         var services = new ServiceCollection();
 
-        var dataPaths = new OpenCareerDataPaths();
-        dataPaths.EnsureDirectories();
+        OpenCareerDataProfileSelection dataProfile =
+            OpenCareerDataProfileSelection.Resolve(
+                Environment.GetCommandLineArgs());
+        dataProfile.Prepare();
+        OpenCareerDataPaths dataPaths = dataProfile.Paths;
         var fileLogger = new OpenCareerFileLoggerProvider(dataPaths);
 
         services.AddSingleton(dataPaths);
@@ -154,6 +158,11 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
         services.AddSingleton<DiagnosticBundleService>();
+        services.AddSingleton(provider =>
+            new KjfkLiveTestDiagnosticJournal(
+                provider.GetRequiredService<OpenCareerDataPaths>(),
+                KjfkLiveTestLaunchMetadata.FromEnvironment()));
+        services.AddSingleton<KjfkLiveTestDiagnosticsService>();
         services.AddSingleton<ShellOpenService>();
 
         services.AddSingleton<FlightSessionCoordinator>();
@@ -272,6 +281,19 @@ public partial class App : Microsoft.UI.Xaml.Application
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         var logger = _services.GetRequiredService<ILogger<App>>();
+
+        OpenCareerDataPaths dataPaths =
+            _services.GetRequiredService<OpenCareerDataPaths>();
+        if (dataPaths.IsDevelopmentLiveTest)
+        {
+            logger.LogWarning(
+                "DEVELOPMENT / TEST KJFK data profile active at {DataRoot}. Normal OpenCareer data is not loaded. Startup reset requested: {ResetRequested}.",
+                dataPaths.Root,
+                Environment.GetCommandLineArgs().Any(argument => string.Equals(
+                    argument,
+                    OpenCareerDataProfileSelection.ResetArgument,
+                    StringComparison.OrdinalIgnoreCase)));
+        }
 
         try
         {
@@ -457,7 +479,26 @@ public partial class App : Microsoft.UI.Xaml.Application
                 "Local MSFS installed-aircraft discovery failed; live SimConnect discovery remains available.");
         }
 
+        if (dataPaths.IsDevelopmentLiveTest)
+        {
+            _liveTestDiagnostics =
+                _services.GetRequiredService<KjfkLiveTestDiagnosticsService>();
+
+            if (_liveTestDiagnostics.Start())
+            {
+                logger.LogInformation(
+                    "KJFK live-test diagnostic state capture started in the isolated development profile.");
+            }
+            else
+            {
+                logger.LogWarning(
+                    "KJFK live-test diagnostic state capture could not start; gameplay remains available and the isolated application log is preserved.");
+            }
+        }
+
         _window = _services.GetRequiredService<MainWindow>();
+        if (dataPaths.IsDevelopmentLiveTest)
+            _window.Title = "OpenCareer — DEVELOPMENT / TEST — KJFK";
         _window.AppWindow.Closing += OnMainWindowClosing;
         _window.Activate();
 
@@ -494,6 +535,12 @@ public partial class App : Microsoft.UI.Xaml.Application
                     "Final FlightSession checkpoint failed during shutdown.");
             }
 
+            if (_liveTestDiagnostics is not null)
+            {
+                await _liveTestDiagnostics
+                    .CompleteAsync("NormalShutdown");
+            }
+
             await _services.DisposeAsync();
         }
         catch (Exception ex)
@@ -513,5 +560,6 @@ public partial class App : Microsoft.UI.Xaml.Application
     {
         var logger = _services.GetRequiredService<ILogger<App>>();
         logger.LogError(e.Exception, "Unhandled OpenCareer UI exception.");
+        _liveTestDiagnostics?.RecordUnhandledException(e.Exception);
     }
 }

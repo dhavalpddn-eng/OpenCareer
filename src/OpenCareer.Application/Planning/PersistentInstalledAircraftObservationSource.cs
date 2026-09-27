@@ -4,6 +4,11 @@ namespace OpenCareer.Application.Planning;
 
 public interface IInstalledAircraftRegistryStore
 {
+    /// <summary>Retains observed provider records without interpreting absent records as removals.</summary>
+    Task UpsertAsync(
+        IReadOnlyList<AircraftRegistryObservation> observations,
+        CancellationToken cancellationToken = default);
+
     Task ReplaceAllAsync(
         IReadOnlyList<AircraftRegistryObservation> observations,
         CancellationToken cancellationToken = default);
@@ -28,19 +33,20 @@ public sealed class PersistentInstalledAircraftObservationSource(
 
         if (current.Availability == InstalledAircraftDiscoveryAvailability.Available)
         {
-            AircraftRegistryObservation[] installed = ValidateInstalledSnapshot(
-                current.Observations);
-
-            await store
-                .ReplaceAllAsync(installed, cancellationToken)
-                .ConfigureAwait(false);
-
-            return installed
+            AircraftRegistryObservation[] installed = ValidateInstalledSnapshot(current.Observations)
                 .Where(observation => string.Equals(
                     observation.CanonicalAircraftId,
                     canonicalAircraftId,
                     StringComparison.OrdinalIgnoreCase))
                 .ToArray();
+
+            if (installed.Length > 0)
+            {
+                await store.UpsertAsync(installed, cancellationToken).ConfigureAwait(false);
+                return installed;
+            }
+            // Available means at least one provider answered, not that every provider
+            // supplied a complete installation inventory. Absence is not removal evidence.
         }
 
         IReadOnlyList<AircraftRegistryObservation> persisted = await store

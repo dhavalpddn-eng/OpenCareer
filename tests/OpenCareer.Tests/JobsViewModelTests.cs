@@ -312,6 +312,259 @@ public sealed class JobsViewModelTests
             viewModel.Offers);
     }
 
+    [Fact]
+    public async Task ReplacingOptionsRetainsSelectionAndReadinessThroughTransientPickerEvents()
+    {
+        var discovery = new FakeDiscovery();
+        var viewModel = SelectionViewModel(discovery);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        AssertReady(viewModel, "fixture-aircraft");
+
+        string? projectedSelection = viewModel.SelectedAircraftId;
+        var pickerEvents = new List<Task>();
+        var notifications = new List<string?>();
+        // Model the ItemsSource reset and OneWay selection-binding echo, including
+        // null events queued while the refresh gate is held. This is not a WinUI test.
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            notifications.Add(e.PropertyName);
+            if (e.PropertyName == nameof(JobsViewModel.AircraftOptions))
+            {
+                projectedSelection = null;
+                pickerEvents.Add(viewModel.SelectAircraftAsync(null));
+            }
+            else if (e.PropertyName == nameof(JobsViewModel.SelectedAircraftId))
+            {
+                projectedSelection = viewModel.SelectedAircraftId;
+                pickerEvents.Add(viewModel.SelectAircraftAsync(projectedSelection));
+            }
+        };
+
+        for (int i = 0; i < 3; i++)
+        {
+            var previous = Assert.Single(viewModel.AircraftOptions);
+            pickerEvents.Clear();
+            notifications.Clear();
+            discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
+                [Installed("fixture-aircraft", $"Refreshed Aircraft {i}")]);
+
+            await viewModel.RefreshAircraftAndReadinessAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            await Task.WhenAll(pickerEvents).WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.NotSame(previous, Assert.Single(viewModel.AircraftOptions));
+            Assert.Same(Assert.Single(viewModel.AircraftOptions), viewModel.SelectedAircraftOption);
+            Assert.Equal("fixture-aircraft", projectedSelection);
+            Assert.True(notifications.IndexOf(nameof(JobsViewModel.SelectedAircraftId))
+                > notifications.IndexOf(nameof(JobsViewModel.AircraftOptions)));
+            AssertReady(viewModel, "fixture-aircraft");
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AuthoritativeRemovalClearsSelectionAndReadiness(bool anotherAircraftRemains)
+    {
+        var discovery = new FakeDiscovery();
+        var viewModel = SelectionViewModel(discovery);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        string? projectedSelection = viewModel.SelectedAircraftId;
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(JobsViewModel.SelectedAircraftId))
+                projectedSelection = viewModel.SelectedAircraftId;
+        };
+        discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
+            anotherAircraftRemains ? [Installed("aircraft-b", "Aircraft B")] : []);
+
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        await viewModel.SelectAircraftAsync(null);
+
+        Assert.Null(viewModel.SelectedAircraftId);
+        Assert.Null(viewModel.SelectedAircraftOption);
+        Assert.Null(projectedSelection);
+        var offer = Assert.Single(viewModel.Offers);
+        Assert.False(offer.CanStart);
+        Assert.Null(offer.StartInputState);
+        Assert.Equal("Select an installed aircraft to verify this offer.", offer.ActionText);
+    }
+
+    [Fact]
+    public async Task AddingAircraftRetainsSelectionAndSwitchingUsesTheNewIdAcrossRefresh()
+    {
+        var discovery = new FakeDiscovery();
+        var viewModel = SelectionViewModel(discovery);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
+            [Installed("fixture-aircraft", "Aircraft A"), Installed("aircraft-b", "Aircraft B")]);
+
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        Assert.Equal(2, viewModel.AircraftOptions.Count);
+        AssertReady(viewModel, "fixture-aircraft");
+        await viewModel.SelectAircraftAsync("aircraft-b");
+        AssertReady(viewModel, "aircraft-b");
+
+        for (int i = 0; i < 3; i++)
+        {
+            await viewModel.RefreshAircraftAndReadinessAsync();
+            await viewModel.SelectAircraftAsync(null);
+            AssertReady(viewModel, "aircraft-b");
+        }
+    }
+
+    [Fact]
+    public async Task TransientNullRetainsAvailableSelectionWithoutRequiringAnotherRefresh()
+    {
+        var viewModel = SelectionViewModel(new FakeDiscovery());
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync(null);
+        Assert.Null(viewModel.SelectedAircraftId);
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+
+        await viewModel.SelectAircraftAsync(null);
+
+        AssertReady(viewModel, "fixture-aircraft");
+    }
+
+    [Fact]
+    public async Task UnavailableDiscoveryRetainsPickerButBlocksReadinessAndStartUntilLiveEvidenceReturns()
+    {
+        var discovery = new FakeDiscovery();
+        var action = new FakeStartAction();
+        var viewModel = SelectionViewModel(discovery, action);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        AssertReady(viewModel, "fixture-aircraft");
+        var retained = viewModel.SelectedAircraftOption;
+        int reads = action.AvailabilityCount;
+        discovery.Current = InstalledAircraftDiscoverySnapshot.Unavailable;
+
+        for (int i = 0; i < 3; i++)
+        {
+            await viewModel.RefreshAircraftAndReadinessAsync();
+            await viewModel.SelectAircraftAsync(null);
+            Assert.Equal("fixture-aircraft", viewModel.SelectedAircraftId);
+            Assert.Same(retained, viewModel.SelectedAircraftOption);
+            Assert.False(Assert.Single(viewModel.Offers).CanStart);
+        }
+        await viewModel.StartOfferAsync(Assert.Single(viewModel.Offers).OfferId);
+        Assert.Equal(0, action.StartCount);
+        Assert.Equal(reads, action.AvailabilityCount); // no evaluation of retained installation history
+
+        discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
+            [Installed("fixture-aircraft", "Returned Aircraft")]);
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        AssertReady(viewModel, "fixture-aircraft");
+        Assert.Equal("Returned Aircraft", viewModel.SelectedAircraftOption!.DisplayName);
+        await viewModel.StartOfferAsync(Assert.Single(viewModel.Offers).OfferId);
+        Assert.Equal(1, action.StartCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartRechecksDiscoveryEvenBeforeNextPeriodicRefresh(bool authoritativeRemoval)
+    {
+        var discovery = new FakeDiscovery();
+        var action = new FakeStartAction();
+        var viewModel = SelectionViewModel(discovery, action);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        AssertReady(viewModel, "fixture-aircraft");
+        discovery.Current = authoritativeRemoval
+            ? new(InstalledAircraftDiscoveryAvailability.Available, [])
+            : InstalledAircraftDiscoverySnapshot.Unavailable;
+
+        await viewModel.StartOfferAsync(Assert.Single(viewModel.Offers).OfferId);
+
+        Assert.Equal(0, action.StartCount);
+        Assert.False(Assert.Single(viewModel.Offers).CanStart);
+        Assert.Equal(authoritativeRemoval ? null : "fixture-aircraft", viewModel.SelectedAircraftId);
+    }
+
+    private static JobsViewModel SelectionViewModel(FakeDiscovery discovery, FakeStartAction? action = null) =>
+        new(new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", locked: false))),
+            CareerRuntime("KRME"), new FixedTimeProvider(Now),
+            new CareerJobAircraftSelectionSource(discovery), action ?? new FakeStartAction(), logger: null);
+
+    [Fact]
+    public async Task UnchangedAircraftRefreshDoesNotRepeatDispatchReadiness()
+    {
+        var discovery = new FakeDiscovery();
+        var action = new FakeStartAction();
+        var viewModel = SelectionViewModel(discovery, action);
+        await viewModel.RefreshAsync();
+        Assert.Equal(0, action.AvailabilityCount);
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        Assert.Equal(1, action.AvailabilityCount);
+        for (int i = 0; i < 5; i++)
+        {
+            discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
+                [Installed("fixture-aircraft", "Fixture Aircraft")]); // new instances, same facts
+            await viewModel.RefreshAircraftAndReadinessAsync();
+            AssertReady(viewModel, "fixture-aircraft");
+        }
+        Assert.Equal(1, action.AvailabilityCount);
+        discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
+            [Installed("fixture-aircraft", "Fixture Aircraft"), Installed("aircraft-b", "Aircraft B")]);
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        Assert.Equal(2, action.AvailabilityCount);
+        await viewModel.SelectAircraftAsync("aircraft-b");
+        Assert.Equal(3, action.AvailabilityCount);
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        Assert.Equal(3, action.AvailabilityCount);
+    }
+
+    [Fact]
+    public async Task TimerRefreshesQueueBehindSelectionWithoutOverlappingOrRepeatingReadiness()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var action = new FakeStartAction { BeforeRead = async () => { entered.SetResult(); await release.Task; } };
+        var viewModel = SelectionViewModel(new FakeDiscovery(), action);
+        await viewModel.RefreshAsync();
+        Task select = viewModel.SelectAircraftAsync("fixture-aircraft");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Task[] refreshes = Enumerable.Range(0, 5).Select(_ => viewModel.RefreshAircraftAndReadinessAsync()).ToArray();
+        Assert.All(refreshes, task => Assert.False(task.IsCompleted));
+        Assert.Equal(1, action.AvailabilityCount);
+        release.SetResult();
+        await Task.WhenAll(refreshes.Append(select)).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, action.AvailabilityCount);
+        AssertReady(viewModel, "fixture-aircraft");
+    }
+
+    [Fact]
+    public async Task UnchangedRefreshStillExpiresOffersWithoutDispatchIo()
+    {
+        var clock = new FixedTimeProvider(Now);
+        var action = new FakeStartAction();
+        var viewModel = new JobsViewModel(new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", false))),
+            CareerRuntime("KRME"), clock, new CareerJobAircraftSelectionSource(new FakeDiscovery()), action, logger: null);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        AssertReady(viewModel, "fixture-aircraft");
+        clock.Now = Now.AddHours(3);
+        await viewModel.RefreshAircraftAndReadinessAsync();
+        Assert.True(Assert.Single(viewModel.Offers).IsExpired);
+        Assert.False(Assert.Single(viewModel.Offers).CanStart);
+        Assert.Equal(1, action.AvailabilityCount);
+    }
+
+    private static void AssertReady(JobsViewModel viewModel, string aircraftId)
+    {
+        Assert.Equal(aircraftId, viewModel.SelectedAircraftId);
+        Assert.Same(Assert.Single(viewModel.AircraftOptions, option => option.AircraftId == aircraftId),
+            viewModel.SelectedAircraftOption);
+        var offer = Assert.Single(viewModel.Offers);
+        Assert.Equal(CareerJobStartInputState.Ready, offer.StartInputState);
+        Assert.Equal("READY TO START", offer.AvailabilityText);
+        Assert.True(offer.CanStart);
+    }
+
     private static PlayerCareerRuntimeState CareerRuntime(
         string airportIcao)
     {
@@ -429,24 +682,28 @@ public sealed class JobsViewModelTests
     private sealed class FakeStartAction
         : ICareerJobStartAction
     {
+        public int AvailabilityCount { get; private set; }
         public int StartCount { get; private set; }
         public Guid? LastOfferId { get; private set; }
         public string? LastAircraftId { get; private set; }
 
-        public Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
+        public Func<Task>? BeforeRead { get; init; }
+
+        public async Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
             Guid offerId,
             string aircraftId,
             CancellationToken cancellationToken = default,
             AirframeId? physicalAirframeId = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            return Task.FromResult(
+            AvailabilityCount++;
+            if (BeforeRead is not null) await BeforeRead();
+            return
                 new CareerJobStartActionAvailability(
                     CanStart:
                         true,
                     CareerJobStartInputState.Ready,
-                    "Authoritative start inputs are ready."));
+                    "Authoritative start inputs are ready.");
         }
 
         public Task<CareerJobPlayableStartResult> StartAsync(
@@ -521,7 +778,8 @@ public sealed class JobsViewModelTests
         DateTimeOffset now)
         : TimeProvider
     {
+        public DateTimeOffset Now { get; set; } = now;
         public override DateTimeOffset GetUtcNow() =>
-            now;
+            Now;
     }
 }

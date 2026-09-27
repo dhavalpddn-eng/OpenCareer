@@ -40,6 +40,7 @@ public sealed class CompositeInstalledAircraftDiscoverySource(
                 new Dictionary<(string ProviderId, string ProviderRecordId), AircraftRegistryObservation>();
 
             bool anyAvailable = false;
+            bool anyUnavailable = false;
 
             foreach (IInstalledAircraftDiscoverySource source in _sources)
             {
@@ -55,6 +56,7 @@ public sealed class CompositeInstalledAircraftDiscoverySource(
                 if (snapshot.Availability
                     != InstalledAircraftDiscoveryAvailability.Available)
                 {
+                    anyUnavailable = true;
                     continue;
                 }
 
@@ -84,7 +86,9 @@ public sealed class CompositeInstalledAircraftDiscoverySource(
                 }
             }
 
-            if (!anyAvailable)
+            // Empty is authoritative only if every provider actually answered. A local
+            // package catalog cannot prove removal of aircraft supplied by an unavailable live source.
+            if (!anyAvailable || (observations.Count == 0 && anyUnavailable))
                 return InstalledAircraftDiscoverySnapshot.Unavailable;
 
             return new(

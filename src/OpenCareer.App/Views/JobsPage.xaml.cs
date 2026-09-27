@@ -11,6 +11,7 @@ public sealed partial class JobsPage : Page
     private CancellationTokenSource? _navigationCts;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _refreshTimer;
     private bool _refreshingAircraft;
+    private bool _synchronizingAircraftSelection;
 
     public JobsPage()
     {
@@ -39,6 +40,7 @@ public sealed partial class JobsPage : Page
                 .RefreshAsync(
                     _navigationCts.Token);
 
+            SynchronizeAircraftSelection(viewModel);
             StartAircraftRefreshTimer(
                 viewModel);
         }
@@ -89,6 +91,7 @@ public sealed partial class JobsPage : Page
                     await viewModel
                         .RefreshAircraftAndReadinessAsync(
                             _navigationCts.Token);
+                    SynchronizeAircraftSelection(viewModel);
                 }
                 catch (OperationCanceledException)
                     when (_navigationCts.IsCancellationRequested)
@@ -119,7 +122,8 @@ public sealed partial class JobsPage : Page
         object sender,
         SelectionChangedEventArgs e)
     {
-        if (DataContext is not JobsViewModel viewModel
+        if (_synchronizingAircraftSelection
+            || DataContext is not JobsViewModel viewModel
             || sender is not ComboBox comboBox)
         {
             return;
@@ -134,6 +138,22 @@ public sealed partial class JobsPage : Page
                 aircraftId,
                 _navigationCts?.Token
                     ?? CancellationToken.None);
+        SynchronizeAircraftSelection(viewModel);
+    }
+
+    private void SynchronizeAircraftSelection(JobsViewModel viewModel)
+    {
+        // Page event continuations run on the UI thread. WinUI can clear SelectedItem
+        // when ItemsSource changes even while the retained ID/binding remains unchanged.
+        _synchronizingAircraftSelection = true;
+        try
+        {
+            AircraftPicker.SelectedItem = viewModel.SelectedAircraftOption;
+        }
+        finally
+        {
+            _synchronizingAircraftSelection = false;
+        }
     }
 
     private async void AcceptStartFlight_Click(
@@ -153,6 +173,7 @@ public sealed partial class JobsPage : Page
                 offer.OfferId,
                 _navigationCts?.Token
                     ?? CancellationToken.None);
+        SynchronizeAircraftSelection(viewModel);
     }
 
     private async void GenerateDevelopmentFlight_Click(
@@ -169,6 +190,7 @@ public sealed partial class JobsPage : Page
                     PositionTestPilot.IsChecked == true,
                     _navigationCts?.Token
                         ?? CancellationToken.None);
+            SynchronizeAircraftSelection(viewModel);
         }
         catch (OperationCanceledException)
         {

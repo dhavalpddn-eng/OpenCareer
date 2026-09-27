@@ -374,6 +374,73 @@ public sealed class CareerJobStartInputSourceTests
         Assert.Equal("READY TO START", startable.AvailabilityText);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StockC172ReadinessResolvesAircraftOnceWhenLiveProviderDropsOut(bool liveRemainsAvailable)
+    {
+        const string rawTitle = "C172SP Classic Passengers";
+        string id = SimConnectInstalledAircraftObservationSource.CreateCanonicalAircraftId(rawTitle);
+        string root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var live = new MutableDiscovery(new(InstalledAircraftDiscoveryAvailability.Available,
+                [new(id, SimConnectInstalledAircraftObservationSource.ProviderId, rawTitle,
+                    AircraftDataConfidence.Verified, IsInstalled: true, DisplayName: rawTitle)]));
+            var packages = new MutableDiscovery(new(InstalledAircraftDiscoveryAvailability.Available, []));
+            var discovery = new CompositeInstalledAircraftDiscoverySource(packages, live);
+            var store = new SqliteInstalledAircraftRegistryStore(Path.Combine(root, "career.db"));
+            var catalog = new AircraftRegistryCatalogService(
+                [new PersistentInstalledAircraftObservationSource(discovery, store),
+                    new PlayableLoopReferenceAircraftObservationSource()]);
+            var registry = new ChangingRegistry(catalog, () => live.Current = liveRemainsAvailable
+                ? new(InstalledAircraftDiscoveryAvailability.Available, [])
+                : InstalledAircraftDiscoverySnapshot.Unavailable);
+            var offer = DevelopmentFlight.CreateOffer(Guid.NewGuid(), Now.AddMinutes(-30));
+            var boards = new FakeBoardStore(JobBoardState.Empty("KJFK", offer.OfferedAt)
+                .Reconcile(offer.OfferedAt, 1, [offer]));
+            var career = new PlayerCareerRuntimeState(new FakeProfileStore(new(1,
+                PlayerCareerProfile.Start(Guid.NewGuid(), "KJFK", Now.AddDays(-1)), Now)));
+            var airports = new CachedAirportDataSource(
+                [new PlayableLoopReferenceAirportObservationSource(new FixedTimeProvider(Now))]);
+            var inputs = new CareerJobStartInputSource(boards, career,
+                new FakeContractStore(existing: null), registry,
+                new OperationDispatchPlanningService(registry, airports),
+                [new PersistedJobContractTermsSource()],
+                [new StandardCivilianPointToPointDispatchAuthoritySource()], new FixedTimeProvider(Now));
+
+            var result = await inputs.ReadAsync(offer.OfferId, id);
+
+            Assert.True(result.IsReady,
+                $"{result.State}: {result.Detail}; registry reads={registry.Statuses.Count}: {string.Join(", ", registry.Statuses)}");
+            Assert.Equal(AircraftInstallationStatus.Installed, Assert.Single(registry.Statuses));
+            Assert.Equal(id, result.Request!.DispatchContext.Aircraft.AircraftId);
+            Assert.Equal(id, Assert.Single(await store.FindAsync(id)).CanonicalAircraftId);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private sealed class MutableDiscovery(InstalledAircraftDiscoverySnapshot current) : IInstalledAircraftDiscoverySource
+    {
+        public InstalledAircraftDiscoverySnapshot Current { get; set; } = current;
+    }
+
+    private sealed class ChangingRegistry(IAircraftRegistrySource source, Action afterResolution) : IAircraftRegistrySource
+    {
+        public List<AircraftInstallationStatus?> Statuses { get; } = [];
+
+        public async Task<AircraftRegistryResolution?> FindAircraftAsync(string aircraftId, CancellationToken cancellationToken = default)
+        {
+            var result = await source.FindAircraftAsync(aircraftId, cancellationToken);
+            Statuses.Add(result?.InstallationStatus);
+            afterResolution();
+            return result;
+        }
+    }
+
     [Fact]
     public async Task MissingIrrelevantCapabilityFieldsUseFailClosedFerryProjection()
     {

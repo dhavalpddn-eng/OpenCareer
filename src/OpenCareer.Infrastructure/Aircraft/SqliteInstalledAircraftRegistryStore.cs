@@ -42,9 +42,20 @@ public sealed class SqliteInstalledAircraftRegistryStore :
             }.ToString();
     }
 
-    public async Task ReplaceAllAsync(
+    public Task UpsertAsync(
         IReadOnlyList<AircraftRegistryObservation> observations,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        SaveAsync(observations, replaceAll: false, cancellationToken);
+
+    public Task ReplaceAllAsync(
+        IReadOnlyList<AircraftRegistryObservation> observations,
+        CancellationToken cancellationToken = default) =>
+        SaveAsync(observations, replaceAll: true, cancellationToken);
+
+    private async Task SaveAsync(
+        IReadOnlyList<AircraftRegistryObservation> observations,
+        bool replaceAll,
+        CancellationToken cancellationToken)
     {
         AircraftRegistryObservation[] snapshot = ValidateSnapshot(observations);
 
@@ -67,8 +78,9 @@ public sealed class SqliteInstalledAircraftRegistryStore :
 
             using SqliteTransaction transaction = connection.BeginTransaction();
 
-            await using (SqliteCommand delete = connection.CreateCommand())
+            if (replaceAll)
             {
+                await using SqliteCommand delete = connection.CreateCommand();
                 delete.Transaction = transaction;
                 delete.CommandText = "DELETE FROM installed_aircraft_observations;";
                 await delete
@@ -95,7 +107,11 @@ public sealed class SqliteInstalledAircraftRegistryStore :
                         $providerRecordId,
                         $payloadSchemaVersion,
                         $payloadJson
-                    );
+                    )
+                    ON CONFLICT (provider_id, provider_record_id) DO UPDATE SET
+                        canonical_aircraft_id = excluded.canonical_aircraft_id,
+                        payload_schema_version = excluded.payload_schema_version,
+                        payload_json = excluded.payload_json;
                     """;
 
                 insert.Parameters.AddWithValue(

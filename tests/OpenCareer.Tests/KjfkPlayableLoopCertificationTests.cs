@@ -33,6 +33,300 @@ public sealed class KjfkPlayableLoopCertificationTests
     private const string AircraftId = AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId;
 
     [Fact]
+    public async Task FailedKalbFacilityQueryKeepsC172ConnectedAndKjfkReadyWithoutTimerQueryStorm()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
+        var transport = new SimConnectTestTransport();
+        transport.FacilityRequestHandler = (id, _) =>
+        {
+            byte[] malformed = SimConnectPackets.Header(29, 16); // attributable request, truncated facility payload
+            BitConverter.GetBytes(id).CopyTo(malformed, 12);
+            transport.Enqueue(malformed);
+        };
+        transport.Enqueue(SimConnectPackets.Open());
+        await using var connection = new SimConnectConnection(transport,
+            NullLogger<SimConnectConnection>.Instance,
+            new SimConnectConnectionOptions { DispatchInterval = TimeSpan.FromMilliseconds(5) }, TimeProvider.System);
+        var live = new SimConnectInstalledAircraftObservationSource(connection);
+        try
+        {
+            connection.Start();
+            await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+            transport.Enqueue(SimConnectPackets.StringSimObjectData(SimConnectCurrentAircraftDefinition.RequestId,
+                SimConnectCurrentAircraftDefinition.DefinitionId, "C172SP Classic Passengers"));
+            await Until(() => live.Current.Availability == InstalledAircraftDiscoveryAvailability.Available);
+            var clock = new TestClock();
+            var app = new Harness(Path.Combine(root, "career.db"), live, connection, new TestTelemetry(), clock,
+                liveAirports: new SimConnectAirportDataObservationSource(connection, clock));
+            await app.Profiles.SaveAsync(PlayerCareerProfile.Start(Guid.NewGuid(), "KJFK", clock.Now),
+                expectedRevision: null, savedAt: clock.Now);
+            await app.InitializeAsync();
+            var development = await app.Development.GenerateAsync();
+            var normal = development with
+            {
+                OfferId = Guid.NewGuid(), DestinationIcao = "KALB", DistanceNm = 130,
+                ContractTerms = development.ContractTerms! with
+                {
+                    MarketId = null,
+                    AircraftRequirements = development.ContractTerms.AircraftRequirements with
+                    { MinimumRangeNauticalMiles = 130 }
+                }
+            };
+            Assert.False(DevelopmentFlight.IsDevelopment(normal));
+            var boards = new SqliteJobBoardStateStore(new OpenCareerDatabaseOptions(app.DatabasePath),
+                NullLogger<SqliteJobBoardStateStore>.Instance);
+            var board = (await boards.GetAsync("KJFK"))!;
+            await boards.SaveAsync(board with { Offers = board.Offers.Add(normal) });
+            await app.Jobs.RefreshAsync();
+            await app.Jobs.SelectAircraftAsync(AircraftId).WaitAsync(TimeSpan.FromSeconds(10));
+
+            var blocked = app.Jobs.Offers.Single(x => x.OfferId == normal.OfferId);
+            Assert.False(blocked.CanStart);
+            Assert.Equal(CareerJobStartInputState.PreflightDataInsufficient, blocked.StartInputState);
+            Assert.Contains("NoRunwayData", blocked.ActionText);
+            Assert.Single(transport.FacilityRequests, x => x.Icao == "KALB");
+            int queries = transport.FacilityRequests.Count;
+            int reads = app.RegistryReadCount;
+            for (int i = 0; i < 5; i++)
+            {
+                clock.Now = clock.Now.AddSeconds(2);
+                await app.Jobs.RefreshAircraftAndReadinessAsync();
+                var ready = app.Jobs.Offers.Single(x => x.OfferId == development.OfferId);
+                Assert.Equal(CareerJobStartInputState.Ready, ready.StartInputState);
+                Assert.Equal("READY TO START", ready.AvailabilityText);
+                Assert.True(ready.CanStart, ready.ActionText);
+                Assert.Equal(AircraftId, app.Jobs.SelectedAircraftId);
+                Assert.Equal("C172SP Classic Passengers", app.Jobs.SelectedAircraftOption!.DisplayName);
+            }
+            Assert.Equal(queries, transport.FacilityRequests.Count);
+            Assert.Equal(reads, app.RegistryReadCount);
+            Assert.Equal(1, transport.Attempts);
+            Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+            var telemetry = new double[SimConnectTelemetryDefinition.ValueCount];
+            telemetry[(int)SimConnectTelemetryValue.HeadingTrue] = 123;
+            transport.Enqueue(SimConnectPackets.SimObjectData(SimConnectTelemetryDefinition.RequestId,
+                SimConnectTelemetryDefinition.DefinitionId, telemetry));
+            await Until(() => connection.Latest?.HeadingDegrees == 123);
+            await app.Jobs.StartOfferAsync(development.OfferId).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(ContractStatus.InProgress, app.Contracts.Find(development.OfferId)!.Contract.Status);
+            Assert.Equal(development.OfferId, app.Session.ContractId);
+            Assert.NotNull(await app.ReservationAsync(development.OfferId));
+            Assert.Equal(1, transport.Attempts);
+            Assert.False(transport.OverlapDetected);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LiveC172TrafficSurvivesMissingHeartbeatAndSilentReconnectRestoresReadyWithoutReselection()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
+        var transport = new SimConnectTestTransport();
+        var connectionClock = new ConnectionClock();
+        transport.Enqueue(SimConnectPackets.Open());
+        await using var connection = new SimConnectConnection(transport,
+            NullLogger<SimConnectConnection>.Instance,
+            new SimConnectConnectionOptions
+            {
+                DispatchInterval = TimeSpan.FromMilliseconds(5),
+                InitialRetryDelay = TimeSpan.FromMilliseconds(10),
+                MaximumRetryDelay = TimeSpan.FromMilliseconds(10)
+            }, connectionClock);
+        var live = new SimConnectInstalledAircraftObservationSource(connection);
+        var discovery = new CompositeInstalledAircraftDiscoverySource(new SwitchableDiscovery(null), live);
+        byte[] title = SimConnectPackets.StringSimObjectData(SimConnectCurrentAircraftDefinition.RequestId,
+            SimConnectCurrentAircraftDefinition.DefinitionId, "C172SP Classic Passengers");
+        try
+        {
+            connection.Start();
+            await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+            transport.Enqueue(title);
+            await Until(() => live.Current.Availability == InstalledAircraftDiscoveryAvailability.Available);
+            var clock = new TestClock();
+            var app = new Harness(Path.Combine(root, "career.db"), discovery, connection, new TestTelemetry(), clock);
+            await app.Profiles.SaveAsync(PlayerCareerProfile.Start(Guid.NewGuid(), "KJFK", clock.Now),
+                expectedRevision: null, savedAt: clock.Now);
+            await app.InitializeAsync();
+            var offer = await app.Development.GenerateAsync();
+            await app.Jobs.RefreshAsync();
+            await app.Jobs.SelectAircraftAsync(AircraftId);
+
+            transport.Enqueue(action: () => connectionClock.Advance(TimeSpan.FromSeconds(6)));
+            await Until(() => transport.Heartbeats.Count == 1);
+            // Omit the heartbeat reply for >35 seconds while TITLE and normalized telemetry flow.
+            for (int i = 0; i < 6; i++)
+            {
+                var values = new double[SimConnectTelemetryDefinition.ValueCount];
+                values[(int)SimConnectTelemetryValue.HeadingTrue] = i + 1;
+                transport.Enqueue(title, action: () => connectionClock.Advance(TimeSpan.FromSeconds(6)));
+                transport.Enqueue(SimConnectPackets.SimObjectData(SimConnectTelemetryDefinition.RequestId,
+                    SimConnectTelemetryDefinition.DefinitionId, values));
+                await Until(() => connection.Latest?.HeadingDegrees == i + 1 || transport.Attempts > 1);
+                Assert.Equal(1, transport.Attempts);
+                Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+                await app.Jobs.RefreshAircraftAndReadinessAsync();
+                Assert.Equal(AircraftId, app.Jobs.SelectedAircraftId);
+                Assert.Equal("C172SP Classic Passengers", app.Jobs.SelectedAircraftOption!.DisplayName);
+                var ready = Assert.Single(app.Jobs.Offers);
+                Assert.Equal(CareerJobStartInputState.Ready, ready.StartInputState);
+                Assert.Equal("READY TO START", ready.AvailabilityText);
+                Assert.True(ready.CanStart);
+            }
+
+            // Now stop all inbound traffic: true silence still closes the connection.
+            transport.Enqueue(action: () => connectionClock.Advance(TimeSpan.FromSeconds(31)));
+            await Until(() => transport.Attempts == 2);
+            Assert.Equal(SimulatorConnectionState.Connecting, connection.Current.State);
+            Assert.Equal(InstalledAircraftDiscoveryAvailability.Unavailable, discovery.Current.Availability);
+            int reads = app.RegistryReadCount;
+            var selected = app.Jobs.SelectedAircraftOption;
+            await app.Jobs.RefreshAircraftAndReadinessAsync();
+            Assert.Equal(AircraftId, app.Jobs.SelectedAircraftId);
+            Assert.Same(selected, app.Jobs.SelectedAircraftOption);
+            Assert.False(Assert.Single(app.Jobs.Offers).CanStart);
+            await app.Jobs.StartOfferAsync(offer.OfferId);
+            Assert.Equal(reads, app.RegistryReadCount);
+            Assert.Null(await app.ContractStore.ReadJobContractAsync(offer.OfferId));
+            Assert.Null(await app.ReservationAsync(offer.OfferId));
+            Assert.Null(app.Sessions.Current);
+
+            transport.Enqueue(SimConnectPackets.Open());
+            await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+            await app.Jobs.RefreshAircraftAndReadinessAsync();
+            Assert.False(Assert.Single(app.Jobs.Offers).CanStart); // connected alone is not fresh installation evidence
+            transport.Enqueue(title);
+            await Until(() => live.Current.Availability == InstalledAircraftDiscoveryAvailability.Available);
+            await app.Jobs.RefreshAircraftAndReadinessAsync();
+            Assert.Equal(AircraftId, app.Jobs.SelectedAircraftId); // no SelectAircraftAsync after reconnection
+            Assert.True(Assert.Single(app.Jobs.Offers).CanStart);
+            await app.Jobs.StartOfferAsync(offer.OfferId);
+            Assert.Equal(ContractStatus.InProgress, app.Contracts.Find(offer.OfferId)!.Contract.Status);
+            Assert.Equal(offer.OfferId, app.Session.ContractId);
+            Assert.NotNull(await app.ReservationAsync(offer.OfferId));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private sealed class ConnectionClock : TimeProvider
+    {
+        private long _ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Interlocked.Read(ref _ticks);
+        public void Advance(TimeSpan elapsed) => Interlocked.Add(ref _ticks, elapsed.Ticks);
+    }
+
+    [Fact]
+    public async Task StockC172RefreshReadinessSurvivesProviderChangesButActualPickerRemovalBlocksStart()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
+        var transport = new SimConnectTestTransport();
+        transport.Enqueue(SimConnectPackets.Open());
+        await using var connection = new SimConnectConnection(transport,
+            NullLogger<SimConnectConnection>.Instance,
+            new SimConnectConnectionOptions { DispatchInterval = TimeSpan.FromMilliseconds(5) }, TimeProvider.System);
+        var live = new SimConnectInstalledAircraftObservationSource(connection);
+        var filteredLive = new SwitchableDiscovery(live);
+        var packages = new SwitchableDiscovery(null);
+        var discovery = new CompositeInstalledAircraftDiscoverySource(packages, filteredLive);
+        try
+        {
+            connection.Start();
+            await Until(() => transport.StringDataDefinitions.Any(
+                item => item.DefinitionId == SimConnectCurrentAircraftDefinition.DefinitionId));
+            transport.Enqueue(SimConnectPackets.StringSimObjectData(SimConnectCurrentAircraftDefinition.RequestId,
+                SimConnectCurrentAircraftDefinition.DefinitionId, "C172SP Classic Passengers"));
+            await Until(() => live.Current.Availability == InstalledAircraftDiscoveryAvailability.Available);
+
+            var clock = new TestClock();
+            var app = new Harness(Path.Combine(root, "career.db"), discovery, connection, new TestTelemetry(), clock,
+                () => filteredLive.OmitAircraft = true);
+            await app.Profiles.SaveAsync(PlayerCareerProfile.Start(Guid.NewGuid(), "KJFK", clock.Now),
+                expectedRevision: null, savedAt: clock.Now);
+            await app.InitializeAsync();
+            var offer = await app.Development.GenerateAsync();
+            await app.Jobs.RefreshAsync();
+            Assert.Equal("C172SP Classic Passengers", Assert.Single(app.Jobs.AircraftOptions).DisplayName);
+            await app.Jobs.SelectAircraftAsync(AircraftId);
+
+            for (int i = 0; i < 5; i++)
+            {
+                filteredLive.OmitAircraft = false; // present when the picker takes its discovery snapshot
+                filteredLive.ReportUnavailable = i % 2 == 0;
+                int reads = app.RegistryReadCount;
+                var oldOption = app.Jobs.SelectedAircraftOption;
+                await app.Jobs.RefreshAsync(); // explicit readiness rebuild; live evidence drops after registry resolution
+                Assert.Equal(1, app.RegistryReadCount - reads);
+                Assert.True(filteredLive.OmitAircraft);
+                Assert.Equal(filteredLive.ReportUnavailable ? InstalledAircraftDiscoveryAvailability.Unavailable
+                    : InstalledAircraftDiscoveryAvailability.Available, discovery.Current.Availability);
+                Assert.Empty(discovery.Current.Observations); // the package provider cannot prove live removal
+                Assert.Equal(AircraftId, app.Jobs.SelectedAircraftId);
+                Assert.NotSame(oldOption, app.Jobs.SelectedAircraftOption);
+                Assert.Same(Assert.Single(app.Jobs.AircraftOptions), app.Jobs.SelectedAircraftOption);
+                var ready = Assert.Single(app.Jobs.Offers);
+                Assert.Equal(CareerJobStartInputState.Ready, ready.StartInputState);
+                Assert.Equal("READY TO START", ready.AvailabilityText);
+                Assert.True(ready.CanStart, ready.ActionText);
+                var retained = await new SqliteInstalledAircraftRegistryStore(app.DatabasePath).FindAsync(AircraftId);
+                Assert.Equal(AircraftId, Assert.Single(retained).CanonicalAircraftId);
+            }
+
+            // Current discovery, not persisted installation history, controls selectable options.
+            filteredLive.ReportUnavailable = false; // every provider confirms authoritative empty
+            await app.Jobs.RefreshAircraftAndReadinessAsync();
+            Assert.Empty(app.Jobs.AircraftOptions);
+            Assert.Null(app.Jobs.SelectedAircraftId);
+            Assert.Null(app.Jobs.SelectedAircraftOption);
+            Assert.False(Assert.Single(app.Jobs.Offers).CanStart);
+            filteredLive.OmitAircraft = false;
+            await app.Jobs.RefreshAircraftAndReadinessAsync();
+            Assert.Null(app.Jobs.SelectedAircraftId); // no automatic reselection after genuine removal
+            await app.Jobs.SelectAircraftAsync(AircraftId);
+            Assert.True(Assert.Single(app.Jobs.Offers).CanStart);
+            filteredLive.OmitAircraft = false;
+            await app.Jobs.StartOfferAsync(offer.OfferId);
+            Assert.Equal(ContractStatus.InProgress, app.Contracts.Find(offer.OfferId)!.Contract.Status);
+            Assert.Equal(offer.OfferId, app.Session.ContractId);
+            Assert.NotNull(await app.ReservationAsync(offer.OfferId));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private sealed class SwitchableDiscovery(IInstalledAircraftDiscoverySource? source) : IInstalledAircraftDiscoverySource
+    {
+        public bool OmitAircraft { get; set; }
+        public bool ReportUnavailable { get; set; }
+        public InstalledAircraftDiscoverySnapshot Current => source is not null && !OmitAircraft
+            ? source.Current
+            : ReportUnavailable ? InstalledAircraftDiscoverySnapshot.Unavailable
+            : new(InstalledAircraftDiscoveryAvailability.Available, []);
+    }
+
+    private sealed class ObservedRegistry(IAircraftRegistrySource source, Action? afterResolution) : IAircraftRegistrySource
+    {
+        public int ReadCount { get; private set; }
+        public async Task<AircraftRegistryResolution?> FindAircraftAsync(string aircraftId, CancellationToken cancellationToken = default)
+        {
+            var result = await source.FindAircraftAsync(aircraftId, cancellationToken);
+            ReadCount++;
+            afterResolution?.Invoke();
+            return result;
+        }
+    }
+
+    [Fact]
     public async Task StockC172CircuitBouncesCompletesRecoversAndCanBeAbandonedAndRepeated()
     {
         string root = Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
@@ -247,6 +541,24 @@ public sealed class KjfkPlayableLoopCertificationTests
     {
         string Read(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "UiContracts", name));
         var jobs = System.Xml.Linq.XDocument.Parse(Read("JobsPage.xaml"));
+        var aircraftPicker = Assert.Single(jobs.Descendants(), e => e.Name.LocalName == "ComboBox"
+            && (string?)e.Attribute("ItemsSource") == "{Binding AircraftOptions}");
+        Assert.Equal("AircraftId", (string?)aircraftPicker.Attribute("SelectedValuePath"));
+        Assert.Equal("{Binding SelectedAircraftId, Mode=OneWay}", (string?)aircraftPicker.Attribute("SelectedValue"));
+        Assert.Null(aircraftPicker.Attribute("SelectedItem"));
+        Assert.Contains((string)aircraftPicker.Attribute("SelectionChanged")!, Read("JobsPage.xaml.cs"));
+        Assert.Contains("SelectAircraftAsync", Read("JobsPage.xaml.cs"));
+        Assert.Contains("RefreshAircraftAndReadinessAsync", Read("JobsPage.xaml.cs"));
+        Assert.Contains("TimeSpan.FromSeconds(2)", Read("JobsPage.xaml.cs"));
+        Assert.Equal("AircraftPicker", (string?)aircraftPicker.Attribute(
+            System.Xml.Linq.XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")));
+        Assert.Contains("AircraftPicker.SelectedItem = viewModel.SelectedAircraftOption", Read("JobsPage.xaml.cs"));
+        Assert.Contains("SynchronizeAircraftSelection(viewModel)", Read("JobsPage.xaml.cs"));
+        string jobsCode = Read("JobsPage.xaml.cs");
+        foreach (string method in new[] { "RefreshAsync", "RefreshAircraftAndReadinessAsync", "SelectAircraftAsync" })
+            Assert.Matches(@"\." + method + @"\([^;]+;\s*SynchronizeAircraftSelection\(viewModel\);", jobsCode);
+        Assert.Contains("if (_synchronizingAircraftSelection", jobsCode);
+        Assert.Matches(@"_synchronizingAircraftSelection = true;\s*try\s*\{\s*AircraftPicker.SelectedItem = viewModel.SelectedAircraftOption;\s*\}\s*finally\s*\{\s*_synchronizingAircraftSelection = false;", jobsCode);
         var start = Assert.Single(jobs.Descendants(), e => e.Name.LocalName == "Button"
             && (string?)e.Attribute("Content") == "Accept & Start Flight");
         Assert.Equal("{Binding CanStart}", (string?)start.Attribute("IsEnabled"));
@@ -298,10 +610,12 @@ public sealed class KjfkPlayableLoopCertificationTests
         public JobsViewModel Jobs { get; }
         public ShellViewModel Shell { get; }
         private readonly PlayerCareerRuntimeState _career;
-        private readonly AircraftRegistryCatalogService _registry;
+        private readonly ObservedRegistry _registry;
+        public int RegistryReadCount => _registry.ReadCount;
 
         public Harness(string path, IInstalledAircraftDiscoverySource discovery,
-            ISimulatorConnection connection, TestTelemetry telemetry, TestClock clock)
+            ISimulatorConnection connection, TestTelemetry telemetry, TestClock clock, Action? afterAircraftResolution = null,
+            IAirportDataObservationSource? liveAirports = null)
         {
             DatabasePath = path; Clock = clock; Telemetry = telemetry;
             var options = new OpenCareerDatabaseOptions(path);
@@ -322,8 +636,11 @@ public sealed class KjfkPlayableLoopCertificationTests
                 new FlightContinuityPolicy(), connection, telemetry, clock);
             Evidence = new(Sessions, Runtime);
             var installed = new PersistentInstalledAircraftObservationSource(discovery, new SqliteInstalledAircraftRegistryStore(path));
-            _registry = new([installed, new PlayableLoopReferenceAircraftObservationSource()]);
-            var airports = new CachedAirportDataSource([new PlayableLoopReferenceAirportObservationSource(clock)], clock: clock);
+            _registry = new(new AircraftRegistryCatalogService([installed, new PlayableLoopReferenceAircraftObservationSource()]),
+                afterAircraftResolution);
+            var referenceAirports = new PlayableLoopReferenceAirportObservationSource(clock);
+            var airports = new CachedAirportDataSource(liveAirports is null ? [referenceAirports]
+                : [liveAirports, referenceAirports], clock: clock);
             var dispatch = new OperationDispatchPlanningService(_registry, airports, aircraftAvailability: Fleet);
             var acceptance = new JobOfferAcceptanceService(ContractStore, lifecycle, boards, Contracts);
             var fleetBridge = new JobAcceptanceFleetBridge(acceptance, ContractStore, new AircraftReservationCoordinator(_registry, Fleet));
@@ -375,6 +692,34 @@ public sealed class KjfkPlayableLoopCertificationTests
             var aircraft = Assert.Single(Jobs.AircraftOptions);
             Assert.Equal(AircraftId, aircraft.AircraftId);
             await Jobs.SelectAircraftAsync(aircraft.AircraftId);
+            // Simulate the picker clearing during each periodic ItemsSource replacement.
+            // The real production XAML binding is certified separately above, not rendered here.
+            Task pickerReset = Task.CompletedTask;
+            void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+            {
+                if (e.PropertyName == nameof(JobsViewModel.AircraftOptions))
+                    pickerReset = Jobs.SelectAircraftAsync(null);
+            }
+            Jobs.PropertyChanged += OnOptionsChanged;
+            try
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    var previous = Assert.Single(Jobs.AircraftOptions);
+                    await Jobs.RefreshAircraftAndReadinessAsync();
+                    await pickerReset;
+                    Assert.NotSame(previous, Assert.Single(Jobs.AircraftOptions));
+                    Assert.Equal(AircraftId, Jobs.SelectedAircraftId);
+                    var refreshed = Assert.Single(Jobs.Offers);
+                    Assert.Equal(CareerJobStartInputState.Ready, refreshed.StartInputState);
+                    Assert.Equal("READY TO START", refreshed.AvailabilityText);
+                    Assert.True(refreshed.CanStart);
+                }
+            }
+            finally
+            {
+                Jobs.PropertyChanged -= OnOptionsChanged;
+            }
             var ready = Assert.Single(Jobs.Offers);
             Assert.True(ready.CanStart, ready.AvailabilityText);
             Assert.Equal(CareerJobStartInputState.Ready, ready.StartInputState);

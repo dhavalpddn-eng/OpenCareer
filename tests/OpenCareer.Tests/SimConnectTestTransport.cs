@@ -43,6 +43,7 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
     internal int FacilityDefinitionResult { get; set; }
     internal ConcurrentQueue<(uint DefinitionId, uint RequestId, string Icao, string Region)> FacilityRequests { get; } = new();
     internal int FacilityRequestResult { get; set; }
+    internal Action<uint, string>? FacilityRequestHandler { get; set; }
     internal int GetLastSentPacketIdResult { get; set; }
     internal uint LastSentPacketId { get; set; } = 700;
     internal ConcurrentQueue<(uint EventId, string EventName, uint SendId)> EventMappings { get; } = new();
@@ -197,6 +198,7 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         {
             LastSentPacketId++;
             FacilityRequests.Enqueue((definitionId, requestId, icao, region));
+            FacilityRequestHandler?.Invoke(requestId, icao);
             return FacilityRequestResult;
         }
         finally { Exit(); }
@@ -379,7 +381,7 @@ internal static class SimConnectPackets
         BitConverter.GetBytes(uniqueRequestId).CopyTo(bytes, 16);
         BitConverter.GetBytes(0u).CopyTo(bytes, 20);
         BitConverter.GetBytes(0u).CopyTo(bytes, 24);
-        bytes[28] = 0;
+        BitConverter.GetBytes(0u).CopyTo(bytes, 28);
         BitConverter.GetBytes(0u).CopyTo(bytes, 32);
         BitConverter.GetBytes(0u).CopyTo(bytes, 36);
         BitConverter.GetBytes(latitudeDegrees).CopyTo(bytes, payloadOffset);
@@ -409,12 +411,12 @@ internal static class SimConnectPackets
         float headingTrueDegrees = 0)
     {
         const int payloadOffset = 40;
-        byte[] bytes = Header(29, payloadOffset + 52);
+        byte[] bytes = Header(29, payloadOffset + 50);
         BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
         BitConverter.GetBytes(uniqueRequestId).CopyTo(bytes, 16);
         BitConverter.GetBytes(parentUniqueRequestId).CopyTo(bytes, 20);
         BitConverter.GetBytes(1u).CopyTo(bytes, 24);
-        bytes[28] = 1;
+        BitConverter.GetBytes(1u).CopyTo(bytes, 28);
         BitConverter.GetBytes(itemIndex).CopyTo(bytes, 32);
         BitConverter.GetBytes(listSize).CopyTo(bytes, 36);
         BitConverter.GetBytes(centerLatitudeDegrees).CopyTo(bytes, payloadOffset);

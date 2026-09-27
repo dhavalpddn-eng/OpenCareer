@@ -27,6 +27,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private IReadOnlyList<CareerJobAircraftOption> _aircraftOptions =
         Array.Empty<CareerJobAircraftOption>();
     private string? _selectedAircraftId;
+    private bool _aircraftDiscoveryAvailable;
     private string _airportText = "Career location unavailable";
     private string _statusText = "Jobs have not been loaded yet.";
     private string _aircraftStatus =
@@ -94,6 +95,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public IReadOnlyList<JobOfferItemViewModel> Offers => _offers;
     public IReadOnlyList<CareerJobAircraftOption> AircraftOptions => _aircraftOptions;
     public string? SelectedAircraftId => _selectedAircraftId;
+    public CareerJobAircraftOption? SelectedAircraftOption =>
+        _aircraftOptions.FirstOrDefault(option => string.Equals(
+            option.AircraftId, _selectedAircraftId, StringComparison.OrdinalIgnoreCase));
     public string AirportText => _airportText;
     public string StatusText => _statusText;
     public string AircraftStatus => _aircraftStatus;
@@ -285,11 +289,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
-            await RefreshAircraftLockedAsync(
-                cancellationToken);
-
-            await RebuildOffersLockedAsync(
-                cancellationToken);
+            bool changed = await RefreshAircraftLockedAsync(cancellationToken);
+            if (changed)
+                await RebuildOffersLockedAsync(cancellationToken);
+            else
+                RefreshOfferExpirationLocked();
         }
         finally
         {
@@ -312,6 +316,19 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     ? null
                     : aircraftId.Trim();
 
+            // ItemsSource replacement can queue a null SelectionChanged behind this gate.
+            // Discovery removes unavailable selections; a picker reset must not remove a valid one.
+            if (normalized is null
+                && _selectedAircraftId is not null
+                && _aircraftOptions.Any(
+                    item => string.Equals(
+                        item.AircraftId,
+                        _selectedAircraftId,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
             if (normalized is not null
                 && !_aircraftOptions.Any(
                     item => string.Equals(
@@ -323,16 +340,19 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     "Selected aircraft is not present in the authoritative installed-aircraft catalog.");
             }
 
-            if (!string.Equals(
+            // Restoring SelectedValue can echo the retained ID through SelectionChanged.
+            if (string.Equals(
                     _selectedAircraftId,
                     normalized,
                     StringComparison.OrdinalIgnoreCase))
             {
-                _selectedAircraftId =
-                    normalized;
-                OnPropertyChanged(
-                    nameof(SelectedAircraftId));
+                return;
             }
+
+            _selectedAircraftId =
+                normalized;
+            OnPropertyChanged(
+                nameof(SelectedAircraftId));
 
             await RebuildOffersLockedAsync(
                 cancellationToken);
@@ -361,6 +381,24 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
+            // CanStart is a UI projection, not permission to use retained discovery after
+            // a disconnect between timer ticks. Recheck before invoking the start authority.
+            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                await RefreshAircraftLockedAsync(cancellationToken);
+                if (!_aircraftDiscoveryAvailable
+                    || !string.Equals(aircraftId, _selectedAircraftId, StringComparison.OrdinalIgnoreCase))
+                {
+                    await RebuildOffersLockedAsync(cancellationToken);
+                    return;
+                }
+            }
+            finally
+            {
+                _refreshGate.Release();
+            }
+
             SetField(
                 ref _acceptanceStatus,
                 "Accepting offer, reserving aircraft, verifying dispatch, and starting the persistent FlightSession…",
@@ -417,18 +455,20 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task RefreshAircraftLockedAsync(
+    private async Task<bool> RefreshAircraftLockedAsync(
         CancellationToken cancellationToken)
     {
         if (_aircraftSelection is null)
         {
+            bool changed = _aircraftDiscoveryAvailable || _aircraftOptions.Count != 0;
+            _aircraftDiscoveryAvailable = false;
             SetAircraftOptions(
                 Array.Empty<CareerJobAircraftOption>());
             SetField(
                 ref _aircraftStatus,
                 "Aircraft selection is not connected to this view.",
                 nameof(AircraftStatus));
-            return;
+            return changed;
         }
 
         CareerJobAircraftSelectionSnapshot snapshot =
@@ -436,26 +476,33 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 .ReadAsync(cancellationToken)
                 .ConfigureAwait(true);
 
-        SetAircraftOptions(
-            snapshot.Aircraft);
+        bool discoveryChanged = _aircraftDiscoveryAvailable != snapshot.IsAvailable
+            || (snapshot.IsAvailable && !_aircraftOptions.SequenceEqual(snapshot.Aircraft));
+        _aircraftDiscoveryAvailable = snapshot.IsAvailable;
+        // Unavailable is uncertainty, not removal. Retain the visual choice, but never
+        // evaluate/start with it until authoritative current discovery is available again.
+        if (snapshot.IsAvailable)
+            SetAircraftOptions(snapshot.Aircraft);
 
         SetField(
             ref _aircraftStatus,
             snapshot.Detail,
             nameof(AircraftStatus));
+        return discoveryChanged;
+    }
 
-        if (_selectedAircraftId is not null
-            && !_aircraftOptions.Any(
-                item => string.Equals(
-                    item.AircraftId,
-                    _selectedAircraftId,
-                    StringComparison.OrdinalIgnoreCase)))
-        {
-            _selectedAircraftId =
-                null;
-            OnPropertyChanged(
-                nameof(SelectedAircraftId));
-        }
+    private void RefreshOfferExpirationLocked()
+    {
+        DateTimeOffset now = _timeProvider.GetUtcNow();
+        if (!_offers.Any(item => item.IsExpired != (now < item.Offer.OfferedAt || now >= item.Offer.ExpiresAt)))
+            return;
+
+        // The timer must still disable expired offers, without repeating airport/dispatch I/O.
+        SetOffers(_offers.Select(item => new JobOfferItemViewModel(
+            item.Offer, now, item.CanStart,
+            now < item.Offer.OfferedAt || now >= item.Offer.ExpiresAt
+                ? "This persisted offer is no longer active." : item.ActionText,
+            item.StartInputState)).ToArray());
     }
 
     private async Task RebuildOffersLockedAsync(
@@ -498,11 +545,14 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                         ? "This persisted offer is no longer active."
                         : _selectedAircraftId is null
                             ? "Select an installed aircraft to verify this offer."
+                            : !_aircraftDiscoveryAvailable
+                                ? "Aircraft discovery is temporarily unavailable. Waiting for current installed-aircraft evidence."
                             : _startAction is null
                                 ? "Accept & Start is not connected to the playable-loop action."
                                 : "Checking authoritative dispatch readiness…";
 
             if (active
+                && _aircraftDiscoveryAvailable
                 && _selectedAircraftId is not null
                 && _startAction is not null)
             {
@@ -560,6 +610,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             ref _acceptanceStatus,
             _selectedAircraftId is null
                 ? "Select an installed aircraft to verify an active offer for dispatch."
+                : !_aircraftDiscoveryAvailable
+                    ? "Aircraft selection retained. Start is disabled until current installed-aircraft evidence returns."
                 : projected.Any(static offer => offer.CanStart)
                     ? "Selected aircraft has at least one verified startable career offer."
                     : firstBlocked is not null
@@ -582,8 +634,18 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     {
         _aircraftOptions =
             aircraft;
+        _selectedAircraftId =
+            aircraft.FirstOrDefault(
+                item => string.Equals(
+                    item.AircraftId,
+                    _selectedAircraftId,
+                    StringComparison.OrdinalIgnoreCase))?.AircraftId;
         OnPropertyChanged(
             nameof(AircraftOptions));
+        // Reapply the ID after the new items arrive, even when the ID did not change.
+        // This restores the visual selection without relying on refreshed object identity.
+        OnPropertyChanged(
+            nameof(SelectedAircraftId));
     }
 
     private void SetField(

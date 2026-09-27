@@ -186,15 +186,20 @@ public sealed class OperationDispatchPlanningTests
             static issue => issue.Reason == DispatchFeasibilityReason.AircraftRunwayPerformanceUnknown);
     }
 
-    [Fact]
-    public async Task KnownButNotInstalledAircraftIsInfeasibleBeforePhysicalEvaluation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task KnownButNotInstalledAircraftIsInfeasibleBeforePhysicalEvaluation(bool useSnapshot)
     {
+        var aircraft = Resolution(isInstalled: false);
         var service = Service(
-            Resolution(isInstalled: false),
+            aircraft,
             Airport("KAAA", Runway("18")),
             Airport("KBBB", Runway("36")));
 
-        DispatchFeasibilityResult result = await service.EvaluateAsync(
+        DispatchFeasibilityResult result = useSnapshot
+            ? await service.EvaluateAsync(aircraft, "KAAA", "KBBB", new(1000, 500))
+            : await service.EvaluateAsync(
             "fixture-aircraft",
             "KAAA",
             "KBBB",
@@ -205,8 +210,10 @@ public sealed class OperationDispatchPlanningTests
         Assert.Equal(DispatchFeasibilityReason.AircraftNotInstalled, issue.Reason);
     }
 
-    [Fact]
-    public async Task PersistedUnavailableAircraftIsInfeasibleBeforePhysicalEvaluation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PersistedUnavailableAircraftIsInfeasibleBeforePhysicalEvaluation(bool useSnapshot)
     {
         AircraftRegistryResolution aircraft = Resolution();
         var service = new OperationDispatchPlanningService(
@@ -223,7 +230,9 @@ public sealed class OperationDispatchPlanningTests
                     aircraft.CanonicalAircraftId,
                     AircraftAvailabilityStatus.Unavailable)));
 
-        DispatchFeasibilityResult result = await service.EvaluateAsync(
+        DispatchFeasibilityResult result = useSnapshot
+            ? await service.EvaluateAsync(aircraft, "KAAA", "KBBB", new(1000, 500))
+            : await service.EvaluateAsync(
             "provider-alias",
             "KAAA",
             "KBBB",
