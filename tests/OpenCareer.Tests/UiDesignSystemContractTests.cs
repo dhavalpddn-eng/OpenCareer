@@ -362,6 +362,19 @@ public sealed class UiDesignSystemContractTests
         Assert.Equal(
             "OpenCareer.App.Diagnostics.ButtonStateRuntimeProbePage",
             probeDocument.Root?.Attribute(XamlNamespace + "Class")?.Value);
+        string[] probeDictionarySources = probeDocument
+            .Descendants()
+            .Where(static element => element.Name.LocalName == "ResourceDictionary")
+            .Select(element => element.Attribute("Source")?.Value)
+            .Where(static source => source is not null)
+            .Select(static source => source!)
+            .ToArray();
+        Assert.Equal(
+            [
+                "ms-appx:///Styles/DesignTokens.xaml",
+                "ms-appx:///Styles/ComponentStyles.xaml"
+            ],
+            probeDictionarySources);
 
         IReadOnlyDictionary<string, string> probeButtonStyles = probeDocument
             .Descendants()
@@ -432,10 +445,7 @@ public sealed class UiDesignSystemContractTests
         Assert.All(stockProbeButtons, stockProbeButton =>
         {
             Assert.Equal("False", stockProbeButton.Attribute("IsTabStop")?.Value);
-            Assert.Equal(
-                "Raw",
-                stockProbeButton.Attributes().Single(attribute =>
-                    attribute.Name.LocalName == "AutomationProperties.AccessibilityView").Value);
+            Assert.Equal("Collapsed", stockProbeButton.Attribute("Visibility")?.Value);
         });
 
         Assert.Contains("InitializeComponent", probeSource, StringComparison.Ordinal);
