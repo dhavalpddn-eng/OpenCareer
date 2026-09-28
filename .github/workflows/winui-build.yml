@@ -167,6 +167,73 @@ jobs:
         shell: pwsh
         run: .\tools\run-button-state-runtime-certification.ps1
 
+      - name: Diagnose published XAML artifacts
+        if: always()
+        shell: pwsh
+        run: |
+          $publishRoot = Join-Path ([System.IO.Path]::GetTempPath()) "OpenCareer-button-state-runtime\app"
+          Write-Host "Publish root: $publishRoot"
+
+          if (-not (Test-Path $publishRoot)) {
+            Write-Host "Publish root does not exist."
+            exit 0
+          }
+
+          $pageNames = @("DashboardPage.xbf", "ButtonStateRuntimeProbePage.xbf")
+          foreach ($pageName in $pageNames) {
+            $matches = @(Get-ChildItem $publishRoot -Recurse -File |
+              Where-Object { $_.Name -ceq $pageName } |
+              Sort-Object FullName)
+
+            Write-Host "=== $pageName ($($matches.Count) exact-case match(es)) ==="
+            foreach ($match in $matches) {
+              $relativePath = [System.IO.Path]::GetRelativePath($publishRoot, $match.FullName)
+              Write-Host "$relativePath [$($match.Length) bytes]"
+            }
+
+            $caseInsensitiveMatches = @(Get-ChildItem $publishRoot -Recurse -File |
+              Where-Object { $_.Name -ieq $pageName })
+            Write-Host "Case-insensitive match count: $($caseInsensitiveMatches.Count)"
+          }
+
+          $priFiles = @(Get-ChildItem $publishRoot -Recurse -Filter "resources.pri" -File |
+            Sort-Object FullName)
+          Write-Host "=== resources.pri ($($priFiles.Count) file(s)) ==="
+          foreach ($priFile in $priFiles) {
+            $relativePath = [System.IO.Path]::GetRelativePath($publishRoot, $priFile.FullName)
+            Write-Host "$relativePath [$($priFile.Length) bytes]"
+          }
+
+          if ($priFiles.Count -eq 0) {
+            Write-Host "No resources.pri exists in the focused publish output."
+            exit 0
+          }
+
+          $makePri = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin" `
+              -Recurse -Filter "makepri.exe" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match "\\x64$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $makePri) {
+            Write-Host "MakePri.exe was not found; PRI entry inspection unavailable."
+            exit 0
+          }
+
+          $index = 0
+          foreach ($priFile in $priFiles) {
+            $dump = Join-Path $env:RUNNER_TEMP "published-resources-$index.xml"
+            $index++
+            Write-Host "--- PRI $($priFile.FullName) using $($makePri.FullName)"
+            & $makePri.FullName dump /if $priFile.FullName /of $dump /dt detailed /o
+            if (Test-Path $dump) {
+              Select-String -Path $dump `
+                -Pattern "DashboardPage|ButtonStateRuntimeProbePage" `
+                -Context 2,2 |
+                ForEach-Object { $_.ToString() }
+            }
+          }
+
       - name: Build live SimConnect probe
         run: dotnet build tools/OpenCareer.LiveProbe/OpenCareer.LiveProbe.csproj --configuration Release -p:Platform=x64
 
