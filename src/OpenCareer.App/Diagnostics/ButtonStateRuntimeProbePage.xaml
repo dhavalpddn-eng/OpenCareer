@@ -5,18 +5,18 @@
 
     <!--
         DIAGNOSTIC BISECTION GROUP A.
-        Resource-free controls retain generated fields required by the existing
-        probe code while isolating compiled Page/control construction.
+        All named probe controls are deferred with x:Load=False so the generated
+        fields remain compilable while isolating Page + empty Grid loading.
     -->
     <Grid>
         <StackPanel>
-            <Button x:Name="PrimaryProbeButton" />
-            <Button x:Name="SecondaryProbeButton" />
-            <Button x:Name="DangerProbeButton" />
-            <ToggleSwitch x:Name="DisabledToggle" />
-            <TextBlock x:Name="ProbeStatusText" />
-            <Button x:Name="StockLightProbeButton" />
-            <Button x:Name="StockDarkProbeButton" />
+            <Button x:Name="PrimaryProbeButton" x:Load="False" />
+            <Button x:Name="SecondaryProbeButton" x:Load="False" />
+            <Button x:Name="DangerProbeButton" x:Load="False" />
+            <ToggleSwitch x:Name="DisabledToggle" x:Load="False" />
+            <TextBlock x:Name="ProbeStatusText" x:Load="False" />
+            <Button x:Name="StockLightProbeButton" x:Load="False" />
+            <Button x:Name="StockDarkProbeButton" x:Load="False" />
         </StackPanel>
     </Grid>
 </Page>
