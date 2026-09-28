@@ -143,6 +143,9 @@ public sealed partial class JobsPage : Page
 
     private void SynchronizeAircraftSelection(JobsViewModel viewModel)
     {
+        if (AircraftPicker.IsDropDownOpen)
+            return;
+
         // Page event continuations run on the UI thread. WinUI can clear SelectedItem
         // when ItemsSource changes even while the retained ID/binding remains unchanged.
         _synchronizingAircraftSelection = true;
