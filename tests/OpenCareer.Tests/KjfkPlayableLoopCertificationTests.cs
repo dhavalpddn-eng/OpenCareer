@@ -596,8 +596,9 @@ public sealed class KjfkPlayableLoopCertificationTests
             Assert.Matches(@"\." + method + @"\([^;]+;\s*SynchronizeAircraftSelection\(viewModel\);", jobsCode);
         Assert.Contains("if (_synchronizingAircraftSelection", jobsCode);
         Assert.Matches(@"private void SynchronizeAircraftSelection\(JobsViewModel viewModel\)\s*\{\s*if \(AircraftPicker\.IsDropDownOpen\)\s*return;", jobsCode);
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(
-            jobsCode, @"AircraftPicker\.SelectedItem\s*=").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(
+            jobsCode, @"AircraftPicker\.SelectedItem\s*=")
+            .Cast<System.Text.RegularExpressions.Match>());
         Assert.Matches(@"_synchronizingAircraftSelection = true;\s*try\s*\{\s*AircraftPicker.SelectedItem = viewModel.SelectedAircraftOption;\s*\}\s*finally\s*\{\s*_synchronizingAircraftSelection = false;", jobsCode);
         var start = Assert.Single(jobs.Descendants(), e => e.Name.LocalName == "Button"
             && (string?)e.Attribute("Content") == "Accept & Start Flight");
