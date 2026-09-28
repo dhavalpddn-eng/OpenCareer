@@ -447,6 +447,94 @@ public sealed class FlightTelemetryEvidenceProcessorTests
     }
 
     [Fact]
+    public void OneSecondSamplingMissesSubsecondBounceThatFrequentSamplesDetect()
+    {
+        AircraftTelemetrySnapshot Sample(
+            int milliseconds,
+            bool onGround,
+            double altitudeAgl) =>
+            Telemetry(
+                0,
+                onGround: onGround,
+                altitudeAgl: altitudeAgl,
+                groundSpeed: onGround ? 45 : 70,
+                indicatedAirspeed: onGround ? 40 : 70,
+                enginesRunning: 1) with
+            {
+                Timestamp = Epoch.AddMilliseconds(milliseconds)
+            };
+
+        AircraftTelemetrySnapshot[] physicalSequence =
+        [
+            Sample(-1_000, onGround: false, altitudeAgl: 100),
+            Sample(-750, onGround: false, altitudeAgl: 100),
+            Sample(-500, onGround: false, altitudeAgl: 100),
+            Sample(-250, onGround: false, altitudeAgl: 100),
+            Sample(0, onGround: false, altitudeAgl: 100),
+            Sample(250, onGround: false, altitudeAgl: 100),
+            Sample(500, onGround: false, altitudeAgl: 100),
+            Sample(750, onGround: false, altitudeAgl: 100),
+            Sample(1_000, onGround: true, altitudeAgl: 0),
+            Sample(1_250, onGround: false, altitudeAgl: 8),
+            Sample(1_500, onGround: true, altitudeAgl: 0),
+            Sample(1_750, onGround: true, altitudeAgl: 0),
+            Sample(2_000, onGround: true, altitudeAgl: 0)
+        ];
+
+        static FlightStateEvidence[] Replay(
+            IEnumerable<AircraftTelemetrySnapshot> samples)
+        {
+            var processor = new FlightTelemetryEvidenceProcessor();
+            return samples
+                .Select(sample => processor.Process(Observation(sample)))
+                .ToArray();
+        }
+
+        static FlightTrackingSnapshot Track(
+            IEnumerable<FlightStateEvidence> evidence)
+        {
+            var tracking =
+                new FlightTrackingSnapshot(
+                    FlightTrackingState.Airborne,
+                    SuspendedFrom: null,
+                    UpdatedAt: Epoch.AddSeconds(-2),
+                    TakeoffCount: 1,
+                    LandingEpisodeCount: 0,
+                    BounceCount: 0,
+                    TouchAndGoCount: 0,
+                    RejectedTakeoffCount: 0,
+                    CrashReported: false);
+
+            foreach (FlightStateEvidence sample in evidence)
+                tracking = FlightTrackingStateMachine.Advance(tracking, sample);
+
+            return tracking;
+        }
+
+        FlightStateEvidence[] oneSecondEvidence =
+            Replay(
+                physicalSequence.Where(sample =>
+                    (sample.Timestamp - Epoch).TotalMilliseconds % 1_000 == 0));
+        FlightStateEvidence[] frequentEvidence = Replay(physicalSequence);
+
+        FlightTrackingSnapshot oneSecondTracking = Track(oneSecondEvidence);
+        FlightTrackingSnapshot frequentTracking = Track(frequentEvidence);
+
+        Assert.Single(oneSecondEvidence.Where(static evidence => evidence.TouchdownConfirmed));
+        Assert.DoesNotContain(oneSecondEvidence, static evidence => evidence.BounceRecontact);
+        Assert.Equal(1, oneSecondTracking.LandingEpisodeCount);
+        Assert.Equal(0, oneSecondTracking.BounceCount);
+
+        FlightStateEvidence detectedBounce =
+            Assert.Single(frequentEvidence.Where(static evidence => evidence.BounceRecontact));
+        Assert.True(detectedBounce.TouchdownConfirmed);
+        Assert.Equal(Epoch.AddMilliseconds(1_750), detectedBounce.Timestamp);
+        Assert.Single(frequentEvidence.Where(static evidence => evidence.TouchdownConfirmed));
+        Assert.Equal(1, frequentTracking.LandingEpisodeCount);
+        Assert.Equal(1, frequentTracking.BounceCount);
+    }
+
+    [Fact]
     public void ReconnectDoesNotInventBounceFromTheLastGroundContact()
     {
         var processor = new FlightTelemetryEvidenceProcessor();
