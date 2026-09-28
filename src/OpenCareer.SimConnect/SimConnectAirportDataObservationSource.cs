@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using OpenCareer.Application.Planning;
+using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Airports;
 using OpenCareer.SimConnect.Native;
 
@@ -11,8 +13,11 @@ public sealed class SimConnectAirportDataObservationSource(
     : IAirportDataObservationSource
 {
     private const double FeetPerMeter = 3.280839895013123;
+    internal static readonly TimeSpan FailureCooldown = TimeSpan.FromSeconds(30);
 
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+    private readonly ConcurrentDictionary<string, AirportLookupState> _lookups =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public string SourceId => "msfs-simconnect-facility";
     public AirportDataAuthority Authority => AirportDataAuthority.LocalSimulator;
@@ -24,13 +29,95 @@ public sealed class SimConnectAirportDataObservationSource(
         ArgumentException.ThrowIfNullOrWhiteSpace(icao);
 
         string normalizedIcao = icao.Trim().ToUpperInvariant();
-        SimConnectAirportFacilitySnapshot? snapshot = await connection
-            .RequestAirportFacilityAsync(normalizedIcao, cancellationToken)
-            .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        if (snapshot is null)
+        if (connection.Current.State != SimulatorConnectionState.Connected)
             return null;
 
+        AirportLookupState state = _lookups.GetOrAdd(
+            normalizedIcao,
+            static _ => new());
+        AirportLookupOperation operation;
+
+        lock (state.Gate)
+        {
+            if (state.FailedAtTimestamp is { } failedAt
+                && _clock.GetElapsedTime(failedAt) < FailureCooldown)
+            {
+                return null;
+            }
+
+            operation = state.InFlight ?? StartLookup(normalizedIcao, state);
+            operation.WaiterCount++;
+        }
+
+        try
+        {
+            return await operation.Task
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            ReleaseWaiter(state, operation);
+        }
+    }
+
+    private AirportLookupOperation StartLookup(
+        string icao,
+        AirportLookupState state)
+    {
+        var operation = new AirportLookupOperation();
+        state.InFlight = operation;
+        operation.Task = ObserveAirportAsync(icao, state, operation);
+        return operation;
+    }
+
+    private async Task<AirportDataObservation?> ObserveAirportAsync(
+        string icao,
+        AirportLookupState state,
+        AirportLookupOperation operation)
+    {
+        AirportDataObservation? observation = null;
+        bool completed = false;
+
+        try
+        {
+            SimConnectAirportFacilitySnapshot? snapshot = await connection
+                .RequestAirportFacilityAsync(icao, operation.Cancellation.Token)
+                .ConfigureAwait(false);
+
+            if (snapshot is not null)
+                observation = MapObservation(snapshot);
+
+            completed = true;
+            return observation;
+        }
+        finally
+        {
+            lock (state.Gate)
+            {
+                if (ReferenceEquals(state.InFlight, operation))
+                {
+                    state.InFlight = null;
+
+                    if (completed)
+                    {
+                        state.FailedAtTimestamp = observation is null
+                            && connection.Current.State == SimulatorConnectionState.Connected
+                            ? _clock.GetTimestamp()
+                            : null;
+                    }
+                }
+            }
+
+            operation.Cancellation.Dispose();
+        }
+    }
+
+    private AirportDataObservation? MapObservation(
+        SimConnectAirportFacilitySnapshot snapshot)
+    {
         RunwayRecord[] runways = snapshot.Runways
             .Select(MapRunway)
             .Where(static runway => runway is not null)
@@ -71,6 +158,51 @@ public sealed class SimConnectAirportDataObservationSource(
             return null;
         }
         return observation;
+    }
+
+    private static void ReleaseWaiter(
+        AirportLookupState state,
+        AirportLookupOperation operation)
+    {
+        bool cancel = false;
+
+        lock (state.Gate)
+        {
+            operation.WaiterCount--;
+            if (operation.WaiterCount == 0
+                && ReferenceEquals(state.InFlight, operation)
+                && !operation.Task.IsCompleted)
+            {
+                state.InFlight = null;
+                cancel = true;
+            }
+        }
+
+        if (cancel)
+        {
+            try
+            {
+                operation.Cancellation.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The lookup completed between the waiter release and cancellation.
+            }
+        }
+    }
+
+    private sealed class AirportLookupState
+    {
+        internal object Gate { get; } = new();
+        internal long? FailedAtTimestamp { get; set; }
+        internal AirportLookupOperation? InFlight { get; set; }
+    }
+
+    private sealed class AirportLookupOperation
+    {
+        internal CancellationTokenSource Cancellation { get; } = new();
+        internal Task<AirportDataObservation?> Task { get; set; } = null!;
+        internal int WaiterCount { get; set; }
     }
 
     private static RunwayRecord? MapRunway(SimConnectRunwayFacilityData runway)

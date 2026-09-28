@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using OpenCareer.Application.Planning;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Airports;
+using OpenCareer.Infrastructure.Airports;
 using OpenCareer.SimConnect;
 using OpenCareer.SimConnect.Native;
 
@@ -88,6 +89,102 @@ public sealed class SimConnectAirportFacilityTests
         api.Enqueue(SimConnectPackets.FacilityDataEnd(nextId));
         Assert.NotNull(await next.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(1, api.Attempts);
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+    }
+
+    [Fact]
+    public async Task FailedFacilityLookupIsSuppressedPerIcaoAndConcurrentRetryIsCoalesced()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+        var clock = new ManualTimeProvider(
+            new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero));
+
+        await using var connection = Create(api);
+        var live = new SimConnectAirportDataObservationSource(connection, clock);
+        var airports = new CachedAirportDataSource(
+            [live, new PlayableLoopReferenceAirportObservationSource(clock)],
+            clock: clock);
+
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+
+        Task<AirportDataObservation?> failed = live.FindAirportObservationAsync("KJFK");
+        await Until(() => api.FacilityRequests.Count == 1);
+        EnqueueTruncatedAirportFacility(
+            api,
+            api.FacilityRequests.Single().RequestId,
+            "KJFK");
+
+        Assert.Null(await failed.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+        Assert.Equal(1, api.Attempts);
+
+        for (int index = 0; index < 5; index++)
+        {
+            AirportDataObservation fallback = Assert.IsType<AirportDataObservation>(
+                await airports.FindAirportObservationAsync("KJFK"));
+            Assert.Equal(AirportDataAuthority.Reference, fallback.Provenance.Authority);
+        }
+        Assert.Single(api.FacilityRequests);
+
+        Task<AirportDataObservation?> independent = live.FindAirportObservationAsync("KALB");
+        await Until(() => api.FacilityRequests.Count == 2);
+        CompleteValidAirportFacility(api, api.FacilityRequests.Last().RequestId, "KALB");
+        Assert.NotNull(await independent.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        clock.Advance(SimConnectAirportDataObservationSource.FailureCooldown - TimeSpan.FromTicks(1));
+        Assert.Null(await live.FindAirportObservationAsync("KJFK"));
+        Assert.Equal(2, api.FacilityRequests.Count);
+
+        clock.Advance(TimeSpan.FromTicks(1));
+        Task<AirportDataObservation?>[] retries =
+        [
+            live.FindAirportObservationAsync("KJFK"),
+            live.FindAirportObservationAsync("KJFK"),
+            live.FindAirportObservationAsync("KJFK")
+        ];
+
+        await Until(() => api.FacilityRequests.Count == 3);
+        CompleteValidAirportFacility(api, api.FacilityRequests.Last().RequestId, "KJFK");
+        await Until(() => retries.All(static task => task.IsCompleted)
+            || api.FacilityRequests.Count > 3);
+        Assert.Equal(3, api.FacilityRequests.Count);
+        AirportDataObservation?[] retryResults = await Task.WhenAll(retries);
+        Assert.All(retryResults, static result => Assert.NotNull(result));
+
+        Task<AirportDataObservation?> afterSuccess = live.FindAirportObservationAsync("KJFK");
+        await Until(() => api.FacilityRequests.Count == 4);
+        CompleteValidAirportFacility(api, api.FacilityRequests.Last().RequestId, "KJFK");
+        Assert.NotNull(await afterSuccess.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+        Assert.Equal(1, api.Attempts);
+    }
+
+    [Fact]
+    public async Task ConcurrentFailedFacilityLookupsQueueOneNativeRequest()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api);
+        var source = new SimConnectAirportDataObservationSource(connection);
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+
+        Task<AirportDataObservation?>[] lookups = Enumerable.Range(0, 8)
+            .Select(_ => source.FindAirportObservationAsync("KJFK"))
+            .ToArray();
+
+        await Until(() => api.FacilityRequests.Count == 1);
+        var request = Assert.Single(api.FacilityRequests);
+        EnqueueTruncatedAirportFacility(api, request.RequestId, "KJFK");
+
+        await Until(() => lookups.All(static task => task.IsCompleted)
+            || api.FacilityRequests.Count > 1);
+        Assert.Single(api.FacilityRequests);
+        AirportDataObservation?[] results = await Task.WhenAll(lookups);
+        Assert.All(results, static result => Assert.Null(result));
         Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
     }
 
@@ -484,7 +581,7 @@ public sealed class SimConnectAirportFacilityTests
     }
 
     [Fact]
-    public async Task FacilityLookupCancellationDoesNotBreakConnectionOrNextRequest()
+    public async Task FacilityLookupCancellationDoesNotStartCooldownOrBreakConnection()
     {
         var api = new SimConnectTestTransport();
         api.Enqueue(SimConnectPackets.Open());
@@ -509,7 +606,7 @@ public sealed class SimConnectAirportFacilityTests
             });
         Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
 
-        Task<AirportDataObservation?> retry = source.FindAirportObservationAsync("KBBB");
+        Task<AirportDataObservation?> retry = source.FindAirportObservationAsync("KAAA");
         await Until(() => api.FacilityRequests.Count == 2);
         var retryRequest = api.FacilityRequests.Last();
 
@@ -517,7 +614,7 @@ public sealed class SimConnectAirportFacilityTests
             retryRequest.RequestId,
             601,
             "Retry Airport",
-            "KBBB"));
+            "KAAA"));
         api.Enqueue(SimConnectPackets.RunwayFacility(
             retryRequest.RequestId,
             602,
@@ -534,7 +631,7 @@ public sealed class SimConnectAirportFacilityTests
         api.Enqueue(SimConnectPackets.FacilityDataEnd(retryRequest.RequestId));
 
         AirportDataObservation observation = Assert.IsType<AirportDataObservation>(await retry);
-        Assert.Equal("KBBB", observation.Airport.Icao);
+        Assert.Equal("KAAA", observation.Airport.Icao);
         Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
     }
 
@@ -706,6 +803,47 @@ public sealed class SimConnectAirportFacilityTests
                 DispatchInterval = TimeSpan.FromMilliseconds(5)
             },
             clock ?? TimeProvider.System);
+
+    private static void EnqueueTruncatedAirportFacility(
+        SimConnectTestTransport api,
+        uint requestId,
+        string icao)
+    {
+        byte[] packet = SimConnectPackets.AirportFacility(
+            requestId,
+            uniqueRequestId: 1,
+            name: "Truncated Airport",
+            icao: icao);
+        Array.Resize(ref packet, packet.Length - 1);
+        BitConverter.GetBytes((uint)packet.Length).CopyTo(packet, 0);
+        api.Enqueue(packet);
+    }
+
+    private static void CompleteValidAirportFacility(
+        SimConnectTestTransport api,
+        uint requestId,
+        string icao)
+    {
+        api.Enqueue(SimConnectPackets.AirportFacility(
+            requestId,
+            uniqueRequestId: 10,
+            name: $"Fixture {icao}",
+            icao: icao));
+        api.Enqueue(SimConnectPackets.RunwayFacility(
+            requestId,
+            uniqueRequestId: 11,
+            parentUniqueRequestId: 10,
+            itemIndex: 0,
+            listSize: 1,
+            lengthMeters: 3000,
+            widthMeters: 45,
+            surface: 4,
+            primaryNumber: 4,
+            primaryDesignator: 0,
+            secondaryNumber: 22,
+            secondaryDesignator: 0));
+        api.Enqueue(SimConnectPackets.FacilityDataEnd(requestId));
+    }
 
     private sealed class ManualTimeProvider(DateTimeOffset origin) : TimeProvider
     {
