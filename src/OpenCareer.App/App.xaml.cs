@@ -2,17 +2,25 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
+using OpenCareer.App.Diagnostics;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Ai;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Dashboard;
+using OpenCareer.Application.Economy;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Application.Military;
+using OpenCareer.Application.Planning;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Application.Tutorials;
+using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Domain.Military;
 using OpenCareer.Infrastructure.Ai;
+using OpenCareer.Infrastructure.Aircraft;
 using OpenCareer.Infrastructure.Flights;
 using OpenCareer.Infrastructure.Persistence;
 using OpenCareer.SimConnect;
@@ -22,7 +30,10 @@ namespace OpenCareer.App;
 public partial class App : Microsoft.UI.Xaml.Application
 {
     private readonly ServiceProvider _services;
+    private readonly ButtonStateRuntimeProbeOptions? _buttonStateRuntimeProbeOptions;
     private MainWindow? _window;
+    private Window? _buttonStateRuntimeProbeWindow;
+    private KjfkLiveTestDiagnosticsService? _liveTestDiagnostics;
     private bool _isShuttingDown;
     private bool _shutdownComplete;
 
@@ -30,10 +41,24 @@ public partial class App : Microsoft.UI.Xaml.Application
     {
         InitializeComponent();
 
+        _buttonStateRuntimeProbeOptions =
+            ButtonStateRuntimeProbeOptions.TryParse(
+                Environment.GetCommandLineArgs());
+        if (_buttonStateRuntimeProbeOptions is not null)
+        {
+            // The runtime probe must not open normal career data, recovery, or SimConnect.
+            _services = new ServiceCollection().BuildServiceProvider();
+            UnhandledException += OnButtonStateRuntimeProbeUnhandledException;
+            return;
+        }
+
         var services = new ServiceCollection();
 
-        var dataPaths = new OpenCareerDataPaths();
-        dataPaths.EnsureDirectories();
+        OpenCareerDataProfileSelection dataProfile =
+            OpenCareerDataProfileSelection.Resolve(
+                Environment.GetCommandLineArgs());
+        dataProfile.Prepare();
+        OpenCareerDataPaths dataPaths = dataProfile.Paths;
         var fileLogger = new OpenCareerFileLoggerProvider(dataPaths);
 
         services.AddSingleton(dataPaths);
@@ -53,15 +78,91 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton(provider =>
             new OpenCareerDatabaseOptions(
                 provider.GetRequiredService<OpenCareerDataPaths>().DatabaseFile));
+
+        services.AddSingleton<IWorldSimulationStateStore, SqliteWorldSimulationStateStore>();
+        services.AddSingleton<ICommodityMarketSnapshotStore, SqliteCommodityMarketSnapshotStore>();
+        services.AddSingleton<WorldSimulationPersistenceService>();
+        services.AddSingleton<IJobBoardStateStore, SqliteJobBoardStateStore>();
+        services.AddSingleton<JobBoardGenerationService>();
+        services.AddSingleton<IJobContractStore, SqliteJobContractStore>();
+        services.AddSingleton<IJobContractRecoverySource, SqliteJobContractRecoverySource>();
+        services.AddSingleton<JobContractRecoveryService>();
+        services.AddSingleton<JobContractRuntimeState>();
+        services.AddSingleton<IJobContractRuntimeSource>(provider =>
+            provider.GetRequiredService<JobContractRuntimeState>());
+        services.AddSingleton<JobContractLifecycleService>();
+        services.AddSingleton<JobOfferAcceptanceService>();
+        services.AddSingleton<IEconomyLedgerStore, SqliteEconomyLedgerStore>();
+
+        services.AddSingleton<EconomySettlementService>();
+        services.AddSingleton<SettlementPendingContractSource>();
+
+        services.AddSingleton<SettlementPendingContractCoordinator>();
+
+        services.AddSingleton<SqlitePlayerCareerProfileStore>();
+        services.AddSingleton<IPlayerCareerProfileStore>(provider =>
+            provider.GetRequiredService<SqlitePlayerCareerProfileStore>());
+        services.AddSingleton<PlayerCareerRuntimeState>();
+        services.AddSingleton<PlayerCareerOnboardingCoordinator>();
+        services.AddSingleton<PlayerCareerLocationCoordinator>();
+        services.AddSingleton<PlayerCareerQualificationCoordinator>();
+
+        services.AddSingleton<PlayerCareerExperienceCoordinator>();
+        services.AddSingleton<CareerLogbookExperienceCoordinator>();
+
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
+        services.AddSingleton<ILogbookIdempotencySource>(provider =>
+            provider.GetRequiredService<SqliteLogbookStore>());
         services.AddSingleton<ILogbookWriter>(provider =>
             provider.GetRequiredService<SqliteLogbookStore>());
+
+        services.AddSingleton<SqliteConflictCampaignStore>();
+        services.AddSingleton<SqliteMilitaryCareerProfileStore>();
+        services.AddSingleton<IMilitaryCareerProfileStore>(provider =>
+            provider.GetRequiredService<SqliteMilitaryCareerProfileStore>());
+        services.AddSingleton<SqliteDatabaseSnapshotService>();
+        services.AddSingleton<SqliteBackupArchiveRestoreService>();
+        services.AddSingleton<AppDataRestoreService>();
+        services.AddSingleton<IConflictCampaignStore>(provider =>
+            provider.GetRequiredService<SqliteConflictCampaignStore>());
+        services.AddSingleton<IConflictCampaignRecoverySource>(provider =>
+            provider.GetRequiredService<SqliteConflictCampaignStore>());
+        services.AddSingleton<ConflictCampaignRuntimeState>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IConflictTheaterCatalog, DefaultConflictTheaterCatalog>();
+        services.AddSingleton<ConflictOperationsService>();
+        services.AddSingleton<ConflictCampaignCoordinator>();
+        services.AddSingleton<SqliteOperationConsequenceStore>();
+        services.AddSingleton<IOperationConsequenceStore>(provider =>
+            provider.GetRequiredService<SqliteOperationConsequenceStore>());
+        services.AddSingleton<IOperationConsequenceHistorySource>(provider =>
+            provider.GetRequiredService<SqliteOperationConsequenceStore>());
+        services.AddSingleton<IOperationResolutionRegistry, InMemoryOperationResolutionRegistry>();
+        services.AddSingleton<OperationResolver>();
+        services.AddSingleton<IOperationResolver>(provider =>
+            new IdempotentOperationResolver(
+                provider.GetRequiredService<OperationResolver>(),
+                provider.GetRequiredService<IOperationResolutionRegistry>()));
+        services.AddSingleton<IMilitaryReputationConsequenceRegistry, InMemoryMilitaryReputationConsequenceRegistry>();
+        services.AddSingleton<MilitaryReputationConsequence>();
+        services.AddSingleton<OperationConsequenceOrchestrator>();
+        services.AddSingleton<PersistedOperationConsequenceCoordinator>();
+        services.AddSingleton<MilitaryDispatchService>();
+        services.AddSingleton<MilitaryCampaignMissionService>();
+        services.AddSingleton<MilitaryCampaignTransitionService>();
+
         services.AddSingleton<LogbookCommitCoordinator>();
+        services.AddSingleton<SettledJobLogbookCoordinator>();
         services.AddSingleton<DashboardGuidanceEngine>();
         services.AddSingleton<AppDataBackupService>();
         services.AddSingleton<DiagnosticBundleService>();
+        services.AddSingleton(provider =>
+            new KjfkLiveTestDiagnosticJournal(
+                provider.GetRequiredService<OpenCareerDataPaths>(),
+                KjfkLiveTestLaunchMetadata.FromEnvironment()));
+        services.AddSingleton<KjfkLiveTestDiagnosticsService>();
         services.AddSingleton<ShellOpenService>();
 
         services.AddSingleton<FlightSessionCoordinator>();
@@ -77,11 +178,79 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<FlightContinuityPolicy>();
         services.AddSingleton<FlightSessionRuntime>();
 
+        services.AddSingleton<IFlightStateEvidenceSource>(provider =>
+            provider.GetRequiredService<FlightSessionRuntime>());
+
         services.AddSingleton<SimConnectConnection>();
         services.AddSingleton<ISimulatorConnection>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
         services.AddSingleton<ISimulatorTelemetrySource>(provider =>
             provider.GetRequiredService<SimConnectConnection>());
+
+        services.AddOpenCareerPlanningServices();
+
+        services.AddSingleton<CareerJobBoardRefillService>();
+        services.AddSingleton<DevelopmentFlightService>();
+        services.AddSingleton<ICareerJobBoardRefillService>(provider =>
+            provider.GetRequiredService<CareerJobBoardRefillService>());
+
+        services.AddSingleton<JobAcceptanceFleetBridge>();
+
+        services.AddSingleton<AcceptedJobDispatchBridge>();
+
+        services.AddSingleton<AcceptedJobStartBridge>();
+
+        services.AddSingleton<AcceptedJobFlightSessionBridge>();
+
+        services.AddSingleton<CareerJobPreFlightSessionRecoveryService>();
+        services.AddSingleton<ICareerJobPreFlightSessionRecoveryService>(provider =>
+            provider.GetRequiredService<CareerJobPreFlightSessionRecoveryService>());
+
+        services.AddSingleton<JobFlightCompletionEvidenceTracker>();
+
+        services.AddSingleton<JobFlightSessionCompletionBridge>();
+
+        services.AddSingleton<CompletedJobContractBridge>();
+
+        services.AddSingleton<CareerFlightReservationReleaseCoordinator>();
+
+        services.AddSingleton<CareerFlightFinalizationCoordinator>();
+
+        services.AddSingleton<CareerFlightTerminalWorkflowCoordinator>();
+
+        services.AddSingleton<CareerJobPlayableLoopCoordinator>();
+
+        services.AddSingleton<PersistedJobContractTermsSource>();
+        services.AddSingleton<ICareerJobContractTermsSource>(provider =>
+            provider.GetRequiredService<PersistedJobContractTermsSource>());
+        services.AddSingleton<StandardCivilianPointToPointDispatchAuthoritySource>();
+        services.AddSingleton<ICareerJobDispatchAuthoritySource>(provider =>
+            provider.GetRequiredService<StandardCivilianPointToPointDispatchAuthoritySource>());
+        services.AddSingleton<CareerJobStartInputSource>();
+        services.AddSingleton<CareerJobAircraftSelectionSource>();
+        services.AddSingleton<CareerJobStartActionService>();
+        services.AddSingleton<ICareerJobStartAction>(provider =>
+            provider.GetRequiredService<CareerJobStartActionService>());
+
+        services.AddSingleton<CareerJobPlayableLoopReadinessSource>();
+
+        services.AddSingleton(StandardPointToPointMissionPolicy.Default);
+        services.AddSingleton<StandardPointToPointMissionCompletionSource>();
+        services.AddSingleton<ICareerJobMissionCompletionSource>(provider =>
+            provider.GetRequiredService<StandardPointToPointMissionCompletionSource>());
+        services.AddSingleton<EmployerCoveredOperatingCostQuoteSource>();
+        services.AddSingleton<ICareerJobOperatingCostQuoteSource>(provider =>
+            provider.GetRequiredService<EmployerCoveredOperatingCostQuoteSource>());
+        services.AddSingleton<PersistedFlightSettlementCostsSource>();
+        services.AddSingleton<ICareerJobSettlementCostsSource>(provider =>
+            provider.GetRequiredService<PersistedFlightSettlementCostsSource>());
+        services.AddSingleton<CareerJobCompletionInputSource>();
+        services.AddSingleton<CareerJobCompletionActionService>();
+        services.AddSingleton<ICareerJobCompletionAction>(provider =>
+            provider.GetRequiredService<CareerJobCompletionActionService>());
+        services.AddSingleton<CareerFlightAbandonCoordinator>();
+        services.AddSingleton<ICareerFlightAbandonAction>(provider =>
+            provider.GetRequiredService<CareerFlightAbandonCoordinator>());
 
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();
@@ -94,6 +263,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<LogbookViewModel>();
+        services.AddSingleton<JobsViewModel>();
+        services.AddSingleton<CareerViewModel>();
+        services.AddSingleton<MilitaryGovernmentViewModel>();
         services.AddSingleton<TutorialViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MainWindow>();
@@ -104,7 +276,36 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (_buttonStateRuntimeProbeOptions is not null)
+        {
+            try
+            {
+                LaunchButtonStateRuntimeProbe(_buttonStateRuntimeProbeOptions);
+            }
+            catch (Exception ex)
+            {
+                CompleteButtonStateRuntimeProbe(
+                    _buttonStateRuntimeProbeOptions,
+                    ButtonStateRuntimeProbe.CreateFailureReport(ex));
+            }
+
+            return;
+        }
+
         var logger = _services.GetRequiredService<ILogger<App>>();
+
+        OpenCareerDataPaths dataPaths =
+            _services.GetRequiredService<OpenCareerDataPaths>();
+        if (dataPaths.IsDevelopmentLiveTest)
+        {
+            logger.LogWarning(
+                "DEVELOPMENT / TEST KJFK data profile active at {DataRoot}. Normal OpenCareer data is not loaded. Startup reset requested: {ResetRequested}.",
+                dataPaths.Root,
+                Environment.GetCommandLineArgs().Any(argument => string.Equals(
+                    argument,
+                    OpenCareerDataProfileSelection.ResetArgument,
+                    StringComparison.OrdinalIgnoreCase)));
+        }
 
         try
         {
@@ -115,6 +316,81 @@ public partial class App : Microsoft.UI.Xaml.Application
         catch (Exception ex)
         {
             logger.LogError(ex, "OpenCareer settings initialization failed; using defaults.");
+        }
+
+        try
+        {
+            bool restored = await _services
+                .GetRequiredService<AppDataRestoreService>()
+                .ApplyPendingDatabaseRestoreAsync();
+
+            if (restored)
+            {
+                logger.LogInformation(
+                    "Applied pending OpenCareer database restore before application data stores were opened.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Pending OpenCareer database restore failed; existing local data was preserved.");
+        }
+
+        try
+        {
+            PlayerCareerProfileStoreRecord? recovered =
+                await _services
+                    .GetRequiredService<PlayerCareerRuntimeState>()
+                    .InitializeAsync();
+
+            if (recovered is not null)
+            {
+                logger.LogInformation(
+                    "Recovered player career profile {CareerId} at revision {Revision}.",
+                    recovered.Profile.CareerId,
+                    recovered.Revision);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "No player career profile found; career onboarding is required.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Player career profile recovery failed; OpenCareer will continue without claiming an active career profile.");
+        }
+
+        try
+        {
+            IReadOnlyList<PersistedJobContract> recoveredContracts =
+                await _services
+                    .GetRequiredService<JobContractRuntimeState>()
+                    .InitializeAsync();
+
+            if (recoveredContracts.Count > 0)
+            {
+                logger.LogInformation(
+                    "Recovered {ContractCount} persisted job contracts requiring runtime reconciliation: {AcceptedCount} accepted, {InProgressCount} in progress, {CompletedCount} completed.",
+                    recoveredContracts.Count,
+                    recoveredContracts.Count(item => item.Contract.Status == ContractStatus.Accepted),
+                    recoveredContracts.Count(item => item.Contract.Status == ContractStatus.InProgress),
+                    recoveredContracts.Count(item => item.Contract.Status == ContractStatus.Completed));
+            }
+            else
+            {
+                logger.LogInformation(
+                    "No persisted job contracts require runtime reconciliation.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Job-contract recovery failed. OpenCareer will continue without claiming recovered active or settlement-pending jobs.");
         }
 
         try
@@ -140,12 +416,201 @@ public partial class App : Microsoft.UI.Xaml.Application
                 "FlightSession recovery failed. OpenCareer will continue without claiming a recovered active flight.");
         }
 
+        try
+        {
+            JobContractRuntimeState contracts =
+                _services.GetRequiredService<JobContractRuntimeState>();
+
+            if (contracts.Current.Any(
+                    item =>
+                        item.Contract.Status
+                            is ContractStatus.Accepted
+                                or ContractStatus.InProgress)
+                && _services
+                    .GetRequiredService<FlightSessionCoordinator>()
+                    .Current is null)
+            {
+                CareerJobPreFlightSessionRecoveryResult recovery =
+                    await _services
+                        .GetRequiredService<ICareerJobPreFlightSessionRecoveryService>()
+                        .RecoverAsync();
+
+                logger.LogInformation(
+                    "Pre-FlightSession job recovery completed with state {RecoveryState} for contract {ContractId}.",
+                    recovery.State,
+                    recovery.ContractId);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Pre-FlightSession job recovery failed. The persisted contract and Fleet reservation were preserved for retry.");
+        }
+
+        try
+        {
+            ConflictCampaignStoreRecord? recovered = await _services
+                .GetRequiredService<ConflictCampaignRuntimeState>()
+                .InitializeAsync();
+
+            if (recovered is not null)
+            {
+                logger.LogInformation(
+                    "Recovered military conflict campaign {CampaignId} at revision {Revision}.",
+                    recovered.Checkpoint.CampaignId,
+                    recovered.Revision);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Military conflict campaign recovery failed; the rest of OpenCareer will continue.");
+        }
+
+        try
+        {
+            MsfsPackageInstalledAircraftDiscoverySource installedAircraft =
+                _services.GetRequiredService<MsfsPackageInstalledAircraftDiscoverySource>();
+
+            await installedAircraft.InitializeAsync();
+
+            InstalledAircraftDiscoverySnapshot snapshot =
+                installedAircraft.Current;
+
+            logger.LogInformation(
+                "Local MSFS installed-aircraft discovery completed with availability {Availability} and {AircraftCount} observations.",
+                snapshot.Availability,
+                snapshot.Observations.Count);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Local MSFS installed-aircraft discovery failed; live SimConnect discovery remains available.");
+        }
+
+        if (dataPaths.IsDevelopmentLiveTest)
+        {
+            _liveTestDiagnostics =
+                _services.GetRequiredService<KjfkLiveTestDiagnosticsService>();
+
+            if (_liveTestDiagnostics.Start())
+            {
+                logger.LogInformation(
+                    "KJFK live-test diagnostic state capture started in the isolated development profile.");
+            }
+            else
+            {
+                logger.LogWarning(
+                    "KJFK live-test diagnostic state capture could not start; gameplay remains available and the isolated application log is preserved.");
+            }
+        }
+
         _window = _services.GetRequiredService<MainWindow>();
+        if (dataPaths.IsDevelopmentLiveTest)
+            _window.Title = "OpenCareer — DEVELOPMENT / TEST — KJFK";
         _window.AppWindow.Closing += OnMainWindowClosing;
         _window.Activate();
 
         _services.GetRequiredService<ISimulatorConnection>().Start();
         logger.LogInformation("OpenCareer application launched.");
+    }
+
+    private void LaunchButtonStateRuntimeProbe(
+        ButtonStateRuntimeProbeOptions options)
+    {
+        ButtonStateRuntimeProbeStageJournal.Initialize(options.OutputPath);
+        ButtonStateRuntimeProbeStageJournal.Record(
+            "1. LaunchButtonStateRuntimeProbe entered");
+        var page = new ButtonStateRuntimeProbePage();
+        bool executed = false;
+
+        page.Loaded += OnProbeLoaded;
+        _buttonStateRuntimeProbeWindow = new Window
+        {
+            Content = page,
+            Title = "OpenCareer — DEVELOPMENT / TEST — Button State Probe"
+        };
+        ButtonStateRuntimeProbeStageJournal.Record(
+            "4. Window created/content assigned");
+        _buttonStateRuntimeProbeWindow.Activate();
+        ButtonStateRuntimeProbeStageJournal.Record(
+            "5. Window.Activate returned");
+
+        async void OnProbeLoaded(object sender, RoutedEventArgs args)
+        {
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "6. Page.Loaded handler entered");
+            if (executed)
+                return;
+
+            executed = true;
+            page.Loaded -= OnProbeLoaded;
+
+            ButtonStateRuntimeProbeReport report =
+                await ButtonStateRuntimeProbe.RunAsync(page);
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "9. RunAsync returned");
+            page.ShowResult(report);
+            CompleteButtonStateRuntimeProbe(options, report, page);
+        }
+    }
+
+    private void OnButtonStateRuntimeProbeUnhandledException(
+        object sender,
+        Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        e.Handled = true;
+
+        if (_buttonStateRuntimeProbeOptions is not null)
+        {
+            CompleteButtonStateRuntimeProbe(
+                _buttonStateRuntimeProbeOptions,
+                ButtonStateRuntimeProbe.CreateFailureReport(e.Exception));
+        }
+    }
+
+    private void CompleteButtonStateRuntimeProbe(
+        ButtonStateRuntimeProbeOptions options,
+        ButtonStateRuntimeProbeReport report,
+        ButtonStateRuntimeProbePage? page = null)
+    {
+        try
+        {
+            ButtonStateRuntimeProbe.WriteReport(options.OutputPath, report);
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "10. Report write completed");
+        }
+        catch (Exception ex)
+        {
+            Environment.ExitCode = 1;
+            if (page is not null)
+            {
+                page.StatusText.Text =
+                    $"FAIL — runtime report could not be written: {ex}";
+            }
+
+            if (options.AutoClose)
+            {
+                ButtonStateRuntimeProbeStageJournal.Record(
+                    "11. Auto-close requested after report-write failure");
+                _buttonStateRuntimeProbeWindow?.Close();
+                Exit();
+            }
+
+            return;
+        }
+
+        Environment.ExitCode = report.Success ? 0 : 1;
+        if (options.AutoClose)
+        {
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "11. Auto-close requested");
+            _buttonStateRuntimeProbeWindow?.Close();
+            Exit();
+        }
     }
 
     private async void OnMainWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
@@ -177,6 +642,12 @@ public partial class App : Microsoft.UI.Xaml.Application
                     "Final FlightSession checkpoint failed during shutdown.");
             }
 
+            if (_liveTestDiagnostics is not null)
+            {
+                await _liveTestDiagnostics
+                    .CompleteAsync("NormalShutdown");
+            }
+
             await _services.DisposeAsync();
         }
         catch (Exception ex)
@@ -196,5 +667,6 @@ public partial class App : Microsoft.UI.Xaml.Application
     {
         var logger = _services.GetRequiredService<ILogger<App>>();
         logger.LogError(e.Exception, "Unhandled OpenCareer UI exception.");
+        _liveTestDiagnostics?.RecordUnhandledException(e.Exception);
     }
 }

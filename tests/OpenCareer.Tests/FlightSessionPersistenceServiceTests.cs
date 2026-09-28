@@ -341,6 +341,80 @@ public sealed class FlightSessionPersistenceServiceTests
         Assert.Null(coordinator.Current);
     }
 
+    [Fact]
+    public async Task AuthoritativeCancellationValidatesIdentityBeforeWriting()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        await service.StartAsync(
+            Epoch,
+            contractId,
+            sessionId);
+
+        int saveCount = store.SaveCount;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.CancelAsync(
+                sessionId,
+                Guid.NewGuid(),
+                Epoch.AddSeconds(1)));
+
+        Assert.Equal(saveCount, store.SaveCount);
+        Assert.Equal(
+            FlightSessionStatus.Active,
+            coordinator.Current!.Status);
+    }
+
+    [Fact]
+    public async Task LaterTelemetryCannotOverwritePersistedCancellation()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        await service.StartAsync(
+            Epoch,
+            contractId,
+            sessionId);
+
+        await service.CancelAsync(
+            sessionId,
+            contractId,
+            Epoch.AddSeconds(1));
+
+        FlightSession afterTelemetry =
+            await service.AdvanceAsync(
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(2),
+                        Connected: true,
+                        StableTelemetry: true,
+                        ValidLoadedAircraft: true,
+                        ContinuityPlausible: true)));
+
+        Assert.Equal(
+            FlightSessionStatus.Cancelled,
+            afterTelemetry.Status);
+        Assert.Equal(
+            FlightSessionStatus.Cancelled,
+            store.Checkpoint!.Status);
+        Assert.Equal(
+            FlightOperationState.Cancelled,
+            coordinator.Current!.OperationState);
+    }
+
     private sealed class MemoryStore :
         IFlightSessionCheckpointStore
     {

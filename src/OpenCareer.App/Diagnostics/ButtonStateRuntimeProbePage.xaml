@@ -1,0 +1,95 @@
+<Page
+    x:Class="OpenCareer.App.Diagnostics.ButtonStateRuntimeProbePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Background="{StaticResource OpenCareerShellBackgroundBrush}"
+          Padding="32">
+        <!--
+            Resolve expected colors through normal compiled XAML lookup. These
+            hidden elements bind directly to the real App palette; the probe
+            does not copy or reconstruct any color value.
+        -->
+        <Grid Visibility="Collapsed">
+            <Border x:Name="ExpectedOpenCareerNavyBrush" Background="{StaticResource OpenCareerNavyBrush}" />
+            <Border x:Name="ExpectedOpenCareerShellTextBrush" Background="{StaticResource OpenCareerShellTextBrush}" />
+            <Border x:Name="ExpectedOpenCareerSteelBorderBrush" Background="{StaticResource OpenCareerSteelBorderBrush}" />
+            <Border x:Name="ExpectedOpenCareerNavyRaisedBrush" Background="{StaticResource OpenCareerNavyRaisedBrush}" />
+            <Border x:Name="ExpectedOpenCareerSteelHighlightBrush" Background="{StaticResource OpenCareerSteelHighlightBrush}" />
+            <Border x:Name="ExpectedOpenCareerNavyPressedBrush" Background="{StaticResource OpenCareerNavyPressedBrush}" />
+            <Border x:Name="ExpectedOpenCareerInkMutedBrush" Background="{StaticResource OpenCareerInkMutedBrush}" />
+            <Border x:Name="ExpectedOpenCareerPaperMutedBrush" Background="{StaticResource OpenCareerPaperMutedBrush}" />
+            <Border x:Name="ExpectedOpenCareerDisabledBrush" Background="{StaticResource OpenCareerDisabledBrush}" />
+            <Border x:Name="ExpectedOpenCareerPaperAltBrush" Background="{StaticResource OpenCareerPaperAltBrush}" />
+            <Border x:Name="ExpectedOpenCareerInkBrush" Background="{StaticResource OpenCareerInkBrush}" />
+            <Border x:Name="ExpectedOpenCareerPaperRuleBrush" Background="{StaticResource OpenCareerPaperRuleBrush}" />
+            <Border x:Name="ExpectedOpenCareerSelectionBrush" Background="{StaticResource OpenCareerSelectionBrush}" />
+            <Border x:Name="ExpectedOpenCareerSecondaryPressedBrush" Background="{StaticResource OpenCareerSecondaryPressedBrush}" />
+            <Border x:Name="ExpectedOpenCareerDangerBrush" Background="{StaticResource OpenCareerDangerBrush}" />
+            <Border x:Name="ExpectedOpenCareerDangerRaisedBrush" Background="{StaticResource OpenCareerDangerRaisedBrush}" />
+            <Border x:Name="ExpectedOpenCareerDangerPressedBrush" Background="{StaticResource OpenCareerDangerPressedBrush}" />
+            <Border x:Name="ExpectedOpenCareerDangerDisabledBrush" Background="{StaticResource OpenCareerDangerDisabledBrush}" />
+        </Grid>
+
+        <Border Background="{StaticResource OpenCareerPaperBrush}"
+                BorderBrush="{StaticResource OpenCareerPaperRuleBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="24"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                RequestedTheme="Light">
+            <StackPanel Spacing="16">
+                <TextBlock Text="DEVELOPMENT / TEST — BUTTON STATE PROBE"
+                           Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                <TextBlock Text="These are real OpenCareer buttons using the compiled App resources and stock WinUI template."
+                           Style="{StaticResource OpenCareerPaperBodyStyle}"
+                           TextWrapping="Wrap" />
+
+                <StackPanel Orientation="Horizontal"
+                            Spacing="12">
+                    <Button x:Name="PrimaryProbeButton"
+                            Content="Primary — hover and press"
+                            Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
+                    <Button x:Name="SecondaryProbeButton"
+                            Content="Secondary — hover and press"
+                            Style="{StaticResource OpenCareerSecondaryButtonStyle}" />
+                    <Button x:Name="DangerProbeButton"
+                            Content="Danger — hover and press"
+                            Style="{StaticResource OpenCareerDangerButtonStyle}" />
+                </StackPanel>
+
+                <ToggleSwitch x:Name="DisabledToggle"
+                              Header="Visual state"
+                              OffContent="Enabled"
+                              OnContent="Disabled"
+                              Toggled="DisabledToggle_Toggled"
+                              Style="{StaticResource OpenCareerToggleSwitchStyle}" />
+
+                <TextBlock x:Name="ProbeStatusText"
+                           Text="Runtime certification pending."
+                           Style="{StaticResource OpenCareerPaperBodyStyle}"
+                           TextWrapping="Wrap" />
+
+                <Button x:Name="StockLightProbeButton"
+                        Content="Stock light template reference"
+                        Style="{StaticResource DefaultButtonStyle}"
+                        RequestedTheme="Light"
+                        Opacity="0"
+                        IsHitTestVisible="False"
+                        IsTabStop="False"
+                        Width="1"
+                        Height="1" />
+                <Button x:Name="StockDarkProbeButton"
+                        Content="Stock dark template reference"
+                        Style="{StaticResource DefaultButtonStyle}"
+                        RequestedTheme="Dark"
+                        Opacity="0"
+                        IsHitTestVisible="False"
+                        IsTabStop="False"
+                        Width="1"
+                        Height="1" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>

@@ -197,11 +197,14 @@ MSFS SDK/version-sensitive behavior is the largest uncertainty.
 
 Optional business ownership, contracts, routes, utilization, staff, margins and expansion while preserving employee-only play. Employer careers must include rank/standing plus deterministic probation, suspension, demotion and firing/termination behavior with fair recovery paths.
 
-### MBL-19 — Military / Government career system
-**Estimated effort: ~15–30 developer days**
+### MBL-19 — Military / Government career system — CAMPAIGN CORE COMPLETE / INTEGRATIONS PENDING
+**Estimated remaining effort: ~6–14 developer days**
 
-Separate qualifications, assigned aircraft, patrol/surveillance/logistics/intercept/escort and later fictionalized conflict operations.
+Draft PR #10 now provides deterministic ground/air conflict state, sector/front representation, linked air-defense/interceptor threats, battlefield-driven CAS/suppression/recon/logistics/patrol/escort/intercept lifecycles, OpenCareer-only effects/damage, military qualification and assigned-aircraft authorization, seeded fictional theater generation, deterministic operation/faction identity plus Defensive/Aggressive/LogisticsFocused/AirFocused operational posture, posture-biased replacement/support-request behavior, SQLite campaign/active-mission recovery, strategic phase/momentum/objectives, bounded campaign cycles, finite replacement reserves, terminal Victory/Defeat/Stalemate/Ceasefire outcomes, persistent completed-operation history, deterministic successor planning/actions with stale-offer protection, an authorization-enforcing dispatch boundary, the production Military/Government WinUI screen using the application snapshot/transition boundaries, persisted completed-operation history, a read-only schematic Operational Map projecting units/threats/support targets, a deterministic current-state Communications feed for command/flight/dispatch/intelligence messages, and an interactive read-only completed-operation drill-down with persisted terminal facts, polling-stable selection, keyboard/focus UX and SQLite restart/no-write verification. MSFS remains flight/telemetry only.
 
+Campaign-core completion boundary reached at `16cda14981bc6284e4f33833e88aa8289ff46149`: production mission completion/failure now settles through the persisted operation-consequence pipeline without the legacy duplicate trust/reputation path, faction posture evolves deterministically with campaign phase changes, and a bounded 96-step deterministic campaign evolution stress test verifies replay equality and state bounds across campaign state, reserves, sectors, units, air units, threats, support requests, identity and postures. Exact-head Linux PR CI for `16cda14981bc6284e4f33833e88aa8289ff46149` is green; exact-head Windows CI is green as well.
+
+MBL-19 remains open only for dependency-driven integration and product acceptance: authoritative career onboarding/profile integration (MBL-13), aircraft assignment issuance/revocation through registry/dispatch (MBL-08/09), authoritative mission/job/economy settlement (MBL-10/14), representative live gameplay verification after flight-evidence/session-recovery gates (MBL-06/07), and local Military/Government visual/accessibility acceptance. No further standalone campaign-core mechanics slice is queued unless a concrete defect is found; broader balance/playtesting remains later tuning work.
 ### MBL-11 — Specialized mission framework
 **Estimated effort: ~20–40+ developer days for the full planned family set**
 

@@ -13,7 +13,56 @@ public sealed record CareerLocation(
     public static CareerLocation Start(string homeAirportIcao, DateTimeOffset time)
     {
         var airport = Normalize(homeAirportIcao);
-        return new(airport, airport, time, ImmutableHashSet.Create(airport), ImmutableHashSet<Guid>.Empty);
+        var location = new CareerLocation(
+            airport,
+            airport,
+            time,
+            ImmutableHashSet.Create(airport),
+            ImmutableHashSet<Guid>.Empty);
+        location.Validate();
+        return location;
+    }
+
+    public void Validate()
+    {
+        if (UpdatedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(UpdatedAt));
+
+        string home = Normalize(HomeAirportIcao);
+        string current = Normalize(CurrentAirportIcao);
+
+        if (!string.Equals(home, HomeAirportIcao, StringComparison.Ordinal))
+            throw new InvalidOperationException("Home airport must use normalized ICAO form.");
+
+        if (!string.Equals(current, CurrentAirportIcao, StringComparison.Ordinal))
+            throw new InvalidOperationException("Current airport must use normalized ICAO form.");
+
+        ArgumentNullException.ThrowIfNull(Connections);
+        ArgumentNullException.ThrowIfNull(AppliedTravelContracts);
+
+        if (!Connections.Contains(home) || !Connections.Contains(current))
+        {
+            throw new InvalidOperationException(
+                "Career connections must contain the home and current airports.");
+        }
+
+        foreach (string connection in Connections)
+        {
+            if (!string.Equals(
+                    Normalize(connection),
+                    connection,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Career connections must use normalized ICAO form.");
+            }
+        }
+
+        if (AppliedTravelContracts.Contains(Guid.Empty))
+        {
+            throw new InvalidOperationException(
+                "Applied travel contracts cannot contain an empty id.");
+        }
     }
 
     public JobContract AcceptLocalJob(JobContract job, ContractDispatchContext context)

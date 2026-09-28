@@ -4,14 +4,18 @@ on:
   pull_request:
     branches:
       - main
+      - feature/m1-simulation-core
     paths:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"
       - "src/OpenCareer.Domain/**"
       - "src/OpenCareer.Infrastructure/**"
       - "src/OpenCareer.SimConnect/**"
+      - "tests/OpenCareer.Tests/**"
       - "tools/OpenCareer.LiveProbe/**"
       - "tools/run-live-probe.ps1"
+      - "tools/run-kjfk-live-test.ps1"
+      - "tools/run-button-state-runtime-certification.ps1"
       - "Directory.Build.props"
       - "Directory.Packages.props"
       - ".github/workflows/winui-build.yml"
@@ -63,7 +67,7 @@ jobs:
           FILES="$(git diff --name-only "$RANGE")"
           printf '%s\n' "$FILES"
 
-          if printf '%s\n' "$FILES" | grep -Eq '^(src/OpenCareer\.App/|src/OpenCareer\.Application/|src/OpenCareer\.Domain/|src/OpenCareer\.Infrastructure/|src/OpenCareer\.SimConnect/|tools/OpenCareer\.LiveProbe/|tools/run-live-probe\.ps1$|Directory\.Build\.props$|Directory\.Packages\.props$|\.github/workflows/winui-build\.yml$)'; then
+          if printf '%s\n' "$FILES" | grep -Eq '^(src/OpenCareer\.App/|src/OpenCareer\.Application/|src/OpenCareer\.Domain/|src/OpenCareer\.Infrastructure/|src/OpenCareer\.SimConnect/|tests/OpenCareer\.Tests/|tools/OpenCareer\.LiveProbe/|tools/run-live-probe\.ps1$|tools/run-kjfk-live-test\.ps1$|tools/run-button-state-runtime-certification\.ps1$|Directory\.Build\.props$|Directory\.Packages\.props$|\.github/workflows/winui-build\.yml$)'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
@@ -76,8 +80,19 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Checkout
+      - name: Checkout exact head
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact head
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $actual = git rev-parse HEAD
+          if ($actual -ne $env:EXPECTED_SHA) { throw "Wrong checkout: $actual" }
+          Write-Host "Certified source SHA: $actual"
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -90,8 +105,140 @@ jobs:
       - name: Build WinUI app
         run: dotnet build src/OpenCareer.App/OpenCareer.App.csproj --configuration Release --no-restore -p:Platform=x64
 
+      - name: Diagnose compiled XAML registration
+        shell: pwsh
+        run: |
+          $project = "src/OpenCareer.App/OpenCareer.App.csproj"
+          $names = @("DashboardPage.g.i.cs", "ButtonStateRuntimeProbePage.g.i.cs")
+
+          Write-Host "=== Generated InitializeComponent sources ==="
+          Get-ChildItem "src/OpenCareer.App/obj" -Recurse -File |
+            Where-Object { $_.Name -in $names } |
+            Sort-Object FullName |
+            ForEach-Object {
+              Write-Host "--- $($_.FullName)"
+              Get-Content $_.FullName |
+                Select-String -Pattern "LoadComponent|ms-appx" -Context 2,2 |
+                ForEach-Object { $_.ToString() }
+            }
+
+          Write-Host "=== MSBuild Page items ==="
+          dotnet msbuild $project `
+            -getItem:Page `
+            -p:Configuration=Release `
+            -p:Platform=x64 |
+            Select-String -Pattern "DashboardPage|ButtonStateRuntimeProbePage" -Context 3,8 |
+            ForEach-Object { $_.ToString() }
+
+          Write-Host "=== XBF and PRI outputs ==="
+          Get-ChildItem "src/OpenCareer.App/obj","src/OpenCareer.App/bin" -Recurse -File |
+            Where-Object {
+              $_.Extension -eq ".xbf" -or $_.Name -eq "resources.pri"
+            } |
+            Sort-Object FullName |
+            ForEach-Object {
+              Write-Host "$($_.FullName) [$($_.Length) bytes]"
+            }
+
+          $makePri = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin" `
+              -Recurse -Filter "makepri.exe" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match "\\x64$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $makePri) {
+            Write-Host "MakePri.exe was not found; PRI entry inspection unavailable."
+          } else {
+            Get-ChildItem "src/OpenCareer.App/bin" -Recurse -Filter "resources.pri" -File |
+              ForEach-Object {
+                $dump = Join-Path $env:RUNNER_TEMP "$($_.Directory.Name)-resources.xml"
+                Write-Host "--- PRI $($_.FullName) using $($makePri.FullName)"
+                & $makePri.FullName dump /if $_.FullName /of $dump /dt detailed
+                if (Test-Path $dump) {
+                  Select-String -Path $dump `
+                    -Pattern "DashboardPage|ButtonStateRuntimeProbePage" `
+                    -Context 2,2 |
+                    ForEach-Object { $_.ToString() }
+                }
+              }
+          }
+
+      - name: Certify compiled WinUI button states
+        shell: pwsh
+        run: .\tools\run-button-state-runtime-certification.ps1
+
+      - name: Diagnose published XAML artifacts
+        if: always()
+        shell: pwsh
+        run: |
+          $publishRoot = Join-Path ([System.IO.Path]::GetTempPath()) "OpenCareer-button-state-runtime\app"
+          Write-Host "Publish root: $publishRoot"
+
+          if (-not (Test-Path $publishRoot)) {
+            Write-Host "Publish root does not exist."
+            exit 0
+          }
+
+          $pageNames = @("DashboardPage.xbf", "ButtonStateRuntimeProbePage.xbf")
+          foreach ($pageName in $pageNames) {
+            $matches = @(Get-ChildItem $publishRoot -Recurse -File |
+              Where-Object { $_.Name -ceq $pageName } |
+              Sort-Object FullName)
+
+            Write-Host "=== $pageName ($($matches.Count) exact-case match(es)) ==="
+            foreach ($match in $matches) {
+              $relativePath = [System.IO.Path]::GetRelativePath($publishRoot, $match.FullName)
+              Write-Host "$relativePath [$($match.Length) bytes]"
+            }
+
+            $caseInsensitiveMatches = @(Get-ChildItem $publishRoot -Recurse -File |
+              Where-Object { $_.Name -ieq $pageName })
+            Write-Host "Case-insensitive match count: $($caseInsensitiveMatches.Count)"
+          }
+
+          $priFiles = @(Get-ChildItem $publishRoot -Recurse -Filter "resources.pri" -File |
+            Sort-Object FullName)
+          Write-Host "=== resources.pri ($($priFiles.Count) file(s)) ==="
+          foreach ($priFile in $priFiles) {
+            $relativePath = [System.IO.Path]::GetRelativePath($publishRoot, $priFile.FullName)
+            Write-Host "$relativePath [$($priFile.Length) bytes]"
+          }
+
+          if ($priFiles.Count -eq 0) {
+            Write-Host "No resources.pri exists in the focused publish output."
+            exit 0
+          }
+
+          $makePri = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin" `
+              -Recurse -Filter "makepri.exe" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match "\\x64$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $makePri) {
+            Write-Host "MakePri.exe was not found; PRI entry inspection unavailable."
+            exit 0
+          }
+
+          $index = 0
+          foreach ($priFile in $priFiles) {
+            $dump = Join-Path $env:RUNNER_TEMP "published-resources-$index.xml"
+            $index++
+            Write-Host "--- PRI $($priFile.FullName) using $($makePri.FullName)"
+            & $makePri.FullName dump /if $priFile.FullName /of $dump /dt detailed /o
+            if (Test-Path $dump) {
+              Select-String -Path $dump `
+                -Pattern "DashboardPage|ButtonStateRuntimeProbePage" `
+                -Context 2,2 |
+                ForEach-Object { $_.ToString() }
+            }
+          }
+
       - name: Build live SimConnect probe
         run: dotnet build tools/OpenCareer.LiveProbe/OpenCareer.LiveProbe.csproj --configuration Release -p:Platform=x64
+
+      - name: Certify rapid KJFK playable loop
+        run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release --filter FullyQualifiedName~KjfkPlayableLoopCertificationTests
 
       - name: Test domain and simulator connection lifecycle
         run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release

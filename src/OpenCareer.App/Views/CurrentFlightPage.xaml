@@ -87,6 +87,47 @@
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="24">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="CAREER WORKFLOW"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="{Binding CareerWorkflowStatus}"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="{Binding CareerWorkflowDetail}"
+                               TextWrapping="Wrap"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <Border Margin="0,8,0,0"
+                            Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding CareerCompletionActionDetail}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                            <Button Content="{Binding CareerCompletionActionText}"
+                                    IsEnabled="{Binding CanCompleteCareerFlight}"
+                                    Click="CompleteCareerFlight_Click"
+                                    Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                    HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,8,0,0"
+                            Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding CareerAbandonActionDetail}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                            <Button Content="{Binding CareerAbandonActionText}"
+                                    IsEnabled="{Binding CanAbandonCurrentFlight}"
+                                    Click="AbandonCurrentFlight_Click"
+                                    Style="{StaticResource OpenCareerDangerButtonStyle}"
+                                    HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="24">
                 <StackPanel Spacing="18">
                     <StackPanel Spacing="4">
                         <TextBlock Text="AIRCRAFT TELEMETRY"
