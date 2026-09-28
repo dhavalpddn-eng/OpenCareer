@@ -269,7 +269,7 @@ public sealed class KjfkPlayableLoopCertificationTests
                     : InstalledAircraftDiscoveryAvailability.Available, discovery.Current.Availability);
                 Assert.Empty(discovery.Current.Observations); // the package provider cannot prove live removal
                 Assert.Equal(AircraftId, app.Jobs.SelectedAircraftId);
-                Assert.NotSame(oldOption, app.Jobs.SelectedAircraftOption);
+                Assert.Same(oldOption, app.Jobs.SelectedAircraftOption);
                 Assert.Same(Assert.Single(app.Jobs.AircraftOptions), app.Jobs.SelectedAircraftOption);
                 var ready = Assert.Single(app.Jobs.Offers);
                 Assert.Equal(CareerJobStartInputState.Ready, ready.StartInputState);
@@ -738,13 +738,17 @@ public sealed class KjfkPlayableLoopCertificationTests
             var aircraft = Assert.Single(Jobs.AircraftOptions);
             Assert.Equal(AircraftId, aircraft.AircraftId);
             await Jobs.SelectAircraftAsync(aircraft.AircraftId);
-            // Simulate the picker clearing during each periodic ItemsSource replacement.
+            // Identical periodic discovery must not replace the picker ItemsSource.
             // The real production XAML binding is certified separately above, not rendered here.
             Task pickerReset = Task.CompletedTask;
+            int optionsRefreshes = 0;
             void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
             {
                 if (e.PropertyName == nameof(JobsViewModel.AircraftOptions))
+                {
+                    optionsRefreshes++;
                     pickerReset = Jobs.SelectAircraftAsync(null);
+                }
             }
             Jobs.PropertyChanged += OnOptionsChanged;
             try
@@ -754,13 +758,14 @@ public sealed class KjfkPlayableLoopCertificationTests
                     var previous = Assert.Single(Jobs.AircraftOptions);
                     await Jobs.RefreshAircraftAndReadinessAsync();
                     await pickerReset;
-                    Assert.NotSame(previous, Assert.Single(Jobs.AircraftOptions));
+                    Assert.Same(previous, Assert.Single(Jobs.AircraftOptions));
                     Assert.Equal(AircraftId, Jobs.SelectedAircraftId);
                     var refreshed = Assert.Single(Jobs.Offers);
                     Assert.Equal(CareerJobStartInputState.Ready, refreshed.StartInputState);
                     Assert.Equal("READY TO START", refreshed.AvailabilityText);
                     Assert.True(refreshed.CanStart);
                 }
+                Assert.Equal(0, optionsRefreshes);
             }
             finally
             {
