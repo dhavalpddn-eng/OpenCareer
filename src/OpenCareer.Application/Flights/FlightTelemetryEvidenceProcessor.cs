@@ -6,6 +6,18 @@ namespace OpenCareer.Application.Flights;
 
 public sealed class FlightTelemetryEvidenceProcessor
 {
+    internal readonly record struct State(
+        AircraftTelemetrySnapshot? Previous,
+        int StableSampleCount,
+        int AirborneSampleCount,
+        int GroundSampleCount,
+        bool AirborneConfirmedPreviously,
+        bool TakeoffCandidateActive,
+        bool LandingEpisodeActive,
+        bool LandingContactObserved,
+        DateTimeOffset? BounceAirborneAt,
+        bool PendingBounceRecontact);
+
     private readonly FlightEvidenceProcessorOptions _options;
 
     private AircraftTelemetrySnapshot? _previous;
@@ -248,6 +260,33 @@ public sealed class FlightTelemetryEvidenceProcessor
         _previous = telemetry;
 
         return evidence;
+    }
+
+    internal State CaptureState() =>
+        new(
+            _previous,
+            _stableSampleCount,
+            _airborneSampleCount,
+            _groundSampleCount,
+            _airborneConfirmedPreviously,
+            _takeoffCandidateActive,
+            _landingEpisodeActive,
+            _landingContactObserved,
+            _bounceAirborneAt,
+            _pendingBounceRecontact);
+
+    internal void RestoreState(State state)
+    {
+        _previous = state.Previous;
+        _stableSampleCount = state.StableSampleCount;
+        _airborneSampleCount = state.AirborneSampleCount;
+        _groundSampleCount = state.GroundSampleCount;
+        _airborneConfirmedPreviously = state.AirborneConfirmedPreviously;
+        _takeoffCandidateActive = state.TakeoffCandidateActive;
+        _landingEpisodeActive = state.LandingEpisodeActive;
+        _landingContactObserved = state.LandingContactObserved;
+        _bounceAirborneAt = state.BounceAirborneAt;
+        _pendingBounceRecontact = state.PendingBounceRecontact;
     }
 
     public void RestoreContext(

@@ -877,6 +877,137 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task FailedBouncePersistenceRestoresProcessorForExactRetry()
+    {
+        FlightSession active = ApproachSession();
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+
+        var store = new MemoryStore { Checkpoint = active };
+        var telemetry = new BufferedTestTelemetrySource();
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                new FlightSessionPersistenceService(coordinator, store),
+                new FlightTelemetryEvidenceProcessor(
+                    new FlightEvidenceProcessorOptions(
+                        StableTelemetrySamples: 1,
+                        AirborneConfirmationSamples: 1,
+                        GroundConfirmationSamples: 1)),
+                new FlightContinuityPolicy(),
+                Connected(),
+                telemetry,
+                new FixedTimeProvider(Epoch.AddHours(1)));
+
+        Assert.False(await runtime.RefreshAsync());
+
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(5.5),
+                32,
+                -97,
+                onGround: false,
+                altitudeMsl: 700,
+                groundSpeed: 65,
+                altitudeAgl: 50));
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(6),
+                32,
+                -97,
+                onGround: true,
+                altitudeMsl: 650,
+                groundSpeed: 55));
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(6.25),
+                32.0001,
+                -97.0001,
+                onGround: false,
+                altitudeMsl: 658,
+                groundSpeed: 58,
+                altitudeAgl: 8));
+
+        Assert.True(await runtime.RefreshAsync());
+
+        FlightSession beforeFailure = Assert.IsType<FlightSession>(coordinator.Current);
+        FlightStateEvidence beforeFailureEvidence =
+            Assert.IsType<FlightStateEvidence>(runtime.Current);
+        FlightSession? checkpointBeforeFailure = store.Checkpoint;
+        int saveCountBeforeFailure = store.SaveCount;
+        int sessionChanged = 0;
+        var publishedEvidence = new List<FlightStateEvidence>();
+        coordinator.SessionChanged += (_, _) => sessionChanged++;
+        runtime.EvidenceChanged += evidence =>
+        {
+            if (evidence is not null)
+                publishedEvidence.Add(evidence);
+        };
+
+        Assert.Equal(Epoch.AddSeconds(6.25), beforeFailure.UpdatedAt);
+        Assert.Equal(1, beforeFailure.Tracking.LandingEpisodeCount);
+        Assert.Equal(0, beforeFailure.Tracking.BounceCount);
+        Assert.Equal(TimeSpan.FromMilliseconds(750), beforeFailure.TimeLedger.ObservedWallTime);
+        Assert.Equal(TimeSpan.FromMilliseconds(750), beforeFailure.TimeLedger.MovementFlightTime);
+        Assert.Equal(TimeSpan.FromMilliseconds(750), beforeFailure.TimeLedger.AirborneTime);
+        Assert.Equal(TimeSpan.FromMilliseconds(750), beforeFailure.TimeLedger.CareerCreditTime);
+
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(6.5),
+                32.0002,
+                -97.0002,
+                onGround: true,
+                altitudeMsl: 650,
+                groundSpeed: 52));
+        store.FailNextSave = true;
+
+        await Assert.ThrowsAsync<IOException>(() => runtime.RefreshAsync());
+
+        Assert.Same(beforeFailure, coordinator.Current);
+        Assert.Same(beforeFailureEvidence, runtime.Current);
+        Assert.Same(checkpointBeforeFailure, store.Checkpoint);
+        Assert.Equal(saveCountBeforeFailure, store.SaveCount);
+        Assert.Equal(Epoch.AddSeconds(6.25), telemetry.LastReadAfterTimestamp);
+        Assert.Equal(0, sessionChanged);
+        Assert.Empty(publishedEvidence);
+
+        FlightSession failedAttempt =
+            Assert.IsType<FlightSession>(store.FailedAttempt);
+        Assert.Equal(Epoch.AddSeconds(6.5), failedAttempt.UpdatedAt);
+        Assert.Equal(1, failedAttempt.Tracking.LandingEpisodeCount);
+        Assert.Equal(1, failedAttempt.Tracking.BounceCount);
+        Assert.Equal(TimeSpan.FromSeconds(1), failedAttempt.TimeLedger.ObservedWallTime);
+        Assert.Equal(TimeSpan.FromSeconds(1), failedAttempt.TimeLedger.MovementFlightTime);
+        Assert.Equal(TimeSpan.FromSeconds(1), failedAttempt.TimeLedger.AirborneTime);
+        Assert.Equal(TimeSpan.FromSeconds(1), failedAttempt.TimeLedger.CareerCreditTime);
+
+        Assert.True(await runtime.RefreshAsync());
+
+        FlightSession afterRetry = Assert.IsType<FlightSession>(coordinator.Current);
+        Assert.Equal(1, afterRetry.Tracking.LandingEpisodeCount);
+        Assert.Equal(1, afterRetry.Tracking.BounceCount);
+        Assert.Equal(failedAttempt.Tracking, afterRetry.Tracking);
+        Assert.Equal(failedAttempt.TimeLedger, afterRetry.TimeLedger);
+        Assert.Equal(afterRetry, store.Checkpoint);
+        Assert.Equal(saveCountBeforeFailure + 1, store.SaveCount);
+        Assert.Equal(1, sessionChanged);
+
+        FlightStateEvidence retriedEvidence = Assert.Single(publishedEvidence);
+        Assert.Equal(Epoch.AddSeconds(6.5), retriedEvidence.Timestamp);
+        Assert.True(retriedEvidence.TouchdownConfirmed);
+        Assert.True(retriedEvidence.BounceRecontact);
+
+        Assert.False(await runtime.RefreshAsync());
+        Assert.Equal(Epoch.AddSeconds(6.5), telemetry.LastReadAfterTimestamp);
+        Assert.Equal(afterRetry, coordinator.Current);
+        Assert.Equal(failedAttempt.TimeLedger, afterRetry.TimeLedger);
+        Assert.Equal(saveCountBeforeFailure + 1, store.SaveCount);
+        Assert.Equal(1, sessionChanged);
+        Assert.Single(publishedEvidence);
+    }
+
+    [Fact]
     public async Task DuplicateTelemetryTimestampDoesNotAdvanceTwice()
     {
         FlightSession active =
@@ -1141,6 +1272,8 @@ public sealed class FlightSessionRuntimeTests
 
         public AircraftTelemetrySnapshot? Latest { get; private set; }
 
+        public DateTimeOffset? LastReadAfterTimestamp { get; private set; }
+
         public void Add(AircraftTelemetrySnapshot sample)
         {
             if (_samples.Count > 0
@@ -1154,12 +1287,16 @@ public sealed class FlightSessionRuntimeTests
         }
 
         public IReadOnlyList<AircraftTelemetrySnapshot> ReadAfter(
-            DateTimeOffset? exclusiveTimestamp) =>
-            _samples
+            DateTimeOffset? exclusiveTimestamp)
+        {
+            LastReadAfterTimestamp = exclusiveTimestamp;
+
+            return _samples
                 .Where(sample =>
                     exclusiveTimestamp is null
                     || sample.Timestamp > exclusiveTimestamp.Value)
                 .ToArray();
+        }
 
         public void Clear() =>
             _samples.Clear();
@@ -1169,12 +1306,21 @@ public sealed class FlightSessionRuntimeTests
         IFlightSessionCheckpointStore
     {
         public FlightSession? Checkpoint { get; set; }
+        public FlightSession? FailedAttempt { get; private set; }
         public int SaveCount { get; private set; }
+        public bool FailNextSave { get; set; }
 
         public Task SaveAsync(
             FlightSession session,
             CancellationToken cancellationToken = default)
         {
+            if (FailNextSave)
+            {
+                FailNextSave = false;
+                FailedAttempt = session;
+                throw new IOException("Injected checkpoint failure.");
+            }
+
             SaveCount++;
             Checkpoint = session;
             return Task.CompletedTask;

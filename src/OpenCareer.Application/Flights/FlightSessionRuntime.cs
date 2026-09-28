@@ -210,66 +210,88 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
             return true;
         }
 
-        FlightStateEvidence evidence =
-            _evidenceProcessor.Process(
-                new FlightEvidenceObservation(
-                    connection.State,
-                    telemetry,
-                    ValidLoadedAircraft: true,
-                    ContinuityPlausible:
-                        continuityPlausible));
+        FlightTelemetryEvidenceProcessor.State processorState =
+            _evidenceProcessor.CaptureState();
+        FlightStateEvidence evidence;
 
-        bool trustworthyObservation =
-            evidence.StableTelemetry
-            && continuityPlausible
-            && !telemetry.SlewActive;
+        try
+        {
+            evidence =
+                _evidenceProcessor.Process(
+                    new FlightEvidenceObservation(
+                        connection.State,
+                        telemetry,
+                        ValidLoadedAircraft: true,
+                        ContinuityPlausible:
+                            continuityPlausible));
 
-        FlightContinuityAnchor? anchor =
-            trustworthyObservation
-                ? FlightContinuityPolicy
-                    .CreateAnchor(telemetry)
-                : null;
+            bool trustworthyObservation =
+                evidence.StableTelemetry
+                && continuityPlausible
+                && !telemetry.SlewActive;
 
-        FlightSessionObservation? observation =
-            trustworthyObservation
-                ? new FlightSessionObservation(
-                    telemetry.Timestamp,
-                    telemetry.LatitudeDegrees,
-                    telemetry.LongitudeDegrees,
-                    telemetry.AltitudeMslFeet,
-                    telemetry.IndicatedAirspeedKnots,
-                    telemetry.GroundSpeedKnots,
-                    telemetry.FuelTotalPounds,
-                    telemetry.PayloadPounds,
-                    ShouldCaptureTrackPoint(
-                        current,
+            FlightContinuityAnchor? anchor =
+                trustworthyObservation
+                    ? FlightContinuityPolicy
+                        .CreateAnchor(telemetry)
+                    : null;
+
+            FlightSessionObservation? observation =
+                trustworthyObservation
+                    ? new FlightSessionObservation(
+                        telemetry.Timestamp,
+                        telemetry.LatitudeDegrees,
+                        telemetry.LongitudeDegrees,
+                        telemetry.AltitudeMslFeet,
+                        telemetry.IndicatedAirspeedKnots,
+                        telemetry.GroundSpeedKnots,
+                        telemetry.FuelTotalPounds,
+                        telemetry.PayloadPounds,
+                        ShouldCaptureTrackPoint(
+                            current,
+                            evidence,
+                            telemetry.Timestamp))
+                    : null;
+
+            FlightTimeInterval? timeInterval =
+                CreateTimeInterval(
+                    current,
+                    telemetry);
+
+            bool shutdownConfirmed =
+                evidence.ParkingConfirmed
+                && telemetry.EnginesRunning == 0;
+
+            await _persistence
+                .AdvanceAsync(
+                    new FlightSessionAdvance(
                         evidence,
-                        telemetry.Timestamp))
-                : null;
+                        TimeInterval:
+                            timeInterval,
+                        ShutdownConfirmed:
+                            shutdownConfirmed,
+                        ContinuityAnchor:
+                            anchor,
+                        Observation:
+                            observation),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            if (ReferenceEquals(
+                    _coordinator.Current,
+                    current))
+            {
+                _evidenceProcessor.RestoreState(processorState);
+            }
+            else
+            {
+                _lastTelemetryTimestamp = telemetry.Timestamp;
+            }
 
-        FlightTimeInterval? timeInterval =
-            CreateTimeInterval(
-                current,
-                telemetry);
-
-        bool shutdownConfirmed =
-            evidence.ParkingConfirmed
-            && telemetry.EnginesRunning == 0;
-
-        await _persistence
-            .AdvanceAsync(
-                new FlightSessionAdvance(
-                    evidence,
-                    TimeInterval:
-                        timeInterval,
-                    ShutdownConfirmed:
-                        shutdownConfirmed,
-                    ContinuityAnchor:
-                        anchor,
-                    Observation:
-                        observation),
-                cancellationToken)
-            .ConfigureAwait(false);
+            throw;
+        }
 
         _lastTelemetryTimestamp =
             telemetry.Timestamp;

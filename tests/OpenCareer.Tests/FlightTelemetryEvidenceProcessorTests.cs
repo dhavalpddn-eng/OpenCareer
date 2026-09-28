@@ -520,16 +520,16 @@ public sealed class FlightTelemetryEvidenceProcessorTests
         FlightTrackingSnapshot oneSecondTracking = Track(oneSecondEvidence);
         FlightTrackingSnapshot frequentTracking = Track(frequentEvidence);
 
-        Assert.Single(oneSecondEvidence.Where(static evidence => evidence.TouchdownConfirmed));
+        Assert.Single(oneSecondEvidence, static evidence => evidence.TouchdownConfirmed);
         Assert.DoesNotContain(oneSecondEvidence, static evidence => evidence.BounceRecontact);
         Assert.Equal(1, oneSecondTracking.LandingEpisodeCount);
         Assert.Equal(0, oneSecondTracking.BounceCount);
 
         FlightStateEvidence detectedBounce =
-            Assert.Single(frequentEvidence.Where(static evidence => evidence.BounceRecontact));
+            Assert.Single(frequentEvidence, static evidence => evidence.BounceRecontact);
         Assert.True(detectedBounce.TouchdownConfirmed);
         Assert.Equal(Epoch.AddMilliseconds(1_750), detectedBounce.Timestamp);
-        Assert.Single(frequentEvidence.Where(static evidence => evidence.TouchdownConfirmed));
+        Assert.Single(frequentEvidence, static evidence => evidence.TouchdownConfirmed);
         Assert.Equal(1, frequentTracking.LandingEpisodeCount);
         Assert.Equal(1, frequentTracking.BounceCount);
     }
