@@ -105,6 +105,64 @@ jobs:
       - name: Build WinUI app
         run: dotnet build src/OpenCareer.App/OpenCareer.App.csproj --configuration Release --no-restore -p:Platform=x64
 
+      - name: Diagnose compiled XAML registration
+        shell: pwsh
+        run: |
+          $project = "src/OpenCareer.App/OpenCareer.App.csproj"
+          $names = @("DashboardPage.g.i.cs", "ButtonStateRuntimeProbePage.g.i.cs")
+
+          Write-Host "=== Generated InitializeComponent sources ==="
+          Get-ChildItem "src/OpenCareer.App/obj" -Recurse -File |
+            Where-Object { $_.Name -in $names } |
+            Sort-Object FullName |
+            ForEach-Object {
+              Write-Host "--- $($_.FullName)"
+              Get-Content $_.FullName |
+                Select-String -Pattern "LoadComponent|ms-appx" -Context 2,2 |
+                ForEach-Object { $_.ToString() }
+            }
+
+          Write-Host "=== MSBuild Page items ==="
+          dotnet msbuild $project `
+            -getItem:Page `
+            -p:Configuration=Release `
+            -p:Platform=x64 |
+            Select-String -Pattern "DashboardPage|ButtonStateRuntimeProbePage" -Context 3,8 |
+            ForEach-Object { $_.ToString() }
+
+          Write-Host "=== XBF and PRI outputs ==="
+          Get-ChildItem "src/OpenCareer.App/obj","src/OpenCareer.App/bin" -Recurse -File |
+            Where-Object {
+              $_.Extension -eq ".xbf" -or $_.Name -eq "resources.pri"
+            } |
+            Sort-Object FullName |
+            ForEach-Object {
+              Write-Host "$($_.FullName) [$($_.Length) bytes]"
+            }
+
+          $makePri = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin" `
+              -Recurse -Filter "makepri.exe" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match "\\x64$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $makePri) {
+            Write-Host "MakePri.exe was not found; PRI entry inspection unavailable."
+          } else {
+            Get-ChildItem "src/OpenCareer.App/bin" -Recurse -Filter "resources.pri" -File |
+              ForEach-Object {
+                $dump = Join-Path $env:RUNNER_TEMP "$($_.Directory.Name)-resources.xml"
+                Write-Host "--- PRI $($_.FullName) using $($makePri.FullName)"
+                & $makePri.FullName dump /if $_.FullName /of $dump /dt detailed
+                if (Test-Path $dump) {
+                  Select-String -Path $dump `
+                    -Pattern "DashboardPage|ButtonStateRuntimeProbePage" `
+                    -Context 2,2 |
+                    ForEach-Object { $_.ToString() }
+                }
+              }
+          }
+
       - name: Certify compiled WinUI button states
         shell: pwsh
         run: .\tools\run-button-state-runtime-certification.ps1
