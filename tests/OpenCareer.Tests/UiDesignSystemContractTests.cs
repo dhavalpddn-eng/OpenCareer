@@ -379,12 +379,7 @@ public sealed class UiDesignSystemContractTests
             .Where(static source => source is not null)
             .Select(static source => source!)
             .ToArray();
-        Assert.Equal(
-            [
-                "ms-appx:///Styles/DesignTokens.xaml",
-                "ms-appx:///Styles/ComponentStyles.xaml"
-            ],
-            probeDictionarySources);
+        Assert.Empty(probeDictionarySources);
 
         IReadOnlyDictionary<string, string> probeButtonStyles = probeDocument
             .Descendants()
