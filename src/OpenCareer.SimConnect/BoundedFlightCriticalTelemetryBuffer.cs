@@ -34,7 +34,9 @@ internal sealed class BoundedFlightCriticalTelemetryBuffer
 
         lock (_gate)
         {
-            if (_lastObserved is { } lastObserved
+            AircraftTelemetrySnapshot? lastObserved = _lastObserved;
+
+            if (lastObserved is not null
                 && sample.Timestamp <= lastObserved.Timestamp)
             {
                 return false;
