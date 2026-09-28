@@ -69,17 +69,35 @@ internal sealed record ButtonStateRuntimeProbeOptions(
 
 public sealed partial class ButtonStateRuntimeProbePage : Page
 {
+    private readonly Button _diagnosticPrimaryButton = new();
+    private readonly Button _diagnosticSecondaryButton = new();
+    private readonly Button _diagnosticDangerButton = new();
+    private readonly Button _diagnosticStockLightButton = new();
+    private readonly Button _diagnosticStockDarkButton = new();
+    private readonly TextBlock _diagnosticStatusText = new();
+    private readonly ToggleSwitch _diagnosticDisabledToggle = new();
+
     public ButtonStateRuntimeProbePage()
     {
-        InitializeComponent();
+        // Diagnostics-only boundary test: construct a real Page/control tree
+        // without loading ButtonStateRuntimeProbePage.xaml.
+        var panel = new StackPanel();
+        panel.Children.Add(_diagnosticPrimaryButton);
+        panel.Children.Add(_diagnosticSecondaryButton);
+        panel.Children.Add(_diagnosticDangerButton);
+        panel.Children.Add(_diagnosticDisabledToggle);
+        panel.Children.Add(_diagnosticStatusText);
+        panel.Children.Add(_diagnosticStockLightButton);
+        panel.Children.Add(_diagnosticStockDarkButton);
+        Content = panel;
     }
 
-    public Button PrimaryButton => PrimaryProbeButton;
-    public Button SecondaryButton => SecondaryProbeButton;
-    public Button DangerButton => DangerProbeButton;
-    public Button StockLightButton => StockLightProbeButton;
-    public Button StockDarkButton => StockDarkProbeButton;
-    public TextBlock StatusText => ProbeStatusText;
+    public Button PrimaryButton => _diagnosticPrimaryButton;
+    public Button SecondaryButton => _diagnosticSecondaryButton;
+    public Button DangerButton => _diagnosticDangerButton;
+    public Button StockLightButton => _diagnosticStockLightButton;
+    public Button StockDarkButton => _diagnosticStockDarkButton;
+    public TextBlock StatusText => _diagnosticStatusText;
 
     internal SolidColorBrush GetExpectedBrush(string token)
     {
@@ -103,7 +121,7 @@ public sealed partial class ButtonStateRuntimeProbePage : Page
 
     private void DisabledToggle_Toggled(object sender, RoutedEventArgs e)
     {
-        bool isEnabled = !DisabledToggle.IsOn;
+        bool isEnabled = !_diagnosticDisabledToggle.IsOn;
         PrimaryButton.IsEnabled = isEnabled;
         SecondaryButton.IsEnabled = isEnabled;
         DangerButton.IsEnabled = isEnabled;
