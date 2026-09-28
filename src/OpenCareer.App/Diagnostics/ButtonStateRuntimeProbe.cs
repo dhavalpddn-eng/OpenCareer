@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -316,7 +317,82 @@ internal static class ButtonStateRuntimeProbe
             StockTemplatePreserved: false,
             SystemFocusBehaviorPreserved: false,
             NativeButtonAutomationPreserved: false,
-            Failure: exception.ToString());
+            Failure: FormatFailureDiagnostic(exception));
+    }
+
+    private static string FormatFailureDiagnostic(Exception exception)
+    {
+        var result = new StringBuilder();
+        Exception? current = exception;
+        int depth = 0;
+
+        while (current is not null)
+        {
+            result.AppendLine($"Exception[{depth}].Type: {current.GetType().FullName}");
+            result.AppendLine($"Exception[{depth}].Message: {current.Message}");
+            result.AppendLine(
+                $"Exception[{depth}].HRESULT: 0x{unchecked((uint)current.HResult):X8} ({current.HResult})");
+            result.AppendLine(
+                $"Exception[{depth}].Source: {current.Source ?? "not exposed"}");
+
+            string? file = ReadOptionalExceptionProperty(
+                current,
+                "XamlFile",
+                "FileName",
+                "SourceUri");
+            string? line = ReadOptionalExceptionProperty(
+                current,
+                "LineNumber",
+                "Line");
+            string? position = ReadOptionalExceptionProperty(
+                current,
+                "LinePosition",
+                "Position");
+            result.AppendLine(
+                $"Exception[{depth}].XamlLocation: " +
+                $"file={file ?? "not exposed"}; " +
+                $"line={line ?? "not exposed"}; " +
+                $"position={position ?? "not exposed"}");
+            result.AppendLine($"Exception[{depth}].StackTrace:");
+            result.AppendLine(current.StackTrace ?? "not exposed");
+
+            current = current.InnerException;
+            depth++;
+        }
+
+        if (depth == 1)
+            result.AppendLine("InnerException: none exposed.");
+
+        result.AppendLine(
+            $"ButtonStateResources diagnostic: {ButtonStateResources.RuntimeDiagnosticSnapshot}");
+        return result.ToString();
+    }
+
+    private static string? ReadOptionalExceptionProperty(
+        Exception exception,
+        params string[] propertyNames)
+    {
+        foreach (string propertyName in propertyNames)
+        {
+            PropertyInfo? property = exception.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Public | BindingFlags.Instance);
+            if (property is null || property.GetIndexParameters().Length != 0)
+                continue;
+
+            try
+            {
+                object? value = property.GetValue(exception);
+                if (value is not null)
+                    return value.ToString();
+            }
+            catch
+            {
+                // Diagnostics must never replace the original XAML failure.
+            }
+        }
+
+        return null;
     }
 
     public static void WriteReport(
