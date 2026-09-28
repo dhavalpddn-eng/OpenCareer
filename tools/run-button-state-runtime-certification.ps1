@@ -12,34 +12,34 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$projectPath = Join-Path $repoRoot "src\OpenCareer.App\OpenCareer.App.csproj"
 $artifactRoot = Join-Path ([System.IO.Path]::GetTempPath()) "OpenCareer-button-state-runtime"
-$publishRoot = Join-Path $artifactRoot "app"
 $reportPath = Join-Path $artifactRoot "button-state-runtime-report.json"
 
 if (Test-Path $artifactRoot) {
     Remove-Item $artifactRoot -Recurse -Force
 }
 
-New-Item -ItemType Directory -Path $publishRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
 
-dotnet publish $projectPath `
-    --configuration $Configuration `
-    --runtime win-x64 `
-    --self-contained false `
-    --output $publishRoot `
-    -p:Platform=$Platform `
-    -p:WindowsAppSDKSelfContained=true `
-    -p:PublishSingleFile=false
+$appRoot = Join-Path $repoRoot "src\OpenCareer.App\bin\$Platform\$Configuration\net10.0-windows10.0.26100.0\win-x64"
+$appPath = Join-Path $appRoot "OpenCareer.App.exe"
+$dashboardXbfPath = Join-Path $appRoot "Views\DashboardPage.xbf"
+$probeXbfPath = Join-Path $appRoot "Diagnostics\ButtonStateRuntimeProbePage.xbf"
 
-if ($LASTEXITCODE -ne 0) {
-    throw "OpenCareer WinUI certification publish failed with exit code $LASTEXITCODE."
+$requiredArtifacts = @($appPath, $dashboardXbfPath, $probeXbfPath)
+$invalidArtifacts = @(
+    $requiredArtifacts | Where-Object {
+        -not (Test-Path $_ -PathType Leaf) -or (Get-Item $_ -ErrorAction SilentlyContinue).Length -eq 0
+    }
+)
+
+if ($invalidArtifacts.Count -gt 0) {
+    throw "Compiled x64 $Configuration OpenCareer output is incomplete. Missing or empty required artifacts: $($invalidArtifacts -join ', ')."
 }
 
-$appPath = Join-Path $publishRoot "OpenCareer.App.exe"
-if (-not (Test-Path $appPath)) {
-    throw "Compiled OpenCareer apphost was not found at $appPath."
-}
+Write-Host "OpenCareer compiled WinUI runtime root: $appRoot"
+Write-Host "Dashboard XBF: $dashboardXbfPath"
+Write-Host "Button-state probe XBF: $probeXbfPath"
 
 $arguments = @(
     "--dev-button-state-runtime-probe",
@@ -54,7 +54,7 @@ if (-not $Interactive) {
 $process = Start-Process `
     -FilePath $appPath `
     -ArgumentList $arguments `
-    -WorkingDirectory $publishRoot `
+    -WorkingDirectory $appRoot `
     -PassThru
 
 if ($Interactive) {
