@@ -4,7 +4,7 @@ using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.Application.Flights;
 
-public sealed class FlightSessionRuntime
+public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
 {
     private readonly FlightSessionCoordinator _coordinator;
     private readonly FlightSessionPersistenceService _persistence;
@@ -18,6 +18,12 @@ public sealed class FlightSessionRuntime
     private Guid? _processorSessionId;
     private bool _processorWasSuspended;
     private DateTimeOffset? _lastTelemetryTimestamp;
+    private FlightStateEvidence? _currentEvidence;
+
+    public FlightStateEvidence? Current =>
+        Volatile.Read(ref _currentEvidence);
+
+    public event Action<FlightStateEvidence?>? EvidenceChanged;
 
     public FlightSessionRuntime(
         FlightSessionCoordinator coordinator,
@@ -89,6 +95,8 @@ public sealed class FlightSessionRuntime
             if (connection.State
                 != SimulatorConnectionState.Connected)
             {
+                ClearFlightCriticalTelemetry();
+
                 if (current.Status
                     == FlightSessionStatus.Suspended)
                 {
@@ -100,58 +108,115 @@ public sealed class FlightSessionRuntime
                         _timeProvider.GetUtcNow(),
                         current.UpdatedAt);
 
+                var disconnectEvidence =
+                    new FlightStateEvidence(
+                        timestamp,
+                        Connected: false,
+                        ContinuityPlausible: false);
+
                 await _persistence
                     .AdvanceAsync(
-                        new FlightSessionAdvance(
-                            new FlightStateEvidence(
-                                timestamp,
-                                Connected: false,
-                                ContinuityPlausible: false)),
+                        new FlightSessionAdvance(disconnectEvidence),
                         cancellationToken)
                     .ConfigureAwait(false);
 
+                Publish(disconnectEvidence);
                 return true;
             }
 
-            AircraftTelemetrySnapshot? telemetry =
-                _telemetrySource.Latest;
+            IReadOnlyList<AircraftTelemetrySnapshot> samples =
+                ReadUnseenTelemetry();
 
-            if (telemetry is null)
-                return false;
-
-            if (_lastTelemetryTimestamp is { } last
-                && telemetry.Timestamp <= last)
+            bool changed = false;
+            foreach (AircraftTelemetrySnapshot telemetry in samples)
             {
-                return false;
-            }
+                current = _coordinator.Current;
+                if (current is null || current.IsTerminal)
+                    break;
 
-            if (telemetry.Timestamp < current.UpdatedAt)
-                return false;
-
-            bool continuityPlausible =
-                _continuityPolicy.IsPlausible(
-                    current,
-                    telemetry);
-
-            if (current.Status
-                    != FlightSessionStatus.Suspended
-                && current.ContinuityAnchor is not null
-                && !continuityPlausible)
-            {
-                await _persistence
-                    .AdvanceAsync(
-                        new FlightSessionAdvance(
-                            new FlightStateEvidence(
-                                telemetry.Timestamp,
-                                Connected: false,
-                                ContinuityPlausible: false)),
+                bool sampleChanged = await ProcessTelemetryAsync(
+                        current,
+                        telemetry,
+                        connection,
                         cancellationToken)
                     .ConfigureAwait(false);
 
-                return true;
+                changed |= sampleChanged;
+
+                if (current.Status != FlightSessionStatus.Suspended
+                    && _coordinator.Current?.Status == FlightSessionStatus.Suspended)
+                {
+                    break;
+                }
             }
 
-            FlightStateEvidence evidence =
+            return changed;
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
+    }
+
+    private IReadOnlyList<AircraftTelemetrySnapshot> ReadUnseenTelemetry()
+    {
+        if (_telemetrySource is IFlightCriticalTelemetrySource critical)
+            return critical.ReadAfter(_lastTelemetryTimestamp);
+
+        return _telemetrySource.Latest is { } latest
+            ? [latest]
+            : [];
+    }
+
+    private async Task<bool> ProcessTelemetryAsync(
+        FlightSession current,
+        AircraftTelemetrySnapshot telemetry,
+        SimulatorConnectionSnapshot connection,
+        CancellationToken cancellationToken)
+    {
+        if (_lastTelemetryTimestamp is { } last
+            && telemetry.Timestamp <= last)
+        {
+            return false;
+        }
+
+        if (telemetry.Timestamp < current.UpdatedAt)
+            return false;
+
+        bool continuityPlausible =
+            _continuityPolicy.IsPlausible(
+                current,
+                telemetry);
+
+        if (current.Status
+                != FlightSessionStatus.Suspended
+            && current.ContinuityAnchor is not null
+            && !continuityPlausible)
+        {
+            var continuityFailureEvidence =
+                new FlightStateEvidence(
+                    telemetry.Timestamp,
+                    Connected: false,
+                    ContinuityPlausible: false);
+
+            await _persistence
+                .AdvanceAsync(
+                    new FlightSessionAdvance(continuityFailureEvidence),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            _lastTelemetryTimestamp = telemetry.Timestamp;
+            Publish(continuityFailureEvidence);
+            return true;
+        }
+
+        FlightTelemetryEvidenceProcessor.State processorState =
+            _evidenceProcessor.CaptureState();
+        FlightStateEvidence evidence;
+
+        try
+        {
+            evidence =
                 _evidenceProcessor.Process(
                     new FlightEvidenceObservation(
                         connection.State,
@@ -211,16 +276,28 @@ public sealed class FlightSessionRuntime
                             observation),
                     cancellationToken)
                 .ConfigureAwait(false);
-
-            _lastTelemetryTimestamp =
-                telemetry.Timestamp;
-
-            return true;
         }
-        finally
+        catch
         {
-            _refreshGate.Release();
+            if (ReferenceEquals(
+                    _coordinator.Current,
+                    current))
+            {
+                _evidenceProcessor.RestoreState(processorState);
+            }
+            else
+            {
+                _lastTelemetryTimestamp = telemetry.Timestamp;
+            }
+
+            throw;
         }
+
+        _lastTelemetryTimestamp =
+            telemetry.Timestamp;
+
+        Publish(evidence);
+        return true;
     }
 
     private bool ShouldCaptureTrackPoint(
@@ -336,6 +413,11 @@ public sealed class FlightSessionRuntime
             _evidenceProcessor.RestoreContext(session);
             _processorSessionId = session.SessionId;
 
+            if (sessionChanged || newlySuspended)
+            {
+                ClearFlightCriticalTelemetry();
+            }
+
             if (sessionChanged)
                 _lastTelemetryTimestamp = null;
         }
@@ -350,7 +432,32 @@ public sealed class FlightSessionRuntime
         _processorSessionId = null;
         _processorWasSuspended = false;
         _lastTelemetryTimestamp = null;
+        ClearFlightCriticalTelemetry();
         _evidenceProcessor.Reset();
+        ClearPublishedEvidence();
+    }
+
+    private void ClearFlightCriticalTelemetry()
+    {
+        if (_telemetrySource is IFlightCriticalTelemetrySource critical)
+            critical.Clear();
+    }
+
+    private void ClearPublishedEvidence()
+    {
+        FlightStateEvidence? previous =
+            Interlocked.Exchange(
+                ref _currentEvidence,
+                null);
+
+        if (previous is not null)
+            EvidenceChanged?.Invoke(null);
+    }
+
+    private void Publish(FlightStateEvidence evidence)
+    {
+        Volatile.Write(ref _currentEvidence, evidence);
+        EvidenceChanged?.Invoke(evidence);
     }
 
     private static DateTimeOffset Max(

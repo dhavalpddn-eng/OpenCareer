@@ -1,4 +1,5 @@
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
@@ -210,6 +211,159 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task CareerCompletionActionEnablesOnlyWhenAuthoritativeInputsAreReady()
+    {
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete:
+                            false,
+                        CareerJobCompletionInputState.SettlementCostsUnavailable,
+                        "Actual settlement costs are unavailable.")
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence:
+                    null,
+                careerReadiness:
+                    null,
+                action,
+                logger:
+                    null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Assert.False(
+            viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "cost",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+
+        action.Availability =
+            new(
+                CanComplete:
+                    true,
+                CareerJobCompletionInputState.Ready,
+                "Authoritative completion inputs are ready.");
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Assert.True(
+            viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "ready",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CareerCompletionActionDelegatesOnceAndDisablesAfterSuccess()
+    {
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete:
+                            true,
+                        CareerJobCompletionInputState.Ready,
+                        "Authoritative completion inputs are ready.")
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence:
+                    null,
+                careerReadiness:
+                    null,
+                action,
+                logger:
+                    null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        Assert.True(
+            viewModel.CanCompleteCareerFlight);
+
+        await viewModel.CompleteCareerFlightAsync();
+
+        Assert.Equal(
+            1,
+            action.CompleteCount);
+        Assert.False(
+            viewModel.CanCompleteCareerFlight);
+        Assert.False(
+            viewModel.IsCareerCompletionBusy);
+        Assert.Contains(
+            "completed",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CareerAbandonActionUsesVerifiedIdentityAndDisablesAfterSuccess()
+    {
+        Guid sessionId =
+            Guid.Parse(
+                "aaaaaaaa-0000-0000-0000-000000000001");
+        Guid contractId =
+            Guid.Parse(
+                "aaaaaaaa-0000-0000-0000-000000000002");
+
+        var action =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned.")
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: null,
+                careerAbandonAction: action,
+                logger: null);
+
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+
+        Assert.True(
+            await viewModel.AbandonCurrentFlightAsync());
+
+        Assert.Equal(1, action.AbandonCount);
+        Assert.Equal(sessionId, action.LastSessionId);
+        Assert.Equal(contractId, action.LastContractId);
+        Assert.False(viewModel.CanAbandonCurrentFlight);
+        Assert.False(viewModel.IsCareerAbandonBusy);
+        Assert.Contains(
+            "no completion rewards",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void MissingRuntimeIsDistinguishedFromWaitingForSimulator()
     {
         var connection = new TestConnection
@@ -262,6 +416,80 @@ public sealed class ShellViewModelTests
             true,
             paused,
             false);
+
+    private sealed class FakeCareerCompletionAction
+        : ICareerJobCompletionAction
+    {
+        public CareerJobCompletionActionAvailability Availability { get; set; } =
+            new(
+                CanComplete:
+                    false,
+                CareerJobCompletionInputState.NoCareerFlight,
+                "No career flight.");
+
+        public int CompleteCount { get; private set; }
+
+        public Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(
+                Availability);
+        }
+
+        public Task CompleteAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CompleteCount++;
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeCareerAbandonAction
+        : ICareerFlightAbandonAction
+    {
+        public CareerFlightAbandonAvailability Availability { get; set; } =
+            new(
+                CanAbandon: false,
+                CareerFlightAbandonAvailabilityState.Unavailable,
+                SessionId: null,
+                ContractId: null,
+                "No career flight.");
+
+        public int AbandonCount { get; private set; }
+        public Guid? LastSessionId { get; private set; }
+        public Guid? LastContractId { get; private set; }
+
+        public Task<CareerFlightAbandonAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Availability);
+        }
+
+        public Task<CareerFlightAbandonResult> AbandonAsync(
+            Guid expectedSessionId,
+            Guid expectedContractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AbandonCount++;
+            LastSessionId = expectedSessionId;
+            LastContractId = expectedContractId;
+
+            return Task.FromResult(
+                new CareerFlightAbandonResult(
+                    CareerFlightAbandonStatus.Abandoned,
+                    expectedSessionId,
+                    expectedContractId,
+                    SessionWasAlreadyCancelled: false,
+                    ContractWasAlreadyCancelled: false,
+                    ReservationWasAlreadyReleased: false));
+        }
+    }
 
     private sealed class TestConnection : ISimulatorConnection
     {
