@@ -67,67 +67,6 @@ internal sealed record ButtonStateRuntimeProbeOptions(
     }
 }
 
-public sealed partial class ButtonStateRuntimeProbePage : Page
-{
-    private readonly Button _diagnosticPrimaryButton = new();
-    private readonly Button _diagnosticSecondaryButton = new();
-    private readonly Button _diagnosticDangerButton = new();
-    private readonly Button _diagnosticStockLightButton = new();
-    private readonly Button _diagnosticStockDarkButton = new();
-    private readonly TextBlock _diagnosticStatusText = new();
-    private readonly ToggleSwitch _diagnosticDisabledToggle = new();
-
-    public ButtonStateRuntimeProbePage()
-    {
-        // Diagnostics-only boundary test: construct a real Page/control tree
-        // without loading ButtonStateRuntimeProbePage.xaml.
-        var panel = new StackPanel();
-        panel.Children.Add(_diagnosticPrimaryButton);
-        panel.Children.Add(_diagnosticSecondaryButton);
-        panel.Children.Add(_diagnosticDangerButton);
-        panel.Children.Add(_diagnosticDisabledToggle);
-        panel.Children.Add(_diagnosticStatusText);
-        panel.Children.Add(_diagnosticStockLightButton);
-        panel.Children.Add(_diagnosticStockDarkButton);
-        Content = panel;
-    }
-
-    public Button PrimaryButton => _diagnosticPrimaryButton;
-    public Button SecondaryButton => _diagnosticSecondaryButton;
-    public Button DangerButton => _diagnosticDangerButton;
-    public Button StockLightButton => _diagnosticStockLightButton;
-    public Button StockDarkButton => _diagnosticStockDarkButton;
-    public TextBlock StatusText => _diagnosticStatusText;
-
-    internal SolidColorBrush GetExpectedBrush(string token)
-    {
-        string elementName = $"Expected{token}";
-        if (FindName(elementName) is Border border &&
-            border.Background is SolidColorBrush brush)
-        {
-            return brush;
-        }
-
-        throw new InvalidDataException(
-            $"Compiled probe element '{elementName}' did not resolve to a SolidColorBrush.");
-    }
-
-    internal void ShowResult(ButtonStateRuntimeProbeReport report)
-    {
-        StatusText.Text = report.Success
-            ? "PASS — runtime resources, stock template, and all four visual states resolved."
-            : $"FAIL — {report.Failure}";
-    }
-
-    private void DisabledToggle_Toggled(object sender, RoutedEventArgs e)
-    {
-        bool isEnabled = !_diagnosticDisabledToggle.IsOn;
-        PrimaryButton.IsEnabled = isEnabled;
-        SecondaryButton.IsEnabled = isEnabled;
-        DangerButton.IsEnabled = isEnabled;
-    }
-}
-
 internal sealed record ButtonStateRuntimeProbeReport(
     int SchemaVersion,
     bool Success,
