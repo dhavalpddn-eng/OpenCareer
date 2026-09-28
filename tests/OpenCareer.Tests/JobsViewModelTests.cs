@@ -500,6 +500,11 @@ public sealed class JobsViewModelTests
         Assert.Equal(0, action.AvailabilityCount);
         await viewModel.SelectAircraftAsync("fixture-aircraft");
         Assert.Equal(1, action.AvailabilityCount);
+        IReadOnlyList<CareerJobAircraftOption> retainedOptions = viewModel.AircraftOptions;
+        CareerJobAircraftOption retainedSelection = Assert.IsType<CareerJobAircraftOption>(
+            viewModel.SelectedAircraftOption);
+        var notifications = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
         for (int i = 0; i < 5; i++)
         {
             discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
@@ -507,6 +512,10 @@ public sealed class JobsViewModelTests
             await viewModel.RefreshAircraftAndReadinessAsync();
             AssertReady(viewModel, "fixture-aircraft");
         }
+        Assert.Same(retainedOptions, viewModel.AircraftOptions);
+        Assert.Same(retainedSelection, viewModel.SelectedAircraftOption);
+        Assert.DoesNotContain(nameof(JobsViewModel.AircraftOptions), notifications);
+        Assert.DoesNotContain(nameof(JobsViewModel.SelectedAircraftId), notifications);
         Assert.Equal(1, action.AvailabilityCount);
         discovery.Current = new(InstalledAircraftDiscoveryAvailability.Available,
             [Installed("fixture-aircraft", "Fixture Aircraft"), Installed("aircraft-b", "Aircraft B")]);
@@ -516,6 +525,47 @@ public sealed class JobsViewModelTests
         Assert.Equal(3, action.AvailabilityCount);
         await viewModel.RefreshAircraftAndReadinessAsync();
         Assert.Equal(3, action.AvailabilityCount);
+    }
+
+    [Fact]
+    public async Task RealCatalogChangesRefreshOptionsOnceAndPreserveOnlyPresentSelection()
+    {
+        var discovery = new FakeDiscovery();
+        var viewModel = SelectionViewModel(discovery);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        var notifications = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+
+        async Task ApplyAndAssertSingleOptionsRefresh(params AircraftRegistryObservation[] aircraft)
+        {
+            notifications.Clear();
+            discovery.Current = new(
+                InstalledAircraftDiscoveryAvailability.Available,
+                aircraft);
+            await viewModel.RefreshAircraftAndReadinessAsync();
+            Assert.Single(notifications, static name =>
+                name == nameof(JobsViewModel.AircraftOptions));
+        }
+
+        await ApplyAndAssertSingleOptionsRefresh(
+            Installed("fixture-aircraft", "Fixture Aircraft"),
+            Installed("aircraft-b", "Aircraft B"));
+        Assert.Equal("fixture-aircraft", viewModel.SelectedAircraftId);
+
+        await ApplyAndAssertSingleOptionsRefresh(
+            Installed("fixture-aircraft", "Renamed Fixture Aircraft"),
+            Installed("aircraft-b", "Aircraft B"));
+        Assert.Equal("fixture-aircraft", viewModel.SelectedAircraftId);
+
+        await ApplyAndAssertSingleOptionsRefresh(
+            Installed("fixture-aircraft", "Renamed Fixture Aircraft"));
+        Assert.Equal("fixture-aircraft", viewModel.SelectedAircraftId);
+
+        await ApplyAndAssertSingleOptionsRefresh(
+            Installed("aircraft-b", "Aircraft B"));
+        Assert.Null(viewModel.SelectedAircraftId);
+        Assert.False(Assert.Single(viewModel.Offers).CanStart);
     }
 
     [Fact]

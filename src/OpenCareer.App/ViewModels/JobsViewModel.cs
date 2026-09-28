@@ -476,12 +476,14 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 .ReadAsync(cancellationToken)
                 .ConfigureAwait(true);
 
-        bool discoveryChanged = _aircraftDiscoveryAvailable != snapshot.IsAvailable
-            || (snapshot.IsAvailable && !_aircraftOptions.SequenceEqual(snapshot.Aircraft));
+        bool availabilityChanged = _aircraftDiscoveryAvailable != snapshot.IsAvailable;
+        bool optionsChanged = snapshot.IsAvailable
+            && !_aircraftOptions.SequenceEqual(snapshot.Aircraft);
+        bool discoveryChanged = availabilityChanged || optionsChanged;
         _aircraftDiscoveryAvailable = snapshot.IsAvailable;
         // Unavailable is uncertainty, not removal. Retain the visual choice, but never
         // evaluate/start with it until authoritative current discovery is available again.
-        if (snapshot.IsAvailable)
+        if (optionsChanged)
             SetAircraftOptions(snapshot.Aircraft);
 
         SetField(
