@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-09-18 against branch head `155d5efe2103f24f5ce47317016a9546e1151adf`.
+Last reconciled: 2026-09-19 with current integration branch plus military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -35,7 +35,7 @@ flowchart LR
     C6 --> C7["7. Persistent Economy<br/>ACTIVE FOUNDATION"]
     C7 --> C8["8. Dealers + Ownership<br/>ACTIVE FOUNDATION"]
     C8 --> C9["9. Maintenance + Company<br/>PLANNED"]
-    C9 --> C10["10. Military + Events<br/>ACTIVE DESIGN"]
+    C9 --> C10["10. Military + Events<br/>ACTIVE IMPLEMENTATION"]
     C10 --> C11["11. Balance + Release<br/>PLANNED"]
 
     classDef complete fill:#173b2a,stroke:#52D273,color:#ffffff,stroke-width:2px;
@@ -426,7 +426,7 @@ Exit gate: maintenance, staffing, facilities and geography affect availability/p
 
 # Chapter 10 — Military/government careers, simulated conflict and special events
 
-Chapter status: **ACTIVE DESIGN / PLANNED IMPLEMENTATION**
+Chapter status: **CAMPAIGN CORE COMPLETE — INTEGRATIONS / ACCEPTANCE PENDING ON PR #10; EXACT-HEAD LINUX/WINDOWS GREEN**
 
 ## Completed design/foundation
 
@@ -438,32 +438,88 @@ Chapter status: **ACTIVE DESIGN / PLANNED IMPLEMENTATION**
 - [x] Define fundamental combat boundary: MSFS supplies flight telemetry; OpenCareer simulates all combat/threat/damage/world effects.
 - [x] Require fictionalized/abstracted conflict scenarios rather than recreating real tragedies as entertainment.
 - [x] Existing world-event engine can provide deterministic event foundations.
+- [x] Implement versioned deterministic conflict-world state.
+- [x] Implement friendly/hostile/neutral ground-unit state with strength, readiness and pressure.
+- [x] Implement geographic sector control and intelligence-confidence state.
+- [x] Implement derived front-line snapshot from contested sector state.
+- [x] Implement friendly/hostile simulated air units with deterministic movement.
+- [x] Implement air-defense and interceptor threat envelopes linked to simulated source units.
+- [x] Generate CAS and suppression support requests from simulated battlefield pressure.
+- [x] Generate reconnaissance, logistics and patrol requests from intelligence/readiness/control state.
+- [x] Generate escort/intercept requests from simulated air activity.
+- [x] Reserve/close support requests so one active request cannot be accepted twice.
+- [x] Implement CAS/suppression accept -> ingress -> on-station -> authorized action -> egress -> objective-complete lifecycle.
+- [x] Implement reconnaissance, logistics and patrol telemetry-driven objective lifecycles.
+- [x] Implement escort and intercept telemetry-driven objective lifecycles.
+- [x] Validate mission windows from normalized player telemetry while rejecting pause/slew and invalid on-ground/airborne conditions.
+- [x] Implement abstract precision/suppression/recon effects entirely inside OpenCareer.
+- [x] Implement abstract intercept effects entirely inside OpenCareer.
+- [x] Implement player threat exposure from normalized telemetry.
+- [x] Implement deterministic simulated threat resolution and OpenCareer-only aircraft-damage state.
+- [x] Feed mission effects back into unit strength/readiness, sector control/intelligence and linked threat severity.
+- [x] Implement military affiliation, qualification and assigned-aircraft authorization policy.
+- [x] Ensure installed/owned military-capable aircraft alone never grants military mission access.
+- [x] Implement bounded military trust/progression result updates.
+- [x] Add explicit operation-resolution input/outcome contracts with deterministic Success / PartialSuccess / Failure / Aborted resolution.
+- [x] Add stable operation-resolution keys and duplicate-completion protection.
+- [x] Add deterministic faction influence, campaign progress, thresholded territory pressure, military reputation and conflict-resource consequences.
+- [x] Add application-layer consequence orchestration that produces one validated immutable result.
+- [x] Persist immutable operation outcomes + applied consequence state in SQLite schema v5 with restart-safe duplicate rejection.
+- [x] Add failure compensation/transaction behavior so failed consequence persistence is retryable and cannot double-apply state.
+- [x] Verify reconnect/replay safety so repeated completed-flight events do not reapply campaign, territory, reputation or resource effects.
+- [x] Add end-to-end integration coverage for success, partial success, failure, abort, invalid mission, already-resolved mission, SQLite restart and rollback/retry.
+- [x] Implement seeded fictional theater generation with repeatable ground/air units, sectors and threats.
+- [x] Implement versioned campaign checkpoints for world, military career, simulated player damage and active mission state.
+- [x] Persist conflict campaigns in the shared SQLite database with schema migration and optimistic revision protection.
+- [x] Restore reserved support requests and active mission state from a persisted checkpoint without duplicating mission ownership.
+- [x] Persist mission-stage progress and simulated threat outcomes so restart recovery does not replay damage/effects.
+- [x] Implement strategic campaign phase, momentum and deterministic objectives for control, intelligence, readiness and threat reduction.
+- [x] Coordinate world advancement and strategic-state persistence through `ConflictCampaignCoordinator`.
+- [x] Enforce military authorization at the dispatch/acceptance boundary so lower-level mission services cannot bypass qualification/assignment rules.
+- [x] Project campaign/front/threat/support/active-operation data through an application snapshot for the future Military/Government UI.
+- [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
+- [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
+
+Verification note: campaign-core implementation head `16cda14981bc6284e4f33833e88aa8289ff46149` is green in exact-head Linux PR CI and exact-head Windows CI. This boundary includes production mission-service consequence wiring, deterministic phase-driven faction-posture evolution, legacy-identity evolution coverage, and the bounded 96-step deterministic campaign evolution stress test.
 
 ## Remaining
 
-- [ ] Define deterministic conflict/world-state model.
-- [ ] Define factions/control/front representation.
-- [ ] Define simulated ground-unit state.
-- [ ] Define air-defense/threat model.
-- [ ] Define simulated friendly/enemy air activity.
-- [ ] Generate support requests from simulated battle needs.
-- [ ] Implement CAS mission lifecycle.
-- [ ] Implement surveillance/recon mission lifecycle.
-- [ ] Implement logistics/transport support.
-- [ ] Implement patrol/intercept/escort objectives where authorized.
-- [ ] Implement SEAD/air-defense suppression abstraction if retained in scope.
-- [ ] Implement attack-run/action validation from real player telemetry.
-- [ ] Implement virtual weapon/effect resolution entirely inside OpenCareer.
-- [ ] Implement simulated threat-to-player resolution from telemetry.
-- [ ] Implement OpenCareer-only damage/consequence state.
-- [ ] Feed mission results back into simulated battle/front state.
-- [ ] Prevent real-world current conflict data from becoming authoritative gameplay.
-- [ ] Add military/reserve onboarding/qualification progression.
-- [ ] Add mission-specific deterministic tests.
-- [ ] Implement production Military/Government/Conflict UI.
+**Campaign-core completion boundary:** reached at `16cda14981bc6284e4f33833e88aa8289ff46149`. No additional standalone campaign mechanic slice is queued. Remaining unchecked work below is dependency-driven integration, product acceptance, or later balance/live-runtime validation.
 
-Exit gate: distinct military/government mission families have deterministic validation, authorization filters, simulated consequences and no dependency on nonexistent MSFS combat APIs.
+- [x] Wire automatic production startup/resume so app startup recovers the most recently saved military conflict campaign without a manual orchestration call.
+- [x] Add database-consistent backup snapshot integration for conflict campaign checkpoints using SQLite backup semantics rather than copying the live WAL database files.
+- [x] Add validated restore integration from an OpenCareer backup archive: stage and integrity-check the SQLite image first, then apply it on restart before SQLite-backed state is recovered, with rollback protection.
+- [ ] Expose backup selection/confirmation in Settings so the validated restore backend is user-accessible without manual/internal invocation.
+- [x] Add deterministic fictional operation identity and distinct friendly/hostile faction names/short codes while keeping the underlying simulation sides generic and reusable.
+- [x] Add the first bounded long-term campaign-cycle layer: nearby logistics recovery for ground units, theater-logistics air readiness recovery, momentum-based sector consolidation and linked-threat resynchronization.
+- [x] Add finite replacement reserves for both sides; replacements require operational logistics, reinforce surviving damaged ground units deterministically and consume the reserve.
+- [x] Add persisted campaign outcomes: Victory, Defeat, Stalemate and Ceasefire, with sustained-secured, mutual-exhaustion and prolonged-balanced-state rules.
+- [x] Prevent telemetry-only mission progress saves from incrementing campaign evaluation counters and prevent new military mission acceptance after a terminal campaign outcome.
+- [x] Add successor-campaign transition after terminal outcomes while preserving military career state, simulated player damage and a persistent completed-operation history chain.
+- [x] Add deterministic successor-operation offer planning across fictional theater candidates, avoiding an immediate theater repeat when alternatives exist and previewing the exact operation identity acceptance will create.
+- [x] Add an application-layer successor-operation flow with `IConflictTheaterCatalog`, offer projection, accept/decline/reconsider actions, stale-offer rejection and runtime-state replacement after acceptance.
+- [x] Persist completed-operation history through SQLite and expose it in the Military/Government operations snapshot.
+- [x] Display read-only archived operation history in Military/Government, with deterministic newest-first ordering, empty/reset states and SQLite recovery coverage.
+- [x] Add completed-operation drill-down selection/detail UX: campaign-ID-stable selection across polling/current-campaign replacement/successor activation, safe stale-history clearing, persisted terminal posture projection, native keyboard/focus behavior, long-text handling and read-only archive labeling.
+- [x] Verify completed-operation drill-down across real SQLite restart with exact field fidelity and a before/after `conflict_campaigns` fingerprint proving select/refresh/clear/reselect performs no database writes (`018e1da5`; Linux 402/402 xUnit + 29/29 SimLab; latest production Windows head `555b9dc7` WinUI/LiveProbe 0 errors + 402/402 xUnit).
+- [x] Add deterministic faction operational posture (Defensive / Aggressive / LogisticsFocused / AirFocused) and use it to bias replacement priority plus support-request thresholds/urgency/range without making AI authoritative.
+- [x] Add the user-facing Military/Government successor-operation presentation with Accept / Decline / Reconsider routed through the application transition service.
+- [x] Verify successor UI storage-failure/cancellation recovery, stable action feedback, stale-campaign refresh, duplicate-click protection and SQLite successor recovery at `4c63e365` in Linux/Windows CI; local MSBuild execution was blocked by workspace socket restrictions.
+- [x] Add deterministic faction-posture evolution across campaign phase transitions while preserving terminal/outcome posture semantics.
+- [ ] Integrate military authorization with authoritative player-career persistence/onboarding.
+- [x] Wire `PersistedOperationConsequenceCoordinator` into `MilitaryCampaignMissionService` completion/failure and replace the legacy direct `MilitaryCareerProgression.RecordOperationResult` update so reputation cannot be awarded twice.
+- [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
+- [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
+- [x] Implement the first production Military/Government WinUI screen against conflict application snapshots/services; it shows campaign/faction/posture/outcome/reserve/front/support/objective state without UI-owned game logic.
+- [x] Add read-only completed-operation history, schematic Operational Map and deterministic Communications feed to Conflict Operations without UI-owned conflict authority.
+- [ ] Expand Conflict Operations UI with deeper drill-down and complete local visual/accessibility acceptance.
+- [x] Add bounded deterministic long-run campaign evolution stress coverage with replay equality and invariant checks (`16cda14981bc6284e4f33833e88aa8289ff46149`).
+- [ ] Add large deterministic campaign balance/playtesting batches for later tuning.
+- [x] Record Linux + Windows validation for code head `b4e3ca81`: 376/376 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
+- [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
+- [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 
+Exit gate: distinct military/government mission families have deterministic validation, authorization filters, persistent simulated consequences, verified tests and no dependency on nonexistent MSFS combat APIs.
 ---
 
 # Chapter 11 — Balance, performance, packaging and release readiness
@@ -564,7 +620,10 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement employer rank/standing lifecycle with deterministic probation, demotion, suspension and firing/termination plus recovery/rehire rules.
 - [ ] Implement Finances screen.
 - [ ] Implement Markets screen.
-- [ ] Implement Military / Government screen.
+- [x] Implement first Military / Government screen using the production design system and application-layer conflict projections/actions.
+- [x] Add a read-only schematic Operational Map to Military/Government using existing conflict snapshot units/threats/support targets, with accessible text/automation labels and no UI-owned conflict rules.
+- [x] Add deterministic Communications panel from current campaign/support/threat/active-operation snapshot state; no AI or fabricated event history.
+- [ ] Complete local visual/accessibility acceptance of the Military/Government history/drill-down and surrounding operational surface.
 - [x] Implement production Logbook / Debrief screen with committed-flight list, aggregate totals, filters, multi-leg detail, route-track rendering, landing evidence, incidents and settlement summary.
 - [ ] Implement Career screen.
 - [x] Implement production Settings screen.

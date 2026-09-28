@@ -25,14 +25,47 @@
     <ProjectReference Include="../../src/OpenCareer.SimConnect/OpenCareer.SimConnect.csproj" />
     <ProjectReference Include="../../tools/OpenCareer.TraceAnalysis/OpenCareer.TraceAnalysis.csproj" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/ShellViewModel.cs" Link="ViewModels/ShellViewModel.cs" />
+    <Compile Include="../../src/OpenCareer.App/ViewModels/JobsViewModel.cs" Link="ViewModels/JobsViewModel.cs" />
+    <Compile Include="../../src/OpenCareer.App/ViewModels/CareerViewModel.cs" Link="ViewModels/CareerViewModel.cs" />
+    <Compile Include="../../src/OpenCareer.App/ViewModels/MilitaryGovernmentViewModel.cs" Link="ViewModels/MilitaryGovernmentViewModel.cs" />
+    <Compile Include="../../src/OpenCareer.App/Services/OpenCareerDataPaths.cs" Link="Services/OpenCareerDataPaths.cs" />
+    <Compile Include="../../src/OpenCareer.App/Services/OpenCareerDevelopmentDataProfile.cs" Link="Services/OpenCareerDevelopmentDataProfile.cs" />
+    <Compile Include="../../src/OpenCareer.App/Services/KjfkLiveTestDiagnosticJournal.cs" Link="Services/KjfkLiveTestDiagnosticJournal.cs" />
+    <Compile Include="../../src/OpenCareer.App/Services/KjfkLiveTestDiagnosticsService.cs" Link="Services/KjfkLiveTestDiagnosticsService.cs" />
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="../../src/OpenCareer.App/Views/JobsPage.xaml;../../src/OpenCareer.App/Views/JobsPage.xaml.cs;../../src/OpenCareer.App/Views/CurrentFlightPage.xaml;../../src/OpenCareer.App/Views/CurrentFlightPage.xaml.cs;../../src/OpenCareer.App/App.xaml.cs;../../src/OpenCareer.App/Services/PlanningServiceRegistration.cs;../../src/OpenCareer.App/Services/KjfkLiveTestDiagnosticJournal.cs;../../src/OpenCareer.App/Services/KjfkLiveTestDiagnosticsService.cs;../../tools/run-kjfk-live-test.ps1"
+          Link="UiContracts/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/OpenCareer.App/Styles/DesignTokens.xaml"
           Link="UiDesign/DesignTokens.xaml"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/OpenCareer.App/Styles/ComponentStyles.xaml"
           Link="UiDesign/ComponentStyles.xaml"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/Styles/*ButtonStates.xaml"
+          Link="UiDesign/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/Styles/ButtonStateResources.cs"
+          Link="UiDesign/ButtonStateResources.cs"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/App.xaml"
+          Link="UiDesign/App.xaml"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/MainWindow.xaml"
+          Link="UiButtons/MainWindow.xaml"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/MainWindow.xaml.cs"
+          Link="UiButtons/MainWindow.xaml.cs"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/Views/*.xaml"
+          Exclude="../../src/OpenCareer.App/Views/JobsPage.xaml;../../src/OpenCareer.App/Views/CurrentFlightPage.xaml"
+          Link="UiButtons/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/OpenCareer.App/Views/*.xaml.cs"
+          Exclude="../../src/OpenCareer.App/Views/JobsPage.xaml.cs;../../src/OpenCareer.App/Views/CurrentFlightPage.xaml.cs"
+          Link="UiButtons/%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

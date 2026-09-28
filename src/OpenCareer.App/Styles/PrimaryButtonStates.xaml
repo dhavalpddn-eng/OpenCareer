@@ -1,0 +1,62 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Loaded into one Primary Button's local Resources by ButtonStateResources. -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="ms-appx:///Styles/DesignTokens.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+            <StaticResource x:Key="ButtonBackground" ResourceKey="OpenCareerNavyBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="OpenCareerNavyRaisedBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="OpenCareerNavyPressedBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="OpenCareerInkMutedBrush" />
+
+            <StaticResource x:Key="ButtonForeground" ResourceKey="OpenCareerShellTextBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OpenCareerShellTextBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OpenCareerShellTextBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="OpenCareerPaperMutedBrush" />
+
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="OpenCareerSteelBorderBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="OpenCareerSteelHighlightBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="OpenCareerNavyPressedBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="OpenCareerDisabledBrush" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+            <StaticResource x:Key="ButtonBackground" ResourceKey="OpenCareerNavyBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="OpenCareerNavyRaisedBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="OpenCareerNavyPressedBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="OpenCareerInkMutedBrush" />
+
+            <StaticResource x:Key="ButtonForeground" ResourceKey="OpenCareerShellTextBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OpenCareerShellTextBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OpenCareerShellTextBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="OpenCareerPaperMutedBrush" />
+
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="OpenCareerSteelBorderBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="OpenCareerSteelHighlightBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="OpenCareerNavyPressedBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="OpenCareerDisabledBrush" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="HighContrast">
+            <StaticResource x:Key="ButtonBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+
+            <StaticResource x:Key="ButtonForeground" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="SystemControlHighlightBaseHighBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="SystemControlHighlightBaseHighBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="SystemControlDisabledBaseMediumLowBrush" />
+
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SystemControlForegroundTransparentBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="SystemColorHighlightColorBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="SystemControlDisabledTransparentBrush" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

@@ -12,10 +12,15 @@ public sealed record FlightEvidenceProcessorOptions(
     double ApproachMaximumAglFeet = 2_000,
     double ApproachMaximumVerticalSpeedFeetPerMinute = -100,
     double LandingRolloutMaximumGroundSpeedKnots = 25,
-    double ParkingMaximumGroundSpeedKnots = 1)
+    double ParkingMaximumGroundSpeedKnots = 1,
+    double BounceMaximumAirborneSeconds = 5,
+    double BounceMaximumAglFeet = 50)
 {
     public void Validate()
     {
+        ValidateNonNegativeFinite(BounceMaximumAirborneSeconds, nameof(BounceMaximumAirborneSeconds));
+        ValidateNonNegativeFinite(BounceMaximumAglFeet, nameof(BounceMaximumAglFeet));
+
         if (StableTelemetrySamples < 1)
             throw new ArgumentOutOfRangeException(nameof(StableTelemetrySamples));
 

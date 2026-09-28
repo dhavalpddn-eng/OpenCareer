@@ -196,7 +196,8 @@ public static class FlightTrackingStateMachine
             return current with
             {
                 State = FlightTrackingState.LandingEpisode,
-                LandingEpisodeCount = current.LandingEpisodeCount + 1
+                LandingEpisodeCount = current.LandingEpisodeCount + 1,
+                BounceCount = current.BounceCount + (evidence.BounceRecontact ? 1 : 0)
             };
         }
 
@@ -222,7 +223,8 @@ public static class FlightTrackingStateMachine
             return current with
             {
                 State = FlightTrackingState.LandingEpisode,
-                LandingEpisodeCount = current.LandingEpisodeCount + 1
+                LandingEpisodeCount = current.LandingEpisodeCount + 1,
+                BounceCount = current.BounceCount + (evidence.BounceRecontact ? 1 : 0)
             };
         }
 

@@ -26,12 +26,17 @@
 
     <Color x:Key="OpenCareerNavyColor">#29475C</Color>
     <Color x:Key="OpenCareerNavyRaisedColor">#365E77</Color>
+    <Color x:Key="OpenCareerNavyPressedColor">#1E384A</Color>
+    <Color x:Key="OpenCareerSecondaryPressedColor">#829DAC</Color>
     <Color x:Key="OpenCareerSelectionColor">#9FB7C7</Color>
     <Color x:Key="OpenCareerBrassColor">#B58A48</Color>
 
     <Color x:Key="OpenCareerSuccessColor">#3E7E57</Color>
     <Color x:Key="OpenCareerWarningColor">#C58327</Color>
     <Color x:Key="OpenCareerDangerColor">#B8453E</Color>
+    <Color x:Key="OpenCareerDangerRaisedColor">#C04B44</Color>
+    <Color x:Key="OpenCareerDangerPressedColor">#8F302B</Color>
+    <Color x:Key="OpenCareerDangerDisabledColor">#6B6261</Color>
     <Color x:Key="OpenCareerDisabledColor">#7B878E</Color>
     <Color x:Key="OpenCareerTutorialScrimColor">#B30A1118</Color>
 
@@ -58,12 +63,17 @@
 
     <SolidColorBrush x:Key="OpenCareerNavyBrush" Color="{StaticResource OpenCareerNavyColor}" />
     <SolidColorBrush x:Key="OpenCareerNavyRaisedBrush" Color="{StaticResource OpenCareerNavyRaisedColor}" />
+    <SolidColorBrush x:Key="OpenCareerNavyPressedBrush" Color="{StaticResource OpenCareerNavyPressedColor}" />
+    <SolidColorBrush x:Key="OpenCareerSecondaryPressedBrush" Color="{StaticResource OpenCareerSecondaryPressedColor}" />
     <SolidColorBrush x:Key="OpenCareerSelectionBrush" Color="{StaticResource OpenCareerSelectionColor}" />
     <SolidColorBrush x:Key="OpenCareerBrassBrush" Color="{StaticResource OpenCareerBrassColor}" />
 
     <SolidColorBrush x:Key="OpenCareerSuccessBrush" Color="{StaticResource OpenCareerSuccessColor}" />
     <SolidColorBrush x:Key="OpenCareerWarningBrush" Color="{StaticResource OpenCareerWarningColor}" />
     <SolidColorBrush x:Key="OpenCareerDangerBrush" Color="{StaticResource OpenCareerDangerColor}" />
+    <SolidColorBrush x:Key="OpenCareerDangerRaisedBrush" Color="{StaticResource OpenCareerDangerRaisedColor}" />
+    <SolidColorBrush x:Key="OpenCareerDangerPressedBrush" Color="{StaticResource OpenCareerDangerPressedColor}" />
+    <SolidColorBrush x:Key="OpenCareerDangerDisabledBrush" Color="{StaticResource OpenCareerDangerDisabledColor}" />
     <SolidColorBrush x:Key="OpenCareerDisabledBrush" Color="{StaticResource OpenCareerDisabledColor}" />
     <SolidColorBrush x:Key="OpenCareerTutorialScrimBrush" Color="{StaticResource OpenCareerTutorialScrimColor}" />
 
