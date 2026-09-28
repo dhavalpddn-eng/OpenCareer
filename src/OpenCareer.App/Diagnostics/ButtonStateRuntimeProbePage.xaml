@@ -13,8 +13,7 @@
             <Button x:Name="PrimaryProbeButton" />
             <Button x:Name="SecondaryProbeButton" />
             <Button x:Name="DangerProbeButton" />
-            <ToggleSwitch x:Name="DisabledToggle"
-                          Toggled="DisabledToggle_Toggled" />
+            <ToggleSwitch x:Name="DisabledToggle" />
             <TextBlock x:Name="ProbeStatusText" />
             <Button x:Name="StockLightProbeButton" />
             <Button x:Name="StockDarkProbeButton" />
