@@ -14,6 +14,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $artifactRoot = Join-Path ([System.IO.Path]::GetTempPath()) "OpenCareer-button-state-runtime"
 $reportPath = Join-Path $artifactRoot "button-state-runtime-report.json"
+$stagePath = Join-Path $artifactRoot "button-state-runtime-stages.log"
 
 if (Test-Path $artifactRoot) {
     Remove-Item $artifactRoot -Recurse -Force
@@ -66,10 +67,20 @@ if ($Interactive) {
 
 if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
     $process.Kill($true)
+    if (Test-Path $stagePath) {
+        Write-Host "OpenCareer runtime stage journal:"
+        Get-Content $stagePath | Write-Host
+    }
+
     throw "OpenCareer WinUI runtime certification exceeded $TimeoutSeconds seconds."
 }
 
 $process.Refresh()
+if (Test-Path $stagePath) {
+    Write-Host "OpenCareer runtime stage journal:"
+    Get-Content $stagePath | Write-Host
+}
+
 if ($process.ExitCode -ne 0) {
     if (Test-Path $reportPath) {
         Get-Content $reportPath | Write-Host

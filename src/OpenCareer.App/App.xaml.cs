@@ -521,6 +521,9 @@ public partial class App : Microsoft.UI.Xaml.Application
     private void LaunchButtonStateRuntimeProbe(
         ButtonStateRuntimeProbeOptions options)
     {
+        ButtonStateRuntimeProbeStageJournal.Initialize(options.OutputPath);
+        ButtonStateRuntimeProbeStageJournal.Record(
+            "1. LaunchButtonStateRuntimeProbe entered");
         var page = new ButtonStateRuntimeProbePage();
         bool executed = false;
 
@@ -530,10 +533,16 @@ public partial class App : Microsoft.UI.Xaml.Application
             Content = page,
             Title = "OpenCareer — DEVELOPMENT / TEST — Button State Probe"
         };
+        ButtonStateRuntimeProbeStageJournal.Record(
+            "4. Window created/content assigned");
         _buttonStateRuntimeProbeWindow.Activate();
+        ButtonStateRuntimeProbeStageJournal.Record(
+            "5. Window.Activate returned");
 
         async void OnProbeLoaded(object sender, RoutedEventArgs args)
         {
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "6. Page.Loaded handler entered");
             if (executed)
                 return;
 
@@ -542,6 +551,8 @@ public partial class App : Microsoft.UI.Xaml.Application
 
             ButtonStateRuntimeProbeReport report =
                 await ButtonStateRuntimeProbe.RunAsync(page);
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "9. RunAsync returned");
             page.ShowResult(report);
             CompleteButtonStateRuntimeProbe(options, report, page);
         }
@@ -569,6 +580,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         try
         {
             ButtonStateRuntimeProbe.WriteReport(options.OutputPath, report);
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "10. Report write completed");
         }
         catch (Exception ex)
         {
@@ -581,6 +594,8 @@ public partial class App : Microsoft.UI.Xaml.Application
 
             if (options.AutoClose)
             {
+                ButtonStateRuntimeProbeStageJournal.Record(
+                    "11. Auto-close requested after report-write failure");
                 _buttonStateRuntimeProbeWindow?.Close();
                 Exit();
             }
@@ -591,6 +606,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         Environment.ExitCode = report.Success ? 0 : 1;
         if (options.AutoClose)
         {
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "11. Auto-close requested");
             _buttonStateRuntimeProbeWindow?.Close();
             Exit();
         }

@@ -8,7 +8,11 @@ public sealed partial class ButtonStateRuntimeProbePage : Page
 {
     public ButtonStateRuntimeProbePage()
     {
+        ButtonStateRuntimeProbeStageJournal.Record(
+            "2. ButtonStateRuntimeProbePage constructor entered");
         InitializeComponent();
+        ButtonStateRuntimeProbeStageJournal.Record(
+            "3. InitializeComponent returned");
     }
 
     public Button PrimaryButton => PrimaryProbeButton;

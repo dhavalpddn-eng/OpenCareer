@@ -93,6 +93,45 @@ internal sealed record ButtonVisualStateRuntimeProbeResult(
     string ResolvedForeground,
     string ResolvedBorder);
 
+internal static class ButtonStateRuntimeProbeStageJournal
+{
+    private const string FileName = "button-state-runtime-stages.log";
+    private static string? _path;
+
+    public static void Initialize(string reportPath)
+    {
+        try
+        {
+            string directory = Path.GetDirectoryName(reportPath)
+                ?? Path.GetTempPath();
+            Directory.CreateDirectory(directory);
+            _path = Path.Combine(directory, FileName);
+            File.WriteAllText(_path, string.Empty);
+        }
+        catch
+        {
+            _path = null;
+        }
+    }
+
+    public static void Record(string stage)
+    {
+        try
+        {
+            if (_path is not null)
+            {
+                File.AppendAllText(
+                    _path,
+                    $"{DateTimeOffset.UtcNow:O}\t{stage}{Environment.NewLine}");
+            }
+        }
+        catch
+        {
+            // Runtime-stage diagnostics must not change probe behavior.
+        }
+    }
+}
+
 internal static class ButtonStateRuntimeProbe
 {
     private const int ReportSchemaVersion = 1;
@@ -173,6 +212,8 @@ internal static class ButtonStateRuntimeProbe
     public static async Task<ButtonStateRuntimeProbeReport> RunAsync(
         ButtonStateRuntimeProbePage page)
     {
+        ButtonStateRuntimeProbeStageJournal.Record(
+            "7. ButtonStateRuntimeProbe.RunAsync entered");
         ArgumentNullException.ThrowIfNull(page);
 
         string windowsAppSdkVersion =
@@ -203,17 +244,42 @@ internal static class ButtonStateRuntimeProbe
 
             await Task.Delay(TimeSpan.FromMilliseconds(100));
             page.UpdateLayout();
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8a. Templates applied");
+
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8b. Primary certification entered");
+            ButtonVariantRuntimeProbeResult primary =
+                await CertifyVariantAsync(page, page.PrimaryButton, Expectations[0]);
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8b. Primary certification completed");
+
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8c. Secondary certification entered");
+            ButtonVariantRuntimeProbeResult secondary =
+                await CertifyVariantAsync(page, page.SecondaryButton, Expectations[1]);
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8c. Secondary certification completed");
+
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8d. Danger certification entered");
+            ButtonVariantRuntimeProbeResult danger =
+                await CertifyVariantAsync(page, page.DangerButton, Expectations[2]);
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8d. Danger certification completed");
 
             IReadOnlyList<ButtonVariantRuntimeProbeResult> variants =
-            [
-                await CertifyVariantAsync(page, page.PrimaryButton, Expectations[0]),
-                await CertifyVariantAsync(page, page.SecondaryButton, Expectations[1]),
-                await CertifyVariantAsync(page, page.DangerButton, Expectations[2])
-            ];
+                [primary, secondary, danger];
 
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8e. Isolation/switch checks entered");
             AssertVariantsAreIsolated(variants);
             await AssertVariantSwitchDoesNotLeakAsync(page, page.PrimaryButton);
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8e. Isolation/switch checks completed");
 
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8f. Stock-template/focus/automation checks entered");
             Style stockStyle = page.StockLightButton.Style
                 ?? throw new InvalidDataException(
                     "Compiled probe XAML did not apply DefaultButtonStyle to its stock reference Button.");
@@ -241,6 +307,8 @@ internal static class ButtonStateRuntimeProbe
             AssertNativeButtonAutomation(page.PrimaryButton);
             AssertNativeButtonAutomation(page.SecondaryButton);
             AssertNativeButtonAutomation(page.DangerButton);
+            ButtonStateRuntimeProbeStageJournal.Record(
+                "8f. Stock-template/focus/automation checks completed");
 
             return new ButtonStateRuntimeProbeReport(
                 ReportSchemaVersion,
