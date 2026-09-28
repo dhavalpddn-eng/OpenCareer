@@ -6,8 +6,13 @@ using OpenCareer.SimConnect.Native;
 
 namespace OpenCareer.SimConnect;
 
-public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelemetrySource
+public sealed class SimConnectConnection :
+    ISimulatorConnection,
+    ISimulatorTelemetrySource,
+    IFlightCriticalTelemetrySource
 {
+    internal const int FlightCriticalTelemetryCapacity = 256;
+
     private readonly object _lifecycleGate = new();
     private readonly ISimConnectApi _api;
     private readonly ILogger<SimConnectConnection> _logger;
@@ -15,6 +20,8 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
     private readonly TimeProvider _clock;
     private SimulatorConnectionSnapshot _current = new(SimulatorConnectionState.Disconnected);
     private AircraftTelemetrySnapshot? _latestTelemetry;
+    private readonly BoundedFlightCriticalTelemetryBuffer _flightCriticalTelemetry =
+        new(FlightCriticalTelemetryCapacity);
     private SimConnectLocalWeatherSnapshot? _localWeather;
     private SimConnectAircraftCatalogSnapshot _aircraftCatalog = SimConnectAircraftCatalogSnapshot.Unavailable;
     private string? _currentAircraftTitle;
@@ -42,6 +49,13 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
 
     public SimulatorConnectionSnapshot Current => Volatile.Read(ref _current);
     public AircraftTelemetrySnapshot? Latest => Volatile.Read(ref _latestTelemetry);
+
+    public IReadOnlyList<AircraftTelemetrySnapshot> ReadAfter(
+        DateTimeOffset? exclusiveTimestamp) =>
+        _flightCriticalTelemetry.ReadAfter(exclusiveTimestamp);
+
+    public void Clear() =>
+        _flightCriticalTelemetry.Clear();
     internal SimConnectLocalWeatherSnapshot? LocalWeather => Volatile.Read(ref _localWeather);
     internal SimConnectAircraftCatalogSnapshot AircraftCatalog => Volatile.Read(ref _aircraftCatalog);
     internal string? CurrentAircraftTitle => Volatile.Read(ref _currentAircraftTitle);
@@ -846,8 +860,15 @@ public sealed class SimConnectConnection : ISimulatorConnection, ISimulatorTelem
         _logger.LogInformation("Simulator connection: {State}; issue: {Issue}.", snapshot.State, snapshot.Issue);
     }
 
-    private void PublishTelemetry(AircraftTelemetrySnapshot? snapshot) =>
+    private void PublishTelemetry(AircraftTelemetrySnapshot? snapshot)
+    {
+        if (snapshot is null)
+            _flightCriticalTelemetry.Clear();
+        else
+            _flightCriticalTelemetry.Add(snapshot);
+
         Volatile.Write(ref _latestTelemetry, snapshot);
+    }
 
     private void PublishLocalWeather(SimConnectLocalWeatherSnapshot? snapshot) =>
         Volatile.Write(ref _localWeather, snapshot);

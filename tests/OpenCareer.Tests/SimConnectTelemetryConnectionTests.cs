@@ -65,9 +65,24 @@ public sealed class SimConnectTelemetryConnectionTests
         Assert.True(connection.Latest.Paused);
         Assert.True(connection.Latest.GearDown);
 
+        IFlightCriticalTelemetrySource critical = connection;
+        var buffered =
+            Assert.Single(critical.ReadAfter(null));
+        Assert.Equal(connection.Latest, buffered);
+        critical.Clear();
+        Assert.Empty(critical.ReadAfter(null));
+        Assert.Equal(43.2338, connection.Latest.LatitudeDegrees);
+
+        api.Enqueue(SimConnectPackets.SimObjectData(
+            SimConnectTelemetryDefinition.RequestId,
+            SimConnectTelemetryDefinition.DefinitionId,
+            values));
+        await Until(() => critical.ReadAfter(null).Count == 1);
+
         api.Enqueue(SimConnectPackets.Header(3));
         await Until(() => api.Closed >= 1 && connection.Latest is null);
 
+        Assert.Empty(critical.ReadAfter(null));
         Assert.False(api.OverlapDetected);
         Assert.Single(api.ThreadIds);
     }

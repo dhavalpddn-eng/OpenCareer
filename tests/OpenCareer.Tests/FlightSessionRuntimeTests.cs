@@ -522,6 +522,20 @@ public sealed class FlightSessionRuntimeTests
             active.ContinuityAnchor,
             coordinator.Current?.ContinuityAnchor);
 
+        Assert.False(
+            await runtime.RefreshAsync());
+
+        Assert.Equal(
+            FlightSessionStatus.Suspended,
+            coordinator.Current?.Status);
+
+        telemetry.Latest =
+            Telemetry(
+                Epoch.AddMinutes(2),
+                34,
+                -95,
+                onGround: true);
+
         Assert.True(
             await runtime.RefreshAsync());
 
@@ -766,6 +780,100 @@ public sealed class FlightSessionRuntimeTests
             coordinator.Current?.Tracking.State);
         Assert.False(
             coordinator.Current?.ContinuityAnchor?.OnGround);
+    }
+
+    [Fact]
+    public async Task OrderedCriticalTelemetryPreservesBounceBetweenRuntimePolls()
+    {
+        FlightSession active = ApproachSession();
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+
+        var store = new MemoryStore { Checkpoint = active };
+        var telemetry = new BufferedTestTelemetrySource();
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                new FlightSessionPersistenceService(coordinator, store),
+                new FlightTelemetryEvidenceProcessor(
+                    new FlightEvidenceProcessorOptions(
+                        StableTelemetrySamples: 1,
+                        AirborneConfirmationSamples: 1,
+                        GroundConfirmationSamples: 1)),
+                new FlightContinuityPolicy(),
+                Connected(),
+                telemetry,
+                new FixedTimeProvider(Epoch.AddHours(1)));
+
+        telemetry.Add(Telemetry(Epoch, 30, -95, onGround: true));
+        Assert.False(await runtime.RefreshAsync());
+        Assert.Empty(telemetry.ReadAfter(null));
+
+        var publishedTimestamps = new List<DateTimeOffset>();
+        runtime.EvidenceChanged += evidence =>
+        {
+            if (evidence is not null)
+                publishedTimestamps.Add(evidence.Timestamp);
+        };
+
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(5.5),
+                32,
+                -97,
+                onGround: false,
+                altitudeMsl: 700,
+                groundSpeed: 65,
+                altitudeAgl: 50));
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(6),
+                32,
+                -97,
+                onGround: true,
+                altitudeMsl: 650,
+                groundSpeed: 55));
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(6.25),
+                32.0001,
+                -97.0001,
+                onGround: false,
+                altitudeMsl: 658,
+                groundSpeed: 58,
+                altitudeAgl: 8));
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(6.5),
+                32.0002,
+                -97.0002,
+                onGround: true,
+                altitudeMsl: 650,
+                groundSpeed: 52));
+
+        Assert.True(await runtime.RefreshAsync());
+
+        FlightSession retained = Assert.IsType<FlightSession>(coordinator.Current);
+        Assert.Equal(Epoch.AddSeconds(6.5), retained.UpdatedAt);
+        Assert.Equal(1, retained.Tracking.LandingEpisodeCount);
+        Assert.Equal(1, retained.Tracking.BounceCount);
+        Assert.Equal(retained, store.Checkpoint);
+        Assert.Equal(
+            [
+                Epoch.AddSeconds(5.5),
+                Epoch.AddSeconds(6),
+                Epoch.AddSeconds(6.25),
+                Epoch.AddSeconds(6.5)
+            ],
+            publishedTimestamps);
+        int savesAfterDrain = store.SaveCount;
+        Assert.True(savesAfterDrain > 0);
+
+        Assert.False(await runtime.RefreshAsync());
+        Assert.Equal(savesAfterDrain, store.SaveCount);
+        Assert.Equal(4, publishedTimestamps.Count);
+        Assert.Equal(retained, coordinator.Current);
+        Assert.Equal(retained, store.Checkpoint);
     }
 
     [Fact]
@@ -1025,15 +1133,49 @@ public sealed class FlightSessionRuntimeTests
         public AircraftTelemetrySnapshot? Latest { get; set; }
     }
 
+    private sealed class BufferedTestTelemetrySource :
+        ISimulatorTelemetrySource,
+        IFlightCriticalTelemetrySource
+    {
+        private readonly List<AircraftTelemetrySnapshot> _samples = [];
+
+        public AircraftTelemetrySnapshot? Latest { get; private set; }
+
+        public void Add(AircraftTelemetrySnapshot sample)
+        {
+            if (_samples.Count > 0
+                && sample.Timestamp <= _samples[^1].Timestamp)
+            {
+                return;
+            }
+
+            _samples.Add(sample);
+            Latest = sample;
+        }
+
+        public IReadOnlyList<AircraftTelemetrySnapshot> ReadAfter(
+            DateTimeOffset? exclusiveTimestamp) =>
+            _samples
+                .Where(sample =>
+                    exclusiveTimestamp is null
+                    || sample.Timestamp > exclusiveTimestamp.Value)
+                .ToArray();
+
+        public void Clear() =>
+            _samples.Clear();
+    }
+
     private sealed class MemoryStore :
         IFlightSessionCheckpointStore
     {
         public FlightSession? Checkpoint { get; set; }
+        public int SaveCount { get; private set; }
 
         public Task SaveAsync(
             FlightSession session,
             CancellationToken cancellationToken = default)
         {
+            SaveCount++;
             Checkpoint = session;
             return Task.CompletedTask;
         }
