@@ -32,7 +32,13 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
     internal int AddDefinitionResult { get; set; }
     internal int AddStringDefinitionResult { get; set; }
     internal HashSet<uint> FailedDataDefinitionIds { get; } = [];
-    internal ConcurrentQueue<(uint RequestId, uint DefinitionId, SimConnectPeriod Period)> TelemetryRequests { get; } = new();
+    internal ConcurrentQueue<(
+        uint RequestId,
+        uint DefinitionId,
+        SimConnectPeriod Period,
+        uint Origin,
+        uint Interval,
+        uint Limit)> TelemetryRequests { get; } = new();
     internal int TelemetryRequestResult { get; set; }
     internal ConcurrentQueue<(uint EventId, string EventName)> SystemEvents { get; } = new();
     internal int SubscribeResult { get; set; }
@@ -119,12 +125,16 @@ internal sealed class SimConnectTestTransport : ISimConnectApi
         nint handle,
         uint requestId,
         uint definitionId,
-        SimConnectPeriod period)
+        SimConnectPeriod period,
+        uint origin = 0,
+        uint interval = 0,
+        uint limit = 0)
     {
         Enter();
         try
         {
-            TelemetryRequests.Enqueue((requestId, definitionId, period));
+            TelemetryRequests.Enqueue(
+                (requestId, definitionId, period, origin, interval, limit));
             return TelemetryRequestResult;
         }
         finally { Exit(); }

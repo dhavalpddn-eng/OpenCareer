@@ -35,6 +35,7 @@ internal static class SimConnectTelemetryDefinition
     internal const uint DefinitionId = 0x4F430001;
     internal const uint RequestId = 0x4F430002;
     internal const uint PauseEventId = 0x4F430003;
+    internal const uint FlightCriticalRequestId = 0x4F430004;
 
     internal static readonly SimConnectTelemetryDatum[] Data =
     [

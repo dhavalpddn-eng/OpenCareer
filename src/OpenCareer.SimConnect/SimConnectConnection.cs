@@ -12,6 +12,8 @@ public sealed class SimConnectConnection :
     IFlightCriticalTelemetrySource
 {
     internal const int FlightCriticalTelemetryCapacity = 256;
+    internal static readonly TimeSpan FlightCriticalTelemetryMinimumSpacing =
+        TimeSpan.FromMilliseconds(50);
 
     private readonly object _lifecycleGate = new();
     private readonly ISimConnectApi _api;
@@ -20,8 +22,11 @@ public sealed class SimConnectConnection :
     private readonly TimeProvider _clock;
     private SimulatorConnectionSnapshot _current = new(SimulatorConnectionState.Disconnected);
     private AircraftTelemetrySnapshot? _latestTelemetry;
+    private AircraftTelemetrySnapshot? _latestFlightCriticalTelemetry;
     private readonly BoundedFlightCriticalTelemetryBuffer _flightCriticalTelemetry =
-        new(FlightCriticalTelemetryCapacity);
+        new(
+            FlightCriticalTelemetryCapacity,
+            FlightCriticalTelemetryMinimumSpacing);
     private SimConnectLocalWeatherSnapshot? _localWeather;
     private SimConnectAircraftCatalogSnapshot _aircraftCatalog = SimConnectAircraftCatalogSnapshot.Unavailable;
     private string? _currentAircraftTitle;
@@ -54,8 +59,11 @@ public sealed class SimConnectConnection :
         DateTimeOffset? exclusiveTimestamp) =>
         _flightCriticalTelemetry.ReadAfter(exclusiveTimestamp);
 
-    public void Clear() =>
+    public void Clear()
+    {
         _flightCriticalTelemetry.Clear();
+        Volatile.Write(ref _latestFlightCriticalTelemetry, null);
+    }
     internal SimConnectLocalWeatherSnapshot? LocalWeather => Volatile.Read(ref _localWeather);
     internal SimConnectAircraftCatalogSnapshot AircraftCatalog => Volatile.Read(ref _aircraftCatalog);
     internal string? CurrentAircraftTitle => Volatile.Read(ref _currentAircraftTitle);
@@ -130,7 +138,7 @@ public sealed class SimConnectConnection :
     {
         bool everConnected = false;
         int failures = 0;
-        PublishTelemetry(null);
+        ResetTelemetry();
         PublishLocalWeather(null);
         PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
         PublishCurrentAircraftTitle(null);
@@ -143,7 +151,7 @@ public sealed class SimConnectConnection :
                 try
                 {
                     var issue = RunSession(token, ref everConnected, ref failures);
-                    PublishTelemetry(null);
+                    ResetTelemetry();
                     PublishLocalWeather(null);
                     PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
                     PublishCurrentAircraftTitle(null);
@@ -159,7 +167,7 @@ public sealed class SimConnectConnection :
                 catch (Exception ex) when (ex is DllNotFoundException or BadImageFormatException
                     or EntryPointNotFoundException or PlatformNotSupportedException)
                 {
-                    PublishTelemetry(null);
+                    ResetTelemetry();
                     PublishLocalWeather(null);
                     PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
                     PublishCurrentAircraftTitle(null);
@@ -181,7 +189,7 @@ public sealed class SimConnectConnection :
         }
         catch (Exception ex)
         {
-            PublishTelemetry(null);
+            ResetTelemetry();
             PublishLocalWeather(null);
             PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
             PublishCurrentAircraftTitle(null);
@@ -190,7 +198,7 @@ public sealed class SimConnectConnection :
         }
         finally
         {
-            PublishTelemetry(null);
+            ResetTelemetry();
             PublishLocalWeather(null);
             PublishAircraftCatalog(SimConnectAircraftCatalogSnapshot.Unavailable);
             PublishCurrentAircraftTitle(null);
@@ -309,15 +317,31 @@ public sealed class SimConnectConnection :
                             paused = message.EventData != 0;
                             validInbound = true;
                             if (Latest is { } currentTelemetry)
-                                PublishTelemetry(currentTelemetry with
-                                {
-                                    Timestamp = _clock.GetUtcNow(),
-                                    Paused = paused
-                                });
+                            {
+                                PublishLatestTelemetry(
+                                    currentTelemetry with
+                                    {
+                                        Timestamp = _clock.GetUtcNow(),
+                                        Paused = paused
+                                    });
+                            }
+
+                            if (Volatile.Read(
+                                    ref _latestFlightCriticalTelemetry)
+                                is { } currentCriticalTelemetry)
+                            {
+                                PublishFlightCriticalTelemetry(
+                                    currentCriticalTelemetry with
+                                    {
+                                        Timestamp = _clock.GetUtcNow(),
+                                        Paused = paused
+                                    });
+                            }
                             break;
                         case SimConnectMessageKind.SimObjectData
                             when acknowledged
-                                && message.RequestId == SimConnectTelemetryDefinition.RequestId
+                                && (message.RequestId == SimConnectTelemetryDefinition.RequestId
+                                    || message.RequestId == SimConnectTelemetryDefinition.FlightCriticalRequestId)
                                 && message.DefinitionId == SimConnectTelemetryDefinition.DefinitionId:
                             var telemetry = SimConnectTelemetryMapper.Map(
                                 message.Data,
@@ -326,7 +350,15 @@ public sealed class SimConnectConnection :
                             if (telemetry is not null)
                             {
                                 validInbound = true;
-                                PublishTelemetry(telemetry);
+                                if (message.RequestId
+                                    == SimConnectTelemetryDefinition.RequestId)
+                                {
+                                    PublishLatestTelemetry(telemetry);
+                                }
+                                else
+                                {
+                                    PublishFlightCriticalTelemetry(telemetry);
+                                }
                             }
                             else
                                 _logger.LogDebug("Ignored invalid aircraft telemetry packet.");
@@ -685,6 +717,22 @@ public sealed class SimConnectConnection :
             return false;
         }
 
+        int criticalRequestResult = _api.RequestDataOnUserAircraft(
+            handle,
+            SimConnectTelemetryDefinition.FlightCriticalRequestId,
+            SimConnectTelemetryDefinition.DefinitionId,
+            SimConnectPeriod.SimFrame,
+            origin: 0,
+            interval: 0,
+            limit: 0);
+        if (criticalRequestResult < 0)
+        {
+            _logger.LogWarning(
+                "SimConnect rejected flight-critical telemetry request with HRESULT {HResult:X8}.",
+                criticalRequestResult);
+            return false;
+        }
+
         return true;
     }
 
@@ -860,14 +908,20 @@ public sealed class SimConnectConnection :
         _logger.LogInformation("Simulator connection: {State}; issue: {Issue}.", snapshot.State, snapshot.Issue);
     }
 
-    private void PublishTelemetry(AircraftTelemetrySnapshot? snapshot)
+    private void ResetTelemetry()
     {
-        if (snapshot is null)
-            _flightCriticalTelemetry.Clear();
-        else
-            _flightCriticalTelemetry.Add(snapshot);
+        _flightCriticalTelemetry.Clear();
+        Volatile.Write(ref _latestFlightCriticalTelemetry, null);
+        Volatile.Write(ref _latestTelemetry, null);
+    }
 
+    private void PublishLatestTelemetry(AircraftTelemetrySnapshot snapshot) =>
         Volatile.Write(ref _latestTelemetry, snapshot);
+
+    private void PublishFlightCriticalTelemetry(AircraftTelemetrySnapshot snapshot)
+    {
+        Volatile.Write(ref _latestFlightCriticalTelemetry, snapshot);
+        _flightCriticalTelemetry.Add(snapshot);
     }
 
     private void PublishLocalWeather(SimConnectLocalWeatherSnapshot? snapshot) =>

@@ -69,7 +69,10 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
         nint handle,
         uint requestId,
         uint definitionId,
-        SimConnectPeriod period) =>
+        SimConnectPeriod period,
+        uint origin = 0,
+        uint interval = 0,
+        uint limit = 0) =>
         SimConnect_RequestDataOnSimObject(
             handle,
             requestId,
@@ -77,9 +80,9 @@ internal sealed class NativeSimConnectApi : ISimConnectApi
             SimConnectObjectIdUser,
             (uint)period,
             0,
-            0,
-            0,
-            0);
+            origin,
+            interval,
+            limit);
 
     public int SubscribeToSystemEvent(nint handle, uint eventId, string eventName) =>
         SimConnect_SubscribeToSystemEvent(handle, eventId, eventName);
