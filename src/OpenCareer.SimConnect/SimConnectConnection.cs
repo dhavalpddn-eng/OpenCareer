@@ -249,12 +249,28 @@ public sealed class SimConnectConnection :
             DispatchCallback callback = (data, size, _) =>
             {
                 // No managed exception may cross the unmanaged callback boundary.
-                try { messages.Add(SimConnectMessageDecoder.Decode(data, size)); }
-                catch (InvalidDataException ex) when (
-                    SimConnectMessageDecoder.TryReadFacilityRequestId(data, size, out uint requestId))
+                try
                 {
-                    messages.Add(new(SimConnectMessageKind.FacilityData,
-                        RequestId: requestId, FacilityDecodeError: ex.Message));
+                    try { messages.Add(SimConnectMessageDecoder.Decode(data, size)); }
+                    catch (InvalidDataException ex)
+                    {
+                        if (SimConnectMessageDecoder.TryCreateFacilityDecodeDiagnostic(
+                                data,
+                                size,
+                                ex.Message,
+                                out SimConnectFacilityDecodeDiagnostic? diagnostic))
+                        {
+                            messages.Add(new(
+                                SimConnectMessageKind.FacilityData,
+                                RequestId: diagnostic!.RequestId,
+                                FacilityDecodeError: ex.Message,
+                                FacilityDecodeDiagnostic: diagnostic));
+                        }
+                        else
+                        {
+                            callbackError ??= ex;
+                        }
+                    }
                 }
                 catch (Exception ex) { callbackError ??= ex; }
             };
@@ -426,11 +442,32 @@ public sealed class SimConnectConnection :
                             if (message.FacilityDecodeError is not null
                                 || !activeAirportFacilityRequest.Accept(message))
                             {
-                                _logger.LogWarning(
-                                    "SimConnect airport facility query for {Icao}, request {RequestId}, failed: {Reason}. Core connection retained.",
-                                    activeAirportFacilityRequest.Query.Icao,
-                                    message.RequestId,
-                                    message.FacilityDecodeError ?? "Inconsistent facility response");
+                                if (message.FacilityDecodeDiagnostic is { } diagnostic)
+                                {
+                                    _logger.LogWarning(
+                                        "SimConnect airport facility query for {Icao} failed decoding: CallbackBufferSize={CallbackBufferSize}, DeclaredRecvSize={DeclaredRecvSize}, MessageKind={MessageKind}, RequestId={RequestId}, FacilityType={FacilityType}, UniqueRequestId={UniqueRequestId}, ParentUniqueRequestId={ParentUniqueRequestId}, IsListItem={IsListItem}, ItemIndex={ItemIndex}, ListSize={ListSize}, RequiredMinimumSize={RequiredMinimumSize}, FailureReason={FailureReason}. Core connection retained.",
+                                        activeAirportFacilityRequest.Query.Icao,
+                                        diagnostic.CallbackBufferSize,
+                                        diagnostic.DeclaredRecvSize,
+                                        diagnostic.MessageKind,
+                                        diagnostic.RequestId,
+                                        diagnostic.FacilityType,
+                                        diagnostic.UniqueRequestId,
+                                        diagnostic.ParentUniqueRequestId,
+                                        diagnostic.IsListItem,
+                                        diagnostic.ItemIndex,
+                                        diagnostic.ListSize,
+                                        diagnostic.RequiredMinimumSize,
+                                        diagnostic.FailureReason);
+                                }
+                                else
+                                {
+                                    _logger.LogWarning(
+                                        "SimConnect airport facility query for {Icao}, request {RequestId}, failed: {Reason}. Core connection retained.",
+                                        activeAirportFacilityRequest.Query.Icao,
+                                        message.RequestId,
+                                        message.FacilityDecodeError ?? "Inconsistent facility response");
+                                }
                                 activeAirportFacilityRequest.Query.Completion.TrySetResult(null);
                                 activeAirportFacilityRequest = null;
                             }

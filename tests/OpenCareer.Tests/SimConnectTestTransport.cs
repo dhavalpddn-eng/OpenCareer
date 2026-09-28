@@ -318,7 +318,7 @@ internal static class SimConnectPackets
     {
         const int headerSize = 28;
         const int entrySize = 512;
-        byte[] bytes = Header(39, headerSize + entries.Length * entrySize);
+        byte[] bytes = Header(38, headerSize + entries.Length * entrySize);
         BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
         BitConverter.GetBytes((uint)entries.Length).CopyTo(bytes, 16);
         BitConverter.GetBytes(entryNumber).CopyTo(bytes, 20);
@@ -342,7 +342,7 @@ internal static class SimConnectPackets
         double longitudeDegrees = 0)
     {
         const int payloadOffset = 40;
-        byte[] bytes = Header(29, payloadOffset + 88);
+        byte[] bytes = Header(28, payloadOffset + 88);
         BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
         BitConverter.GetBytes(uniqueRequestId).CopyTo(bytes, 16);
         BitConverter.GetBytes(0u).CopyTo(bytes, 20);
@@ -377,7 +377,7 @@ internal static class SimConnectPackets
         float headingTrueDegrees = 0)
     {
         const int payloadOffset = 40;
-        byte[] bytes = Header(29, payloadOffset + 50);
+        byte[] bytes = Header(28, payloadOffset + 50);
         BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
         BitConverter.GetBytes(uniqueRequestId).CopyTo(bytes, 16);
         BitConverter.GetBytes(parentUniqueRequestId).CopyTo(bytes, 20);
@@ -402,7 +402,7 @@ internal static class SimConnectPackets
 
     internal static byte[] FacilityDataEnd(uint requestId)
     {
-        byte[] bytes = Header(30, 16);
+        byte[] bytes = Header(29, 16);
         BitConverter.GetBytes(requestId).CopyTo(bytes, 12);
         return bytes;
     }

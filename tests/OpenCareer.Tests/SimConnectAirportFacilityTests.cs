@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Runtime.InteropServices;
 using OpenCareer.Application.Planning;
@@ -25,6 +27,9 @@ public sealed class SimConnectAirportFacilityTests
     [Fact]
     public void FacilityPacketOffsetsMatchOfficialSdkHeaderAndRequestedFieldTypes()
     {
+        Assert.Equal(28u, (uint)SimConnectMessageKind.FacilityData);
+        Assert.Equal(29u, (uint)SimConnectMessageKind.FacilityDataEnd);
+        Assert.Equal(38u, (uint)SimConnectMessageKind.EnumerateSimObjectAndLiveryList);
         Assert.Equal(28, Marshal.OffsetOf<SdkFacilityHeader>(nameof(SdkFacilityHeader.IsListItem)).ToInt32());
         Assert.Equal(32, Marshal.OffsetOf<SdkFacilityHeader>(nameof(SdkFacilityHeader.ItemIndex)).ToInt32());
         Assert.Equal(36, Marshal.OffsetOf<SdkFacilityHeader>(nameof(SdkFacilityHeader.ListSize)).ToInt32());
@@ -317,6 +322,189 @@ public sealed class SimConnectAirportFacilityTests
                 Assert.Throws<InvalidDataException>(
                     () => SimConnectMessageDecoder.Decode(data, size));
             });
+    }
+
+    [Fact]
+    public void TruncatedAirportDiagnosticRetainsOnlySafeEnvelopeMetadata()
+    {
+        byte[] packet = SimConnectPackets.AirportFacility(
+            requestId: 900,
+            uniqueRequestId: 41,
+            name: "Private fixture airport name",
+            icao: "KAAA");
+        Array.Resize(ref packet, packet.Length - 1);
+        BitConverter.GetBytes((uint)packet.Length).CopyTo(packet, 0);
+
+        SimConnectFacilityDecodeDiagnostic diagnostic = ReadDecodeDiagnostic(packet);
+
+        Assert.Equal(127u, diagnostic.CallbackBufferSize);
+        Assert.Equal(127u, diagnostic.DeclaredRecvSize);
+        Assert.Equal((uint)SimConnectMessageKind.FacilityData, diagnostic.MessageKind);
+        Assert.Equal(900u, diagnostic.RequestId);
+        Assert.Equal(41u, diagnostic.UniqueRequestId);
+        Assert.Equal(0u, diagnostic.ParentUniqueRequestId);
+        Assert.Equal((uint)SimConnectFacilityDataType.Airport, diagnostic.FacilityType);
+        Assert.Equal(0u, diagnostic.IsListItem);
+        Assert.Equal(0u, diagnostic.ItemIndex);
+        Assert.Equal(0u, diagnostic.ListSize);
+        Assert.Equal(128u, diagnostic.RequiredMinimumSize);
+        Assert.Equal("Truncated SimConnect message.", diagnostic.FailureReason);
+    }
+
+    [Fact]
+    public void TruncatedRunwayDiagnosticRetainsOnlySafeEnvelopeMetadata()
+    {
+        byte[] packet = SimConnectPackets.RunwayFacility(
+            requestId: 901,
+            uniqueRequestId: 42,
+            parentUniqueRequestId: 41,
+            itemIndex: 2,
+            listSize: 3,
+            lengthMeters: 1828.8f,
+            widthMeters: 45.72f,
+            surface: 4,
+            primaryNumber: 18,
+            primaryDesignator: 0,
+            secondaryNumber: 36,
+            secondaryDesignator: 0);
+        Array.Resize(ref packet, packet.Length - 1);
+        BitConverter.GetBytes((uint)packet.Length).CopyTo(packet, 0);
+
+        SimConnectFacilityDecodeDiagnostic diagnostic = ReadDecodeDiagnostic(packet);
+
+        Assert.Equal(89u, diagnostic.CallbackBufferSize);
+        Assert.Equal(89u, diagnostic.DeclaredRecvSize);
+        Assert.Equal((uint)SimConnectMessageKind.FacilityData, diagnostic.MessageKind);
+        Assert.Equal(901u, diagnostic.RequestId);
+        Assert.Equal(42u, diagnostic.UniqueRequestId);
+        Assert.Equal(41u, diagnostic.ParentUniqueRequestId);
+        Assert.Equal((uint)SimConnectFacilityDataType.Runway, diagnostic.FacilityType);
+        Assert.Equal(1u, diagnostic.IsListItem);
+        Assert.Equal(2u, diagnostic.ItemIndex);
+        Assert.Equal(3u, diagnostic.ListSize);
+        Assert.Equal(90u, diagnostic.RequiredMinimumSize);
+        Assert.Equal("Truncated SimConnect message.", diagnostic.FailureReason);
+    }
+
+    [Theory]
+    [InlineData(16, false, false, false, false, false, false)]
+    [InlineData(19, false, false, false, false, false, false)]
+    [InlineData(20, true, false, false, false, false, false)]
+    [InlineData(24, true, true, false, false, false, false)]
+    [InlineData(28, true, true, true, false, false, false)]
+    [InlineData(32, true, true, true, true, false, false)]
+    [InlineData(36, true, true, true, true, true, false)]
+    [InlineData(40, true, true, true, true, true, true)]
+    public void DiagnosticNeverReadsPastCallbackBuffer(
+        uint callbackBufferSize,
+        bool hasUnique,
+        bool hasParent,
+        bool hasType,
+        bool hasListFlag,
+        bool hasItemIndex,
+        bool hasListSize)
+    {
+        byte[] packet = SimConnectPackets.RunwayFacility(
+            requestId: 901,
+            uniqueRequestId: 42,
+            parentUniqueRequestId: 41,
+            itemIndex: 2,
+            listSize: 3,
+            lengthMeters: 1828.8f,
+            widthMeters: 45.72f,
+            surface: 4,
+            primaryNumber: 18,
+            primaryDesignator: 0,
+            secondaryNumber: 36,
+            secondaryDesignator: 0);
+
+        SimConnectFacilityDecodeDiagnostic? diagnostic = null;
+        SimConnectPackets.WithPointer(
+            packet,
+            (data, _) =>
+            {
+                Assert.True(SimConnectMessageDecoder.TryCreateFacilityDecodeDiagnostic(
+                    data,
+                    callbackBufferSize,
+                    "test failure",
+                    out diagnostic));
+            });
+
+        Assert.NotNull(diagnostic);
+        Assert.Equal(callbackBufferSize, diagnostic!.CallbackBufferSize);
+        Assert.Equal(hasUnique, diagnostic.UniqueRequestId.HasValue);
+        Assert.Equal(hasParent, diagnostic.ParentUniqueRequestId.HasValue);
+        Assert.Equal(hasType, diagnostic.FacilityType.HasValue);
+        Assert.Equal(hasListFlag, diagnostic.IsListItem.HasValue);
+        Assert.Equal(hasItemIndex, diagnostic.ItemIndex.HasValue);
+        Assert.Equal(hasListSize, diagnostic.ListSize.HasValue);
+    }
+
+    [Fact]
+    public void DiagnosticExtractionWithoutSafeRequestPrefixFailsWithoutThrowing()
+    {
+        Assert.False(SimConnectMessageDecoder.TryCreateFacilityDecodeDiagnostic(
+            nint.Zero,
+            uint.MaxValue,
+            "test failure",
+            out SimConnectFacilityDecodeDiagnostic? nullPointerDiagnostic));
+        Assert.Null(nullPointerDiagnostic);
+
+        byte[] packet = SimConnectPackets.AirportFacility(900, 41, "Airport", "KAAA");
+        SimConnectPackets.WithPointer(
+            packet,
+            (data, _) =>
+            {
+                Assert.False(SimConnectMessageDecoder.TryCreateFacilityDecodeDiagnostic(
+                    data,
+                    15,
+                    "test failure",
+                    out SimConnectFacilityDecodeDiagnostic? truncatedPrefixDiagnostic));
+                Assert.Null(truncatedPrefixDiagnostic);
+            });
+    }
+
+    [Fact]
+    public async Task MalformedFacilityLogsBoundedEnvelopeAndRetainsConnection()
+    {
+        var api = new SimConnectTestTransport();
+        var logger = new CollectingLogger<SimConnectConnection>();
+        api.Enqueue(SimConnectPackets.Open());
+        await using var connection = Create(api, logger: logger);
+        connection.Start();
+        await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
+
+        Task<SimConnectAirportFacilitySnapshot?> query =
+            connection.RequestAirportFacilityAsync("KAAA", CancellationToken.None);
+        await Until(() => api.FacilityRequests.Count == 1);
+        byte[] packet = SimConnectPackets.AirportFacility(
+            api.FacilityRequests.Single().RequestId,
+            uniqueRequestId: 41,
+            name: "Private fixture airport name",
+            icao: "KAAA",
+            latitudeDegrees: 12.3456789,
+            longitudeDegrees: -98.7654321);
+        Array.Resize(ref packet, packet.Length - 1);
+        BitConverter.GetBytes((uint)packet.Length).CopyTo(packet, 0);
+        api.Enqueue(packet);
+
+        Assert.Null(await query.WaitAsync(TimeSpan.FromSeconds(5)));
+        await Until(() => logger.Entries.Any(static entry =>
+            entry.Properties.ContainsKey("RequiredMinimumSize")));
+        LogEntry entry = Assert.Single(logger.Entries, static entry =>
+            entry.Properties.ContainsKey("RequiredMinimumSize"));
+        Assert.Equal(127u, entry.Properties["CallbackBufferSize"]);
+        Assert.Equal(127u, entry.Properties["DeclaredRecvSize"]);
+        Assert.Equal(128u, entry.Properties["RequiredMinimumSize"]);
+        Assert.Equal("Truncated SimConnect message.", entry.Properties["FailureReason"]);
+        Assert.DoesNotContain("Private fixture airport name", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("12.3456789", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("-98.7654321", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Latitude", entry.Properties.Keys);
+        Assert.DoesNotContain("Longitude", entry.Properties.Keys);
+        Assert.DoesNotContain("Payload", entry.Properties.Keys);
+        Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
+        Assert.Equal(1, api.Attempts);
     }
 
     [Fact]
@@ -792,10 +980,11 @@ public sealed class SimConnectAirportFacilityTests
 
     private static SimConnectConnection Create(
         SimConnectTestTransport api,
-        TimeProvider? clock = null) =>
+        TimeProvider? clock = null,
+        ILogger<SimConnectConnection>? logger = null) =>
         new(
             api,
-            NullLogger<SimConnectConnection>.Instance,
+            logger ?? NullLogger<SimConnectConnection>.Instance,
             new SimConnectConnectionOptions
             {
                 InitialRetryDelay = TimeSpan.FromMilliseconds(10),
@@ -803,6 +992,25 @@ public sealed class SimConnectAirportFacilityTests
                 DispatchInterval = TimeSpan.FromMilliseconds(5)
             },
             clock ?? TimeProvider.System);
+
+    private static SimConnectFacilityDecodeDiagnostic ReadDecodeDiagnostic(byte[] packet)
+    {
+        SimConnectFacilityDecodeDiagnostic? diagnostic = null;
+        SimConnectPackets.WithPointer(
+            packet,
+            (data, size) =>
+            {
+                InvalidDataException exception = Assert.Throws<InvalidDataException>(
+                    () => SimConnectMessageDecoder.Decode(data, size));
+                Assert.True(SimConnectMessageDecoder.TryCreateFacilityDecodeDiagnostic(
+                    data,
+                    size,
+                    exception.Message,
+                    out diagnostic));
+            });
+
+        return Assert.IsType<SimConnectFacilityDecodeDiagnostic>(diagnostic);
+    }
 
     private static void EnqueueTruncatedAirportFacility(
         SimConnectTestTransport api,
@@ -860,6 +1068,33 @@ public sealed class SimConnectAirportFacilityTests
         public void Advance(TimeSpan elapsed) =>
             Interlocked.Add(ref _timestamp, elapsed.Ticks);
     }
+
+    private sealed class CollectingLogger<T> : ILogger<T>
+    {
+        public ConcurrentQueue<LogEntry> Entries { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            var properties = state as IEnumerable<KeyValuePair<string, object?>>;
+            Entries.Enqueue(new(
+                formatter(state, exception),
+                properties?.ToDictionary(static pair => pair.Key, static pair => pair.Value)
+                    ?? new Dictionary<string, object?>()));
+        }
+    }
+
+    private sealed record LogEntry(
+        string Message,
+        IReadOnlyDictionary<string, object?> Properties);
 
     private static async Task Until(Func<bool> condition)
     {

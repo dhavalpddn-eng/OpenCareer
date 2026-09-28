@@ -46,19 +46,93 @@ internal static class SimConnectMessageDecoder
         };
     }
 
-    internal static bool TryReadFacilityRequestId(nint data, uint bufferSize, out uint requestId)
+    internal static bool TryCreateFacilityDecodeDiagnostic(
+        nint data,
+        uint bufferSize,
+        string failureReason,
+        out SimConnectFacilityDecodeDiagnostic? diagnostic)
     {
-        requestId = 0;
-        // Use the actual callback buffer, not a possibly corrupt declared length.
-        // Without both the facility kind and request ID, the error remains a core error.
-        if (data == nint.Zero || bufferSize < HeaderSize + sizeof(uint))
+        diagnostic = null;
+        try
+        {
+            // Use only the actual callback buffer for diagnostics. The declared receive
+            // size is evidence and may itself be corrupt.
+            if (!TryReadUInt32(data, bufferSize, 0, out uint declaredSize)
+                || !TryReadUInt32(data, bufferSize, 8, out uint rawKind)
+                || !TryReadUInt32(data, bufferSize, 12, out uint requestId))
+            {
+                return false;
+            }
+
+            var kind = (SimConnectMessageKind)rawKind;
+            if (kind is not (SimConnectMessageKind.FacilityData or SimConnectMessageKind.FacilityDataEnd))
+                return false;
+
+            uint? uniqueRequestId = TryReadUInt32(data, bufferSize, 16, out uint unique)
+                ? unique
+                : null;
+            uint? parentUniqueRequestId = TryReadUInt32(data, bufferSize, 20, out uint parent)
+                ? parent
+                : null;
+            uint? facilityType = TryReadUInt32(data, bufferSize, 24, out uint type)
+                ? type
+                : null;
+            uint? isListItem = TryReadUInt32(data, bufferSize, 28, out uint listItem)
+                ? listItem
+                : null;
+            uint? itemIndex = TryReadUInt32(data, bufferSize, 32, out uint item)
+                ? item
+                : null;
+            uint? listSize = TryReadUInt32(data, bufferSize, 36, out uint list)
+                ? list
+                : null;
+
+            uint requiredMinimumSize = checked((uint)(
+                kind == SimConnectMessageKind.FacilityDataEnd
+                    ? HeaderSize + sizeof(uint)
+                    : facilityType switch
+                    {
+                        (uint)SimConnectFacilityDataType.Airport =>
+                            FacilityDataPayloadOffset + AirportFacilityPayloadSize,
+                        (uint)SimConnectFacilityDataType.Runway =>
+                            FacilityDataPayloadOffset + RunwayFacilityPayloadSize,
+                        _ => FacilityDataPayloadOffset + sizeof(uint)
+                    }));
+
+            diagnostic = new(
+                bufferSize,
+                declaredSize,
+                rawKind,
+                requestId,
+                uniqueRequestId,
+                parentUniqueRequestId,
+                facilityType,
+                isListItem,
+                itemIndex,
+                listSize,
+                requiredMinimumSize,
+                failureReason);
+            return true;
+        }
+        catch
+        {
+            // Optional diagnostics must never throw across the native callback boundary.
+            diagnostic = null;
+            return false;
+        }
+    }
+
+    private static bool TryReadUInt32(
+        nint data,
+        uint bufferSize,
+        int offset,
+        out uint value)
+    {
+        value = 0;
+        if (data == nint.Zero || offset < 0 || (ulong)(uint)offset + sizeof(uint) > bufferSize)
             return false;
 
-        var kind = (SimConnectMessageKind)unchecked((uint)Marshal.ReadInt32(data, 8));
-        if (kind is not (SimConnectMessageKind.FacilityData or SimConnectMessageKind.FacilityDataEnd))
-            return false;
-
-        requestId = unchecked((uint)Marshal.ReadInt32(data, 12));
+        value = unchecked((uint)Marshal.ReadInt32(data, offset));
         return true;
     }
 

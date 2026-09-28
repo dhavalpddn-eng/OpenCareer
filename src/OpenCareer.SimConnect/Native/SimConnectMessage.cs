@@ -12,9 +12,9 @@ internal enum SimConnectMessageKind : uint
     Event = 4,
     SimObjectData = 8,
     SystemState = 15,
-    FacilityData = 29,
-    FacilityDataEnd = 30,
-    EnumerateSimObjectAndLiveryList = 39
+    FacilityData = 28,
+    FacilityDataEnd = 29,
+    EnumerateSimObjectAndLiveryList = 38
 }
 
 internal enum SimConnectFacilityDataType : uint
@@ -47,6 +47,20 @@ internal sealed record SimConnectRunwayFacilityData(
     bool PrimaryClosed,
     bool SecondaryClosed);
 
+internal sealed record SimConnectFacilityDecodeDiagnostic(
+    uint CallbackBufferSize,
+    uint DeclaredRecvSize,
+    uint MessageKind,
+    uint RequestId,
+    uint? UniqueRequestId,
+    uint? ParentUniqueRequestId,
+    uint? FacilityType,
+    uint? IsListItem,
+    uint? ItemIndex,
+    uint? ListSize,
+    uint RequiredMinimumSize,
+    string FailureReason);
+
 internal sealed record SimConnectMessage(
     SimConnectMessageKind Kind,
     SimulatorInfo? Simulator = null,
@@ -70,4 +84,5 @@ internal sealed record SimConnectMessage(
     uint ListSize = 0,
     SimConnectAirportFacilityData? AirportFacilityData = null,
     SimConnectRunwayFacilityData? RunwayFacilityData = null,
-    string? FacilityDecodeError = null);
+    string? FacilityDecodeError = null,
+    SimConnectFacilityDecodeDiagnostic? FacilityDecodeDiagnostic = null);
