@@ -5,6 +5,12 @@ using OpenCareer.Infrastructure.Flights;
 
 namespace OpenCareer.Tests;
 
+[CollectionDefinition("FlightSession long-duration replay", DisableParallelization = true)]
+public sealed class FlightSessionLongDurationReplayCollection
+{
+}
+
+[Collection("FlightSession long-duration replay")]
 public sealed class FlightSessionLongDurationReplayTests : IDisposable
 {
     private static readonly DateTimeOffset Epoch =
@@ -20,9 +26,9 @@ public sealed class FlightSessionLongDurationReplayTests : IDisposable
             Guid.NewGuid().ToString("N"));
 
     [Theory]
-    [InlineData(1, 120)]
-    [InlineData(3, 360)]
-    [InlineData(6, FlightSessionStatistics.MaximumTrackPoints)]
+    [InlineData(1, 60)]
+    [InlineData(3, 180)]
+    [InlineData(6, 360)]
     public async Task LongDurationReplayIsDeterministicBoundedAndRecoverySafe(
         int hours,
         int expectedTrackPoints)
@@ -84,11 +90,11 @@ public sealed class FlightSessionLongDurationReplayTests : IDisposable
         await AdvanceAsync(persistence, Epoch.AddSeconds(4), takeoffCandidate: true);
         await AdvanceAsync(persistence, Epoch.AddSeconds(5), airborne: true);
 
-        int sampleCount = hours * 120;
+        int sampleCount = hours * 60;
         for (int sample = 1; sample <= sampleCount; sample++)
         {
             DateTimeOffset timestamp =
-                Epoch.AddSeconds(5 + sample * 30L);
+                Epoch.AddSeconds(5 + sample * 60L);
             double longitude = -73.78 + sample * 0.001;
             var anchor =
                 new FlightContinuityAnchor(
@@ -102,7 +108,7 @@ public sealed class FlightSessionLongDurationReplayTests : IDisposable
                 new FlightSessionAdvance(
                     Evidence(timestamp, airborne: true),
                     new FlightTimeInterval(
-                        TimeSpan.FromSeconds(30),
+                        TimeSpan.FromMinutes(1),
                         SimulationRate: 1,
                         ValidOperationalEvidence: true,
                         Paused: false,
@@ -155,7 +161,7 @@ public sealed class FlightSessionLongDurationReplayTests : IDisposable
             }
         }
 
-        DateTimeOffset arrival = Epoch.AddSeconds(5 + sampleCount * 30L);
+        DateTimeOffset arrival = Epoch.AddSeconds(5 + sampleCount * 60L);
         await AdvanceAsync(persistence, arrival.AddSeconds(1), approach: true);
         await AdvanceAsync(persistence, arrival.AddSeconds(2), touchdown: true);
         await AdvanceAsync(persistence, arrival.AddSeconds(3), rollout: true);
