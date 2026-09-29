@@ -27,13 +27,14 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                13);
+                14);
 
             await AssertTablesExistAsync(
                 path,
                 "player_career_profile",
                 "job_board_states",
                 "job_contracts",
+                "career_terminal_recovery",
                 "economy_ledger_transactions",
                 "economy_ledger_postings",
                 "commodity_market_snapshots",
@@ -69,7 +70,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                13);
+                14);
 
             await AssertTablesExistAsync(
                 path,
@@ -142,7 +143,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                13);
+                14);
 
             await AssertTablesExistAsync(
                 path,
@@ -208,7 +209,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                13);
+                14);
 
             await using SqliteConnection connection =
                 await OpenReadOnlyAsync(path);
@@ -318,7 +319,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                13);
+                14);
 
             await using SqliteConnection verification =
                 await OpenReadOnlyAsync(path);
