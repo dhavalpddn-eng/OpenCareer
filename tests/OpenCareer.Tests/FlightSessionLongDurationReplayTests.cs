@@ -10,6 +10,9 @@ public sealed class FlightSessionLongDurationReplayTests : IDisposable
     private static readonly DateTimeOffset Epoch =
         new(2026, 9, 29, 12, 0, 0, TimeSpan.Zero);
 
+    private static readonly FlightSessionCheckpointPolicy ReplayCheckpointPolicy =
+        new(TimeSpan.FromMinutes(15));
+
     private readonly string _directory =
         Path.Combine(
             Path.GetTempPath(),
@@ -69,7 +72,10 @@ public sealed class FlightSessionLongDurationReplayTests : IDisposable
         var coordinator = new FlightSessionCoordinator();
         var store = new SqliteFlightSessionCheckpointStore(databasePath);
         var persistence =
-            new FlightSessionPersistenceService(coordinator, store);
+            new FlightSessionPersistenceService(
+                coordinator,
+                store,
+                ReplayCheckpointPolicy);
 
         await persistence.StartAsync(Epoch, contractId, sessionId);
         await AdvanceAsync(persistence, Epoch.AddSeconds(1), validAircraft: true);
@@ -128,7 +134,11 @@ public sealed class FlightSessionLongDurationReplayTests : IDisposable
                     await persistence.FlushAsync();
                     coordinator = new FlightSessionCoordinator();
                     store = new SqliteFlightSessionCheckpointStore(databasePath);
-                    persistence = new FlightSessionPersistenceService(coordinator, store);
+                    persistence =
+                        new FlightSessionPersistenceService(
+                            coordinator,
+                            store,
+                            ReplayCheckpointPolicy);
                     Assert.NotNull(await persistence.RecoverAsync());
                 }
                 else
