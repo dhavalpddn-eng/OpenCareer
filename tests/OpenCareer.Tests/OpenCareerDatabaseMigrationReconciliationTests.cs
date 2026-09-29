@@ -9,7 +9,7 @@ namespace OpenCareer.Tests;
 public sealed class OpenCareerDatabaseMigrationReconciliationTests
 {
     [Fact]
-    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV14()
+    public async Task FlightOnlyLegacyV2AddsMissingSchemasAndAdvancesToV15()
     {
         string directory = CreateTempDirectory();
 
@@ -47,7 +47,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV14()
+    public async Task ConflictOnlyLegacyV2AddsMissingSchemasAndAdvancesToV15()
     {
         string directory = CreateTempDirectory();
 
@@ -82,7 +82,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV14()
+    public async Task UnifiedLegacyV3AddsMilitaryPersistenceSchemasAndAdvancesToV15()
     {
         string directory = CreateTempDirectory();
 
@@ -161,7 +161,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
     }
 
     [Fact]
-    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV14()
+    public async Task UnifiedLegacyV4AddsOperationConsequencesAndAdvancesToV15()
     {
         string directory = CreateTempDirectory();
 
@@ -318,6 +318,11 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
         Assert.True(
             await TableExistsAsync(
                 connection,
+                "flight_session_checkpoint_previous"));
+
+        Assert.True(
+            await TableExistsAsync(
+                connection,
                 "conflict_campaigns"));
 
         Assert.True(
@@ -364,7 +369,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            14L,
+            15L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));

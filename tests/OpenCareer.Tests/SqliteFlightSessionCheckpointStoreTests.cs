@@ -121,6 +121,154 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Fact]
+    public async Task ValidCurrentCheckpointWinsEvenWhenPreviousIsCorrupt()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+        FlightSession previous = CreateAirborneSession();
+        FlightSession current = previous with
+        {
+            UpdatedAt = previous.UpdatedAt.AddSeconds(1)
+        };
+
+        await store.SaveAsync(previous);
+        await store.SaveAsync(current);
+        await ExecuteAsync(
+            databasePath,
+            "UPDATE flight_session_checkpoint_previous SET payload_json = '{';");
+
+        FlightSession loaded = Assert.IsType<FlightSession>(await store.LoadAsync());
+        AssertSessionEquivalent(current, loaded);
+    }
+
+    [Fact]
+    public async Task CorruptCurrentCheckpointFallsBackToPreviousValidCheckpoint()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+        FlightSession previous = CreateAirborneSession();
+        FlightSession current = previous with
+        {
+            UpdatedAt = previous.UpdatedAt.AddSeconds(1)
+        };
+
+        await store.SaveAsync(previous);
+        await store.SaveAsync(current);
+        await ExecuteAsync(
+            databasePath,
+            "UPDATE flight_session_checkpoint SET payload_json = '{';");
+
+        FlightSession loaded = Assert.IsType<FlightSession>(await store.LoadAsync());
+        AssertSessionEquivalent(previous, loaded);
+    }
+
+    [Fact]
+    public async Task CorruptCurrentAndCorruptOrMissingPreviousFailClosed()
+    {
+        string corruptDatabasePath = Path.Combine(_directory, "corrupt.db");
+        var corruptStore = new SqliteFlightSessionCheckpointStore(corruptDatabasePath);
+        FlightSession first = CreateAirborneSession();
+        FlightSession second = first with
+        {
+            UpdatedAt = first.UpdatedAt.AddSeconds(1)
+        };
+
+        await corruptStore.SaveAsync(first);
+        await corruptStore.SaveAsync(second);
+        await ExecuteAsync(
+            corruptDatabasePath,
+            """
+            UPDATE flight_session_checkpoint SET payload_json = '{';
+            UPDATE flight_session_checkpoint_previous SET payload_json = '{';
+            """);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            async () => await corruptStore.LoadAsync());
+
+        string missingDatabasePath = Path.Combine(_directory, "missing.db");
+        var missingStore = new SqliteFlightSessionCheckpointStore(missingDatabasePath);
+        await missingStore.SaveAsync(first);
+        await ExecuteAsync(
+            missingDatabasePath,
+            "UPDATE flight_session_checkpoint SET payload_json = '{';");
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            async () => await missingStore.LoadAsync());
+    }
+
+    [Fact]
+    public async Task FallbackNeverCrossesSessionIdentity()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+        FlightSession previous = CreateAirborneSession();
+        FlightSession current = previous with
+        {
+            UpdatedAt = previous.UpdatedAt.AddSeconds(1)
+        };
+
+        await store.SaveAsync(previous);
+        await store.SaveAsync(current);
+        await ExecuteAsync(
+            databasePath,
+            $"""
+            UPDATE flight_session_checkpoint SET payload_json = '{{';
+            UPDATE flight_session_checkpoint_previous
+            SET successor_session_id = '{Guid.NewGuid():D}';
+            """);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            async () => await store.LoadAsync());
+    }
+
+    [Fact]
+    public async Task SuccessfulSaveAfterCorruptionRestoresNormalCurrentRecovery()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+        FlightSession previous = CreateAirborneSession();
+        FlightSession corrupt = previous with
+        {
+            UpdatedAt = previous.UpdatedAt.AddSeconds(1)
+        };
+        FlightSession restored = previous with
+        {
+            UpdatedAt = previous.UpdatedAt.AddSeconds(2)
+        };
+
+        await store.SaveAsync(previous);
+        await store.SaveAsync(corrupt);
+        await ExecuteAsync(
+            databasePath,
+            "UPDATE flight_session_checkpoint SET payload_json = '{';");
+
+        await store.SaveAsync(restored);
+
+        FlightSession loaded = Assert.IsType<FlightSession>(await store.LoadAsync());
+        AssertSessionEquivalent(restored, loaded);
+    }
+
+    [Fact]
+    public async Task MissingCurrentCheckpointDoesNotActivatePreviousCheckpoint()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+        FlightSession previous = CreateAirborneSession();
+        FlightSession current = previous with
+        {
+            UpdatedAt = previous.UpdatedAt.AddSeconds(1)
+        };
+
+        await store.SaveAsync(previous);
+        await store.SaveAsync(current);
+        await ExecuteAsync(
+            databasePath,
+            "DELETE FROM flight_session_checkpoint;");
+
+        Assert.Null(await store.LoadAsync());
+    }
+
+    [Fact]
     public async Task ClearRemovesRecoverableCheckpoint()
     {
         string databasePath =
@@ -130,14 +278,30 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
             new SqliteFlightSessionCheckpointStore(
                 databasePath);
 
+        FlightSession first = FlightSession.Start(DateTimeOffset.UtcNow);
+        await store.SaveAsync(first);
         await store.SaveAsync(
-            FlightSession.Start(
-                DateTimeOffset.UtcNow));
+            first with
+            {
+                UpdatedAt = first.UpdatedAt.AddSeconds(1)
+            });
 
         await store.ClearAsync();
 
         Assert.Null(
             await store.LoadAsync());
+
+        await using var connection =
+            new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync();
+        await using SqliteCommand count = connection.CreateCommand();
+        count.CommandText =
+            """
+            SELECT
+                (SELECT COUNT(*) FROM flight_session_checkpoint)
+                + (SELECT COUNT(*) FROM flight_session_checkpoint_previous);
+            """;
+        Assert.Equal(0L, Convert.ToInt64(await count.ExecuteScalarAsync()));
     }
 
     [Fact]
@@ -222,6 +386,18 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
                 _directory,
                 recursive: true);
         }
+    }
+
+    private static async Task ExecuteAsync(
+        string databasePath,
+        string sql)
+    {
+        await using var connection =
+            new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
     }
 
     private static void AssertSessionEquivalent(

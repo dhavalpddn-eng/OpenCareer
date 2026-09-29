@@ -7,7 +7,7 @@ internal static class OpenCareerDatabaseMigrator
     // Career and Economy branches independently reused schema versions 1-10.
     // Version 11 was the first shared convergence point; pre-v11 user_version
     // alone cannot be used to infer which subsystem tables already exist.
-    public const int CurrentSchemaVersion = 14;
+    public const int CurrentSchemaVersion = 15;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -100,6 +100,18 @@ internal static class OpenCareerDatabaseMigrator
 
                 CREATE TABLE IF NOT EXISTS flight_session_checkpoint (
                     slot_id INTEGER NOT NULL PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    payload_schema_version INTEGER NOT NULL,
+                    status INTEGER NOT NULL,
+                    updated_at_utc_ticks INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    CHECK (slot_id = 1)
+                );
+
+                CREATE TABLE IF NOT EXISTS flight_session_checkpoint_previous (
+                    slot_id INTEGER NOT NULL PRIMARY KEY,
+                    successor_session_id TEXT NOT NULL,
+                    successor_contract_id TEXT NULL,
                     session_id TEXT NOT NULL,
                     payload_schema_version INTEGER NOT NULL,
                     status INTEGER NOT NULL,
