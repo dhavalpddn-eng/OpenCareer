@@ -22,6 +22,8 @@ public sealed class SqliteCareerJobTerminalRecoveryStoreTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
+        SqliteConnection.ClearAllPools();
+
         if (Directory.Exists(_directory))
             Directory.Delete(_directory, recursive: true);
 
