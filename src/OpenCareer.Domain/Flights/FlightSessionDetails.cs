@@ -41,11 +41,19 @@ public sealed record FlightSessionPlan(
     }
 }
 
+public enum FlightLegStatus
+{
+    Active = 0,
+    Completed = 1
+}
+
 public sealed record FlightLeg(
     Guid LegId,
     int Sequence,
     DateTimeOffset StartedAt,
-    FlightSessionPlan? Plan = null)
+    FlightSessionPlan? Plan = null,
+    FlightLegStatus Status = FlightLegStatus.Active,
+    DateTimeOffset? CompletedAt = null)
 {
     public static FlightLeg First(
         Guid sessionId,
@@ -65,7 +73,39 @@ public sealed record FlightLeg(
         if (Sequence <= 0)
             throw new ArgumentOutOfRangeException(nameof(Sequence));
 
+        if (!Enum.IsDefined(Status))
+            throw new ArgumentOutOfRangeException(nameof(Status));
+
+        if (Status == FlightLegStatus.Active && CompletedAt is not null)
+        {
+            throw new InvalidOperationException(
+                "An active flight leg cannot have a completion timestamp.");
+        }
+
+        if (Status == FlightLegStatus.Completed
+            && (CompletedAt is not { } completedAt
+                || completedAt < StartedAt))
+        {
+            throw new InvalidOperationException(
+                "A completed flight leg requires a valid completion timestamp.");
+        }
+
         Plan?.Validate();
+    }
+
+    public FlightLeg Complete(DateTimeOffset completedAt)
+    {
+        if (Status == FlightLegStatus.Completed)
+            return this;
+
+        if (completedAt < StartedAt)
+            throw new ArgumentOutOfRangeException(nameof(completedAt));
+
+        return this with
+        {
+            Status = FlightLegStatus.Completed,
+            CompletedAt = completedAt
+        };
     }
 }
 

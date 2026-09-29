@@ -149,6 +149,8 @@ public sealed class FlightSessionDetailsTests
         Assert.Equal(1, leg.Sequence);
         Assert.Equal(session.CreatedAt, leg.StartedAt);
         Assert.Same(plan, leg.Plan);
+        Assert.Equal(FlightLegStatus.Active, leg.Status);
+        Assert.Null(leg.CompletedAt);
 
         Assert.NotNull(
             session.Statistics);

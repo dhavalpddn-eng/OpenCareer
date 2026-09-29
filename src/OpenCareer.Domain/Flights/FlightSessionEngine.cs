@@ -71,6 +71,9 @@ public static class FlightSessionEngine
                 nextTracking,
                 update.Evidence.Timestamp);
 
+        IReadOnlyList<FlightLeg> legs =
+            current.EffectiveLegs;
+
         if (update.ShutdownConfirmed
             && nextTracking.State == FlightTrackingState.Parked)
         {
@@ -81,6 +84,10 @@ public static class FlightSessionEngine
         {
             operationState = FlightOperationState.Complete;
             status = FlightSessionStatus.Completed;
+            legs =
+            [
+                legs.Single().Complete(update.Evidence.Timestamp)
+            ];
         }
 
         return current with
@@ -95,7 +102,8 @@ public static class FlightSessionEngine
                 update.ContinuityAnchor
                 ?? current.ContinuityAnchor,
             Statistics = statistics,
-            LandingEpisodes = landingEpisodes
+            LandingEpisodes = landingEpisodes,
+            Legs = legs
         };
     }
 

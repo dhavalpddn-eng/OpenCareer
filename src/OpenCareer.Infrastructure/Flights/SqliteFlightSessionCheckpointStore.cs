@@ -64,7 +64,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
-        session = session.EnsureInitialLeg();
+        session = session.EnsureLegLifecycle();
         ValidateForPersistence(session);
 
         string payload =
@@ -538,7 +538,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
             ?? throw new InvalidDataException(
                 "Flight-session checkpoint payload is empty.");
 
-        session = session.EnsureInitialLeg();
+        session = session.EnsureLegLifecycle();
 
         ValidateLoadedCheckpoint(
             session,
@@ -715,6 +715,23 @@ public sealed class SqliteFlightSessionCheckpointStore :
         {
             throw new InvalidDataException(
                 "Flight leg 1 does not match its parent FlightSession identity and plan.");
+        }
+
+        if (session.Status == FlightSessionStatus.Completed)
+        {
+            if (session.Milestones.CompletedAt is not { } completedAt
+                || leg.Status != FlightLegStatus.Completed
+                || leg.CompletedAt != completedAt)
+            {
+                throw new InvalidDataException(
+                    "Completed FlightSession and flight-leg terminal state do not match.");
+            }
+        }
+        else if (leg.Status != FlightLegStatus.Active
+            || leg.CompletedAt is not null)
+        {
+            throw new InvalidDataException(
+                "A non-completed FlightSession cannot contain a completed flight leg.");
         }
     }
 

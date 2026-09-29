@@ -89,7 +89,8 @@ public static class FlightSessionDebriefProjector
                 runtimeLeg.LegId,
                 runtimeLeg.Sequence,
                 runtimeLeg.StartedAt,
-                endedAt,
+                runtimeLeg.CompletedAt
+                ?? endedAt,
                 route,
                 session.TimeLedger,
                 track,

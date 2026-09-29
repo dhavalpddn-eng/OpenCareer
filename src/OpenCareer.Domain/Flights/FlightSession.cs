@@ -77,6 +77,28 @@ public sealed record FlightSession(
                 Legs = EffectiveLegs
             };
 
+    public FlightSession EnsureLegLifecycle()
+    {
+        FlightSession session = EnsureInitialLeg();
+
+        if (session.Status != FlightSessionStatus.Completed
+            || session.Legs is not { Count: 1 }
+            || session.Legs[0].Status != FlightLegStatus.Active
+            || session.Legs[0].CompletedAt is not null
+            || session.Milestones.CompletedAt is not { } completedAt)
+        {
+            return session;
+        }
+
+        return session with
+        {
+            Legs =
+            [
+                session.Legs[0].Complete(completedAt)
+            ]
+        };
+    }
+
     public bool IsTerminal =>
         Status is FlightSessionStatus.Interrupted
             or FlightSessionStatus.Completed

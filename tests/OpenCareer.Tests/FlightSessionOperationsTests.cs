@@ -88,6 +88,14 @@ public sealed class FlightSessionOperationsTests
             FlightTrackingState.Complete,
             completed.Tracking.State);
 
+        FlightLeg completedLeg =
+            Assert.Single(completed.EffectiveLegs);
+
+        Assert.Equal(FlightLegStatus.Completed, completedLeg.Status);
+        Assert.Equal(Epoch.AddSeconds(10), completedLeg.CompletedAt);
+
+        int completedSaveCount = store.SaveCount;
+
         FlightSession repeated =
             await service.CompleteAsync(
                 new FlightSessionCompletionRequest(
@@ -98,6 +106,52 @@ public sealed class FlightSessionOperationsTests
         Assert.Equal(
             completed,
             repeated);
+        Assert.Equal(completedSaveCount, store.SaveCount);
+        Assert.Equal(
+            completedLeg.CompletedAt,
+            Assert.Single(repeated.EffectiveLegs).CompletedAt);
+    }
+
+    [Fact]
+    public async Task CompletionWriteFailureRetryClosesLegOnceAtSameTimestamp()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var persistence =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        await persistence.StartAsync(Epoch);
+        await AdvanceToShutdownAsync(persistence);
+
+        var service =
+            new FlightSessionCompletionService(
+                coordinator,
+                persistence);
+
+        var request =
+            new FlightSessionCompletionRequest(
+                Epoch.AddSeconds(10),
+                MissionConditionsVerified: true,
+                PostFlightTasksVerified: true);
+
+        store.FailWrites = true;
+        await Assert.ThrowsAsync<IOException>(
+            () => service.CompleteAsync(request));
+
+        FlightLeg pendingLeg =
+            Assert.Single(coordinator.Current!.EffectiveLegs);
+        Assert.Equal(FlightLegStatus.Active, pendingLeg.Status);
+        Assert.Null(pendingLeg.CompletedAt);
+
+        store.FailWrites = false;
+        FlightSession completed = await service.CompleteAsync(request);
+        FlightLeg completedLeg = Assert.Single(completed.EffectiveLegs);
+
+        Assert.Equal(FlightLegStatus.Completed, completedLeg.Status);
+        Assert.Equal(Epoch.AddSeconds(10), completedLeg.CompletedAt);
+        Assert.Equal(completed, store.Checkpoint);
     }
 
     [Fact]
@@ -405,10 +459,15 @@ public sealed class FlightSessionOperationsTests
     {
         public FlightSession? Checkpoint { get; set; }
 
+        public bool FailWrites { get; set; }
+
         public Task SaveAsync(
             FlightSession session,
             CancellationToken cancellationToken = default)
         {
+            if (FailWrites)
+                throw new IOException("Synthetic persistence failure.");
+
             Checkpoint = session;
             return Task.CompletedTask;
         }

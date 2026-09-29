@@ -57,6 +57,8 @@ public sealed class FlightSessionDebriefProjectorTests
         Assert.Equal(runtimeLeg.LegId, debriefLeg.LegId);
         Assert.Equal(runtimeLeg.Sequence, debriefLeg.Sequence);
         Assert.Equal(runtimeLeg.StartedAt, debriefLeg.StartedAt);
+        Assert.Equal(FlightLegStatus.Completed, runtimeLeg.Status);
+        Assert.Equal(runtimeLeg.CompletedAt, debriefLeg.EndedAt);
 
         Assert.Equal(
             "KDFW",

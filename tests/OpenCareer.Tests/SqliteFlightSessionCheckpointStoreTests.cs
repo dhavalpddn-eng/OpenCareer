@@ -47,6 +47,27 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Fact]
+    public async Task CompletedLegStateSurvivesStoreReopen()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        FlightSession completed = CreateCompletedSession();
+
+        await new SqliteFlightSessionCheckpointStore(databasePath)
+            .SaveAsync(completed);
+
+        FlightSession restored =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        FlightLeg expectedLeg = Assert.Single(completed.EffectiveLegs);
+        FlightLeg actualLeg = Assert.Single(restored.EffectiveLegs);
+        Assert.Equal(expectedLeg, actualLeg);
+        Assert.Equal(FlightLegStatus.Completed, actualLeg.Status);
+        Assert.Equal(completed.Milestones.CompletedAt, actualLeg.CompletedAt);
+    }
+
+    [Fact]
     public async Task LegacyCheckpointWithoutExpectedAircraftIdentityStillLoadsWithoutFabrication()
     {
         string databasePath = Path.Combine(_directory, "career.db");
@@ -554,4 +575,41 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
                     ContinuityPlausible: true,
                     AirborneConfirmed: true)));
     }
+
+    private static FlightSession CreateCompletedSession()
+    {
+        FlightSession session = CreateAirborneSession();
+        DateTimeOffset epoch = session.CreatedAt;
+
+        session = Advance(session, epoch.AddSeconds(6), approach: true);
+        session = Advance(session, epoch.AddSeconds(7), touchdown: true);
+        session = Advance(session, epoch.AddSeconds(8), rollout: true);
+        session = Advance(session, epoch.AddSeconds(9), parking: true);
+        session = Advance(session, epoch.AddSeconds(10), shutdown: true);
+        return Advance(session, epoch.AddSeconds(11), complete: true);
+    }
+
+    private static FlightSession Advance(
+        FlightSession session,
+        DateTimeOffset timestamp,
+        bool approach = false,
+        bool touchdown = false,
+        bool rollout = false,
+        bool parking = false,
+        bool shutdown = false,
+        bool complete = false) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    timestamp,
+                    Connected: true,
+                    StableTelemetry: true,
+                    ContinuityPlausible: true,
+                    ApproachConfirmed: approach,
+                    TouchdownConfirmed: touchdown,
+                    LandingRolloutConfirmed: rollout,
+                    ParkingConfirmed: parking,
+                    OperationCompleteConfirmed: complete),
+                ShutdownConfirmed: shutdown));
 }

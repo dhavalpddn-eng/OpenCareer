@@ -83,6 +83,10 @@ public sealed class FlightSessionEngineTests
                 7,
                 touchdown: true);
 
+        FlightLeg landedLeg = Assert.Single(session.EffectiveLegs);
+        Assert.Equal(FlightLegStatus.Active, landedLeg.Status);
+        Assert.Null(landedLeg.CompletedAt);
+
         Assert.Equal(
             FlightOperationState.Landed,
             session.OperationState);
@@ -178,6 +182,21 @@ public sealed class FlightSessionEngineTests
         Assert.Equal(
             Epoch.AddSeconds(11),
             session.Milestones.CompletedAt);
+
+        FlightLeg completedLeg = Assert.Single(session.EffectiveLegs);
+        Assert.Equal(FlightLegStatus.Completed, completedLeg.Status);
+        Assert.Equal(Epoch.AddSeconds(11), completedLeg.CompletedAt);
+
+        FlightSession replayed =
+            Advance(
+                session,
+                12,
+                complete: true);
+
+        Assert.Same(session, replayed);
+        Assert.Equal(
+            Epoch.AddSeconds(11),
+            Assert.Single(replayed.EffectiveLegs).CompletedAt);
     }
 
     [Fact]
