@@ -704,10 +704,12 @@ public sealed class KjfkPlayableLoopCertificationTests
                 new SettledJobLogbookCoordinator(Sessions, new LogbookCommitCoordinator(Logbook)), Logbook,
                 new CareerLogbookExperienceCoordinator(new PlayerCareerExperienceCoordinator(Profiles, _career, ContractStore)),
                 location, new CareerFlightFinalizationCoordinator(new CareerFlightReservationReleaseCoordinator(Fleet, Fleet), Persistence, Sessions));
+            var terminalRecovery = new SqliteCareerJobTerminalRecoveryStore(options);
             Loop = new(new AcceptedJobDispatchBridge(fleetBridge, dispatch),
                 new AcceptedJobFlightSessionBridge(new AcceptedJobStartBridge(lifecycle), ContractStore, Persistence, Sessions),
                 new JobFlightSessionCompletionBridge(Evidence, Sessions, new FlightSessionCompletionService(Sessions, Persistence)),
-                new CompletedJobContractBridge(ContractStore, lifecycle, Sessions), ContractStore, terminal);
+                new CompletedJobContractBridge(ContractStore, lifecycle, Sessions), ContractStore, terminal,
+                terminalRecovery);
             var inputs = new CareerJobStartInputSource(boards, _career, ContractStore, _registry, dispatch,
                 [new PersistedJobContractTermsSource()], [new StandardCivilianPointToPointDispatchAuthoritySource()], clock);
             Development = new(new JobBoardGenerationService(boards), _career, recoverySource, Checkpoints, clock, location);
