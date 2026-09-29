@@ -207,6 +207,98 @@ public sealed class FlightSessionPersistenceService
         }
     }
 
+    public async Task<FlightSession> CompleteCurrentLegAsync(
+        Guid expectedSessionId,
+        Guid? expectedContractId,
+        DateTimeOffset requestedAt,
+        FlightLegTerminalEvidence terminalEvidence,
+        FlightLegTerminalPolicy terminalPolicy,
+        CancellationToken cancellationToken = default)
+    {
+        if (expectedSessionId == Guid.Empty)
+            throw new ArgumentException("Session ID is required.", nameof(expectedSessionId));
+
+        if (expectedContractId is { } contractId && contractId == Guid.Empty)
+            throw new ArgumentException("Contract ID is required.", nameof(expectedContractId));
+
+        if (requestedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(requestedAt));
+
+        ArgumentNullException.ThrowIfNull(terminalEvidence);
+        ArgumentNullException.ThrowIfNull(terminalPolicy);
+
+        await _mutationGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            FlightSession current =
+                _coordinator.Current
+                ?? throw new InvalidOperationException(
+                    "No flight session is active.");
+
+            ValidateExpectedCompletionIdentity(
+                current,
+                expectedSessionId,
+                expectedContractId);
+
+            if (current.IsTerminal)
+            {
+                throw new InvalidOperationException(
+                    "A terminal FlightSession cannot complete an intermediate flight leg.");
+            }
+
+            if (requestedAt < current.CreatedAt)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(requestedAt),
+                    "Leg completion cannot predate the FlightSession.");
+            }
+
+            current.ValidateLegs();
+            FlightLeg[] legs = current.EffectiveLegs.ToArray();
+            FlightLeg activeLeg = legs[^1];
+
+            if (activeLeg.Status == FlightLegStatus.Completed)
+                return current;
+
+            if (!terminalPolicy.IsSatisfied(terminalEvidence))
+            {
+                throw new InvalidOperationException(
+                    "Trusted terminal evidence does not satisfy the flight-leg terminal policy.");
+            }
+
+            DateTimeOffset completedAt =
+                requestedAt < current.UpdatedAt
+                    ? current.UpdatedAt
+                    : requestedAt;
+
+            legs[^1] = activeLeg.Complete(completedAt);
+
+            FlightSession completedLeg =
+                current with
+                {
+                    UpdatedAt = completedAt,
+                    Legs = legs
+                };
+
+            completedLeg.ValidateLegs();
+
+            await _store
+                .SaveAsync(completedLeg, cancellationToken)
+                .ConfigureAwait(false);
+
+            _lastPersisted = completedLeg;
+            _coordinator.CommitPersisted(completedLeg);
+            return completedLeg;
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
     public async Task<FlightSession> CancelAsync(
         Guid expectedSessionId,
         Guid expectedContractId,

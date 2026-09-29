@@ -1,5 +1,6 @@
 using OpenCareer.Application.Flights;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Infrastructure.Flights;
 
 namespace OpenCareer.Tests;
 
@@ -7,6 +8,15 @@ public sealed class FlightSessionPersistenceServiceTests
 {
     private static readonly DateTimeOffset Epoch =
         new(2026, 9, 19, 15, 0, 0, TimeSpan.Zero);
+
+    private static readonly FlightLegTerminalEvidence CompleteTerminalEvidence =
+        new(
+            AtAcceptedTerminal: true,
+            OnGround: true,
+            Stationary: true,
+            ParkingBrakeSet: true,
+            EnginesRunning: 0,
+            ServicingComplete: true);
 
     [Fact]
     public async Task StartPersistsBeforePublishingSession()
@@ -71,6 +81,149 @@ public sealed class FlightSessionPersistenceServiceTests
         Assert.Equal(
             started,
             coordinator.Current);
+    }
+
+    [Fact]
+    public async Task InsufficientTerminalEvidenceDoesNotCompleteCurrentLeg()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        FlightSession started = await service.StartAsync(Epoch);
+        int saveCount = store.SaveCount;
+
+        FlightLegTerminalEvidence incomplete =
+            CompleteTerminalEvidence with { ServicingComplete = false };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.CompleteCurrentLegAsync(
+                started.SessionId,
+                started.ContractId,
+                Epoch.AddMinutes(1),
+                incomplete,
+                FlightLegTerminalPolicy.ConventionalCommercialTurnaround));
+
+        Assert.Equal(started, coordinator.Current);
+        Assert.Equal(saveCount, store.SaveCount);
+    }
+
+    [Fact]
+    public async Task SatisfiedPolicyCompletesLegOnceAndKeepsSessionActive()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        FlightSession started = await service.StartAsync(Epoch);
+
+        FlightSession completedLeg =
+            await service.CompleteCurrentLegAsync(
+                started.SessionId,
+                started.ContractId,
+                Epoch.AddMinutes(1),
+                CompleteTerminalEvidence,
+                FlightLegTerminalPolicy.ConventionalCommercialTurnaround);
+
+        FlightLeg leg = Assert.Single(completedLeg.EffectiveLegs);
+        Assert.Equal(FlightLegStatus.Completed, leg.Status);
+        Assert.Equal(Epoch.AddMinutes(1), leg.CompletedAt);
+        Assert.Equal(FlightSessionStatus.Active, completedLeg.Status);
+        Assert.Equal(started.OperationState, completedLeg.OperationState);
+        Assert.Equal(started.Tracking, completedLeg.Tracking);
+        Assert.Equal(completedLeg, store.Checkpoint);
+
+        int saveCount = store.SaveCount;
+        FlightSession replay =
+            await service.CompleteCurrentLegAsync(
+                started.SessionId,
+                started.ContractId,
+                Epoch.AddMinutes(2),
+                CompleteTerminalEvidence,
+                FlightLegTerminalPolicy.ConventionalCommercialTurnaround);
+
+        Assert.Equal(completedLeg, replay);
+        Assert.Equal(saveCount, store.SaveCount);
+        Assert.Equal(
+            Epoch.AddMinutes(1),
+            Assert.Single(replay.EffectiveLegs).CompletedAt);
+    }
+
+    [Fact]
+    public async Task FailedLegCompletionWriteLeavesPublishedStateUnchangedAndRetryIsStable()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        FlightSession started = await service.StartAsync(Epoch);
+
+        store.FailWrites = true;
+        await Assert.ThrowsAsync<IOException>(
+            () => service.CompleteCurrentLegAsync(
+                started.SessionId,
+                started.ContractId,
+                Epoch.AddMinutes(1),
+                CompleteTerminalEvidence,
+                FlightLegTerminalPolicy.ConventionalCommercialTurnaround));
+
+        Assert.Equal(started, coordinator.Current);
+        Assert.Equal(
+            FlightLegStatus.Active,
+            Assert.Single(coordinator.Current!.EffectiveLegs).Status);
+
+        store.FailWrites = false;
+        FlightSession retried =
+            await service.CompleteCurrentLegAsync(
+                started.SessionId,
+                started.ContractId,
+                Epoch.AddMinutes(1),
+                CompleteTerminalEvidence,
+                FlightLegTerminalPolicy.ConventionalCommercialTurnaround);
+
+        Assert.Equal(Epoch.AddMinutes(1), Assert.Single(retried.EffectiveLegs).CompletedAt);
+        Assert.Equal(retried, store.Checkpoint);
+    }
+
+    [Fact]
+    public async Task CompletedCurrentLegSurvivesSqliteRestart()
+    {
+        string directory =
+            Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
+        string databasePath = Path.Combine(directory, "career.db");
+
+        try
+        {
+            var coordinator = new FlightSessionCoordinator();
+            var service =
+                new FlightSessionPersistenceService(
+                    coordinator,
+                    new SqliteFlightSessionCheckpointStore(databasePath));
+
+            FlightSession started = await service.StartAsync(Epoch);
+            await service.CompleteCurrentLegAsync(
+                started.SessionId,
+                started.ContractId,
+                Epoch.AddMinutes(1),
+                CompleteTerminalEvidence,
+                FlightLegTerminalPolicy.ConventionalCommercialTurnaround);
+
+            var restoredCoordinator = new FlightSessionCoordinator();
+            var restoredService =
+                new FlightSessionPersistenceService(
+                    restoredCoordinator,
+                    new SqliteFlightSessionCheckpointStore(databasePath));
+
+            FlightSession restored =
+                Assert.IsType<FlightSession>(await restoredService.RecoverAsync());
+
+            FlightLeg restoredLeg = Assert.Single(restored.EffectiveLegs);
+            Assert.Equal(FlightLegStatus.Completed, restoredLeg.Status);
+            Assert.Equal(Epoch.AddMinutes(1), restoredLeg.CompletedAt);
+            Assert.False(restored.IsTerminal);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]
