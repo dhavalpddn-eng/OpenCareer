@@ -51,6 +51,10 @@ public sealed class AcceptedJobFlightSessionBridge
 
         retainedAccepted.Validate();
 
+        string expectedCanonicalAircraftId =
+            RequireCanonicalAircraftId(
+                acceptedDispatch.FleetResult.CanonicalAircraftId);
+
         Guid contractId =
             retainedAccepted.Contract.ContractId;
 
@@ -90,6 +94,16 @@ public sealed class AcceptedJobFlightSessionBridge
                 {
                     throw new InvalidOperationException(
                         "A different active FlightSession already owns the simulator operation.");
+                }
+
+                if (current.Plan?.ExpectedCanonicalAircraftId is { } retainedIdentity
+                    && !string.Equals(
+                        retainedIdentity,
+                        expectedCanonicalAircraftId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "The active FlightSession aircraft identity does not match the retained reservation.");
                 }
             }
 
@@ -133,7 +147,9 @@ public sealed class AcceptedJobFlightSessionBridge
                     SourceProvider:
                         "OpenCareer.JobContract",
                     SourceReference:
-                        contractId.ToString("D"));
+                        contractId.ToString("D"),
+                    ExpectedCanonicalAircraftId:
+                        expectedCanonicalAircraftId);
 
             FlightSession session =
                 await _flightSessionPersistence
@@ -154,6 +170,18 @@ public sealed class AcceptedJobFlightSessionBridge
         {
             _gate.Release();
         }
+    }
+
+    private static string RequireCanonicalAircraftId(
+        string? canonicalAircraftId)
+    {
+        if (string.IsNullOrWhiteSpace(canonicalAircraftId))
+        {
+            throw new InvalidOperationException(
+                "A contract-linked FlightSession requires the reserved canonical aircraft identity.");
+        }
+
+        return canonicalAircraftId.Trim();
     }
 
     public static Guid GetFlightSessionId(

@@ -104,6 +104,145 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task MatchingLoadedAircraftAllowsContractSessionProgress()
+    {
+        FlightSession active = ContractSession(
+            FlightSession.Start(Epoch),
+            "aircraft-a");
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+        var store = new MemoryStore { Checkpoint = active };
+        var telemetry = new TestTelemetrySource
+        {
+            Latest = Telemetry(Epoch.AddSeconds(1), 32, -97, onGround: true)
+        };
+
+        var runtime = new FlightSessionRuntime(
+            coordinator,
+            new FlightSessionPersistenceService(coordinator, store),
+            Processor(),
+            new FlightContinuityPolicy(),
+            Connected(),
+            telemetry,
+            new TestLoadedAircraftIdentitySource("aircraft-a"),
+            new FixedTimeProvider(Epoch.AddSeconds(1)));
+
+        Assert.True(await runtime.RefreshAsync());
+        Assert.Equal(FlightSessionStatus.Active, coordinator.Current?.Status);
+        Assert.Equal(FlightTrackingState.Preflight, coordinator.Current?.Tracking.State);
+    }
+
+    [Fact]
+    public async Task UnknownLoadedAircraftSuspendsWithoutAdvancingContractSession()
+    {
+        FlightSession active = ContractSession(ApproachSession(), "aircraft-a");
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+        var store = new MemoryStore { Checkpoint = active };
+        var telemetry = new BufferedTestTelemetrySource();
+        telemetry.Add(Telemetry(Epoch.AddSeconds(6), 32, -97, onGround: true, groundSpeed: 55));
+        telemetry.Add(Telemetry(Epoch.AddSeconds(7), 32, -97, onGround: false, altitudeAgl: 8));
+        telemetry.Add(Telemetry(Epoch.AddSeconds(8), 32, -97, onGround: true, groundSpeed: 45));
+        var identity = new TestLoadedAircraftIdentitySource();
+
+        var runtime = new FlightSessionRuntime(
+            coordinator,
+            new FlightSessionPersistenceService(coordinator, store),
+            Processor(),
+            new FlightContinuityPolicy(),
+            Connected(),
+            telemetry,
+            identity,
+            new FixedTimeProvider(Epoch.AddSeconds(8)));
+
+        Assert.True(await runtime.RefreshAsync());
+        FlightSession suspended = Assert.IsType<FlightSession>(coordinator.Current);
+        Assert.Equal(FlightSessionStatus.Suspended, suspended.Status);
+        Assert.Equal(active.OperationState, suspended.OperationState);
+        Assert.Equal(active.TimeLedger, suspended.TimeLedger);
+        Assert.Equal(active.EffectiveStatistics, suspended.EffectiveStatistics);
+        Assert.Equal(active.Tracking.TakeoffCount, suspended.Tracking.TakeoffCount);
+        Assert.Equal(active.Tracking.LandingEpisodeCount, suspended.Tracking.LandingEpisodeCount);
+        Assert.Equal(active.Tracking.BounceCount, suspended.Tracking.BounceCount);
+        Assert.Empty(telemetry.ReadAfter(null));
+
+        identity.CanonicalAircraftId = "aircraft-a";
+        Assert.False(await runtime.RefreshAsync());
+        telemetry.Add(Telemetry(Epoch.AddSeconds(9), 32, -97, onGround: false, altitudeMsl: 700));
+        Assert.True(await runtime.RefreshAsync());
+        Assert.Equal(FlightSessionStatus.Active, coordinator.Current?.Status);
+        Assert.Equal(0, coordinator.Current?.Tracking.LandingEpisodeCount);
+        Assert.Equal(0, coordinator.Current?.Tracking.BounceCount);
+    }
+
+    [Fact]
+    public async Task PositiveAircraftMismatchCannotTransferBufferedFlightEvidence()
+    {
+        FlightSession active = ContractSession(ApproachSession(), "aircraft-a");
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+        var store = new MemoryStore { Checkpoint = active };
+        var telemetry = new BufferedTestTelemetrySource();
+        telemetry.Add(Telemetry(Epoch.AddSeconds(6), 32, -97, onGround: true, groundSpeed: 55));
+        telemetry.Add(Telemetry(Epoch.AddSeconds(7), 32, -97, onGround: false, altitudeAgl: 8));
+        telemetry.Add(Telemetry(Epoch.AddSeconds(8), 32, -97, onGround: true, groundSpeed: 45));
+        var identity = new TestLoadedAircraftIdentitySource("aircraft-b");
+
+        var runtime = new FlightSessionRuntime(
+            coordinator,
+            new FlightSessionPersistenceService(coordinator, store),
+            Processor(),
+            new FlightContinuityPolicy(),
+            Connected(),
+            telemetry,
+            identity,
+            new FixedTimeProvider(Epoch.AddSeconds(8)));
+
+        Assert.True(await runtime.RefreshAsync());
+        FlightSession suspended = Assert.IsType<FlightSession>(coordinator.Current);
+        Assert.Equal(FlightSessionStatus.Suspended, suspended.Status);
+        Assert.Equal(0, suspended.Tracking.LandingEpisodeCount);
+        Assert.Equal(0, suspended.Tracking.BounceCount);
+
+        identity.CanonicalAircraftId = "aircraft-a";
+        Assert.False(await runtime.RefreshAsync());
+        telemetry.Add(Telemetry(Epoch.AddSeconds(9), 32, -97, onGround: false, altitudeMsl: 700));
+        Assert.True(await runtime.RefreshAsync());
+        Assert.Equal(FlightSessionStatus.Active, coordinator.Current?.Status);
+        Assert.Equal(0, coordinator.Current?.Tracking.LandingEpisodeCount);
+        Assert.Equal(0, coordinator.Current?.Tracking.BounceCount);
+    }
+
+    [Fact]
+    public async Task LegacyContractSessionWithoutExpectedAircraftFailsClosed()
+    {
+        FlightSession legacy = FlightSession.Start(
+            Epoch,
+            contractId: Guid.Parse("97000000-0000-0000-0000-000000000001"));
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(legacy);
+        var store = new MemoryStore { Checkpoint = legacy };
+
+        var runtime = new FlightSessionRuntime(
+            coordinator,
+            new FlightSessionPersistenceService(coordinator, store),
+            Processor(),
+            new FlightContinuityPolicy(),
+            Connected(),
+            new TestTelemetrySource
+            {
+                Latest = Telemetry(Epoch.AddSeconds(1), 32, -97, onGround: true)
+            },
+            new TestLoadedAircraftIdentitySource("aircraft-a"),
+            new FixedTimeProvider(Epoch.AddSeconds(1)));
+
+        Assert.True(await runtime.RefreshAsync());
+        Assert.Equal(FlightSessionStatus.Suspended, coordinator.Current?.Status);
+        Assert.Null(coordinator.Current?.Plan?.ExpectedCanonicalAircraftId);
+        Assert.Equal(FlightTrackingState.Observing, coordinator.Current?.Tracking.SuspendedFrom);
+    }
+
+    [Fact]
     public async Task DisconnectSuspendsAndPersistsActiveSession()
     {
         var coordinator =
@@ -1208,6 +1347,21 @@ public sealed class FlightSessionRuntimeTests
                     Connected: false,
                     ContinuityPlausible: false)));
 
+    private static FlightSession ContractSession(
+        FlightSession session,
+        string expectedCanonicalAircraftId) =>
+        session with
+        {
+            ContractId =
+                Guid.Parse("97000000-0000-0000-0000-000000000001"),
+            Plan =
+                new FlightSessionPlan(
+                    "KJFK",
+                    "KJFK",
+                    ExpectedCanonicalAircraftId:
+                        expectedCanonicalAircraftId)
+        };
+
     private static AircraftTelemetrySnapshot Telemetry(
         DateTimeOffset timestamp,
         double latitude,
@@ -1262,6 +1416,20 @@ public sealed class FlightSessionRuntimeTests
         ISimulatorTelemetrySource
     {
         public AircraftTelemetrySnapshot? Latest { get; set; }
+    }
+
+    private sealed class TestLoadedAircraftIdentitySource(
+        string? canonicalAircraftId = null)
+        : ICurrentLoadedAircraftIdentitySource
+    {
+        public string? CanonicalAircraftId { get; set; } =
+            canonicalAircraftId;
+
+        public CurrentLoadedAircraftIdentitySnapshot Current =>
+            string.IsNullOrWhiteSpace(CanonicalAircraftId)
+                ? CurrentLoadedAircraftIdentitySnapshot.Unavailable
+                : CurrentLoadedAircraftIdentitySnapshot.Identified(
+                    CanonicalAircraftId);
     }
 
     private sealed class BufferedTestTelemetrySource :

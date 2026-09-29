@@ -393,6 +393,8 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 nameof(session),
                 "Flight operation state is invalid.");
         }
+
+        session.Plan?.Validate();
     }
 
     private static void ValidateLoadedCheckpoint(

@@ -12,6 +12,7 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
     private readonly FlightContinuityPolicy _continuityPolicy;
     private readonly ISimulatorConnection _connection;
     private readonly ISimulatorTelemetrySource _telemetrySource;
+    private readonly ICurrentLoadedAircraftIdentitySource _loadedAircraftIdentitySource;
     private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
@@ -32,6 +33,27 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
         FlightContinuityPolicy continuityPolicy,
         ISimulatorConnection connection,
         ISimulatorTelemetrySource telemetrySource,
+        TimeProvider? timeProvider = null)
+        : this(
+            coordinator,
+            persistence,
+            evidenceProcessor,
+            continuityPolicy,
+            connection,
+            telemetrySource,
+            UnavailableLoadedAircraftIdentitySource.Instance,
+            timeProvider)
+    {
+    }
+
+    public FlightSessionRuntime(
+        FlightSessionCoordinator coordinator,
+        FlightSessionPersistenceService persistence,
+        FlightTelemetryEvidenceProcessor evidenceProcessor,
+        FlightContinuityPolicy continuityPolicy,
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        ICurrentLoadedAircraftIdentitySource loadedAircraftIdentitySource,
         TimeProvider? timeProvider = null)
     {
         _coordinator =
@@ -57,6 +79,10 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
         _telemetrySource =
             telemetrySource
             ?? throw new ArgumentNullException(nameof(telemetrySource));
+
+        _loadedAircraftIdentitySource =
+            loadedAircraftIdentitySource
+            ?? throw new ArgumentNullException(nameof(loadedAircraftIdentitySource));
 
         _timeProvider =
             timeProvider
@@ -124,6 +150,14 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
                 return true;
             }
 
+            if (!IsExpectedLoadedAircraft(current))
+            {
+                return await SuspendForUnverifiedAircraftAsync(
+                        current,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             IReadOnlyList<AircraftTelemetrySnapshot> samples =
                 ReadUnseenTelemetry();
 
@@ -156,6 +190,68 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
         {
             _refreshGate.Release();
         }
+    }
+
+    private bool IsExpectedLoadedAircraft(
+        FlightSession session)
+    {
+        if (session.ContractId is null)
+            return true;
+
+        string? expectedCanonicalAircraftId =
+            session.Plan?.ExpectedCanonicalAircraftId;
+
+        if (string.IsNullOrWhiteSpace(expectedCanonicalAircraftId))
+            return false;
+
+        CurrentLoadedAircraftIdentitySnapshot loaded =
+            _loadedAircraftIdentitySource.Current;
+
+        try
+        {
+            loaded.Validate();
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
+        return loaded.Status
+                == CurrentLoadedAircraftIdentityStatus.Identified
+            && string.Equals(
+                expectedCanonicalAircraftId.Trim(),
+                loaded.CanonicalAircraftId?.Trim(),
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<bool> SuspendForUnverifiedAircraftAsync(
+        FlightSession current,
+        CancellationToken cancellationToken)
+    {
+        ClearFlightCriticalTelemetry();
+
+        if (current.Status == FlightSessionStatus.Suspended)
+            return false;
+
+        DateTimeOffset timestamp =
+            Max(
+                _timeProvider.GetUtcNow(),
+                current.UpdatedAt);
+
+        var suspensionEvidence =
+            new FlightStateEvidence(
+                timestamp,
+                Connected: false,
+                ContinuityPlausible: false);
+
+        await _persistence
+            .AdvanceAsync(
+                new FlightSessionAdvance(suspensionEvidence),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        Publish(suspensionEvidence);
+        return true;
     }
 
     private IReadOnlyList<AircraftTelemetrySnapshot> ReadUnseenTelemetry()
@@ -466,4 +562,14 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
         left >= right
             ? left
             : right;
+
+    private sealed class UnavailableLoadedAircraftIdentitySource
+        : ICurrentLoadedAircraftIdentitySource
+    {
+        public static UnavailableLoadedAircraftIdentitySource Instance { get; } =
+            new();
+
+        public CurrentLoadedAircraftIdentitySnapshot Current =>
+            CurrentLoadedAircraftIdentitySnapshot.Unavailable;
+    }
 }

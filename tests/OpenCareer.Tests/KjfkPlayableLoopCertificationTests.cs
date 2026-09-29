@@ -386,6 +386,9 @@ public sealed class KjfkPlayableLoopCertificationTests
             Assert.Equal(first, app.Session.SessionId);
             Assert.Equal(ContractStatus.InProgress, app.Contracts.Find(first)!.Contract.Status);
             Assert.NotNull(await app.ReservationAsync(first));
+            Assert.Equal(
+                AircraftId,
+                app.Session.Plan?.ExpectedCanonicalAircraftId);
             await app.SamplesAsync(4, false, 600, 80);
             Assert.Equal(FlightSessionStatus.Active, app.Session.Status);
             Assert.Equal(first, app.Session.SessionId);
@@ -679,7 +682,13 @@ public sealed class KjfkPlayableLoopCertificationTests
             Checkpoints = new(new SqliteFlightSessionCheckpointStore(path));
             Persistence = new(Sessions, Checkpoints);
             Runtime = new(Sessions, Persistence, new FlightTelemetryEvidenceProcessor(),
-                new FlightContinuityPolicy(), connection, telemetry, clock);
+                new FlightContinuityPolicy(), connection, telemetry,
+                connection is SimConnectConnection simConnect
+                    ? new SimConnectCurrentLoadedAircraftIdentitySource(simConnect)
+                    : throw new ArgumentException(
+                        "KJFK certification requires the real SimConnect loaded-aircraft identity boundary.",
+                        nameof(connection)),
+                clock);
             Evidence = new(Sessions, Runtime);
             var installed = new PersistentInstalledAircraftObservationSource(discovery, new SqliteInstalledAircraftRegistryStore(path));
             _registry = new(new AircraftRegistryCatalogService([installed, new PlayableLoopReferenceAircraftObservationSource()]),
@@ -786,6 +795,9 @@ public sealed class KjfkPlayableLoopCertificationTests
             Assert.Equal(offer.OfferId, Session.ContractId);
             Assert.Equal(Session.SessionId, (await Checkpoints.LoadAsync())!.SessionId);
             Assert.Equal(AircraftId, (await ReservationAsync(offer.OfferId))!.CanonicalAircraftId);
+            Assert.Equal(
+                AircraftId,
+                Session.Plan?.ExpectedCanonicalAircraftId);
             Shell.RefreshConnectionStatus();
             Assert.True(Shell.HasFlightSession);
             Assert.Contains("KJFK", Shell.CurrentFlightRouteSummary);

@@ -53,6 +53,9 @@ public sealed class AcceptedJobFlightSessionBridgeTests
             "KSYR",
             result.FlightSession.Plan?.PlannedDestination);
         Assert.Equal(
+            "canonical-aircraft",
+            result.FlightSession.Plan?.ExpectedCanonicalAircraftId);
+        Assert.Equal(
             result.FlightSession,
             sessionStore.Checkpoint);
         Assert.Equal(
@@ -99,6 +102,9 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         Assert.Equal(
             "KJFK",
             result.FlightSession.Plan?.PlannedDestination);
+        Assert.Equal(
+            "canonical-aircraft",
+            result.FlightSession.Plan?.ExpectedCanonicalAircraftId);
         Assert.Equal(
             result.FlightSession,
             sessionStore.Checkpoint);
@@ -151,8 +157,35 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         Assert.Equal(
             first.FlightSession.SessionId,
             replay.FlightSession.SessionId);
+        Assert.Equal(
+            first.FlightSession.Plan?.ExpectedCanonicalAircraftId,
+            replay.FlightSession.Plan?.ExpectedCanonicalAircraftId);
         Assert.Equal(1, contractStore.UpdateCount);
         Assert.Equal(1, sessionStore.SaveCount);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task MissingReservedCanonicalIdentityFailsBeforeContractOrSessionMutation(
+        string? canonicalAircraftId)
+    {
+        PersistedJobContract accepted = AcceptedContract();
+        var contractStore = new FakeContractStore(accepted);
+        var sessionStore = new MemorySessionStore();
+        var coordinator = new FlightSessionCoordinator();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreateBridge(contractStore, sessionStore, coordinator)
+                .StartAsync(
+                    DispatchResult(accepted, canonicalAircraftId),
+                    DispatchContext(OfferedAt.AddMinutes(20))));
+
+        Assert.Equal(ContractStatus.Accepted, contractStore.Current.Contract.Status);
+        Assert.Equal(0, contractStore.UpdateCount);
+        Assert.Equal(0, sessionStore.SaveCount);
+        Assert.Null(coordinator.Current);
     }
 
     [Fact]
@@ -272,7 +305,13 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 accepted.Contract.ContractId,
                 sessionId:
                     Guid.Parse(
-                        "96000000-0000-0000-0000-000000000010"));
+                        "96000000-0000-0000-0000-000000000010"),
+                plan:
+                    new FlightSessionPlan(
+                        "KRME",
+                        "KSYR",
+                        ExpectedCanonicalAircraftId:
+                            "canonical-aircraft"));
 
         var coordinator =
             new FlightSessionCoordinator();
@@ -301,6 +340,9 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         Assert.Equal(
             recovered.SessionId,
             result.FlightSession.SessionId);
+        Assert.Equal(
+            "canonical-aircraft",
+            result.FlightSession.Plan?.ExpectedCanonicalAircraftId);
         Assert.Equal(0, contractStore.UpdateCount);
         Assert.Equal(0, sessionStore.SaveCount);
     }
@@ -331,7 +373,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
     }
 
     private static AcceptedJobDispatchResult DispatchResult(
-        PersistedJobContract accepted)
+        PersistedJobContract accepted,
+        string? canonicalAircraftId = "canonical-aircraft")
     {
         var fleet =
             new JobAcceptanceFleetResult(
@@ -339,7 +382,7 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 accepted,
                 JobAcceptanceFleetBridge.GetReservationId(
                     accepted.Contract.ContractId),
-                "canonical-aircraft");
+                canonicalAircraftId);
 
         DispatchFeasibilityResult dispatch =
             DispatchFeasibilityResult.Create(

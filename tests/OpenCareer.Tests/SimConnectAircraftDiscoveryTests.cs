@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.Application.Planning;
+using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.SimConnect;
 using OpenCareer.SimConnect.Native;
@@ -102,6 +103,7 @@ public sealed class SimConnectAircraftDiscoveryTests
 
         await using var connection = Create(api);
         var source = new SimConnectInstalledAircraftObservationSource(connection);
+        var loadedAircraft = new SimConnectCurrentLoadedAircraftIdentitySource(connection);
 
         connection.Start();
 
@@ -140,6 +142,46 @@ public sealed class SimConnectAircraftDiscoveryTests
         Assert.Equal(
             OpenCareer.Application.Simulator.SimulatorConnectionState.Connected,
             connection.Current.State);
+        Assert.Equal(
+            AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId,
+            loadedAircraft.Current.CanonicalAircraftId);
+    }
+
+    [Fact]
+    public async Task CurrentLoadedIdentityUsesTitleAndNeverCatalogContents()
+    {
+        var api = new SimConnectTestTransport();
+        api.Enqueue(SimConnectPackets.Open());
+
+        await using var connection = Create(api);
+        var discovery = new SimConnectInstalledAircraftObservationSource(connection);
+        var loadedAircraft = new SimConnectCurrentLoadedAircraftIdentitySource(connection);
+
+        connection.Start();
+        await Until(() => api.AircraftEnumerations.Count == 1);
+        api.Enqueue(SimConnectPackets.EnumeratedSimObjects(
+            SimConnectAircraftCatalog.RequestId,
+            0,
+            1,
+            ("C172SP Classic Passengers", "Classic")));
+        await Until(() => discovery.Current.Availability == InstalledAircraftDiscoveryAvailability.Available);
+
+        Assert.Equal(
+            CurrentLoadedAircraftIdentityStatus.Unavailable,
+            loadedAircraft.Current.Status);
+
+        api.Enqueue(SimConnectPackets.StringSimObjectData(
+            SimConnectCurrentAircraftDefinition.RequestId,
+            SimConnectCurrentAircraftDefinition.DefinitionId,
+            "DA62 Asobo"));
+        await Until(() => loadedAircraft.Current.Status == CurrentLoadedAircraftIdentityStatus.Identified);
+
+        Assert.Equal(
+            "msfs-title:DA62 Asobo",
+            loadedAircraft.Current.CanonicalAircraftId);
+        Assert.Contains(
+            discovery.Current.Observations,
+            item => item.CanonicalAircraftId == AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId);
     }
 
     [Fact]

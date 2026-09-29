@@ -6,7 +6,8 @@ public sealed record FlightSessionPlan(
     string? PlannedAlternate = null,
     string? PlannedRoute = null,
     string? SourceProvider = null,
-    string? SourceReference = null)
+    string? SourceReference = null,
+    string? ExpectedCanonicalAircraftId = null)
 {
     public void Validate()
     {
@@ -16,6 +17,18 @@ public sealed record FlightSessionPlan(
         ValidateText(PlannedRoute, 8_000, nameof(PlannedRoute));
         ValidateText(SourceProvider, 100, nameof(SourceProvider));
         ValidateText(SourceReference, 500, nameof(SourceReference));
+        ValidateText(
+            ExpectedCanonicalAircraftId,
+            500,
+            nameof(ExpectedCanonicalAircraftId));
+
+        if (ExpectedCanonicalAircraftId is not null
+            && string.IsNullOrWhiteSpace(ExpectedCanonicalAircraftId))
+        {
+            throw new ArgumentException(
+                "Expected canonical aircraft ID must be non-empty when supplied.",
+                nameof(ExpectedCanonicalAircraftId));
+        }
     }
 
     private static void ValidateText(

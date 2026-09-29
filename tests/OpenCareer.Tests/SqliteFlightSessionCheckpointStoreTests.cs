@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+using Microsoft.Data.Sqlite;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Infrastructure.Flights;
 
@@ -36,6 +38,41 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
 
         Assert.NotNull(actual);
         AssertSessionEquivalent(expected, actual);
+        Assert.Equal(
+            "msfs-title:Cessna 172 Skyhawk",
+            actual.Plan?.ExpectedCanonicalAircraftId);
+    }
+
+    [Fact]
+    public async Task LegacyCheckpointWithoutExpectedAircraftIdentityStillLoadsWithoutFabrication()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+        FlightSession expected = CreateAirborneSession();
+        await store.SaveAsync(expected);
+
+        await using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var read = connection.CreateCommand();
+            read.CommandText = "SELECT payload_json FROM flight_session_checkpoint WHERE slot_id = 1;";
+            string payload = Assert.IsType<string>(await read.ExecuteScalarAsync());
+            JsonObject root = Assert.IsType<JsonObject>(JsonNode.Parse(payload));
+            JsonObject plan = Assert.IsType<JsonObject>(root["plan"]);
+            Assert.True(plan.Remove("expectedCanonicalAircraftId"));
+
+            await using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE flight_session_checkpoint SET payload_json = $payload WHERE slot_id = 1;";
+            update.Parameters.AddWithValue("$payload", root.ToJsonString());
+            Assert.Equal(1, await update.ExecuteNonQueryAsync());
+        }
+
+        FlightSession? legacy = await new SqliteFlightSessionCheckpointStore(databasePath).LoadAsync();
+
+        Assert.NotNull(legacy);
+        Assert.Equal(expected.SessionId, legacy.SessionId);
+        Assert.NotNull(legacy.Plan);
+        Assert.Null(legacy.Plan.ExpectedCanonicalAircraftId);
     }
 
     [Fact]
@@ -273,7 +310,13 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
                         "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
                 sessionId:
                     Guid.Parse(
-                        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"));
+                        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                plan:
+                    new FlightSessionPlan(
+                        "KJFK",
+                        "KJFK",
+                        ExpectedCanonicalAircraftId:
+                            "msfs-title:Cessna 172 Skyhawk"));
 
         session =
             FlightSessionEngine.Advance(
