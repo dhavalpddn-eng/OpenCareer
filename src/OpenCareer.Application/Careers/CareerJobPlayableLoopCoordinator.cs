@@ -3,6 +3,7 @@ using OpenCareer.Application.Logbook;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Domain.Logbook;
 using OpenCareer.Domain.Planning;
 
 namespace OpenCareer.Application.Careers;
@@ -25,7 +26,57 @@ public sealed record CareerJobPlayableCompletionRequest(
     DateTimeOffset SettledAt,
     SettledJobLogbookContext LogbookContext,
     DateTimeOffset LogbookCommittedAt,
-    DateTimeOffset ExperienceSavedAt);
+    DateTimeOffset ExperienceSavedAt)
+{
+    public void Validate()
+    {
+        if (ContractId == Guid.Empty)
+            throw new ArgumentException("Contract ID is required.", nameof(ContractId));
+
+        ArgumentNullException.ThrowIfNull(ActualCosts);
+        ArgumentNullException.ThrowIfNull(LogbookContext);
+        ArgumentNullException.ThrowIfNull(LogbookContext.Aircraft);
+        ArgumentNullException.ThrowIfNull(LogbookContext.Payload);
+
+        if (FlightCompletionTime == default
+            || SettledAt == default
+            || LogbookCommittedAt == default
+            || ExperienceSavedAt == default)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(FlightCompletionTime),
+                "Career-flight terminal timestamps are required.");
+        }
+
+        if (SettledAt < FlightCompletionTime
+            || LogbookCommittedAt < SettledAt
+            || ExperienceSavedAt < LogbookCommittedAt)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(SettledAt),
+                "Career-flight terminal timestamps must be monotonic.");
+        }
+
+        ActualCosts.Validate();
+        LogbookContext.Aircraft.Validate();
+        LogbookContext.Payload.Validate();
+
+        if (!double.IsFinite(LogbookContext.ReputationDelta))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(LogbookContext.ReputationDelta));
+        }
+
+        if (LogbookContext.Events is not null)
+        {
+            foreach (FlightDebriefEvent item in LogbookContext.Events)
+            {
+                ArgumentNullException.ThrowIfNull(item);
+                item.Validate();
+            }
+        }
+    }
+}
 
 public sealed record CareerJobPlayableCompletionResult(
     FlightSession? CompletedFlight,
@@ -40,6 +91,7 @@ public sealed class CareerJobPlayableLoopCoordinator
     private readonly CompletedJobContractBridge _contractCompletion;
     private readonly IJobContractStore _contractStore;
     private readonly CareerFlightTerminalWorkflowCoordinator _terminal;
+    private readonly ICareerJobTerminalRecoveryStore _terminalRecovery;
     private readonly SemaphoreSlim _completionGate = new(1, 1);
 
     public CareerJobPlayableLoopCoordinator(
@@ -48,7 +100,8 @@ public sealed class CareerJobPlayableLoopCoordinator
         JobFlightSessionCompletionBridge flightCompletion,
         CompletedJobContractBridge contractCompletion,
         IJobContractStore contractStore,
-        CareerFlightTerminalWorkflowCoordinator terminal)
+        CareerFlightTerminalWorkflowCoordinator terminal,
+        ICareerJobTerminalRecoveryStore terminalRecovery)
     {
         _dispatch =
             dispatch
@@ -68,6 +121,9 @@ public sealed class CareerJobPlayableLoopCoordinator
         _terminal =
             terminal
             ?? throw new ArgumentNullException(nameof(terminal));
+        _terminalRecovery =
+            terminalRecovery
+            ?? throw new ArgumentNullException(nameof(terminalRecovery));
     }
 
     public async Task<CareerJobPlayableStartResult> AcceptAndStartAsync(
@@ -107,39 +163,7 @@ public sealed class CareerJobPlayableLoopCoordinator
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.ContractId
-            == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Contract ID is required.",
-                nameof(request));
-        }
-
-        ArgumentNullException.ThrowIfNull(
-            request.ActualCosts);
-        ArgumentNullException.ThrowIfNull(
-            request.LogbookContext);
-
-        if (request.FlightCompletionTime == default
-            || request.SettledAt == default
-            || request.LogbookCommittedAt == default
-            || request.ExperienceSavedAt == default)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(request),
-                "Career-flight terminal timestamps are required.");
-        }
-
-        if (request.SettledAt < request.FlightCompletionTime
-            || request.LogbookCommittedAt < request.SettledAt
-            || request.ExperienceSavedAt < request.LogbookCommittedAt)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(request),
-                "Career-flight terminal timestamps must be monotonic.");
-        }
-
-        request.ActualCosts.Validate();
+        request.Validate();
 
         await _completionGate
             .WaitAsync(cancellationToken)
@@ -147,6 +171,10 @@ public sealed class CareerJobPlayableLoopCoordinator
 
         try
         {
+            await _terminalRecovery
+                .SaveAsync(request, cancellationToken)
+                .ConfigureAwait(false);
+
             PersistedJobContract authoritative =
                 await _contractStore
                     .ReadJobContractAsync(
@@ -227,10 +255,16 @@ public sealed class CareerJobPlayableLoopCoordinator
                     "Terminal workflow returned a different career contract.");
             }
 
-            return new(
+            var result = new CareerJobPlayableCompletionResult(
                 completedFlight,
                 completedContract,
                 terminal);
+
+            await _terminalRecovery
+                .ClearAsync(request.ContractId, cancellationToken)
+                .ConfigureAwait(false);
+
+            return result;
         }
         finally
         {
@@ -238,6 +272,20 @@ public sealed class CareerJobPlayableLoopCoordinator
                 null;
             _completionGate.Release();
         }
+    }
+
+    public async Task<CareerJobPlayableCompletionResult?> ResumePendingAsync(
+        CancellationToken cancellationToken = default)
+    {
+        CareerJobPlayableCompletionRequest? request =
+            await _terminalRecovery
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        return request is null
+            ? null
+            : await CompleteAsync(request, cancellationToken)
+                .ConfigureAwait(false);
     }
 
     private FlightSession? _lastCompletedFlight;

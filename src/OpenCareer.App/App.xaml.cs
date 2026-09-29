@@ -207,6 +207,10 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<CareerFlightTerminalWorkflowCoordinator>();
 
+        services.AddSingleton<SqliteCareerJobTerminalRecoveryStore>();
+        services.AddSingleton<ICareerJobTerminalRecoveryStore>(provider =>
+            provider.GetRequiredService<SqliteCareerJobTerminalRecoveryStore>());
+
         services.AddSingleton<CareerJobPlayableLoopCoordinator>();
 
         services.AddSingleton<PersistedJobContractTermsSource>();
@@ -387,6 +391,27 @@ public partial class App : Microsoft.UI.Xaml.Application
             logger.LogError(
                 ex,
                 "FlightSession recovery failed. OpenCareer will continue without claiming a recovered active flight.");
+        }
+
+        try
+        {
+            CareerJobPlayableCompletionResult? resumed =
+                await _services
+                    .GetRequiredService<CareerJobPlayableLoopCoordinator>()
+                    .ResumePendingAsync();
+
+            if (resumed is not null)
+            {
+                logger.LogInformation(
+                    "Resumed terminal career workflow for contract {ContractId} through finalization.",
+                    resumed.CompletedContract.Contract.ContractId);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Career terminal workflow recovery failed. Persisted terminal inputs and completed authorities were preserved for retry.");
         }
 
         try

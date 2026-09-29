@@ -265,6 +265,62 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         Assert.Equal(1, context.CheckpointStore.ClearCount);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task RestartResumesPersistedTerminalWorkflowExactlyOnce(
+        int failureWindow)
+    {
+        TestContext context = CreateContext();
+
+        switch (failureWindow)
+        {
+            case 0:
+                context.Ledger.FailNextPost = true;
+                break;
+            case 1:
+                context.Logbook.FailNextAppend = true;
+                break;
+            case 2:
+                context.ProfileStore.FailNextSave = true;
+                break;
+            case 3:
+                context.Fleet.FailNextRelease = true;
+                break;
+            case 4:
+                context.CheckpointStore.FailNextClear = true;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(failureWindow));
+        }
+
+        await Assert.ThrowsAsync<IOException>(
+            () => context.Coordinator.CompleteAsync(context.Request));
+
+        Assert.NotNull(context.TerminalRecovery.Pending);
+
+        CareerJobPlayableLoopCoordinator restarted = context.Restart();
+        CareerJobPlayableCompletionResult resumed =
+            Assert.IsType<CareerJobPlayableCompletionResult>(
+                await restarted.ResumePendingAsync());
+
+        Assert.Equal(
+            CareerFlightFinalizationStatus.Finalized,
+            resumed.Terminal.Finalization.Status);
+        Assert.Equal(1, context.Ledger.UniquePostCount);
+        Assert.Single(context.Logbook.Entries);
+        Assert.Equal(2, context.ProfileStore.SaveCount);
+        Assert.Equal(1, context.Fleet.ReleaseCount);
+        Assert.Equal(1, context.CheckpointStore.ClearCount);
+        Assert.Equal(1, context.TerminalRecovery.ClearCount);
+        Assert.Null(context.TerminalRecovery.Pending);
+        Assert.Null(context.Sessions.Current);
+        Assert.Null(await restarted.ResumePendingAsync());
+    }
+
     private static TestContext CreateContext(
         bool development = false)
     {
@@ -502,14 +558,21 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                 flightPersistence,
                 sessions);
 
-        var coordinator =
-            new CareerJobPlayableLoopCoordinator(
+        var terminalRecovery =
+            new MemoryTerminalRecoveryStore();
+
+        CareerJobPlayableLoopCoordinator CreateCoordinator() =>
+            new(
                 dispatch,
                 flightStart,
                 flightCompletion,
                 contractCompletion,
                 contractStore,
-                terminal);
+                terminal,
+                terminalRecovery);
+
+        CareerJobPlayableLoopCoordinator coordinator =
+            CreateCoordinator();
 
         DateTimeOffset completedAt =
             shutdownSession.UpdatedAt
@@ -595,7 +658,9 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             fleet,
             checkpointStore,
             sessions,
-            flightPersistence);
+            flightPersistence,
+            terminalRecovery,
+            CreateCoordinator);
     }
 
     private static PersistedJobContract InProgressContract(
@@ -789,7 +854,9 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         FakeFleetStore Fleet,
         MemoryCheckpointStore CheckpointStore,
         FlightSessionCoordinator Sessions,
-        FlightSessionPersistenceService FlightPersistence);
+        FlightSessionPersistenceService FlightPersistence,
+        MemoryTerminalRecoveryStore TerminalRecovery,
+        Func<CareerJobPlayableLoopCoordinator> Restart);
 
     private sealed class FakeContractStore(
         PersistedJobContract current)
@@ -896,12 +963,20 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         public int UniquePostCount =>
             _transactions.Count;
 
+        public bool FailNextPost { get; set; }
+
         public Task<LedgerPostResult> PostAsync(
             EconomyLedgerTransaction transaction,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             transaction.Validate();
+
+            if (FailNextPost)
+            {
+                FailNextPost = false;
+                throw new IOException("Injected settlement failure.");
+            }
 
             if (_transactions.TryGetValue(
                     transaction.IdempotencyKey,
@@ -1001,6 +1076,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         public IReadOnlyCollection<LogbookEntry> Entries =>
             _entries.Values;
 
+        public bool FailNextAppend { get; set; }
+
         public Task<LogbookEntry?> FindByIdempotencyKeyAsync(
             string idempotencyKey,
             CancellationToken cancellationToken = default)
@@ -1021,6 +1098,12 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (FailNextAppend)
+            {
+                FailNextAppend = false;
+                throw new IOException("Injected Logbook failure.");
+            }
 
             if (_entries.TryGetValue(
                     idempotencyKey,
@@ -1052,6 +1135,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
 
         public int SaveCount { get; private set; }
 
+        public bool FailNextSave { get; set; }
+
         public Task<PlayerCareerProfileStoreRecord?> LoadAsync(
             CancellationToken cancellationToken = default)
         {
@@ -1068,6 +1153,13 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (FailNextSave)
+            {
+                FailNextSave = false;
+                throw new IOException("Injected Career/Profile failure.");
+            }
+
             SaveCount++;
 
             if (expectedRevision
@@ -1099,6 +1191,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
 
         public int ReleaseCount { get; private set; }
 
+        public bool FailNextRelease { get; set; }
+
         public Task<AircraftReservationOwnership?> FindByReservationIdAsync(
             string reservationId,
             CancellationToken cancellationToken = default)
@@ -1129,6 +1223,12 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (FailNextRelease)
+            {
+                FailNextRelease = false;
+                throw new IOException("Injected Fleet release failure.");
+            }
+
             if (Ownership is null)
             {
                 return Task.FromResult(
@@ -1150,6 +1250,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         public FlightSession? Checkpoint { get; set; }
 
         public int ClearCount { get; private set; }
+
+        public bool FailNextClear { get; set; }
 
         public Task SaveAsync(
             FlightSession session,
@@ -1174,9 +1276,69 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (FailNextClear)
+            {
+                FailNextClear = false;
+                throw new IOException("Injected checkpoint cleanup failure.");
+            }
+
             ClearCount++;
             Checkpoint =
                 null;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class MemoryTerminalRecoveryStore
+        : ICareerJobTerminalRecoveryStore
+    {
+        public CareerJobPlayableCompletionRequest? Pending { get; private set; }
+
+        public int ClearCount { get; private set; }
+
+        public Task<CareerJobPlayableCompletionRequest?> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Pending);
+        }
+
+        public Task SaveAsync(
+            CareerJobPlayableCompletionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            request.Validate();
+
+            if (Pending is not null && Pending != request)
+            {
+                throw new InvalidOperationException(
+                    "Conflicting terminal recovery request.");
+            }
+
+            Pending = request;
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (Pending is not null && Pending.ContractId != contractId)
+            {
+                throw new InvalidOperationException(
+                    "Terminal recovery contract mismatch.");
+            }
+
+            if (Pending is not null)
+            {
+                Pending = null;
+                ClearCount++;
+            }
+
             return Task.CompletedTask;
         }
     }
