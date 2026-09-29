@@ -699,39 +699,17 @@ public sealed class SqliteFlightSessionCheckpointStore :
 
         session.Plan?.Validate();
 
-        if (session.Legs is null || session.Legs.Count != 1)
+        try
+        {
+            session.ValidateLegs();
+        }
+        catch (Exception exception)
+            when (exception is ArgumentException
+                or InvalidOperationException)
         {
             throw new InvalidDataException(
-                "The current FlightSession checkpoint must contain exactly one flight leg.");
-        }
-
-        FlightLeg leg = session.Legs[0];
-        leg.Validate();
-
-        if (leg.LegId != session.SessionId
-            || leg.Sequence != 1
-            || leg.StartedAt != session.CreatedAt
-            || leg.Plan != session.Plan)
-        {
-            throw new InvalidDataException(
-                "Flight leg 1 does not match its parent FlightSession identity and plan.");
-        }
-
-        if (session.Status == FlightSessionStatus.Completed)
-        {
-            if (session.Milestones.CompletedAt is not { } completedAt
-                || leg.Status != FlightLegStatus.Completed
-                || leg.CompletedAt != completedAt)
-            {
-                throw new InvalidDataException(
-                    "Completed FlightSession and flight-leg terminal state do not match.");
-            }
-        }
-        else if (leg.Status != FlightLegStatus.Active
-            || leg.CompletedAt is not null)
-        {
-            throw new InvalidDataException(
-                "A non-completed FlightSession cannot contain a completed flight leg.");
+                "FlightSession flight-leg state is invalid.",
+                exception);
         }
     }
 

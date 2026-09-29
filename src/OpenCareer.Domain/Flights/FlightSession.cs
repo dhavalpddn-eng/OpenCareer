@@ -99,6 +99,79 @@ public sealed record FlightSession(
         };
     }
 
+    public void ValidateLegs()
+    {
+        if (Legs is null || Legs.Count == 0)
+            throw new InvalidOperationException("FlightSession requires at least one flight leg.");
+
+        var legIds = new HashSet<Guid>();
+        FlightLeg? previous = null;
+        int activeCount = 0;
+
+        for (int index = 0; index < Legs.Count; index++)
+        {
+            FlightLeg leg =
+                Legs[index]
+                ?? throw new InvalidOperationException("FlightSession cannot contain a null flight leg.");
+
+            leg.Validate();
+
+            if (leg.Sequence != index + 1)
+                throw new InvalidOperationException("Flight-leg sequence must be contiguous and ordered.");
+
+            if (!legIds.Add(leg.LegId))
+                throw new InvalidOperationException("Flight-leg identities must be unique within a session.");
+
+            if (leg.StartedAt < CreatedAt || leg.StartedAt > UpdatedAt)
+                throw new InvalidOperationException("Flight-leg start must fall within its parent session.");
+
+            if (leg.CompletedAt is { } completedAt && completedAt > UpdatedAt)
+                throw new InvalidOperationException("Flight-leg completion cannot exceed its parent session timestamp.");
+
+            if (previous is not null)
+            {
+                if (previous.CompletedAt is not { } previousCompletedAt)
+                    throw new InvalidOperationException("Only the final flight leg may remain active.");
+
+                if (leg.StartedAt < previousCompletedAt)
+                    throw new InvalidOperationException("Flight legs must be chronologically ordered without overlap.");
+            }
+
+            if (leg.Status == FlightLegStatus.Active)
+            {
+                activeCount++;
+                if (index != Legs.Count - 1)
+                    throw new InvalidOperationException("An active flight leg must be the final leg.");
+            }
+
+            previous = leg;
+        }
+
+        if (activeCount > 1)
+            throw new InvalidOperationException("FlightSession cannot contain multiple active flight legs.");
+
+        FlightLeg first = Legs[0];
+        if (first.LegId != SessionId
+            || first.StartedAt != CreatedAt
+            || first.Plan != Plan)
+        {
+            throw new InvalidOperationException(
+                "Flight leg 1 must preserve its parent FlightSession identity, start, and plan.");
+        }
+
+        if (Status == FlightSessionStatus.Completed)
+        {
+            FlightLeg final = Legs[^1];
+            if (activeCount != 0
+                || Milestones.CompletedAt is not { } completedAt
+                || final.CompletedAt != completedAt)
+            {
+                throw new InvalidOperationException(
+                    "Completed FlightSession and final flight-leg terminal state must match.");
+            }
+        }
+    }
+
     public bool IsTerminal =>
         Status is FlightSessionStatus.Interrupted
             or FlightSessionStatus.Completed

@@ -67,6 +67,86 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(completed.Milestones.CompletedAt, actualLeg.CompletedAt);
     }
 
+    [Theory]
+    [InlineData(2, true)]
+    [InlineData(3, false)]
+    public async Task MultiLegCollectionSurvivesStoreReopen(
+        int legCount,
+        bool finalLegActive)
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        FlightSession expected =
+            CreateMultiLegSession(legCount, finalLegActive);
+
+        await new SqliteFlightSessionCheckpointStore(databasePath)
+            .SaveAsync(expected);
+
+        FlightSession actual =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(expected, actual);
+        Assert.Equal(expected.EffectiveLegs, actual.EffectiveLegs);
+    }
+
+    [Fact]
+    public async Task DuplicateLegIdentityFailsClosed()
+    {
+        FlightSession session = CreateMultiLegSession(2, finalLegActive: true);
+        FlightLeg[] legs = session.EffectiveLegs.ToArray();
+        legs[1] = legs[1] with { LegId = legs[0].LegId };
+
+        await AssertInvalidLegsAsync(session with { Legs = legs });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SequenceGapOrChronologicalOrderErrorFailsClosed(
+        bool sequenceGap)
+    {
+        FlightSession session = CreateMultiLegSession(2, finalLegActive: true);
+        FlightLeg[] legs = session.EffectiveLegs.ToArray();
+        legs[1] =
+            sequenceGap
+                ? legs[1] with { Sequence = 3 }
+                : legs[1] with
+                {
+                    StartedAt = legs[0].CompletedAt!.Value.AddMinutes(-1)
+                };
+
+        await AssertInvalidLegsAsync(session with { Legs = legs });
+    }
+
+    [Fact]
+    public async Task CompletedLegAfterActiveLegFailsClosed()
+    {
+        FlightSession session = CreateMultiLegSession(2, finalLegActive: false);
+        FlightLeg[] legs = session.EffectiveLegs.ToArray();
+        legs[0] = legs[0] with
+        {
+            Status = FlightLegStatus.Active,
+            CompletedAt = null
+        };
+
+        await AssertInvalidLegsAsync(session with { Legs = legs });
+    }
+
+    [Fact]
+    public async Task MultipleActiveLegsFailClosed()
+    {
+        FlightSession session = CreateMultiLegSession(2, finalLegActive: true);
+        FlightLeg[] legs = session.EffectiveLegs.ToArray();
+        legs[0] = legs[0] with
+        {
+            Status = FlightLegStatus.Active,
+            CompletedAt = null
+        };
+
+        await AssertInvalidLegsAsync(session with { Legs = legs });
+    }
+
     [Fact]
     public async Task LegacyCheckpointWithoutExpectedAircraftIdentityStillLoadsWithoutFabrication()
     {
@@ -430,6 +510,15 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         await command.ExecuteNonQueryAsync();
     }
 
+    private async Task AssertInvalidLegsAsync(FlightSession session)
+    {
+        string databasePath = Path.Combine(_directory, "invalid.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => store.SaveAsync(session));
+    }
+
     private static void AssertSessionEquivalent(
         FlightSession expected,
         FlightSession actual)
@@ -587,6 +676,57 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         session = Advance(session, epoch.AddSeconds(9), parking: true);
         session = Advance(session, epoch.AddSeconds(10), shutdown: true);
         return Advance(session, epoch.AddSeconds(11), complete: true);
+    }
+
+    private static FlightSession CreateMultiLegSession(
+        int legCount,
+        bool finalLegActive)
+    {
+        DateTimeOffset epoch =
+            new(2026, 9, 19, 12, 0, 0, TimeSpan.Zero);
+
+        var firstPlan = new FlightSessionPlan("KJFK", "KBOS");
+        FlightSession session =
+            FlightSession.Start(
+                epoch,
+                sessionId:
+                    Guid.Parse("11111111-2222-3333-4444-555555555555"),
+                plan: firstPlan);
+
+        var legs = new List<FlightLeg>(legCount);
+        for (int index = 0; index < legCount; index++)
+        {
+            int sequence = index + 1;
+            DateTimeOffset startedAt = epoch.AddHours(index * 2);
+            bool active = finalLegActive && sequence == legCount;
+            FlightSessionPlan plan =
+                sequence == 1
+                    ? firstPlan
+                    : new FlightSessionPlan(
+                        $"LEG{sequence - 1}",
+                        $"LEG{sequence}");
+
+            legs.Add(
+                new FlightLeg(
+                    sequence == 1
+                        ? session.SessionId
+                        : Guid.Parse($"00000000-0000-0000-0000-{sequence:D12}"),
+                    sequence,
+                    startedAt,
+                    plan,
+                    active
+                        ? FlightLegStatus.Active
+                        : FlightLegStatus.Completed,
+                    active
+                        ? null
+                        : startedAt.AddHours(1)));
+        }
+
+        return session with
+        {
+            UpdatedAt = epoch.AddHours(legCount * 2),
+            Legs = legs
+        };
     }
 
     private static FlightSession Advance(
