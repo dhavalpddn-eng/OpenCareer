@@ -84,6 +84,26 @@ public class FlightStateFoundationTests
     }
 
     [Fact]
+    public void GoAroundThenNewApproachCreatesOnlySubsequentLandingEpisode()
+    {
+        var state = Airborne();
+        state = Step(state, 6, approach: true);
+        state = Step(state, 7, goAround: true);
+
+        Assert.Equal(FlightTrackingState.Airborne, state.State);
+        Assert.Equal(0, state.LandingEpisodeCount);
+
+        state = Step(state, 8, approach: true);
+        Assert.Equal(FlightTrackingState.Approach, state.State);
+
+        state = Step(state, 9, touchdown: true);
+
+        Assert.Equal(FlightTrackingState.LandingEpisode, state.State);
+        Assert.Equal(1, state.LandingEpisodeCount);
+        Assert.Equal(0, state.BounceCount);
+    }
+
+    [Fact]
     public void DisconnectHasNoTimeoutAndResumesWhenContinuityIsPlausible()
     {
         var state = Airborne();

@@ -14,12 +14,20 @@ public sealed record FlightEvidenceProcessorOptions(
     double LandingRolloutMaximumGroundSpeedKnots = 25,
     double ParkingMaximumGroundSpeedKnots = 1,
     double BounceMaximumAirborneSeconds = 5,
-    double BounceMaximumAglFeet = 50)
+    double BounceMaximumAglFeet = 50,
+    double GoAroundMinimumClimbFeetPerMinute = 300,
+    double GoAroundMinimumAglGainFeet = 100,
+    double GoAroundMinimumClimbSeconds = 3,
+    double GoAroundMaximumTelemetryGapSeconds = 2)
 {
     public void Validate()
     {
         ValidateNonNegativeFinite(BounceMaximumAirborneSeconds, nameof(BounceMaximumAirborneSeconds));
         ValidateNonNegativeFinite(BounceMaximumAglFeet, nameof(BounceMaximumAglFeet));
+        ValidatePositiveFinite(GoAroundMinimumClimbFeetPerMinute, nameof(GoAroundMinimumClimbFeetPerMinute));
+        ValidatePositiveFinite(GoAroundMinimumAglGainFeet, nameof(GoAroundMinimumAglGainFeet));
+        ValidatePositiveFinite(GoAroundMinimumClimbSeconds, nameof(GoAroundMinimumClimbSeconds));
+        ValidatePositiveFinite(GoAroundMaximumTelemetryGapSeconds, nameof(GoAroundMaximumTelemetryGapSeconds));
 
         if (StableTelemetrySamples < 1)
             throw new ArgumentOutOfRangeException(nameof(StableTelemetrySamples));
@@ -89,6 +97,14 @@ public sealed record FlightEvidenceProcessorOptions(
         string name)
     {
         if (!double.IsFinite(value) || value < 0)
+            throw new ArgumentOutOfRangeException(name);
+    }
+
+    private static void ValidatePositiveFinite(
+        double value,
+        string name)
+    {
+        if (!double.IsFinite(value) || value <= 0)
             throw new ArgumentOutOfRangeException(name);
     }
 }

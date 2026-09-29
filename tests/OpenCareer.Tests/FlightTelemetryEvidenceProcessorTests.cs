@@ -547,14 +547,268 @@ public sealed class FlightTelemetryEvidenceProcessorTests
         Assert.False(processor.Process(Observation(Telemetry(7))).BounceRecontact);
     }
 
+    [Fact]
+    public void SustainedClimbAfterApproachConfirmsOneGoAroundAndAllowsLaterLanding()
+    {
+        var processor = GoAroundProcessor();
+        FlightTrackingSnapshot tracking = AirborneTracking();
+        var evidence = new List<FlightStateEvidence>();
+
+        foreach (AircraftTelemetrySnapshot sample in new[]
+        {
+            Telemetry(0, onGround: false, altitudeAgl: 600, verticalSpeed: -300),
+            Telemetry(1, onGround: false, altitudeAgl: 560, verticalSpeed: -300),
+            Telemetry(2, onGround: false, altitudeAgl: 580, verticalSpeed: 500),
+            Telemetry(3, onGround: false, altitudeAgl: 620, verticalSpeed: 500),
+            Telemetry(4, onGround: false, altitudeAgl: 670, verticalSpeed: 500),
+            Telemetry(5, onGround: false, altitudeAgl: 800, verticalSpeed: 500)
+        })
+        {
+            FlightStateEvidence next = processor.Process(Observation(sample));
+            evidence.Add(next);
+            tracking = FlightTrackingStateMachine.Advance(tracking, next);
+        }
+
+        FlightStateEvidence goAround =
+            Assert.Single(evidence, static item => item.GoAroundConfirmed);
+
+        Assert.Equal(Epoch.AddSeconds(4), goAround.Timestamp);
+        Assert.Equal(FlightTrackingState.Airborne, tracking.State);
+        Assert.Equal(0, tracking.LandingEpisodeCount);
+
+        FlightStateEvidence nextApproach =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        6,
+                        onGround: false,
+                        altitudeAgl: 500,
+                        verticalSpeed: -300)));
+        tracking = FlightTrackingStateMachine.Advance(tracking, nextApproach);
+
+        FlightStateEvidence firstContact =
+            processor.Process(Observation(Telemetry(7)));
+        tracking = FlightTrackingStateMachine.Advance(tracking, firstContact);
+
+        FlightStateEvidence touchdown =
+            processor.Process(Observation(Telemetry(8)));
+        tracking = FlightTrackingStateMachine.Advance(tracking, touchdown);
+
+        Assert.True(nextApproach.ApproachConfirmed);
+        Assert.Equal(FlightTrackingState.LandingEpisode, tracking.State);
+        Assert.Equal(1, tracking.LandingEpisodeCount);
+        Assert.Equal(0, tracking.BounceCount);
+    }
+
+    [Fact]
+    public void BriefClimbAfterApproachDoesNotConfirmGoAround()
+    {
+        var processor = GoAroundProcessor();
+
+        _ =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        0,
+                        onGround: false,
+                        altitudeAgl: 500,
+                        verticalSpeed: -300)));
+
+        FlightStateEvidence briefClimb =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        1,
+                        onGround: false,
+                        altitudeAgl: 620,
+                        verticalSpeed: 500)));
+
+        FlightStateEvidence climbEnded =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        2,
+                        onGround: false,
+                        altitudeAgl: 650,
+                        verticalSpeed: 0)));
+
+        Assert.False(briefClimb.GoAroundConfirmed);
+        Assert.False(climbEnded.GoAroundConfirmed);
+    }
+
+    [Fact]
+    public void ClimbWithoutPriorApproachDoesNotConfirmGoAround()
+    {
+        var processor = GoAroundProcessor();
+        var evidence = new List<FlightStateEvidence>();
+
+        for (int second = 0; second < 5; second++)
+        {
+            evidence.Add(
+                processor.Process(
+                    Observation(
+                        Telemetry(
+                            second,
+                            onGround: false,
+                            altitudeAgl: 2_500 + (second * 100),
+                            verticalSpeed: 500))));
+        }
+
+        Assert.DoesNotContain(evidence, static item => item.ApproachConfirmed);
+        Assert.DoesNotContain(evidence, static item => item.GoAroundConfirmed);
+    }
+
+    [Fact]
+    public void GroundContactAndBounceCannotConfirmApproachGoAround()
+    {
+        var processor =
+            new FlightTelemetryEvidenceProcessor(
+                GoAroundOptions() with
+                {
+                    GroundConfirmationSamples = 2
+                });
+        var evidence = new List<FlightStateEvidence>();
+
+        foreach (AircraftTelemetrySnapshot sample in new[]
+        {
+            Telemetry(0, onGround: false, altitudeAgl: 100, verticalSpeed: -300),
+            Telemetry(1),
+            Telemetry(2, onGround: false, altitudeAgl: 20, verticalSpeed: 600),
+            Telemetry(3),
+            Telemetry(4)
+        })
+        {
+            evidence.Add(processor.Process(Observation(sample)));
+        }
+
+        Assert.DoesNotContain(evidence, static item => item.GoAroundConfirmed);
+        FlightStateEvidence bounce =
+            Assert.Single(evidence, static item => item.BounceRecontact);
+        Assert.True(bounce.TouchdownConfirmed);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void InterruptedGoAroundCandidateRequiresANewApproach(int interruption)
+    {
+        var processor = GoAroundProcessor();
+
+        _ =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        0,
+                        onGround: false,
+                        altitudeAgl: 500,
+                        verticalSpeed: -300)));
+        _ =
+            processor.Process(
+                Observation(
+                    Telemetry(
+                        1,
+                        onGround: false,
+                        altitudeAgl: 540,
+                        verticalSpeed: 500)));
+
+        FlightEvidenceObservation interrupted =
+            interruption switch
+            {
+                0 => Observation(
+                    Telemetry(
+                        2,
+                        onGround: false,
+                        altitudeAgl: 580,
+                        verticalSpeed: 500,
+                        paused: true)),
+                1 => Observation(
+                    Telemetry(
+                        2,
+                        onGround: false,
+                        altitudeAgl: 580,
+                        verticalSpeed: 500,
+                        slew: true)),
+                2 => new FlightEvidenceObservation(
+                    SimulatorConnectionState.Disconnected,
+                    Telemetry(
+                        2,
+                        onGround: false,
+                        altitudeAgl: 580,
+                        verticalSpeed: 500),
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: false),
+                3 => Observation(
+                    Telemetry(
+                        5,
+                        onGround: false,
+                        altitudeAgl: 700,
+                        verticalSpeed: 500)),
+                4 => Observation(
+                    Telemetry(
+                        2,
+                        onGround: false,
+                        altitudeAgl: 580,
+                        verticalSpeed: 500),
+                    continuityPlausible: false),
+                _ => throw new ArgumentOutOfRangeException(nameof(interruption))
+            };
+
+        _ = processor.Process(interrupted);
+
+        var laterClimb = new List<FlightStateEvidence>();
+        int firstSecond = interruption == 3 ? 6 : 3;
+        for (int offset = 0; offset < 4; offset++)
+        {
+            laterClimb.Add(
+                processor.Process(
+                    Observation(
+                        Telemetry(
+                            firstSecond + offset,
+                            onGround: false,
+                            altitudeAgl: 800 + (offset * 100),
+                            verticalSpeed: 500))));
+        }
+
+        Assert.DoesNotContain(laterClimb, static item => item.GoAroundConfirmed);
+    }
+
+    private static FlightTelemetryEvidenceProcessor GoAroundProcessor() =>
+        new(GoAroundOptions());
+
+    private static FlightEvidenceProcessorOptions GoAroundOptions() =>
+        new(
+            StableTelemetrySamples: 1,
+            AirborneConfirmationSamples: 1,
+            GoAroundMinimumClimbFeetPerMinute: 300,
+            GoAroundMinimumAglGainFeet: 100,
+            GoAroundMinimumClimbSeconds: 2,
+            GoAroundMaximumTelemetryGapSeconds: 2);
+
+    private static FlightTrackingSnapshot AirborneTracking() =>
+        new(
+            FlightTrackingState.Airborne,
+            SuspendedFrom: null,
+            UpdatedAt: Epoch.AddSeconds(-1),
+            TakeoffCount: 1,
+            LandingEpisodeCount: 0,
+            BounceCount: 0,
+            TouchAndGoCount: 0,
+            RejectedTakeoffCount: 0,
+            CrashReported: false);
+
     private static FlightEvidenceObservation Observation(
         AircraftTelemetrySnapshot telemetry,
-        bool operationCompleteConfirmed = false) =>
+        bool operationCompleteConfirmed = false,
+        bool continuityPlausible = true) =>
         new(
             SimulatorConnectionState.Connected,
             telemetry,
             ValidLoadedAircraft: true,
-            ContinuityPlausible: true,
+            ContinuityPlausible:
+                continuityPlausible,
             OperationCompleteConfirmed:
                 operationCompleteConfirmed);
 
@@ -567,7 +821,8 @@ public sealed class FlightTelemetryEvidenceProcessorTests
         int enginesRunning = 0,
         bool parkingBrake = false,
         bool paused = false,
-        bool slew = false) =>
+        bool slew = false,
+        double? verticalSpeed = null) =>
         new(
             Epoch.AddSeconds(seconds),
             LatitudeDegrees: 32.0,
@@ -577,7 +832,8 @@ public sealed class FlightTelemetryEvidenceProcessorTests
             IndicatedAirspeedKnots: indicatedAirspeed,
             GroundSpeedKnots: groundSpeed,
             VerticalSpeedFeetPerMinute:
-                onGround ? 0 : -150,
+                verticalSpeed
+                ?? (onGround ? 0 : -150),
             HeadingDegrees: 180,
             PitchDegrees: 2,
             BankDegrees: 0,
