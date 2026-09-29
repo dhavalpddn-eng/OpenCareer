@@ -461,6 +461,8 @@ public sealed class FlightSessionOperationsTests
 
         public bool FailWrites { get; set; }
 
+        public int SaveCount { get; private set; }
+
         public Task SaveAsync(
             FlightSession session,
             CancellationToken cancellationToken = default)
@@ -468,6 +470,7 @@ public sealed class FlightSessionOperationsTests
             if (FailWrites)
                 throw new IOException("Synthetic persistence failure.");
 
+            SaveCount++;
             Checkpoint = session;
             return Task.CompletedTask;
         }
