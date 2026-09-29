@@ -299,6 +299,62 @@ public sealed class FlightSessionPersistenceService
         }
     }
 
+    public async Task<FlightSession> StartNextLegAsync(
+        Guid expectedSessionId,
+        Guid? expectedContractId,
+        Guid nextLegId,
+        FlightSessionPlan nextPlan,
+        DateTimeOffset requestedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (expectedSessionId == Guid.Empty)
+            throw new ArgumentException("Session ID is required.", nameof(expectedSessionId));
+
+        if (expectedContractId is { } contractId && contractId == Guid.Empty)
+            throw new ArgumentException("Contract ID is required.", nameof(expectedContractId));
+
+        ArgumentNullException.ThrowIfNull(nextPlan);
+
+        await _mutationGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            FlightSession current =
+                _coordinator.Current
+                ?? throw new InvalidOperationException(
+                    "No flight session is active.");
+
+            ValidateExpectedCompletionIdentity(
+                current,
+                expectedSessionId,
+                expectedContractId);
+
+            FlightSession next =
+                FlightSessionEngine.StartNextLeg(
+                    current,
+                    nextLegId,
+                    nextPlan,
+                    requestedAt);
+
+            if (ReferenceEquals(next, current))
+                return current;
+
+            await _store
+                .SaveAsync(next, cancellationToken)
+                .ConfigureAwait(false);
+
+            _lastPersisted = next;
+            _coordinator.CommitPersisted(next);
+            return next;
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
     public async Task<FlightSession> CancelAsync(
         Guid expectedSessionId,
         Guid expectedContractId,

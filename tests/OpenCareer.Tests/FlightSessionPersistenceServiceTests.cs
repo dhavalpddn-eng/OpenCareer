@@ -227,6 +227,185 @@ public sealed class FlightSessionPersistenceServiceTests
     }
 
     [Fact]
+    public async Task NextLegRequiresCompletedCurrentLeg()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        FlightSession started = await service.StartAsync(Epoch);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.StartNextLegAsync(
+                started.SessionId,
+                started.ContractId,
+                Guid.NewGuid(),
+                new FlightSessionPlan("KDFW", "KIAH"),
+                Epoch.AddMinutes(1)));
+
+        Assert.Single(coordinator.Current!.EffectiveLegs);
+        Assert.Equal(started, store.Checkpoint);
+    }
+
+    [Fact]
+    public async Task NextLegRejectsEmptyOrDuplicateIdentity()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        FlightSession started = await service.StartAsync(Epoch);
+        FlightSession completed = await CompleteCurrentLegAsync(service, started);
+        var plan = new FlightSessionPlan("KDFW", "KIAH");
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => service.StartNextLegAsync(
+                started.SessionId,
+                started.ContractId,
+                Guid.Empty,
+                plan,
+                Epoch.AddMinutes(2)));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.StartNextLegAsync(
+                started.SessionId,
+                started.ContractId,
+                started.SessionId,
+                plan,
+                Epoch.AddMinutes(2)));
+
+        Assert.Equal(completed, coordinator.Current);
+    }
+
+    [Fact]
+    public async Task NextLegPersistsOnceAndConflictingReplayFailsClosed()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        FlightSession started = await service.StartAsync(Epoch);
+        await CompleteCurrentLegAsync(service, started);
+
+        Guid nextLegId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var nextPlan = new FlightSessionPlan("KDFW", "KIAH");
+        FlightSession next =
+            await service.StartNextLegAsync(
+                started.SessionId,
+                started.ContractId,
+                nextLegId,
+                nextPlan,
+                Epoch.AddMinutes(2));
+
+        Assert.Equal(started.SessionId, next.SessionId);
+        Assert.Equal(2, next.EffectiveLegs.Count);
+        Assert.Equal(2, next.EffectiveLegs[^1].Sequence);
+        Assert.Equal(nextLegId, next.EffectiveLegs[^1].LegId);
+        Assert.Equal(FlightLegStatus.Active, next.EffectiveLegs[^1].Status);
+        Assert.Equal(FlightTrackingState.Preflight, next.Tracking.State);
+        Assert.Equal(FlightOperationState.ReadyForStart, next.OperationState);
+
+        int saveCount = store.SaveCount;
+        FlightSession replay =
+            await service.StartNextLegAsync(
+                started.SessionId,
+                started.ContractId,
+                nextLegId,
+                nextPlan,
+                Epoch.AddMinutes(2));
+
+        Assert.Equal(next, replay);
+        Assert.Equal(saveCount, store.SaveCount);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.StartNextLegAsync(
+                started.SessionId,
+                started.ContractId,
+                Guid.NewGuid(),
+                nextPlan,
+                Epoch.AddMinutes(2)));
+        Assert.Equal(next, coordinator.Current);
+    }
+
+    [Fact]
+    public async Task FailedNextLegSavePublishesNothingAndRetryAppendsOnce()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        FlightSession started = await service.StartAsync(Epoch);
+        FlightSession completed = await CompleteCurrentLegAsync(service, started);
+        Guid nextLegId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var nextPlan = new FlightSessionPlan("KDFW", "KIAH");
+
+        store.FailWrites = true;
+        await Assert.ThrowsAsync<IOException>(
+            () => service.StartNextLegAsync(
+                started.SessionId,
+                started.ContractId,
+                nextLegId,
+                nextPlan,
+                Epoch.AddMinutes(2)));
+
+        Assert.Equal(completed, coordinator.Current);
+        Assert.Single(coordinator.Current!.EffectiveLegs);
+
+        store.FailWrites = false;
+        FlightSession retried =
+            await service.StartNextLegAsync(
+                started.SessionId,
+                started.ContractId,
+                nextLegId,
+                nextPlan,
+                Epoch.AddMinutes(2));
+
+        Assert.Equal(2, retried.EffectiveLegs.Count);
+        Assert.Equal(nextLegId, retried.EffectiveLegs[^1].LegId);
+    }
+
+    [Fact]
+    public async Task TwoLegSessionSurvivesSqliteRestart()
+    {
+        string directory =
+            Path.Combine(Path.GetTempPath(), "OpenCareer.Tests", Guid.NewGuid().ToString("N"));
+        string databasePath = Path.Combine(directory, "career.db");
+
+        try
+        {
+            var coordinator = new FlightSessionCoordinator();
+            var service =
+                new FlightSessionPersistenceService(
+                    coordinator,
+                    new SqliteFlightSessionCheckpointStore(databasePath));
+            FlightSession started = await service.StartAsync(Epoch);
+            await CompleteCurrentLegAsync(service, started);
+            Guid nextLegId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+            await service.StartNextLegAsync(
+                started.SessionId,
+                started.ContractId,
+                nextLegId,
+                new FlightSessionPlan("KDFW", "KIAH"),
+                Epoch.AddMinutes(2));
+
+            var restoredCoordinator = new FlightSessionCoordinator();
+            var restoredService =
+                new FlightSessionPersistenceService(
+                    restoredCoordinator,
+                    new SqliteFlightSessionCheckpointStore(databasePath));
+            FlightSession restored =
+                Assert.IsType<FlightSession>(await restoredService.RecoverAsync());
+
+            Assert.Equal(started.SessionId, restored.SessionId);
+            Assert.Equal(2, restored.EffectiveLegs.Count);
+            Assert.Equal(FlightLegStatus.Completed, restored.EffectiveLegs[0].Status);
+            Assert.Equal(nextLegId, restored.EffectiveLegs[1].LegId);
+            Assert.Equal(FlightLegStatus.Active, restored.EffectiveLegs[1].Status);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task RecoverRestoresCheckpointIntoEmptyCoordinator()
     {
         FlightSession checkpoint =
@@ -567,6 +746,16 @@ public sealed class FlightSessionPersistenceServiceTests
             FlightOperationState.Cancelled,
             coordinator.Current!.OperationState);
     }
+
+    private static Task<FlightSession> CompleteCurrentLegAsync(
+        FlightSessionPersistenceService service,
+        FlightSession started) =>
+        service.CompleteCurrentLegAsync(
+            started.SessionId,
+            started.ContractId,
+            Epoch.AddMinutes(1),
+            CompleteTerminalEvidence,
+            FlightLegTerminalPolicy.ConventionalCommercialTurnaround);
 
     private sealed class MemoryStore :
         IFlightSessionCheckpointStore

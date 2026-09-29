@@ -2,6 +2,77 @@ namespace OpenCareer.Domain.Flights;
 
 public static class FlightSessionEngine
 {
+    public static FlightSession StartNextLeg(
+        FlightSession current,
+        Guid nextLegId,
+        FlightSessionPlan nextPlan,
+        DateTimeOffset requestedAt)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(nextPlan);
+
+        if (nextLegId == Guid.Empty)
+            throw new ArgumentException("Flight leg ID cannot be empty.", nameof(nextLegId));
+
+        if (requestedAt == default || requestedAt < current.CreatedAt)
+            throw new ArgumentOutOfRangeException(nameof(requestedAt));
+
+        if (current.IsTerminal)
+            throw new InvalidOperationException("A terminal FlightSession cannot start another leg.");
+
+        nextPlan.Validate();
+        current.ValidateLegs();
+
+        FlightLeg[] legs = current.EffectiveLegs.ToArray();
+        DateTimeOffset startedAt =
+            requestedAt < current.UpdatedAt
+                ? current.UpdatedAt
+                : requestedAt;
+
+        FlightLeg final = legs[^1];
+        if (final.Status == FlightLegStatus.Active)
+        {
+            if (final.Sequence > 1
+                && final.LegId == nextLegId
+                && final.StartedAt == startedAt
+                && final.Plan == nextPlan)
+            {
+                return current;
+            }
+
+            throw new InvalidOperationException(
+                "The current flight leg must complete before another leg can start.");
+        }
+
+        if (legs.Any(leg => leg.LegId == nextLegId))
+            throw new InvalidOperationException("Flight leg ID already exists in this session.");
+
+        var nextLeg =
+            new FlightLeg(
+                nextLegId,
+                final.Sequence + 1,
+                startedAt,
+                nextPlan);
+
+        FlightSession next =
+            current with
+            {
+                UpdatedAt = startedAt,
+                Status = FlightSessionStatus.Active,
+                OperationState = FlightOperationState.ReadyForStart,
+                Tracking = current.Tracking with
+                {
+                    State = FlightTrackingState.Preflight,
+                    SuspendedFrom = null,
+                    UpdatedAt = startedAt
+                },
+                Legs = [.. legs, nextLeg]
+            };
+
+        next.ValidateLegs();
+        return next;
+    }
+
     public static FlightSession Advance(
         FlightSession current,
         FlightSessionAdvance update)
@@ -84,10 +155,10 @@ public static class FlightSessionEngine
         {
             operationState = FlightOperationState.Complete;
             status = FlightSessionStatus.Completed;
-            legs =
-            [
-                legs.Single().Complete(update.Evidence.Timestamp)
-            ];
+            FlightLeg[] completedLegs = legs.ToArray();
+            completedLegs[^1] =
+                completedLegs[^1].Complete(update.Evidence.Timestamp);
+            legs = completedLegs;
         }
 
         return current with

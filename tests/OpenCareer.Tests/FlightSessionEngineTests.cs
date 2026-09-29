@@ -8,6 +8,88 @@ public sealed class FlightSessionEngineTests
         new(2026, 9, 19, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void StartingNextLegResetsBoundaryStateAndPreservesCumulativeAggregates()
+    {
+        FlightSession started =
+            FlightSession.Start(
+                Epoch,
+                sessionId: Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                plan: new FlightSessionPlan("KJFK", "KBOS"));
+
+        FlightTimeLedger ledger =
+            FlightTimeLedger.Empty.Add(
+                new FlightTimeInterval(
+                    TimeSpan.FromMinutes(10),
+                    1,
+                    ValidOperationalEvidence: true,
+                    Paused: false,
+                    SlewActive: false,
+                    CountsTowardBlockTime: true,
+                    CountsTowardFlightTime: true,
+                    Airborne: true,
+                    TaxiOut: false,
+                    TaxiIn: false,
+                    Night: false,
+                    ActualInstrument: false));
+
+        FlightSession completedLeg =
+            started with
+            {
+                UpdatedAt = Epoch.AddMinutes(10),
+                OperationState = FlightOperationState.Shutdown,
+                Tracking = new FlightTrackingSnapshot(
+                    FlightTrackingState.Parked,
+                    null,
+                    Epoch.AddMinutes(10),
+                    TakeoffCount: 2,
+                    LandingEpisodeCount: 3,
+                    BounceCount: 1,
+                    TouchAndGoCount: 1,
+                    RejectedTakeoffCount: 1,
+                    CrashReported: false),
+                TimeLedger = ledger,
+                Statistics = FlightSessionStatistics.Empty,
+                LandingEpisodes =
+                [
+                    new FlightSessionLandingEpisode(
+                        1,
+                        Epoch.AddMinutes(8),
+                        FlightSessionLandingKind.FullStop,
+                        BounceCount: 1,
+                        CompletedAt: Epoch.AddMinutes(9))
+                ],
+                Legs =
+                [
+                    Assert.Single(started.EffectiveLegs)
+                        .Complete(Epoch.AddMinutes(10))
+                ]
+            };
+
+        FlightSession next =
+            FlightSessionEngine.StartNextLeg(
+                completedLeg,
+                Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                new FlightSessionPlan("KBOS", "KPHL"),
+                Epoch.AddMinutes(11));
+
+        Assert.Equal(completedLeg.SessionId, next.SessionId);
+        Assert.Equal(FlightSessionStatus.Active, next.Status);
+        Assert.Equal(FlightOperationState.ReadyForStart, next.OperationState);
+        Assert.Equal(FlightTrackingState.Preflight, next.Tracking.State);
+        Assert.Null(next.Tracking.SuspendedFrom);
+        Assert.Equal(completedLeg.Tracking.TakeoffCount, next.Tracking.TakeoffCount);
+        Assert.Equal(completedLeg.Tracking.LandingEpisodeCount, next.Tracking.LandingEpisodeCount);
+        Assert.Equal(completedLeg.Tracking.BounceCount, next.Tracking.BounceCount);
+        Assert.Equal(completedLeg.Tracking.TouchAndGoCount, next.Tracking.TouchAndGoCount);
+        Assert.Equal(completedLeg.TimeLedger, next.TimeLedger);
+        Assert.Equal(completedLeg.EffectiveStatistics, next.EffectiveStatistics);
+        Assert.Equal(completedLeg.EffectiveLandingEpisodes, next.EffectiveLandingEpisodes);
+        Assert.Equal(2, next.EffectiveLegs.Count);
+        Assert.Equal(2, next.EffectiveLegs[^1].Sequence);
+        Assert.Equal(FlightLegStatus.Active, next.EffectiveLegs[^1].Status);
+    }
+
+    [Fact]
     public void ColdAndDarkSessionRecordsTheOperationalMilestones()
     {
         FlightSession session =
