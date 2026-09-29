@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-09-19 with current integration branch plus military PR #10 status.
+Last reconciled: 2026-09-28 against `feature/playable-loop-integration` code head `f2acb367`, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -28,10 +28,10 @@ Status words used in the graphics:
 ```mermaid
 flowchart LR
     C1["1. Continuity<br/>COMPLETE"] --> C2["2. WinUI Shell<br/>ACTIVE"]
-    C2 --> C3["3. SimConnect + Telemetry<br/>GATED"]
-    C3 --> C4["4. Flight Detection + Recovery<br/>ACTIVE / GATED"]
-    C4 --> C5["5. Aircraft Registry + Dispatch<br/>PLANNED"]
-    C5 --> C6["6. Playable Jobs + Career Loop<br/>PLANNED"]
+    C2 --> C3["3. SimConnect + Telemetry<br/>ACTIVE / CORE LIVE PASS"]
+    C3 --> C4["4. Flight Detection + Recovery<br/>ACTIVE / CORE LIVE PASS"]
+    C4 --> C5["5. Aircraft Registry + Dispatch<br/>ACTIVE"]
+    C5 --> C6["6. Playable Jobs + Career Loop<br/>ACTIVE / FIRST LOOP LIVE PASS"]
     C6 --> C7["7. Persistent Economy<br/>ACTIVE FOUNDATION"]
     C7 --> C8["8. Dealers + Ownership<br/>ACTIVE FOUNDATION"]
     C8 --> C9["9. Maintenance + Company<br/>PLANNED"]
@@ -45,27 +45,24 @@ flowchart LR
 
     class C1 complete;
     class C2,C4,C7,C8,C10 active;
-    class C3 gated;
-    class C5,C6,C9,C11 planned;
+    class C3,C5,C6 active;
+    class C9,C11 planned;
 ```
 
 ## Current critical path
 
 ```mermaid
 flowchart TD
-    A["Live Windows/MSFS probe<br/>F-22 at KRME validation fixture"] --> B["Correct concrete SimVar/unit issues"]
-    B --> C["FlightEvidenceProcessor<br/>telemetry -> reducer evidence"]
-    C --> D["Versioned SQLite<br/>FlightSession + FlightLeg recovery"]
-    D --> E["Installed-aircraft registry<br/>+ capability confidence"]
-    E --> F["Runway / payload / fuel<br/>dispatch feasibility"]
-    F --> G["Market-driven job generation"]
-    G --> H["Mission validation<br/>+ atomic settlement"]
-    H --> I["First end-to-end playable career loop"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["Bind loaded aircraft identity<br/>to active FlightSession"]
+    B --> C["Touch-and-go / go-around<br/>production evidence"]
+    C --> D["Mid-terminal restart<br/>automatic resumption"]
+    D --> E["Ordinary compensated job<br/>live certification"]
+    E --> F["Broader registry / jobs<br/>career progression"]
 
     classDef next fill:#3b3218,stroke:#F4B942,color:#fff,stroke-width:2px;
     classDef future fill:#172737,stroke:#4EA8DE,color:#fff,stroke-width:1px;
-    class A next;
-    class B,C,D,E,F,G,H,I future;
+    class B next;
+    class A,C,D,E,F future;
 ```
 
 ---
@@ -126,7 +123,7 @@ Exit gate: Windows launch/navigation/disconnected state verified locally; no sta
 
 # Chapter 3 — Simulator connection and normalized telemetry
 
-Chapter status: **GATED — implementation exists, live runtime acceptance is open**
+Chapter status: **ACTIVE — CORE C172/KJFK RUNTIME PATH LIVE ACCEPTED; BROADER TELEMETRY GATES OPEN**
 
 ## Implemented
 
@@ -155,13 +152,16 @@ Chapter status: **GATED — implementation exists, live runtime acceptance is op
 - [x] Add Windows live-probe executable.
 - [x] Add offline JSONL trace analyzer.
 - [x] Add synthetic trace-analyzer tests.
+- [x] Add current-aircraft TITLE observation and canonical identity mapping.
+- [x] Add bounded ordered SimFrame flight-critical telemetry while preserving the 1 Hz `Latest` consumer contract.
+- [x] Isolate malformed/request-scoped airport facility failures from the healthy core connection and bound identical retries.
 
 ## Remaining / live gate
 
 - [x] Run `./tools/run-live-probe.ps1` with MSFS 2024 on the user's Windows machine.
 - [x] Verify simulator absent -> Waiting/Disconnected.
 - [x] Verify native connection to MSFS 2024.
-- [ ] Verify actual installed aircraft identity behavior.
+- [x] Verify stock C172 current-aircraft TITLE and canonical identity behavior on the user's Windows/MSFS machine.
 - [x] Capture ~1 Hz F-22/KRME telemetry; instrument-by-instrument acceptance remains open.
 - [x] Capture pause / resume transitions.
 - [x] Capture menus/loading transitions, including placeholder coordinates that must not become flight evidence.
@@ -175,8 +175,10 @@ Chapter status: **GATED — implementation exists, live runtime acceptance is op
 - [x] Verify reconnect after MSFS restart.
 - [x] Correct observed gear-extension scale mismatch; live rerun verification remains required.
 - [ ] Add verified simulation-rate capture.
-- [ ] Add verified aircraft identity/title/type fields needed by the flight/session system.
-- [ ] Add bounded/adaptive telemetry sampling needed for landing detection/scoring.
+- [x] Add verified TITLE/canonical identity fields needed by registry/readiness.
+- [ ] Bind current canonical aircraft identity to the active FlightSession and fail closed on an aircraft change.
+- [x] Add bounded high-rate telemetry sampling needed to preserve short landing/bounce state edges.
+- [ ] Add phase-adaptive/richer scoring capture only where later evidence requires it.
 
 Exit gate: live Windows/MSFS connect-disconnect-reconnect and telemetry behavior demonstrated; missing-value handling remains covered by automated tests.
 
@@ -184,7 +186,7 @@ Exit gate: live Windows/MSFS connect-disconnect-reconnect and telemetry behavior
 
 # Chapter 4 — Flight detection, time accounting and durable recovery
 
-Chapter status: **ACTIVE FOUNDATION / GATED FOR CALIBRATION**
+Chapter status: **CORE FULL-STOP LIVE PATH IMPLEMENTED / EDGE + MULTI-LEG HARDENING OPEN**
 
 ## Implemented foundation
 
@@ -203,35 +205,40 @@ Chapter status: **ACTIVE FOUNDATION / GATED FOR CALIBRATION**
 - [x] Define conventional park/shutdown/servicing terminal policy.
 - [x] Add deterministic unit tests for the pure flight-core foundation.
 - [x] Add offline trace analysis to support threshold calibration.
+- [x] Implement production `FlightTelemetryEvidenceProcessor` and `FlightSessionRuntime` wiring.
+- [x] Add transactional processor-state rollback so a failed checkpoint retry emits identical evidence exactly once.
+- [x] Persist and recover one authoritative FlightSession through versioned SQLite checkpoints.
+- [x] Persist decimated route statistics and landing-episode summaries in the checkpoint.
 
 ## Remaining
 
-- [ ] Implement configurable `FlightEvidenceProcessor` from normalized telemetry/events.
-- [ ] Calibrate speed/AGL/timing/hysteresis thresholds from real MSFS traces.
-- [ ] Detect stable load/observation start.
-- [ ] Detect self-powered movement / flight-time start.
-- [ ] Detect taxi-out.
-- [ ] Detect takeoff roll.
-- [ ] Detect rejected takeoff.
-- [ ] Detect sustained airborne state.
-- [ ] Detect approach/landing episode.
-- [ ] Detect bounce/recontact without duplicate landing.
-- [ ] Detect go-around/new approach.
-- [ ] Detect taxi-in.
-- [ ] Detect parking/shutdown terminal conditions.
+- [x] Implement configurable `FlightTelemetryEvidenceProcessor` from normalized telemetry/events.
+- [ ] Extend calibration beyond the exact-PC C172/KJFK full-stop path to representative aircraft/edge cases.
+- [x] Detect stable load/observation start.
+- [x] Detect self-powered movement / flight-time start.
+- [x] Detect taxi-out.
+- [x] Detect takeoff roll.
+- [x] Detect rejected takeoff.
+- [x] Detect sustained airborne state.
+- [x] Detect approach/landing episode.
+- [x] Detect bounce/recontact without duplicate landing, including subsecond transitions retained across runtime polling.
+- [ ] Produce telemetry-derived touch-and-go/go-around/new-approach evidence; reducer support alone is insufficient.
+- [x] Detect taxi-in.
+- [x] Detect parking/shutdown terminal conditions.
 - [ ] Handle aircraft change safely.
-- [ ] Handle material slew/teleport evidence.
-- [ ] Handle disconnect suspension and plausible resume.
-- [ ] Create authoritative runtime `FlightSession` orchestration.
-- [ ] Create versioned SQLite schema for FlightSession/FlightLeg.
-- [ ] Add atomic/checkpoint persistence.
-- [ ] Add previous-valid-save/recovery strategy.
-- [ ] Prevent duplicate milestones/rewards after resume.
-- [ ] Persist decimated route track plus event windows.
-- [ ] Verify recovery after app restart.
-- [ ] Verify recovery after simulator disconnect/restart.
+- [x] Handle material slew/teleport evidence.
+- [x] Handle disconnect suspension and plausible resume.
+- [x] Create authoritative runtime `FlightSession` orchestration.
+- [x] Create versioned SQLite checkpoint persistence for the current FlightSession aggregate.
+- [x] Add atomic/checkpoint persistence with bounded steady-state writes and immediate transition checkpoints.
+- [ ] Add explicit previous-valid/corrupt-checkpoint fallback beyond the current atomic single checkpoint.
+- [x] Prevent duplicate milestones/effects after resume and replay.
+- [x] Persist decimated route track and landing summaries; richer event windows remain open.
+- [x] Verify recovery after app restart for the supported current-session path.
+- [x] Verify recovery after simulator interruption with plausible continuity; broader quit/restart cases remain open.
+- [ ] Implement concrete multi-leg/FlightLeg runtime persistence.
 - [ ] Verify representative 1-, 3- and 6-hour replay scenarios.
-- [ ] Verify at least one complete live takeoff-to-park/shutdown session.
+- [x] Verify one complete C172/KJFK live takeoff-to-park/shutdown/completion session, including bounce exact-once behavior.
 
 Exit gate: a real session can be tracked, saved, interrupted, recovered and completed without duplicate effects.
 
@@ -239,7 +246,7 @@ Exit gate: a real session can be tracked, saved, interrupted, recovered and comp
 
 # Chapter 5 — Installed-aircraft registry and feasible dispatch
 
-Chapter status: **PLANNED, with domain capability foundations**
+Chapter status: **ACTIVE — FIRST C172/POINT-TO-POINT PATH IMPLEMENTED**
 
 ## Existing foundation
 
@@ -247,26 +254,32 @@ Chapter status: **PLANNED, with domain capability foundations**
 - [x] Define separate concepts for civilian ownership, rental/employer access and military assignment.
 - [x] Establish performance-source/confidence policy.
 - [x] Establish runway/performance feasibility requirement.
+- [x] Discover installed/current aircraft from SimConnect catalog/TITLE and package evidence.
+- [x] Persist installed-aircraft observations in SQLite with restart fallback.
+- [x] Normalize known aliases to canonical aircraft identity without treating TITLE as ownership.
+- [x] Retain per-field source/confidence and fail closed when critical evidence is unknown.
+- [x] Add simulator airport/runway facility observation with bounded failure fallback to reference data.
+- [x] Add persistent contract-owned Fleet reservation acquire/recovery/release.
 
 ## Remaining
 
-- [ ] Detect/index installed aircraft.
-- [ ] Persist installed-aircraft registry.
-- [ ] Normalize aircraft identity/family/type.
-- [ ] Infer/store capability profiles.
-- [ ] Record source/confidence per important capability.
-- [ ] Resolve selected aircraft access type.
-- [ ] Read/use simulator scenery/facility runway data where practical.
-- [ ] Build airport/runway candidate model.
-- [ ] Validate payload/weight.
-- [ ] Validate fuel/endurance/range.
-- [ ] Validate takeoff runway feasibility.
-- [ ] Validate landing runway feasibility.
-- [ ] Apply safety margins.
-- [ ] Include weather/environment inputs where authoritative data exists.
-- [ ] Reject unknown-critical-performance cases with explicit reason.
-- [ ] Ensure military assignment eligibility cannot imply civilian ownership.
-- [ ] Add deterministic capability/dispatch tests.
+- [x] Detect/index installed aircraft for current production discovery sources.
+- [x] Persist installed-aircraft registry observations.
+- [ ] Expand general aircraft family/type normalization beyond current mappings.
+- [ ] Expand authoritative capability profiles beyond the C172 reference and available configuration evidence.
+- [x] Record source/confidence per important capability.
+- [ ] Complete owned/rented/employer/assigned access and location authority; current civilian/military access metadata is partial.
+- [x] Read/use simulator scenery/facility runway data where available without making failures reconnect SimConnect.
+- [x] Build airport/runway candidate model.
+- [x] Validate payload/weight.
+- [x] Validate fuel/endurance/range in planning services; wire the complete composite planner into all production job paths.
+- [x] Validate takeoff runway feasibility.
+- [x] Validate landing runway feasibility.
+- [x] Apply configurable safety margins in planning; current Ferry/Reposition terms do not request every optional margin.
+- [x] Include weather/environment inputs where requested and authoritative data exists.
+- [x] Reject unknown-critical-performance cases with explicit reason.
+- [x] Ensure military assignment eligibility cannot imply civilian ownership; assignment issuance/revocation remains open.
+- [x] Add deterministic capability/dispatch/reservation tests.
 
 Exit gate: impossible or unknown-critical jobs are rejected before acceptance; feasible routes explain why they pass.
 
@@ -274,7 +287,7 @@ Exit gate: impossible or unknown-critical jobs are rejected before acceptance; f
 
 # Chapter 6 — Home airport, employment and first playable mission loop
 
-Chapter status: **PLANNED, with contract/location foundations**
+Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 
 ## Existing foundation
 
@@ -285,37 +298,44 @@ Chapter status: **PLANNED, with contract/location foundations**
 - [x] Define no-teleport company geography.
 - [x] Define fresh-career start with no required owned aircraft.
 - [x] Define employer/rental/assigned-aircraft path.
+- [x] Persist player profile/current airport and provide editable home-airport onboarding foundation.
+- [x] Implement deterministic persisted board refill foundation at the current career location.
+- [x] Implement production Jobs aircraft selection/readiness/accept-start flow.
+- [x] Implement Ferry/Reposition contract, reservation, dispatch, FlightSession and terminal authorities.
+- [x] Implement isolated zero-progression C172/KJFK Development/Test circuit through the same production authorities.
 
 ## Remaining
 
-- [ ] Create player career onboarding.
-- [ ] Home-airport selection.
-- [ ] Persist player location/home base.
-- [ ] Build market-driven job generation.
-- [ ] Filter jobs through aircraft/runway/qualification feasibility.
-- [ ] Build briefing flow.
-- [ ] Build dispatch-to-active-mission flow.
-- [ ] Bind mission evidence to FlightSession.
-- [ ] Implement mission-specific objective validation.
-- [ ] Require mission terminal conditions beyond landing.
-- [ ] Build result/debrief flow.
+- [x] Create player career onboarding foundation; licensing/training onboarding remains later MBL-13 work.
+- [x] Home-airport selection foundation.
+- [x] Persist player location/home base.
+- [x] Build deterministic board refill foundation; authoritative market-demand integration remains open.
+- [x] Fail closed through aircraft/runway/qualification readiness before acceptance/start; generation-time filtering/ranking remains open.
+- [ ] Build a richer dedicated briefing flow beyond the current Jobs offer/readiness surface.
+- [x] Build dispatch-to-active-mission flow for Ferry/Reposition and Development/Test.
+- [x] Bind supported mission evidence to FlightSession.
+- [x] Implement mission-specific validation for the supported standard point-to-point path.
+- [x] Require parking/shutdown and mission/post-flight verification beyond landing.
+- [x] Build automatic result/debrief flow for supported career jobs; manual free/practice postflight remains open.
   - [x] Define immutable FlightDebrief snapshot with separate flight-safety and mission outcomes.
   - [x] Preserve multi-leg hierarchy, decimated route track, time/experience, fuel, payload, assistance, landing and event evidence.
   - [x] Preserve evidence quality and unknown/unavailable values without fabrication.
-  - [ ] Map authoritative completed FlightSession data into the debrief automatically.
-- [ ] Add logbook commit flow.
+  - [x] Map authoritative completed FlightSession data into the debrief automatically for supported career jobs.
+- [x] Add automatic career logbook commit flow.
   - [x] Implement idempotent application-level LogbookCommitCoordinator.
   - [x] Require final authoritative career settlement before automatic career log commit.
   - [x] Keep manual free/practice logging separate from contract settlement.
   - [x] Implement persistent versioned SQLite ILogbookSource / ILogbookWriter with indexed filters, immutable payload storage and idempotency.
-  - [ ] Wire authoritative career settlement -> SQLite Logbook commit.
-- [ ] Atomically settle money once.
+  - [x] Wire authoritative career settlement -> SQLite Logbook commit.
+  - [ ] Wire manual free/practice **Log Flight / Discard** UI flow.
+- [x] Atomically settle money once.
 - [ ] Atomically settle reputation/relationships once.
-- [ ] Atomically settle travel/location once.
-- [ ] Prevent duplicate settlement.
+- [x] Atomically settle travel/location once.
+- [x] Prevent duplicate settlement/logbook/experience/location/finalization effects on replay.
 - [ ] Keep employee work viable without company ownership.
 - [ ] Add first representative passenger/cargo/utility job.
-- [ ] Add first end-to-end playable KRME-area career operation.
+- [ ] Live-certify one ordinary compensated market-generated civilian route; the zero-progression KJFK circuit is already live accepted.
+- [ ] Automatically reconstruct/resume a terminal workflow interrupted midway through settlement/finalization.
 
 Exit gate: accept -> dispatch -> fly -> validate -> park/shutdown -> settle once -> reload.
 
@@ -476,7 +496,7 @@ Chapter status: **CAMPAIGN CORE COMPLETE — INTEGRATIONS / ACCEPTANCE PENDING O
 - [x] Implement strategic campaign phase, momentum and deterministic objectives for control, intelligence, readiness and threat reduction.
 - [x] Coordinate world advancement and strategic-state persistence through `ConflictCampaignCoordinator`.
 - [x] Enforce military authorization at the dispatch/acceptance boundary so lower-level mission services cannot bypass qualification/assignment rules.
-- [x] Project campaign/front/threat/support/active-operation data through an application snapshot for the future Military/Government UI.
+- [x] Project campaign/front/threat/support/active-operation data through an application snapshot consumed by the production Military/Government UI.
 - [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
 - [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
 
@@ -580,7 +600,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Preserve native WinUI control templates/focus behavior instead of replacing accessibility-critical templates.
 - [x] Add design-system contract tests for canonical colors, contrast, required style keys and duplicate resources.
 - [x] Migrate current Dashboard, Current Flight, Settings, placeholder, shell and tutorial surfaces onto shared design resources.
-- [ ] Verify shared resource dictionaries in Windows WinUI CI and local application launch.
+- [x] Verify shared resource dictionaries in Windows WinUI CI and exact-PC application launch; broader accessibility states remain below.
 - [x] Verify canonical text/background contrast mathematically in automated design-system contract tests.
 - [ ] Verify keyboard focus, high-contrast behavior and text scaling interactively with the production resource system.
 - [x] Define all 15 current navigation destinations.
@@ -611,7 +631,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement controller/keyboard binding resolution/profile source without guessed bindings.
 - [ ] Render missing controller/keyboard mappings as visible amber/orange **UNBOUND** and required/critical missing mappings as red **UNBOUND — REQUIRED**.
 - [ ] Implement Dispatch screen against real dispatch services.
-- [ ] Implement Jobs screen against real job services.
+- [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.
 - [ ] Implement Map / World screen against real world state.
 - [ ] Implement Aircraft screen against registry.
 - [ ] Implement Hangar / Bases screen.
@@ -721,7 +741,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PLANNED**
 
 # MVP acceptance checklist
 
-The first end-to-end playable foundation is not complete until every item below is checked.
+The first supported C172/KJFK playable-loop foundation is complete; unchecked items below remain broader product/runtime acceptance gates.
 
 - [x] App project exists.
 - [x] App can represent Waiting/Disconnected state.
@@ -730,17 +750,17 @@ The first end-to-end playable foundation is not complete until every item below 
 - [x] Core normalized telemetry implementation exists.
 - [x] Deterministic world/economy simulation can run independently of MSFS.
 - [ ] Production app launch verified locally with MSFS not running.
-- [ ] Live MSFS connection verified.
-- [ ] Live reconnect after MSFS restart verified.
-- [ ] Current aircraft identity verified.
-- [ ] Live core telemetry verified.
-- [ ] Robust flight-state detection works from calibrated evidence.
-- [ ] Active FlightSession orchestration works.
-- [ ] FlightSession saves to SQLite.
-- [ ] Interrupted FlightSession recovers safely.
-- [ ] Basic flight completes from start through parking/shutdown.
-- [ ] Completed flight is saved to logbook/history.
-- [ ] At least one feasible job can be accepted and settled exactly once.
+- [x] Live MSFS connection verified for the exact-PC C172/KJFK validation path.
+- [x] Live reconnect after MSFS restart verified for the established SimConnect validation path.
+- [x] Current stock C172 TITLE and canonical aircraft identity verified.
+- [x] Live core telemetry verified for the supported validation path.
+- [x] Robust full-stop flight-state detection works for the C172/KJFK validation path, including bounded bounce capture; broader calibration remains open.
+- [x] Active FlightSession orchestration works.
+- [x] FlightSession saves to SQLite.
+- [x] Interrupted FlightSession recovers safely.
+- [x] Basic flight completes from start through parking/shutdown.
+- [x] Completed supported career flight is saved to SQLite Logbook/history.
+- [x] A feasible Development/Test job is accepted, dispatched and settled exactly once with zero configured progression.
 
 ---
 
@@ -748,12 +768,10 @@ The first end-to-end playable foundation is not complete until every item below 
 
 Do not skip this order without an explicit reason:
 
-1. Run the real Windows/MSFS live probe.
-2. Analyze the JSONL trace.
-3. Correct only concrete simulator-variable/unit/runtime discrepancies.
-4. Implement configurable `FlightEvidenceProcessor`.
-5. Add versioned SQLite FlightSession/FlightLeg checkpoint/recovery.
-6. Build installed-aircraft registry and runway/dispatch feasibility.
-7. Build the first market-driven playable job and atomic settlement.
+1. Bind the authoritative current canonical aircraft identity to the active FlightSession and fail closed on loaded-aircraft mismatch.
+2. Add telemetry-derived touch-and-go/go-around/new-approach evidence and focused replay/live validation.
+3. Persist enough terminal-workflow intent to reconstruct/resume safely after process exit between its exactly-once steps.
+4. Live-certify one ordinary compensated market-generated Ferry/Reposition job through dispatch, settlement, Logbook, location and restart replay.
+5. Expand registry/capability/job breadth without rebuilding the validated KJFK loop.
 
 The external aviation APIs, full conflict simulation, dealer expansion and rich production UI are valuable, but they do not replace this critical path.
