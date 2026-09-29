@@ -64,7 +64,9 @@ internal static class SimConnectTelemetryMapper
             IsTrue(Read(values, SimConnectTelemetryValue.SlewActive)),
             simulationRate,
             NormalizeNightEvidence(
-                Read(values, SimConnectTelemetryValue.TimeOfDay)));
+                Read(values, SimConnectTelemetryValue.TimeOfDay)),
+            NormalizeBooleanEvidence(
+                Read(values, SimConnectTelemetryValue.AmbientInCloud)));
     }
 
     private static double Read(IReadOnlyList<double> values, SimConnectTelemetryValue index) =>
@@ -94,6 +96,14 @@ internal static class SimConnectTelemetryMapper
         {
             0d or 1d or 2d => false,
             3d => true,
+            _ => null
+        };
+
+    private static bool? NormalizeBooleanEvidence(double value) =>
+        value switch
+        {
+            0d => false,
+            1d or -1d => true,
             _ => null
         };
 

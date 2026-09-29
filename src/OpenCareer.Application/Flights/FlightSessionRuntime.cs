@@ -495,7 +495,7 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
             TaxiOut: taxiOut,
             TaxiIn: taxiIn,
             Night: telemetry.IsNight is true,
-            ActualInstrument: false);
+            ActualInstrument: telemetry.IsInCloud is true);
     }
 
     private void EnsureProcessorContext(

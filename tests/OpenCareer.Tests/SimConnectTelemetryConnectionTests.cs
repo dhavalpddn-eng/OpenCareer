@@ -33,6 +33,11 @@ public sealed class SimConnectTelemetryConnectionTests
             static definition =>
                 definition.DatumName == "TIME OF DAY"
                 && definition.Units == "number");
+        Assert.Contains(
+            telemetryDefinitions,
+            static definition =>
+                definition.DatumName == "AMBIENT IN CLOUD"
+                && definition.Units == "bool");
 
         var request = Assert.Single(
             api.TelemetryRequests,
@@ -82,6 +87,7 @@ public sealed class SimConnectTelemetryConnectionTests
         values[(int)SimConnectTelemetryValue.GearTotalPercent] = 100;
         values[(int)SimConnectTelemetryValue.SimulationRate] = 1;
         values[(int)SimConnectTelemetryValue.TimeOfDay] = 3;
+        values[(int)SimConnectTelemetryValue.AmbientInCloud] = 1;
 
         api.Enqueue(SimConnectPackets.Event(SimConnectTelemetryDefinition.PauseEventId, 4));
         api.Enqueue(SimConnectPackets.SimObjectData(
@@ -97,6 +103,7 @@ public sealed class SimConnectTelemetryConnectionTests
         Assert.True(connection.Latest.GearDown);
         Assert.Equal(1, connection.Latest.SimulationRate);
         Assert.True(connection.Latest.IsNight);
+        Assert.True(connection.Latest.IsInCloud);
 
         IFlightCriticalTelemetrySource critical = connection;
         Assert.Empty(critical.ReadAfter(null));

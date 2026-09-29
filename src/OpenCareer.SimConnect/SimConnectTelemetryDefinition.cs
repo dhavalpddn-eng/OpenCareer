@@ -29,7 +29,8 @@ internal enum SimConnectTelemetryValue
     GearTotalPercent,
     SlewActive,
     SimulationRate,
-    TimeOfDay
+    TimeOfDay,
+    AmbientInCloud
 }
 
 internal static class SimConnectTelemetryDefinition
@@ -66,7 +67,8 @@ internal static class SimConnectTelemetryDefinition
         new("GEAR TOTAL PCT EXTENDED", "percent"),
         new("IS SLEW ACTIVE", "bool"),
         new("SIMULATION RATE", "number"),
-        new("TIME OF DAY", "number")
+        new("TIME OF DAY", "number"),
+        new("AMBIENT IN CLOUD", "bool")
     ];
 
     internal static int ValueCount => Data.Length;

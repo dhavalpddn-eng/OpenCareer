@@ -35,6 +35,7 @@ public sealed class SimConnectTelemetryMapperTests
         Set(values, SimConnectTelemetryValue.SlewActive, -1);
         Set(values, SimConnectTelemetryValue.SimulationRate, 4);
         Set(values, SimConnectTelemetryValue.TimeOfDay, 3);
+        Set(values, SimConnectTelemetryValue.AmbientInCloud, 1);
 
         DateTimeOffset timestamp = new(2026, 9, 17, 21, 30, 0, TimeSpan.Zero);
         var snapshot = SimConnectTelemetryMapper.Map(values, timestamp, paused: true);
@@ -54,6 +55,7 @@ public sealed class SimConnectTelemetryMapperTests
         Assert.True(snapshot.SlewActive);
         Assert.Equal(4, snapshot.SimulationRate);
         Assert.True(snapshot.IsNight);
+        Assert.True(snapshot.IsInCloud);
         Assert.False(snapshot.OnGround);
     }
 
@@ -128,6 +130,29 @@ public sealed class SimConnectTelemetryMapperTests
                     paused: false));
 
         Assert.Equal(expectedNight, snapshot.IsNight);
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    [InlineData(-1, true)]
+    [InlineData(2, null)]
+    public void AmbientInCloudNormalizesInstrumentEvidence(
+        double ambientInCloud,
+        bool? expectedInCloud)
+    {
+        var values = new double[SimConnectTelemetryDefinition.ValueCount];
+        Set(values, SimConnectTelemetryValue.SimulationRate, 1);
+        Set(values, SimConnectTelemetryValue.AmbientInCloud, ambientInCloud);
+
+        AircraftTelemetrySnapshot snapshot =
+            Assert.IsType<AircraftTelemetrySnapshot>(
+                SimConnectTelemetryMapper.Map(
+                    values,
+                    DateTimeOffset.UtcNow,
+                    paused: false));
+
+        Assert.Equal(expectedInCloud, snapshot.IsInCloud);
     }
 
     [Fact]
