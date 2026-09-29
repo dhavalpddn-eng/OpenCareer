@@ -17,6 +17,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         bool LandingContactObserved,
         DateTimeOffset? BounceAirborneAt,
         bool PendingBounceRecontact,
+        DateTimeOffset? TouchAndGoDepartureAt,
         bool GoAroundArmed,
         double? GoAroundLowAglFeet,
         DateTimeOffset? GoAroundClimbStartedAt);
@@ -33,6 +34,7 @@ public sealed class FlightTelemetryEvidenceProcessor
     private bool _landingContactObserved;
     private DateTimeOffset? _bounceAirborneAt;
     private bool _pendingBounceRecontact;
+    private DateTimeOffset? _touchAndGoDepartureAt;
     private bool _goAroundArmed;
     private double? _goAroundLowAglFeet;
     private DateTimeOffset? _goAroundClimbStartedAt;
@@ -201,6 +203,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         {
             _landingEpisodeActive = false;
             ResetLandingContact();
+            ResetTouchAndGoCandidate();
         }
 
         bool approachConfirmed =
@@ -216,6 +219,12 @@ public sealed class FlightTelemetryEvidenceProcessor
             && stableTelemetry
             && observation.ValidLoadedAircraft
             && observation.ContinuityPlausible;
+
+        bool touchAndGoConfirmed =
+            ObserveTouchAndGo(
+                telemetry,
+                trustworthyFlightStateSample,
+                airborneConfirmed);
 
         bool goAroundConfirmed =
             ObserveGoAround(
@@ -264,6 +273,8 @@ public sealed class FlightTelemetryEvidenceProcessor
                     approachConfirmed,
                 GoAroundConfirmed:
                     goAroundConfirmed,
+                TouchAndGoConfirmed:
+                    touchAndGoConfirmed,
                 TouchdownConfirmed:
                     touchdownConfirmed,
                 BounceRecontact:
@@ -294,6 +305,7 @@ public sealed class FlightTelemetryEvidenceProcessor
             _landingContactObserved,
             _bounceAirborneAt,
             _pendingBounceRecontact,
+            _touchAndGoDepartureAt,
             _goAroundArmed,
             _goAroundLowAglFeet,
             _goAroundClimbStartedAt);
@@ -310,6 +322,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         _landingContactObserved = state.LandingContactObserved;
         _bounceAirborneAt = state.BounceAirborneAt;
         _pendingBounceRecontact = state.PendingBounceRecontact;
+        _touchAndGoDepartureAt = state.TouchAndGoDepartureAt;
         _goAroundArmed = state.GoAroundArmed;
         _goAroundLowAglFeet = state.GoAroundLowAglFeet;
         _goAroundClimbStartedAt = state.GoAroundClimbStartedAt;
@@ -352,6 +365,7 @@ public sealed class FlightTelemetryEvidenceProcessor
         _takeoffCandidateActive = false;
         _landingEpisodeActive = false;
         ResetLandingContact();
+        ResetTouchAndGoCandidate();
         ResetGoAroundCandidate();
     }
 
@@ -362,7 +376,56 @@ public sealed class FlightTelemetryEvidenceProcessor
         _groundSampleCount = 0;
         _takeoffCandidateActive = false;
         ResetLandingContact();
+        ResetTouchAndGoCandidate();
         ResetGoAroundCandidate();
+    }
+
+    private bool ObserveTouchAndGo(
+        AircraftTelemetrySnapshot telemetry,
+        bool trustworthy,
+        bool airborneConfirmed)
+    {
+        if (!trustworthy || !_landingEpisodeActive)
+        {
+            ResetTouchAndGoCandidate();
+            return false;
+        }
+
+        if (_previous is not null
+            && (telemetry.Timestamp - _previous.Timestamp).TotalSeconds
+                > _options.BounceMaximumAirborneSeconds)
+        {
+            ResetTouchAndGoCandidate();
+            return false;
+        }
+
+        if (telemetry.OnGround)
+        {
+            ResetTouchAndGoCandidate();
+            return false;
+        }
+
+        if (_touchAndGoDepartureAt is null)
+        {
+            if (_previous is null || !_previous.OnGround)
+                return false;
+
+            _touchAndGoDepartureAt = _previous.Timestamp;
+        }
+
+        bool outsideBounceEnvelope =
+            telemetry.AltitudeAglFeet
+                > _options.BounceMaximumAglFeet
+            || (telemetry.Timestamp - _touchAndGoDepartureAt.Value).TotalSeconds
+                > _options.BounceMaximumAirborneSeconds;
+
+        if (!airborneConfirmed || !outsideBounceEnvelope)
+            return false;
+
+        _landingEpisodeActive = false;
+        ResetLandingContact();
+        ResetTouchAndGoCandidate();
+        return true;
     }
 
     private bool ObserveGoAround(
@@ -468,6 +531,11 @@ public sealed class FlightTelemetryEvidenceProcessor
         _landingContactObserved = false;
         _bounceAirborneAt = null;
         _pendingBounceRecontact = false;
+    }
+
+    private void ResetTouchAndGoCandidate()
+    {
+        _touchAndGoDepartureAt = null;
     }
 
     private void ResetGoAroundCandidate()

@@ -1293,6 +1293,136 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task FailedTouchAndGoPersistenceRestoresProcessorForExactRetry()
+    {
+        FlightSession active = ApproachSession();
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+
+        var store = new MemoryStore { Checkpoint = active };
+        var telemetry = new BufferedTestTelemetrySource();
+        var runtime =
+            new FlightSessionRuntime(
+                coordinator,
+                new FlightSessionPersistenceService(coordinator, store),
+                new FlightTelemetryEvidenceProcessor(
+                    new FlightEvidenceProcessorOptions(
+                        StableTelemetrySamples: 1,
+                        AirborneConfirmationSamples: 2,
+                        GroundConfirmationSamples: 1)),
+                new FlightContinuityPolicy(),
+                Connected(),
+                telemetry,
+                new FixedTimeProvider(Epoch.AddHours(1)));
+
+        Assert.False(await runtime.RefreshAsync());
+
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(5.5),
+                32,
+                -97,
+                onGround: true,
+                altitudeMsl: 650,
+                groundSpeed: 50));
+        Assert.True(await runtime.RefreshAsync());
+
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(6),
+                32.0001,
+                -97.0001,
+                onGround: false,
+                altitudeMsl: 670,
+                groundSpeed: 65,
+                altitudeAgl: 20));
+        Assert.True(await runtime.RefreshAsync());
+
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(7),
+                32.0002,
+                -97.0002,
+                onGround: false,
+                altitudeMsl: 685,
+                groundSpeed: 70,
+                altitudeAgl: 35));
+        Assert.True(await runtime.RefreshAsync());
+
+        FlightSession beforeFailure =
+            Assert.IsType<FlightSession>(coordinator.Current);
+        FlightStateEvidence beforeFailureEvidence =
+            Assert.IsType<FlightStateEvidence>(runtime.Current);
+        FlightSession? checkpointBeforeFailure = store.Checkpoint;
+        int saveCountBeforeFailure = store.SaveCount;
+        int sessionChanged = 0;
+        var publishedEvidence = new List<FlightStateEvidence>();
+        coordinator.SessionChanged += (_, _) => sessionChanged++;
+        runtime.EvidenceChanged += evidence =>
+        {
+            if (evidence is not null)
+                publishedEvidence.Add(evidence);
+        };
+
+        Assert.Equal(FlightTrackingState.LandingEpisode, beforeFailure.Tracking.State);
+        Assert.Equal(1, beforeFailure.Tracking.LandingEpisodeCount);
+        Assert.Equal(0, beforeFailure.Tracking.TouchAndGoCount);
+
+        telemetry.Add(
+            Telemetry(
+                Epoch.AddSeconds(8),
+                32.0003,
+                -97.0003,
+                onGround: false,
+                altitudeMsl: 710,
+                groundSpeed: 75,
+                altitudeAgl: 60));
+        store.FailNextSave = true;
+
+        await Assert.ThrowsAsync<IOException>(() => runtime.RefreshAsync());
+
+        Assert.Same(beforeFailure, coordinator.Current);
+        Assert.Same(beforeFailureEvidence, runtime.Current);
+        Assert.Same(checkpointBeforeFailure, store.Checkpoint);
+        Assert.Equal(saveCountBeforeFailure, store.SaveCount);
+        Assert.Equal(Epoch.AddSeconds(7), telemetry.LastReadAfterTimestamp);
+        Assert.Equal(0, sessionChanged);
+        Assert.Empty(publishedEvidence);
+
+        FlightSession failedAttempt =
+            Assert.IsType<FlightSession>(store.FailedAttempt);
+        Assert.Equal(FlightTrackingState.Airborne, failedAttempt.Tracking.State);
+        Assert.Equal(1, failedAttempt.Tracking.LandingEpisodeCount);
+        Assert.Equal(1, failedAttempt.Tracking.TouchAndGoCount);
+        Assert.Equal(
+            FlightSessionLandingKind.TouchAndGo,
+            Assert.Single(failedAttempt.EffectiveLandingEpisodes).Kind);
+
+        Assert.True(await runtime.RefreshAsync());
+
+        FlightSession afterRetry =
+            Assert.IsType<FlightSession>(coordinator.Current);
+        Assert.Equal(failedAttempt.Tracking, afterRetry.Tracking);
+        Assert.Equal(failedAttempt.TimeLedger, afterRetry.TimeLedger);
+        Assert.Equal(afterRetry, store.Checkpoint);
+        Assert.Equal(saveCountBeforeFailure + 1, store.SaveCount);
+        Assert.Equal(1, sessionChanged);
+
+        FlightStateEvidence retriedEvidence = Assert.Single(publishedEvidence);
+        Assert.Equal(Epoch.AddSeconds(8), retriedEvidence.Timestamp);
+        Assert.True(retriedEvidence.TouchAndGoConfirmed);
+        Assert.False(retriedEvidence.TouchdownConfirmed);
+        Assert.False(retriedEvidence.BounceRecontact);
+
+        Assert.False(await runtime.RefreshAsync());
+        Assert.Equal(Epoch.AddSeconds(8), telemetry.LastReadAfterTimestamp);
+        Assert.Equal(afterRetry, coordinator.Current);
+        Assert.Equal(saveCountBeforeFailure + 1, store.SaveCount);
+        Assert.Equal(1, sessionChanged);
+        Assert.Single(publishedEvidence);
+    }
+
+    [Fact]
     public async Task DuplicateTelemetryTimestampDoesNotAdvanceTwice()
     {
         FlightSession active =

@@ -447,6 +447,182 @@ public sealed class FlightTelemetryEvidenceProcessorTests
     }
 
     [Fact]
+    public void ConfirmedTouchdownThenShortBounceRecontactDoesNotBecomeTouchAndGo()
+    {
+        var processor = TouchAndGoProcessor();
+        var evidence = new List<FlightStateEvidence>();
+
+        foreach (AircraftTelemetrySnapshot sample in new[]
+        {
+            FlightTelemetry(0, altitudeAgl: 100),
+            FlightTelemetry(1, altitudeAgl: 100),
+            RolloutTelemetry(2, groundSpeed: 50),
+            RolloutTelemetry(3, groundSpeed: 45),
+            FlightTelemetry(4, altitudeAgl: 20),
+            FlightTelemetry(5, altitudeAgl: 25),
+            RolloutTelemetry(6, groundSpeed: 45),
+            RolloutTelemetry(7, groundSpeed: 40)
+        })
+        {
+            evidence.Add(processor.Process(Observation(sample)));
+        }
+
+        Assert.DoesNotContain(evidence, static item => item.TouchAndGoConfirmed);
+        FlightStateEvidence bounce =
+            Assert.Single(evidence, static item => item.BounceRecontact);
+        Assert.True(bounce.TouchdownConfirmed);
+    }
+
+    [Fact]
+    public void SustainedDepartureConfirmsOneTouchAndGoAndAllowsNextLandingEpisode()
+    {
+        var processor = TouchAndGoProcessor();
+        FlightSession session = AirborneSession();
+        var evidence = new List<FlightStateEvidence>();
+
+        foreach (AircraftTelemetrySnapshot sample in new[]
+        {
+            FlightTelemetry(0, altitudeAgl: 100),
+            FlightTelemetry(1, altitudeAgl: 100),
+            RolloutTelemetry(2, groundSpeed: 50),
+            RolloutTelemetry(3, groundSpeed: 45),
+            FlightTelemetry(4, altitudeAgl: 20),
+            FlightTelemetry(5, altitudeAgl: 35),
+            FlightTelemetry(6, altitudeAgl: 60),
+            FlightTelemetry(7, altitudeAgl: 100)
+        })
+        {
+            FlightStateEvidence next = processor.Process(Observation(sample));
+            evidence.Add(next);
+            session =
+                FlightSessionEngine.Advance(
+                    session,
+                    new FlightSessionAdvance(next));
+        }
+
+        FlightStateEvidence touchAndGo =
+            Assert.Single(evidence, static item => item.TouchAndGoConfirmed);
+        Assert.Equal(Epoch.AddSeconds(6), touchAndGo.Timestamp);
+        Assert.Equal(FlightTrackingState.Airborne, session.Tracking.State);
+        Assert.Equal(1, session.Tracking.TouchAndGoCount);
+        Assert.Equal(1, session.Tracking.LandingEpisodeCount);
+        Assert.Equal(
+            FlightSessionLandingKind.TouchAndGo,
+            Assert.Single(session.EffectiveLandingEpisodes).Kind);
+
+        foreach (AircraftTelemetrySnapshot sample in new[]
+        {
+            FlightTelemetry(8, altitudeAgl: 500, verticalSpeed: -300),
+            RolloutTelemetry(9, groundSpeed: 50),
+            RolloutTelemetry(10, groundSpeed: 45)
+        })
+        {
+            FlightStateEvidence next = processor.Process(Observation(sample));
+            session =
+                FlightSessionEngine.Advance(
+                    session,
+                    new FlightSessionAdvance(next));
+        }
+
+        Assert.Equal(FlightTrackingState.LandingEpisode, session.Tracking.State);
+        Assert.Equal(2, session.Tracking.LandingEpisodeCount);
+        Assert.Equal(1, session.Tracking.TouchAndGoCount);
+        Assert.Equal(2, session.EffectiveLandingEpisodes.Count);
+    }
+
+    [Fact]
+    public void FullStopRolloutPreventsLaterDepartureFromBecomingTouchAndGo()
+    {
+        var processor = TouchAndGoProcessor();
+        var evidence = new List<FlightStateEvidence>();
+
+        foreach (AircraftTelemetrySnapshot sample in new[]
+        {
+            FlightTelemetry(0, altitudeAgl: 100),
+            FlightTelemetry(1, altitudeAgl: 100),
+            RolloutTelemetry(2, groundSpeed: 30),
+            RolloutTelemetry(3, groundSpeed: 25),
+            RolloutTelemetry(4, groundSpeed: 20),
+            FlightTelemetry(5, altitudeAgl: 20),
+            FlightTelemetry(6, altitudeAgl: 60),
+            FlightTelemetry(7, altitudeAgl: 100)
+        })
+        {
+            evidence.Add(processor.Process(Observation(sample)));
+        }
+
+        Assert.Single(evidence, static item => item.LandingRolloutConfirmed);
+        Assert.DoesNotContain(evidence, static item => item.TouchAndGoConfirmed);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void InterruptedTouchAndGoCandidateDoesNotResume(int interruption)
+    {
+        var processor = TouchAndGoProcessor();
+
+        foreach (AircraftTelemetrySnapshot sample in new[]
+        {
+            FlightTelemetry(0, altitudeAgl: 100),
+            FlightTelemetry(1, altitudeAgl: 100),
+            RolloutTelemetry(2, groundSpeed: 50),
+            RolloutTelemetry(3, groundSpeed: 45),
+            FlightTelemetry(4, altitudeAgl: 20)
+        })
+        {
+            _ = processor.Process(Observation(sample));
+        }
+
+        FlightEvidenceObservation interrupted =
+            interruption switch
+            {
+                0 => Observation(
+                    FlightTelemetry(5, altitudeAgl: 30) with { Paused = true }),
+                1 => Observation(
+                    FlightTelemetry(5, altitudeAgl: 30) with { SlewActive = true }),
+                2 => new FlightEvidenceObservation(
+                    SimulatorConnectionState.Disconnected,
+                    FlightTelemetry(5, altitudeAgl: 30),
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true),
+                3 => new FlightEvidenceObservation(
+                    SimulatorConnectionState.Connected,
+                    FlightTelemetry(5, altitudeAgl: 30),
+                    ValidLoadedAircraft: false,
+                    ContinuityPlausible: true),
+                4 => Observation(
+                    FlightTelemetry(5, altitudeAgl: 30),
+                    continuityPlausible: false),
+                5 => Observation(
+                    FlightTelemetry(10, altitudeAgl: 60)),
+                _ => throw new ArgumentOutOfRangeException(nameof(interruption))
+            };
+
+        Assert.False(processor.Process(interrupted).TouchAndGoConfirmed);
+
+        var laterEvidence = new List<FlightStateEvidence>();
+        int firstSecond = interruption == 5 ? 11 : 6;
+        for (int offset = 0; offset < 3; offset++)
+        {
+            laterEvidence.Add(
+                processor.Process(
+                    Observation(
+                        FlightTelemetry(
+                            firstSecond + offset,
+                            altitudeAgl: 100 + (offset * 50)))));
+        }
+
+        Assert.DoesNotContain(
+            laterEvidence,
+            static item => item.TouchAndGoConfirmed);
+    }
+
+    [Fact]
     public void OneSecondSamplingMissesSubsecondBounceThatFrequentSamplesDetect()
     {
         AircraftTelemetrySnapshot Sample(
@@ -777,6 +953,75 @@ public sealed class FlightTelemetryEvidenceProcessorTests
 
     private static FlightTelemetryEvidenceProcessor GoAroundProcessor() =>
         new(GoAroundOptions());
+
+    private static FlightTelemetryEvidenceProcessor TouchAndGoProcessor() =>
+        new(
+            new FlightEvidenceProcessorOptions(
+                StableTelemetrySamples: 1,
+                AirborneConfirmationSamples: 2,
+                GroundConfirmationSamples: 2));
+
+    private static FlightSession AirborneSession()
+    {
+        FlightSession session =
+            FlightSession.Start(Epoch.AddSeconds(-5));
+
+        foreach (FlightStateEvidence evidence in new[]
+        {
+            new FlightStateEvidence(
+                Epoch.AddSeconds(-4),
+                Connected: true,
+                StableTelemetry: true,
+                ValidLoadedAircraft: true,
+                ContinuityPlausible: true),
+            new FlightStateEvidence(
+                Epoch.AddSeconds(-3),
+                Connected: true,
+                ContinuityPlausible: true,
+                SelfPoweredMovementForFlight: true),
+            new FlightStateEvidence(
+                Epoch.AddSeconds(-2),
+                Connected: true,
+                ContinuityPlausible: true,
+                TakeoffCandidate: true),
+            new FlightStateEvidence(
+                Epoch.AddSeconds(-1),
+                Connected: true,
+                ContinuityPlausible: true,
+                AirborneConfirmed: true)
+        })
+        {
+            session =
+                FlightSessionEngine.Advance(
+                    session,
+                    new FlightSessionAdvance(evidence));
+        }
+
+        return session;
+    }
+
+    private static AircraftTelemetrySnapshot FlightTelemetry(
+        int seconds,
+        double altitudeAgl,
+        double verticalSpeed = 500) =>
+        Telemetry(
+            seconds,
+            onGround: false,
+            altitudeAgl: altitudeAgl,
+            groundSpeed: 70,
+            indicatedAirspeed: 70,
+            enginesRunning: 1,
+            verticalSpeed: verticalSpeed);
+
+    private static AircraftTelemetrySnapshot RolloutTelemetry(
+        int seconds,
+        double groundSpeed) =>
+        Telemetry(
+            seconds,
+            onGround: true,
+            groundSpeed: groundSpeed,
+            indicatedAirspeed: groundSpeed,
+            enginesRunning: 1);
 
     private static FlightEvidenceProcessorOptions GoAroundOptions() =>
         new(
