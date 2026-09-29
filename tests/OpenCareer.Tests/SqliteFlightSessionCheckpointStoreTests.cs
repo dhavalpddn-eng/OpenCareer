@@ -212,7 +212,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         await ExecuteAsync(
             databasePath,
             $$"""
-            UPDATE flight_session_checkpoint SET payload_json = '{{';
+            UPDATE flight_session_checkpoint SET payload_json = '{';
             UPDATE flight_session_checkpoint_previous
             SET successor_session_id = '{{Guid.NewGuid():D}}';
             """);
