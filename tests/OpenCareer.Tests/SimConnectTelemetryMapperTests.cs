@@ -1,3 +1,4 @@
+using OpenCareer.Domain.Telemetry;
 using OpenCareer.SimConnect;
 
 namespace OpenCareer.Tests;
@@ -33,6 +34,7 @@ public sealed class SimConnectTelemetryMapperTests
         Set(values, SimConnectTelemetryValue.GearTotalPercent, 99);
         Set(values, SimConnectTelemetryValue.SlewActive, -1);
         Set(values, SimConnectTelemetryValue.SimulationRate, 4);
+        Set(values, SimConnectTelemetryValue.TimeOfDay, 3);
 
         DateTimeOffset timestamp = new(2026, 9, 17, 21, 30, 0, TimeSpan.Zero);
         var snapshot = SimConnectTelemetryMapper.Map(values, timestamp, paused: true);
@@ -51,6 +53,7 @@ public sealed class SimConnectTelemetryMapperTests
         Assert.True(snapshot.Paused);
         Assert.True(snapshot.SlewActive);
         Assert.Equal(4, snapshot.SimulationRate);
+        Assert.True(snapshot.IsNight);
         Assert.False(snapshot.OnGround);
     }
 
@@ -99,6 +102,32 @@ public sealed class SimConnectTelemetryMapperTests
                 values,
                 DateTimeOffset.UtcNow,
                 paused: false));
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, false)]
+    [InlineData(2, false)]
+    [InlineData(3, true)]
+    [InlineData(-1, null)]
+    [InlineData(1.5, null)]
+    [InlineData(4, null)]
+    public void TimeOfDayNormalizesNightEvidence(
+        double timeOfDay,
+        bool? expectedNight)
+    {
+        var values = new double[SimConnectTelemetryDefinition.ValueCount];
+        Set(values, SimConnectTelemetryValue.SimulationRate, 1);
+        Set(values, SimConnectTelemetryValue.TimeOfDay, timeOfDay);
+
+        AircraftTelemetrySnapshot snapshot =
+            Assert.IsType<AircraftTelemetrySnapshot>(
+                SimConnectTelemetryMapper.Map(
+                    values,
+                    DateTimeOffset.UtcNow,
+                    paused: false));
+
+        Assert.Equal(expectedNight, snapshot.IsNight);
     }
 
     [Fact]

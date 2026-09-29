@@ -62,7 +62,9 @@ internal static class SimConnectTelemetryMapper
             IsGearDown(Read(values, SimConnectTelemetryValue.GearTotalPercent)),
             paused,
             IsTrue(Read(values, SimConnectTelemetryValue.SlewActive)),
-            simulationRate);
+            simulationRate,
+            NormalizeNightEvidence(
+                Read(values, SimConnectTelemetryValue.TimeOfDay)));
     }
 
     private static double Read(IReadOnlyList<double> values, SimConnectTelemetryValue index) =>
@@ -86,6 +88,14 @@ internal static class SimConnectTelemetryMapper
             or 32d
             or 64d
             or 128d;
+
+    private static bool? NormalizeNightEvidence(double timeOfDay) =>
+        timeOfDay switch
+        {
+            0d or 1d or 2d => false,
+            3d => true,
+            _ => null
+        };
 
     private static double NormalizeHeading(double degrees)
     {

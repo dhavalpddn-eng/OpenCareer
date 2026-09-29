@@ -22,4 +22,5 @@ public sealed record AircraftTelemetrySnapshot(
     bool GearDown,
     bool Paused,
     bool SlewActive,
-    double SimulationRate = 1d);
+    double SimulationRate = 1d,
+    bool? IsNight = null);

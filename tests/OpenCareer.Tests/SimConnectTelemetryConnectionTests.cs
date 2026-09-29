@@ -28,6 +28,11 @@ public sealed class SimConnectTelemetryConnectionTests
             static definition =>
                 definition.DatumName == "SIMULATION RATE"
                 && definition.Units == "number");
+        Assert.Contains(
+            telemetryDefinitions,
+            static definition =>
+                definition.DatumName == "TIME OF DAY"
+                && definition.Units == "number");
 
         var request = Assert.Single(
             api.TelemetryRequests,
@@ -76,6 +81,7 @@ public sealed class SimConnectTelemetryConnectionTests
         values[(int)SimConnectTelemetryValue.EmptyWeight] = 1_500;
         values[(int)SimConnectTelemetryValue.GearTotalPercent] = 100;
         values[(int)SimConnectTelemetryValue.SimulationRate] = 1;
+        values[(int)SimConnectTelemetryValue.TimeOfDay] = 3;
 
         api.Enqueue(SimConnectPackets.Event(SimConnectTelemetryDefinition.PauseEventId, 4));
         api.Enqueue(SimConnectPackets.SimObjectData(
@@ -90,6 +96,7 @@ public sealed class SimConnectTelemetryConnectionTests
         Assert.True(connection.Latest.Paused);
         Assert.True(connection.Latest.GearDown);
         Assert.Equal(1, connection.Latest.SimulationRate);
+        Assert.True(connection.Latest.IsNight);
 
         IFlightCriticalTelemetrySource critical = connection;
         Assert.Empty(critical.ReadAfter(null));

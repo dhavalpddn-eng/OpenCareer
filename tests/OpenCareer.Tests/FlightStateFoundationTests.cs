@@ -218,15 +218,16 @@ public class FlightStateFoundationTests
     public void PauseAndSlewNeverCreateCareerOrSimulatedOperationalTime()
     {
         var paused = FlightTimeLedger.Empty.Add(new FlightTimeInterval(
-            TimeSpan.FromMinutes(5), 4d, true, true, false, true, true, false, true, false, false, false));
+            TimeSpan.FromMinutes(5), 4d, true, true, false, true, true, false, true, false, true, false));
         var slewed = paused.Add(new FlightTimeInterval(
-            TimeSpan.FromMinutes(5), 1d, true, false, true, true, true, false, false, true, false, false));
+            TimeSpan.FromMinutes(5), 1d, true, false, true, true, true, false, false, true, true, false));
 
         Assert.Equal(TimeSpan.FromMinutes(10), slewed.ObservedWallTime);
         Assert.Equal(TimeSpan.FromMinutes(5), slewed.PausedWallTime);
         Assert.Equal(TimeSpan.FromMinutes(5), slewed.SlewWallTime);
         Assert.Equal(TimeSpan.Zero, slewed.SimulatedOperationalTime);
         Assert.Equal(TimeSpan.Zero, slewed.CareerCreditTime);
+        Assert.Equal(TimeSpan.Zero, slewed.NightCareerCreditTime);
     }
 
     [Fact]

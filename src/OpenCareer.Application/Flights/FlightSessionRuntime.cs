@@ -494,7 +494,7 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
             Airborne: airborne,
             TaxiOut: taxiOut,
             TaxiIn: taxiIn,
-            Night: false,
+            Night: telemetry.IsNight is true,
             ActualInstrument: false);
     }
 

@@ -1565,6 +1565,53 @@ public sealed class FlightSessionRuntimeTests
         Assert.Equal(FlightTimeLedger.Empty, coordinator.Current!.TimeLedger);
     }
 
+    [Theory]
+    [InlineData(false, 1.0, 0.0)]
+    [InlineData(true, 1.0, 1.0)]
+    [InlineData(true, 4.0, 1.0)]
+    [InlineData(null, 1.0, 0.0)]
+    public async Task RuntimeCreditsNightOnlyFromAffirmativeEvidence(
+        bool? isNight,
+        double simulationRate,
+        double expectedNightSeconds)
+    {
+        FlightSession active = AirborneSession();
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+        var store = new MemoryStore { Checkpoint = active };
+        var telemetry = new TestTelemetrySource
+        {
+            Latest = Telemetry(
+                Epoch.AddSeconds(5),
+                32,
+                -97,
+                onGround: false,
+                simulationRate: simulationRate,
+                isNight: isNight)
+        };
+        var runtime = CreateRuntime(coordinator, store, Connected(), telemetry);
+
+        Assert.True(await runtime.RefreshAsync());
+
+        telemetry.Latest = Telemetry(
+            Epoch.AddSeconds(6),
+            32,
+            -97,
+            onGround: false,
+            simulationRate: simulationRate,
+            isNight: isNight);
+        Assert.True(await runtime.RefreshAsync());
+
+        FlightTimeLedger ledger = coordinator.Current!.TimeLedger;
+        Assert.Equal(TimeSpan.FromSeconds(1), ledger.CareerCreditTime);
+        Assert.Equal(
+            TimeSpan.FromSeconds(expectedNightSeconds),
+            ledger.NightCareerCreditTime);
+        Assert.True(
+            ledger.NightCareerCreditTime
+            <= ledger.CareerCreditTime);
+    }
+
     private static FlightSessionRuntime CreateRuntime(
         FlightSessionCoordinator coordinator,
         MemoryStore store,
@@ -1725,7 +1772,8 @@ public sealed class FlightSessionRuntimeTests
         double altitudeMsl = 650,
         double groundSpeed = 0,
         double? altitudeAgl = null,
-        double simulationRate = 1d) =>
+        double simulationRate = 1d,
+        bool? isNight = null) =>
         new(
             timestamp,
             latitude,
@@ -1749,7 +1797,8 @@ public sealed class FlightSessionRuntimeTests
             true,
             false,
             false,
-            simulationRate);
+            simulationRate,
+            isNight);
 
     private sealed class TestConnection :
         ISimulatorConnection

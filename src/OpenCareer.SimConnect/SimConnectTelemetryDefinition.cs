@@ -28,7 +28,8 @@ internal enum SimConnectTelemetryValue
     FlapsHandlePercentOver100,
     GearTotalPercent,
     SlewActive,
-    SimulationRate
+    SimulationRate,
+    TimeOfDay
 }
 
 internal static class SimConnectTelemetryDefinition
@@ -64,7 +65,8 @@ internal static class SimConnectTelemetryDefinition
         new("FLAPS HANDLE PERCENT", "percent over 100"),
         new("GEAR TOTAL PCT EXTENDED", "percent"),
         new("IS SLEW ACTIVE", "bool"),
-        new("SIMULATION RATE", "number")
+        new("SIMULATION RATE", "number"),
+        new("TIME OF DAY", "number")
     ];
 
     internal static int ValueCount => Data.Length;
