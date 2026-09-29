@@ -64,6 +64,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
+        session = session.EnsureInitialLeg();
         ValidateForPersistence(session);
 
         string payload =
@@ -537,6 +538,8 @@ public sealed class SqliteFlightSessionCheckpointStore :
             ?? throw new InvalidDataException(
                 "Flight-session checkpoint payload is empty.");
 
+        session = session.EnsureInitialLeg();
+
         ValidateLoadedCheckpoint(
             session,
             row.SessionId,
@@ -695,6 +698,24 @@ public sealed class SqliteFlightSessionCheckpointStore :
         }
 
         session.Plan?.Validate();
+
+        if (session.Legs is null || session.Legs.Count != 1)
+        {
+            throw new InvalidDataException(
+                "The current FlightSession checkpoint must contain exactly one flight leg.");
+        }
+
+        FlightLeg leg = session.Legs[0];
+        leg.Validate();
+
+        if (leg.LegId != session.SessionId
+            || leg.Sequence != 1
+            || leg.StartedAt != session.CreatedAt
+            || leg.Plan != session.Plan)
+        {
+            throw new InvalidDataException(
+                "Flight leg 1 does not match its parent FlightSession identity and plan.");
+        }
     }
 
     private static void ValidateLoadedCheckpoint(

@@ -42,10 +42,15 @@ public static class FlightSessionDebriefProjector
         FlightSessionStatistics statistics =
             session.EffectiveStatistics;
 
+        FlightLeg runtimeLeg =
+            session.EffectiveLegs.Single();
+
+        runtimeLeg.Validate();
+
         FlightRouteDebrief route =
             new(
-                session.Plan?.PlannedOrigin,
-                session.Plan?.PlannedDestination,
+                runtimeLeg.Plan?.PlannedOrigin,
+                runtimeLeg.Plan?.PlannedDestination,
                 context.ActualDeparture,
                 context.ActualArrival,
                 context.DiversionLocation,
@@ -81,9 +86,9 @@ public static class FlightSessionDebriefProjector
 
         var leg =
             new FlightLegDebrief(
-                session.SessionId,
-                Sequence: 1,
-                session.CreatedAt,
+                runtimeLeg.LegId,
+                runtimeLeg.Sequence,
+                runtimeLeg.StartedAt,
                 endedAt,
                 route,
                 session.TimeLedger,

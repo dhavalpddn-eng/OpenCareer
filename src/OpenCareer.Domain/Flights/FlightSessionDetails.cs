@@ -41,6 +41,34 @@ public sealed record FlightSessionPlan(
     }
 }
 
+public sealed record FlightLeg(
+    Guid LegId,
+    int Sequence,
+    DateTimeOffset StartedAt,
+    FlightSessionPlan? Plan = null)
+{
+    public static FlightLeg First(
+        Guid sessionId,
+        DateTimeOffset startedAt,
+        FlightSessionPlan? plan) =>
+        new(
+            sessionId,
+            Sequence: 1,
+            startedAt,
+            plan);
+
+    public void Validate()
+    {
+        if (LegId == Guid.Empty)
+            throw new ArgumentException("Flight leg ID cannot be empty.", nameof(LegId));
+
+        if (Sequence <= 0)
+            throw new ArgumentOutOfRangeException(nameof(Sequence));
+
+        Plan?.Validate();
+    }
+}
+
 public sealed record FlightSessionTrackPoint(
     DateTimeOffset Timestamp,
     double LatitudeDegrees,

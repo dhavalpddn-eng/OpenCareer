@@ -48,6 +48,16 @@ public sealed class FlightSessionDebriefProjectorTests
             session.SessionId,
             debrief.SessionId);
 
+        FlightLeg runtimeLeg =
+            Assert.Single(session.EffectiveLegs);
+
+        FlightLegDebrief debriefLeg =
+            Assert.Single(debrief.Legs);
+
+        Assert.Equal(runtimeLeg.LegId, debriefLeg.LegId);
+        Assert.Equal(runtimeLeg.Sequence, debriefLeg.Sequence);
+        Assert.Equal(runtimeLeg.StartedAt, debriefLeg.StartedAt);
+
         Assert.Equal(
             "KDFW",
             debrief.Route.PlannedOrigin);
@@ -67,7 +77,7 @@ public sealed class FlightSessionDebriefProjectorTests
 
         Assert.Equal(
             2,
-            Assert.Single(debrief.Legs).RouteTrack.Count);
+            debriefLeg.RouteTrack.Count);
 
         LandingDebrief landing =
             Assert.Single(debrief.Landings);

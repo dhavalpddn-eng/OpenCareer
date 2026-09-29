@@ -39,6 +39,9 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.NotNull(actual);
         AssertSessionEquivalent(expected, actual);
         Assert.Equal(
+            expected.EffectiveLegs,
+            actual.EffectiveLegs);
+        Assert.Equal(
             "msfs-title:Cessna 172 Skyhawk",
             actual.Plan?.ExpectedCanonicalAircraftId);
     }
@@ -60,6 +63,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
             JsonObject root = Assert.IsType<JsonObject>(JsonNode.Parse(payload));
             JsonObject plan = Assert.IsType<JsonObject>(root["plan"]);
             Assert.True(plan.Remove("expectedCanonicalAircraftId"));
+            Assert.True(root.Remove("legs"));
 
             await using var update = connection.CreateCommand();
             update.CommandText = "UPDATE flight_session_checkpoint SET payload_json = $payload WHERE slot_id = 1;";
@@ -73,6 +77,11 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(expected.SessionId, legacy.SessionId);
         Assert.NotNull(legacy.Plan);
         Assert.Null(legacy.Plan.ExpectedCanonicalAircraftId);
+        FlightLeg leg = Assert.Single(legacy.EffectiveLegs);
+        Assert.Equal(legacy.SessionId, leg.LegId);
+        Assert.Equal(legacy.CreatedAt, leg.StartedAt);
+        Assert.Equal(legacy.Plan, leg.Plan);
+        Assert.NotNull(legacy.Legs);
     }
 
     [Fact]
@@ -416,6 +425,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
         Assert.Equal(expected.ContinuityAnchor, actual.ContinuityAnchor);
         Assert.Equal(expected.Plan, actual.Plan);
+        Assert.Equal(expected.EffectiveLegs, actual.EffectiveLegs);
 
         FlightSessionStatistics expectedStatistics =
             expected.EffectiveStatistics;

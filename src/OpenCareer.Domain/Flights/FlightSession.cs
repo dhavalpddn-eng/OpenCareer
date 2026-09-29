@@ -14,7 +14,8 @@ public sealed record FlightSession(
     FlightContinuityAnchor? ContinuityAnchor = null,
     FlightSessionPlan? Plan = null,
     FlightSessionStatistics? Statistics = null,
-    IReadOnlyList<FlightSessionLandingEpisode>? LandingEpisodes = null)
+    IReadOnlyList<FlightSessionLandingEpisode>? LandingEpisodes = null,
+    IReadOnlyList<FlightLeg>? Legs = null)
 {
     public static FlightSession Start(
         DateTimeOffset timestamp,
@@ -42,7 +43,14 @@ public sealed record FlightSession(
             FlightSessionMilestones.Empty,
             Plan: plan,
             Statistics: FlightSessionStatistics.Empty,
-            LandingEpisodes: Array.Empty<FlightSessionLandingEpisode>());
+            LandingEpisodes: Array.Empty<FlightSessionLandingEpisode>(),
+            Legs:
+            [
+                FlightLeg.First(
+                    resolvedSessionId,
+                    timestamp,
+                    plan)
+            ]);
     }
 
     public FlightSessionStatistics EffectiveStatistics =>
@@ -50,6 +58,24 @@ public sealed record FlightSession(
 
     public IReadOnlyList<FlightSessionLandingEpisode> EffectiveLandingEpisodes =>
         LandingEpisodes ?? Array.Empty<FlightSessionLandingEpisode>();
+
+    public IReadOnlyList<FlightLeg> EffectiveLegs =>
+        Legs
+        ??
+        [
+            FlightLeg.First(
+                SessionId,
+                CreatedAt,
+                Plan)
+        ];
+
+    public FlightSession EnsureInitialLeg() =>
+        Legs is not null
+            ? this
+            : this with
+            {
+                Legs = EffectiveLegs
+            };
 
     public bool IsTerminal =>
         Status is FlightSessionStatus.Interrupted
