@@ -104,6 +104,7 @@ public sealed class KjfkPlayableLoopCertificationTests
             Assert.Equal(SimulatorConnectionState.Connected, connection.Current.State);
             var telemetry = new double[SimConnectTelemetryDefinition.ValueCount];
             telemetry[(int)SimConnectTelemetryValue.HeadingTrue] = 123;
+            telemetry[(int)SimConnectTelemetryValue.SimulationRate] = 1;
             transport.Enqueue(SimConnectPackets.SimObjectData(SimConnectTelemetryDefinition.RequestId,
                 SimConnectTelemetryDefinition.DefinitionId, telemetry));
             await Until(() => connection.Latest?.HeadingDegrees == 123);
@@ -162,6 +163,7 @@ public sealed class KjfkPlayableLoopCertificationTests
             {
                 var values = new double[SimConnectTelemetryDefinition.ValueCount];
                 values[(int)SimConnectTelemetryValue.HeadingTrue] = i + 1;
+                values[(int)SimConnectTelemetryValue.SimulationRate] = 1;
                 transport.Enqueue(title, action: () => connectionClock.Advance(TimeSpan.FromSeconds(6)));
                 transport.Enqueue(SimConnectPackets.SimObjectData(SimConnectTelemetryDefinition.RequestId,
                     SimConnectTelemetryDefinition.DefinitionId, values));

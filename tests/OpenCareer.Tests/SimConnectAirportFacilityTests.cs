@@ -52,8 +52,10 @@ public sealed class SimConnectAirportFacilityTests
         await Until(() => connection.Current.State == SimulatorConnectionState.Connected);
         api.Enqueue(SimConnectPackets.StringSimObjectData(SimConnectCurrentAircraftDefinition.RequestId,
             SimConnectCurrentAircraftDefinition.DefinitionId, "C172SP Classic Passengers"));
+        var initialTelemetry = new double[SimConnectTelemetryDefinition.ValueCount];
+        initialTelemetry[(int)SimConnectTelemetryValue.SimulationRate] = 1;
         api.Enqueue(SimConnectPackets.SimObjectData(SimConnectTelemetryDefinition.RequestId,
-            SimConnectTelemetryDefinition.DefinitionId, new double[SimConnectTelemetryDefinition.ValueCount]));
+            SimConnectTelemetryDefinition.DefinitionId, initialTelemetry));
         await Until(() => connection.CurrentAircraftTitle is not null && connection.Latest is not null);
 
         var source = new SimConnectAirportDataObservationSource(connection);
@@ -75,6 +77,7 @@ public sealed class SimConnectAirportFacilityTests
         Assert.Equal(1, api.Attempts);
         var values = new double[SimConnectTelemetryDefinition.ValueCount];
         values[(int)SimConnectTelemetryValue.HeadingTrue] = 123;
+        values[(int)SimConnectTelemetryValue.SimulationRate] = 1;
         api.Enqueue(SimConnectPackets.SimObjectData(SimConnectTelemetryDefinition.RequestId,
             SimConnectTelemetryDefinition.DefinitionId, values));
         await Until(() => connection.Latest?.HeadingDegrees == 123);

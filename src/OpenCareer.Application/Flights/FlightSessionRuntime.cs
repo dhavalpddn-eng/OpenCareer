@@ -445,6 +445,12 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
             return null;
         }
 
+        if (!double.IsFinite(telemetry.SimulationRate)
+            || telemetry.SimulationRate <= 0d)
+        {
+            return null;
+        }
+
         bool taxiOut =
             session.OperationState
                 is FlightOperationState.TaxiOut
@@ -477,7 +483,7 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
 
         return new FlightTimeInterval(
             wallDuration,
-            SimulationRate: 1d,
+            SimulationRate: telemetry.SimulationRate,
             ValidOperationalEvidence: true,
             Paused: telemetry.Paused,
             SlewActive: telemetry.SlewActive,

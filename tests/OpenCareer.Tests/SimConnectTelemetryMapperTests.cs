@@ -32,6 +32,7 @@ public sealed class SimConnectTelemetryMapperTests
         Set(values, SimConnectTelemetryValue.FlapsHandlePercentOver100, 0.25);
         Set(values, SimConnectTelemetryValue.GearTotalPercent, 99);
         Set(values, SimConnectTelemetryValue.SlewActive, -1);
+        Set(values, SimConnectTelemetryValue.SimulationRate, 4);
 
         DateTimeOffset timestamp = new(2026, 9, 17, 21, 30, 0, TimeSpan.Zero);
         var snapshot = SimConnectTelemetryMapper.Map(values, timestamp, paused: true);
@@ -49,6 +50,7 @@ public sealed class SimConnectTelemetryMapperTests
         Assert.True(snapshot.GearDown);
         Assert.True(snapshot.Paused);
         Assert.True(snapshot.SlewActive);
+        Assert.Equal(4, snapshot.SimulationRate);
         Assert.False(snapshot.OnGround);
     }
 
@@ -62,6 +64,7 @@ public sealed class SimConnectTelemetryMapperTests
     public void GearExtensionAcceptsObservedAndDocumentedPercentScales(double rawValue, bool expectedDown)
     {
         var values = new double[SimConnectTelemetryDefinition.ValueCount];
+        Set(values, SimConnectTelemetryValue.SimulationRate, 1);
         Set(values, SimConnectTelemetryValue.GearTotalPercent, rawValue);
 
         var snapshot = SimConnectTelemetryMapper.Map(values, DateTimeOffset.UtcNow, paused: false);
@@ -76,14 +79,33 @@ public sealed class SimConnectTelemetryMapperTests
         Assert.Null(SimConnectTelemetryMapper.Map([], DateTimeOffset.UtcNow, paused: false));
 
         var values = new double[SimConnectTelemetryDefinition.ValueCount];
+        Set(values, SimConnectTelemetryValue.SimulationRate, 1);
         values[0] = double.NaN;
         Assert.Null(SimConnectTelemetryMapper.Map(values, DateTimeOffset.UtcNow, paused: false));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(0.75)]
+    [InlineData(256)]
+    public void InvalidSimulationRateRejectsTelemetryPacket(double simulationRate)
+    {
+        var values = new double[SimConnectTelemetryDefinition.ValueCount];
+        Set(values, SimConnectTelemetryValue.SimulationRate, simulationRate);
+
+        Assert.Null(
+            SimConnectTelemetryMapper.Map(
+                values,
+                DateTimeOffset.UtcNow,
+                paused: false));
     }
 
     [Fact]
     public void DerivedPayloadAndPercentagesAreBounded()
     {
         var values = new double[SimConnectTelemetryDefinition.ValueCount];
+        Set(values, SimConnectTelemetryValue.SimulationRate, 1);
         Set(values, SimConnectTelemetryValue.FuelTotalWeight, 800);
         Set(values, SimConnectTelemetryValue.TotalWeight, 1_000);
         Set(values, SimConnectTelemetryValue.EmptyWeight, 500);

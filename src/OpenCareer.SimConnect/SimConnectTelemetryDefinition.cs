@@ -27,7 +27,8 @@ internal enum SimConnectTelemetryValue
     EmptyWeight,
     FlapsHandlePercentOver100,
     GearTotalPercent,
-    SlewActive
+    SlewActive,
+    SimulationRate
 }
 
 internal static class SimConnectTelemetryDefinition
@@ -62,7 +63,8 @@ internal static class SimConnectTelemetryDefinition
         new("EMPTY WEIGHT", "pounds"),
         new("FLAPS HANDLE PERCENT", "percent over 100"),
         new("GEAR TOTAL PCT EXTENDED", "percent"),
-        new("IS SLEW ACTIVE", "bool")
+        new("IS SLEW ACTIVE", "bool"),
+        new("SIMULATION RATE", "number")
     ];
 
     internal static int ValueCount => Data.Length;

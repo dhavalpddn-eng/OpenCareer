@@ -23,6 +23,11 @@ public sealed class SimConnectTelemetryConnectionTests
             .ToArray();
 
         Assert.Equal(SimConnectTelemetryDefinition.ValueCount, telemetryDefinitions.Length);
+        Assert.Contains(
+            telemetryDefinitions,
+            static definition =>
+                definition.DatumName == "SIMULATION RATE"
+                && definition.Units == "number");
 
         var request = Assert.Single(
             api.TelemetryRequests,
@@ -70,6 +75,7 @@ public sealed class SimConnectTelemetryConnectionTests
         values[(int)SimConnectTelemetryValue.TotalWeight] = 2_200;
         values[(int)SimConnectTelemetryValue.EmptyWeight] = 1_500;
         values[(int)SimConnectTelemetryValue.GearTotalPercent] = 100;
+        values[(int)SimConnectTelemetryValue.SimulationRate] = 1;
 
         api.Enqueue(SimConnectPackets.Event(SimConnectTelemetryDefinition.PauseEventId, 4));
         api.Enqueue(SimConnectPackets.SimObjectData(
@@ -83,6 +89,7 @@ public sealed class SimConnectTelemetryConnectionTests
         Assert.Equal(1, connection.Latest.EnginesRunning);
         Assert.True(connection.Latest.Paused);
         Assert.True(connection.Latest.GearDown);
+        Assert.Equal(1, connection.Latest.SimulationRate);
 
         IFlightCriticalTelemetrySource critical = connection;
         Assert.Empty(critical.ReadAfter(null));
@@ -233,6 +240,7 @@ public sealed class SimConnectTelemetryConnectionTests
         values[(int)SimConnectTelemetryValue.OnGround] = onGround ? 1 : 0;
         values[(int)SimConnectTelemetryValue.NumberOfEngines] = 1;
         values[(int)SimConnectTelemetryValue.Engine1Combustion] = 1;
+        values[(int)SimConnectTelemetryValue.SimulationRate] = 1;
         return values;
     }
 

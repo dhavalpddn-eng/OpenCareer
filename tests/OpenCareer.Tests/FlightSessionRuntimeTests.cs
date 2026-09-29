@@ -1486,6 +1486,85 @@ public sealed class FlightSessionRuntimeTests
         Assert.Same(first, source.Current);
     }
 
+    [Theory]
+    [InlineData(0.5, 0.5, 0.5)]
+    [InlineData(1.0, 1.0, 1.0)]
+    [InlineData(2.0, 2.0, 1.0)]
+    [InlineData(4.0, 4.0, 1.0)]
+    public async Task RuntimeUsesTelemetrySimulationRateForAuthoritativeTime(
+        double simulationRate,
+        double expectedSimulatedSeconds,
+        double expectedCareerSeconds)
+    {
+        FlightSession active = AirborneSession();
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+        var store = new MemoryStore { Checkpoint = active };
+        var telemetry = new TestTelemetrySource
+        {
+            Latest = Telemetry(
+                Epoch.AddSeconds(5),
+                32,
+                -97,
+                onGround: false,
+                simulationRate: simulationRate)
+        };
+        var runtime = CreateRuntime(coordinator, store, Connected(), telemetry);
+
+        Assert.True(await runtime.RefreshAsync());
+
+        telemetry.Latest = Telemetry(
+            Epoch.AddSeconds(6),
+            32,
+            -97,
+            onGround: false,
+            simulationRate: simulationRate);
+        Assert.True(await runtime.RefreshAsync());
+
+        FlightTimeLedger ledger = coordinator.Current!.TimeLedger;
+        Assert.Equal(TimeSpan.FromSeconds(1), ledger.ObservedWallTime);
+        Assert.Equal(TimeSpan.FromSeconds(expectedSimulatedSeconds), ledger.SimulatedOperationalTime);
+        Assert.Equal(TimeSpan.FromSeconds(expectedSimulatedSeconds), ledger.BlockTime);
+        Assert.Equal(TimeSpan.FromSeconds(expectedSimulatedSeconds), ledger.MovementFlightTime);
+        Assert.Equal(TimeSpan.FromSeconds(expectedSimulatedSeconds), ledger.AirborneTime);
+        Assert.Equal(TimeSpan.FromSeconds(expectedCareerSeconds), ledger.CareerCreditTime);
+        Assert.Equal(
+            simulationRate > 1d
+                ? TimeSpan.FromSeconds(1)
+                : TimeSpan.Zero,
+            ledger.AcceleratedWallTime);
+    }
+
+    [Fact]
+    public async Task InvalidSimulationRateSkipsAuthoritativeTimeInterval()
+    {
+        FlightSession active = AirborneSession();
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+        var store = new MemoryStore { Checkpoint = active };
+        var telemetry = new TestTelemetrySource
+        {
+            Latest = Telemetry(
+                Epoch.AddSeconds(5),
+                32,
+                -97,
+                onGround: false)
+        };
+        var runtime = CreateRuntime(coordinator, store, Connected(), telemetry);
+
+        Assert.True(await runtime.RefreshAsync());
+
+        telemetry.Latest = Telemetry(
+            Epoch.AddSeconds(6),
+            32,
+            -97,
+            onGround: false,
+            simulationRate: 0);
+        Assert.True(await runtime.RefreshAsync());
+
+        Assert.Equal(FlightTimeLedger.Empty, coordinator.Current!.TimeLedger);
+    }
+
     private static FlightSessionRuntime CreateRuntime(
         FlightSessionCoordinator coordinator,
         MemoryStore store,
@@ -1645,7 +1724,8 @@ public sealed class FlightSessionRuntimeTests
         bool onGround,
         double altitudeMsl = 650,
         double groundSpeed = 0,
-        double? altitudeAgl = null) =>
+        double? altitudeAgl = null,
+        double simulationRate = 1d) =>
         new(
             timestamp,
             latitude,
@@ -1668,7 +1748,8 @@ public sealed class FlightSessionRuntimeTests
             0,
             true,
             false,
-            false);
+            false,
+            simulationRate);
 
     private sealed class TestConnection :
         ISimulatorConnection

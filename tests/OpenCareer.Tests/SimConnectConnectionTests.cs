@@ -387,9 +387,15 @@ public sealed class SimConnectConnectionTests
         SimConnectCurrentAircraftDefinition.RequestId, SimConnectCurrentAircraftDefinition.DefinitionId,
         "C172SP Classic Passengers");
 
-    private static byte[] TelemetryPacket() => SimConnectPackets.SimObjectData(
-        SimConnectTelemetryDefinition.RequestId, SimConnectTelemetryDefinition.DefinitionId,
-        new double[SimConnectTelemetryDefinition.ValueCount]);
+    private static byte[] TelemetryPacket()
+    {
+        var values = new double[SimConnectTelemetryDefinition.ValueCount];
+        values[(int)SimConnectTelemetryValue.SimulationRate] = 1;
+        return SimConnectPackets.SimObjectData(
+            SimConnectTelemetryDefinition.RequestId,
+            SimConnectTelemetryDefinition.DefinitionId,
+            values);
+    }
 
     private static async Task DispatchAsync(SimConnectTestTransport api, byte[] packet, Action? action = null)
     {
