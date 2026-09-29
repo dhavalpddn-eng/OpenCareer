@@ -211,10 +211,10 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         await store.SaveAsync(current);
         await ExecuteAsync(
             databasePath,
-            $"""
+            $$"""
             UPDATE flight_session_checkpoint SET payload_json = '{{';
             UPDATE flight_session_checkpoint_previous
-            SET successor_session_id = '{Guid.NewGuid():D}';
+            SET successor_session_id = '{{Guid.NewGuid():D}}';
             """);
 
         await Assert.ThrowsAsync<InvalidDataException>(
