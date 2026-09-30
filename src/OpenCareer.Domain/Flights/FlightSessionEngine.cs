@@ -54,7 +54,8 @@ public static class FlightSessionEngine
                 startedAt,
                 nextPlan,
                 TimeLedger: FlightTimeLedger.Empty,
-                Statistics: FlightSessionStatistics.Empty);
+                Statistics: FlightSessionStatistics.Empty,
+                LandingEpisodeNumbers: Array.Empty<int>());
 
         FlightSession next =
             current with
@@ -169,6 +170,25 @@ public static class FlightSessionEngine
                 previousTracking,
                 nextTracking,
                 update.Evidence.Timestamp);
+
+        if (landingEpisodes.Count > current.EffectiveLandingEpisodes.Count)
+        {
+            int activeLegIndex =
+                Array.FindLastIndex(
+                    legs,
+                    leg => leg.Status == FlightLegStatus.Active);
+
+            if (activeLegIndex >= 0)
+            {
+                foreach (FlightSessionLandingEpisode episode
+                         in landingEpisodes.Skip(current.EffectiveLandingEpisodes.Count))
+                {
+                    legs[activeLegIndex] =
+                        legs[activeLegIndex]
+                            .ReferenceLandingEpisode(episode.EpisodeNumber);
+                }
+            }
+        }
 
         if (update.ShutdownConfirmed
             && nextTracking.State == FlightTrackingState.Parked)

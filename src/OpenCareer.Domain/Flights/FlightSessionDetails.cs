@@ -56,13 +56,17 @@ public sealed record FlightLeg(
     DateTimeOffset? CompletedAt = null,
     FlightTimeLedger? TimeLedger = null,
     FlightSessionStatistics? Statistics = null,
-    FlightContinuityAnchor? StatisticsContinuityAnchor = null)
+    FlightContinuityAnchor? StatisticsContinuityAnchor = null,
+    IReadOnlyList<int>? LandingEpisodeNumbers = null)
 {
     public FlightTimeLedger EffectiveTimeLedger =>
         TimeLedger ?? FlightTimeLedger.Empty;
 
     public FlightSessionStatistics EffectiveStatistics =>
         Statistics ?? FlightSessionStatistics.Empty;
+
+    public IReadOnlyList<int> EffectiveLandingEpisodeNumbers =>
+        LandingEpisodeNumbers ?? Array.Empty<int>();
 
     public static FlightLeg First(
         Guid sessionId,
@@ -74,7 +78,8 @@ public sealed record FlightLeg(
             startedAt,
             plan,
             TimeLedger: FlightTimeLedger.Empty,
-            Statistics: FlightSessionStatistics.Empty);
+            Statistics: FlightSessionStatistics.Empty,
+            LandingEpisodeNumbers: Array.Empty<int>());
 
     public void Validate()
     {
@@ -102,6 +107,14 @@ public sealed record FlightLeg(
         }
 
         Plan?.Validate();
+
+        if (EffectiveLandingEpisodeNumbers.Any(number => number <= 0)
+            || EffectiveLandingEpisodeNumbers.Distinct().Count()
+                != EffectiveLandingEpisodeNumbers.Count)
+        {
+            throw new InvalidOperationException(
+                "Flight-leg landing episode references must be positive and unique.");
+        }
     }
 
     public FlightLeg Complete(DateTimeOffset completedAt)
@@ -152,6 +165,30 @@ public sealed record FlightLeg(
             StatisticsContinuityAnchor =
                 nextAnchor
                 ?? StatisticsContinuityAnchor
+        };
+    }
+
+    public FlightLeg ReferenceLandingEpisode(int episodeNumber)
+    {
+        if (Status != FlightLegStatus.Active)
+        {
+            throw new InvalidOperationException(
+                "Completed flight-leg landing references are immutable.");
+        }
+
+        if (episodeNumber <= 0)
+            throw new ArgumentOutOfRangeException(nameof(episodeNumber));
+
+        if (EffectiveLandingEpisodeNumbers.Contains(episodeNumber))
+            return this;
+
+        return this with
+        {
+            LandingEpisodeNumbers =
+            [
+                .. EffectiveLandingEpisodeNumbers,
+                episodeNumber
+            ]
         };
     }
 }

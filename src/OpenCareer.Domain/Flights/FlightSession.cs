@@ -83,7 +83,11 @@ public sealed record FlightSession(
                     {
                         TimeLedger = TimeLedger,
                         Statistics = EffectiveStatistics,
-                        StatisticsContinuityAnchor = ContinuityAnchor
+                        StatisticsContinuityAnchor = ContinuityAnchor,
+                        LandingEpisodeNumbers =
+                            EffectiveLandingEpisodes
+                                .Select(episode => episode.EpisodeNumber)
+                                .ToArray()
                     }
                 ]
             };
@@ -155,12 +159,42 @@ public sealed record FlightSession(
         };
     }
 
+    public FlightSession EnsureLegLandingEpisodes()
+    {
+        FlightSession session = EnsureLegStatistics();
+
+        if (session.Legs is not { Count: 1 }
+            || session.Legs[0].LandingEpisodeNumbers is not null)
+        {
+            return session;
+        }
+
+        return session with
+        {
+            Legs =
+            [
+                session.Legs[0] with
+                {
+                    LandingEpisodeNumbers =
+                        session.EffectiveLandingEpisodes
+                            .Select(episode => episode.EpisodeNumber)
+                            .ToArray()
+                }
+            ]
+        };
+    }
+
     public void ValidateLegs()
     {
         if (Legs is null || Legs.Count == 0)
             throw new InvalidOperationException("FlightSession requires at least one flight leg.");
 
         var legIds = new HashSet<Guid>();
+        var referencedLandingEpisodes = new HashSet<int>();
+        var sessionLandingEpisodes =
+            EffectiveLandingEpisodes
+                .Select(episode => episode.EpisodeNumber)
+                .ToHashSet();
         FlightLeg? previous = null;
         int activeCount = 0;
 
@@ -177,6 +211,16 @@ public sealed record FlightSession(
 
             if (!legIds.Add(leg.LegId))
                 throw new InvalidOperationException("Flight-leg identities must be unique within a session.");
+
+            foreach (int episodeNumber in leg.EffectiveLandingEpisodeNumbers)
+            {
+                if (!sessionLandingEpisodes.Contains(episodeNumber)
+                    || !referencedLandingEpisodes.Add(episodeNumber))
+                {
+                    throw new InvalidOperationException(
+                        "Flight-leg landing references must identify unique session episodes.");
+                }
+            }
 
             if (leg.StartedAt < CreatedAt || leg.StartedAt > UpdatedAt)
                 throw new InvalidOperationException("Flight-leg start must fall within its parent session.");

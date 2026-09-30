@@ -177,6 +177,28 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
                         20,
                         CaptureTrackPoint: true)));
 
+        FlightLeg[] legs = session.EffectiveLegs.ToArray();
+        legs[0] = legs[0] with { LandingEpisodeNumbers = [1] };
+        legs[1] = legs[1] with { LandingEpisodeNumbers = [2] };
+        session = session with
+        {
+            LandingEpisodes =
+            [
+                new FlightSessionLandingEpisode(
+                    1,
+                    session.CreatedAt.AddMinutes(1),
+                    FlightSessionLandingKind.FullStop,
+                    0,
+                    session.CreatedAt.AddMinutes(1)),
+                new FlightSessionLandingEpisode(
+                    2,
+                    session.UpdatedAt,
+                    FlightSessionLandingKind.Unknown,
+                    0)
+            ],
+            Legs = legs
+        };
+
         await new SqliteFlightSessionCheckpointStore(databasePath).SaveAsync(session);
         FlightSession restored = Assert.IsType<FlightSession>(
             await new SqliteFlightSessionCheckpointStore(databasePath).LoadAsync());
@@ -193,6 +215,8 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(
             session.EffectiveLegs[1].StatisticsContinuityAnchor,
             restored.EffectiveLegs[1].StatisticsContinuityAnchor);
+        Assert.Equal([1], restored.EffectiveLegs[0].EffectiveLandingEpisodeNumbers);
+        Assert.Equal([2], restored.EffectiveLegs[1].EffectiveLandingEpisodeNumbers);
     }
 
     [Fact]
@@ -258,6 +282,18 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         string databasePath = Path.Combine(_directory, "career.db");
         var store = new SqliteFlightSessionCheckpointStore(databasePath);
         FlightSession expected = CreateAirborneSession();
+        expected = expected with
+        {
+            LandingEpisodes =
+            [
+                new FlightSessionLandingEpisode(
+                    1,
+                    expected.UpdatedAt,
+                    FlightSessionLandingKind.TouchAndGo,
+                    0,
+                    expected.UpdatedAt)
+            ]
+        };
         await store.SaveAsync(expected);
 
         await using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
@@ -290,6 +326,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(legacy.TimeLedger, leg.EffectiveTimeLedger);
         Assert.Equal(legacy.EffectiveStatistics, leg.EffectiveStatistics);
         Assert.Equal(legacy.ContinuityAnchor, leg.StatisticsContinuityAnchor);
+        Assert.Equal([1], leg.EffectiveLandingEpisodeNumbers);
         Assert.NotNull(legacy.Legs);
     }
 
@@ -723,6 +760,9 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(
             expected.StatisticsContinuityAnchor,
             actual.StatisticsContinuityAnchor);
+        Assert.Equal(
+            expected.EffectiveLandingEpisodeNumbers,
+            actual.EffectiveLandingEpisodeNumbers);
         AssertStatisticsEquivalent(
             expected.EffectiveStatistics,
             actual.EffectiveStatistics);

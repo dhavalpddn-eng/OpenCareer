@@ -149,6 +149,45 @@ public sealed class FlightSessionPersistenceServiceTests
     }
 
     [Fact]
+    public async Task FailedLandingCheckpointRetryDoesNotDuplicateLegReference()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        await service.StartAsync(Epoch);
+
+        foreach (FlightStateEvidence evidence in new[]
+        {
+            Evidence(1, stable: true, validAircraft: true),
+            Evidence(2, engineStart: true),
+            Evidence(3, movement: true),
+            Evidence(4, takeoffCandidate: true),
+            Evidence(5, airborne: true),
+            Evidence(6, approach: true)
+        })
+        {
+            await service.AdvanceAsync(new FlightSessionAdvance(evidence));
+        }
+
+        FlightSession beforeLanding = coordinator.Current!;
+        var landing =
+            new FlightSessionAdvance(
+                Evidence(7, touchdown: true));
+
+        store.FailWrites = true;
+        await Assert.ThrowsAsync<IOException>(() => service.AdvanceAsync(landing));
+        Assert.Equal(beforeLanding, coordinator.Current);
+
+        store.FailWrites = false;
+        FlightSession retried = await service.AdvanceAsync(landing);
+
+        Assert.Single(retried.EffectiveLandingEpisodes);
+        Assert.Equal(
+            [1],
+            Assert.Single(retried.EffectiveLegs).EffectiveLandingEpisodeNumbers);
+    }
+
+    [Fact]
     public async Task InsufficientTerminalEvidenceDoesNotCompleteCurrentLeg()
     {
         var coordinator = new FlightSessionCoordinator();
@@ -821,6 +860,29 @@ public sealed class FlightSessionPersistenceServiceTests
             Epoch.AddMinutes(1),
             CompleteTerminalEvidence,
             FlightLegTerminalPolicy.ConventionalCommercialTurnaround);
+
+    private static FlightStateEvidence Evidence(
+        int seconds,
+        bool stable = false,
+        bool validAircraft = false,
+        bool engineStart = false,
+        bool movement = false,
+        bool takeoffCandidate = false,
+        bool airborne = false,
+        bool approach = false,
+        bool touchdown = false) =>
+        new(
+            Epoch.AddSeconds(seconds),
+            Connected: true,
+            StableTelemetry: stable,
+            ValidLoadedAircraft: validAircraft,
+            ContinuityPlausible: true,
+            EngineStartObserved: engineStart,
+            SelfPoweredMovementForFlight: movement,
+            TakeoffCandidate: takeoffCandidate,
+            AirborneConfirmed: airborne,
+            ApproachConfirmed: approach,
+            TouchdownConfirmed: touchdown);
 
     private sealed class MemoryStore :
         IFlightSessionCheckpointStore

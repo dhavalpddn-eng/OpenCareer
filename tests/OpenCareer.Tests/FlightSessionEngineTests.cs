@@ -335,6 +335,7 @@ public sealed class FlightSessionEngineTests
         FlightLeg landedLeg = Assert.Single(session.EffectiveLegs);
         Assert.Equal(FlightLegStatus.Active, landedLeg.Status);
         Assert.Null(landedLeg.CompletedAt);
+        Assert.Equal([1], landedLeg.EffectiveLandingEpisodeNumbers);
 
         Assert.Equal(
             FlightOperationState.Landed,
@@ -580,6 +581,55 @@ public sealed class FlightSessionEngineTests
         Assert.Equal(
             1,
             session.Tracking.TouchAndGoCount);
+        Assert.Equal(
+            [1],
+            Assert.Single(session.EffectiveLegs).EffectiveLandingEpisodeNumbers);
+    }
+
+    [Fact]
+    public void BounceDoesNotDuplicateLegLandingReference()
+    {
+        FlightSession session = AirborneSession();
+        session = Advance(session, 6, approach: true);
+        session = Advance(session, 7, touchdown: true);
+        session = Advance(session, 8, bounce: true);
+
+        Assert.Single(session.EffectiveLandingEpisodes);
+        Assert.Equal(1, session.EffectiveLandingEpisodes[0].BounceCount);
+        Assert.Equal(
+            [1],
+            Assert.Single(session.EffectiveLegs).EffectiveLandingEpisodeNumbers);
+    }
+
+    [Fact]
+    public void LandingReferencesRemainPartitionedAcrossLegs()
+    {
+        FlightSession session = AirborneSession();
+        session = Advance(session, 6, approach: true);
+        session = Advance(session, 7, touchdown: true);
+        session = Advance(session, 8, rollout: true);
+        session = Advance(session, 9, parking: true);
+        session = session with
+        {
+            Legs = [session.EffectiveLegs[0].Complete(Epoch.AddSeconds(9))]
+        };
+        session = FlightSessionEngine.StartNextLeg(
+            session,
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            new FlightSessionPlan("KBOS", "KPHL"),
+            Epoch.AddSeconds(10));
+
+        Assert.Empty(session.EffectiveLegs[1].EffectiveLandingEpisodeNumbers);
+        session = Advance(session, 11, engineStart: true);
+        session = Advance(session, 12, movement: true);
+        session = Advance(session, 13, takeoffCandidate: true);
+        session = Advance(session, 14, airborne: true);
+        session = Advance(session, 15, approach: true);
+        session = Advance(session, 16, touchdown: true);
+
+        Assert.Equal([1], session.EffectiveLegs[0].EffectiveLandingEpisodeNumbers);
+        Assert.Equal([2], session.EffectiveLegs[1].EffectiveLandingEpisodeNumbers);
+        Assert.Equal([1, 2], session.EffectiveLandingEpisodes.Select(x => x.EpisodeNumber));
     }
 
     [Fact]
@@ -745,6 +795,7 @@ public sealed class FlightSessionEngineTests
         bool airborne = false,
         bool approach = false,
         bool touchdown = false,
+        bool bounce = false,
         bool touchAndGo = false,
         bool rollout = false,
         bool parking = false,
@@ -766,6 +817,7 @@ public sealed class FlightSessionEngineTests
                     AirborneConfirmed: airborne,
                     ApproachConfirmed: approach,
                     TouchdownConfirmed: touchdown,
+                    BounceRecontact: bounce,
                     TouchAndGoConfirmed: touchAndGo,
                     LandingRolloutConfirmed: rollout,
                     ParkingConfirmed: parking,
