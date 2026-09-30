@@ -169,7 +169,8 @@ public static class FlightSessionEngine
                 current.EffectiveLandingEpisodes,
                 previousTracking,
                 nextTracking,
-                update.Evidence.Timestamp);
+                update.Evidence.Timestamp,
+                update.TouchdownMetrics);
 
         if (landingEpisodes.Count > current.EffectiveLandingEpisodes.Count)
         {
@@ -473,7 +474,8 @@ public static class FlightSessionEngine
         IReadOnlyList<FlightSessionLandingEpisode> current,
         FlightTrackingSnapshot previous,
         FlightTrackingSnapshot next,
-        DateTimeOffset timestamp)
+        DateTimeOffset timestamp,
+        FlightSessionTouchdownMetrics? touchdownMetrics)
     {
         var episodes =
             current.ToList();
@@ -491,7 +493,17 @@ public static class FlightSessionEngine
                         episode,
                         timestamp,
                         FlightSessionLandingKind.Unknown,
-                        BounceCount: 0));
+                        BounceCount: 0,
+                        VerticalSpeedFeetPerMinute:
+                            touchdownMetrics?.VerticalSpeedFeetPerMinute,
+                        NormalAccelerationG:
+                            touchdownMetrics?.NormalAccelerationG,
+                        IndicatedAirspeedKnots:
+                            touchdownMetrics?.IndicatedAirspeedKnots,
+                        PitchDegrees:
+                            touchdownMetrics?.PitchDegrees,
+                        BankDegrees:
+                            touchdownMetrics?.BankDegrees));
             }
         }
 

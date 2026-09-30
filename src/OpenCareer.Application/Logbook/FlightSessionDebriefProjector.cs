@@ -226,11 +226,16 @@ public static class FlightSessionDebriefProjector
             episode.TouchdownAt,
             operationType,
             episode.BounceCount,
-            VerticalSpeedFeetPerMinute: null,
-            TouchdownG: null,
-            IndicatedAirspeedKnots: null,
-            PitchDegrees: null,
-            BankDegrees: null,
+            VerticalSpeedFeetPerMinute:
+                episode.VerticalSpeedFeetPerMinute,
+            TouchdownG:
+                episode.NormalAccelerationG,
+            IndicatedAirspeedKnots:
+                episode.IndicatedAirspeedKnots,
+            PitchDegrees:
+                episode.PitchDegrees,
+            BankDegrees:
+                episode.BankDegrees,
             HardLanding: null,
             EvidenceQuality:
                 EvidenceQuality.DerivedHighConfidence);

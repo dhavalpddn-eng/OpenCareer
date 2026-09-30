@@ -189,7 +189,12 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
                     session.CreatedAt.AddMinutes(1),
                     FlightSessionLandingKind.FullStop,
                     0,
-                    session.CreatedAt.AddMinutes(1)),
+                    session.CreatedAt.AddMinutes(1),
+                    VerticalSpeedFeetPerMinute: -210,
+                    NormalAccelerationG: 1.2,
+                    IndicatedAirspeedKnots: 70,
+                    PitchDegrees: 3,
+                    BankDegrees: -1),
                 new FlightSessionLandingEpisode(
                     2,
                     session.UpdatedAt,
@@ -217,6 +222,8 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
             restored.EffectiveLegs[1].StatisticsContinuityAnchor);
         Assert.Equal([1], restored.EffectiveLegs[0].EffectiveLandingEpisodeNumbers);
         Assert.Equal([2], restored.EffectiveLegs[1].EffectiveLandingEpisodeNumbers);
+        Assert.Equal(-210, restored.EffectiveLandingEpisodes[0].VerticalSpeedFeetPerMinute);
+        Assert.Equal(1.2, restored.EffectiveLandingEpisodes[0].NormalAccelerationG);
     }
 
     [Fact]

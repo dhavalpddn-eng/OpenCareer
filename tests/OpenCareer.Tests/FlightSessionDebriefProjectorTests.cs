@@ -95,6 +95,12 @@ public sealed class FlightSessionDebriefProjectorTests
         Assert.Equal(
             1,
             landing.EpisodeNumber);
+        Assert.Equal(-220, landing.VerticalSpeedFeetPerMinute);
+        Assert.Equal(1.25, landing.TouchdownG);
+        Assert.Equal(71, landing.IndicatedAirspeedKnots);
+        Assert.Equal(3, landing.PitchDegrees);
+        Assert.Equal(-2, landing.BankDegrees);
+        Assert.Null(landing.HardLanding);
     }
 
     [Fact]
@@ -237,7 +243,14 @@ public sealed class FlightSessionDebriefProjectorTests
             Advance(
                 session,
                 6,
-                touchdown: true);
+                touchdown: true,
+                touchdownMetrics:
+                    new FlightSessionTouchdownMetrics(
+                        -220,
+                        1.25,
+                        71,
+                        3,
+                        -2));
 
         session =
             Advance(
@@ -361,7 +374,8 @@ public sealed class FlightSessionDebriefProjectorTests
         bool parking = false,
         bool shutdown = false,
         FlightSessionObservation? observation = null,
-        FlightContinuityAnchor? anchor = null) =>
+        FlightContinuityAnchor? anchor = null,
+        FlightSessionTouchdownMetrics? touchdownMetrics = null) =>
         FlightSessionEngine.Advance(
             session,
             new FlightSessionAdvance(
@@ -379,7 +393,8 @@ public sealed class FlightSessionDebriefProjectorTests
                     ParkingConfirmed: parking),
                 ShutdownConfirmed: shutdown,
                 ContinuityAnchor: anchor,
-                Observation: observation));
+                Observation: observation,
+                TouchdownMetrics: touchdownMetrics));
 
     private static FlightSessionObservation Observation(
         int seconds,

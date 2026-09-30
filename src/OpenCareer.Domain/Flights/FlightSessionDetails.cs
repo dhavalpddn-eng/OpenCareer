@@ -445,7 +445,12 @@ public sealed record FlightSessionLandingEpisode(
     DateTimeOffset TouchdownAt,
     FlightSessionLandingKind Kind,
     int BounceCount,
-    DateTimeOffset? CompletedAt = null)
+    DateTimeOffset? CompletedAt = null,
+    double? VerticalSpeedFeetPerMinute = null,
+    double? NormalAccelerationG = null,
+    double? IndicatedAirspeedKnots = null,
+    double? PitchDegrees = null,
+    double? BankDegrees = null)
 {
     public void Validate()
     {
@@ -460,5 +465,20 @@ public sealed record FlightSessionLandingEpisode(
         {
             throw new ArgumentOutOfRangeException(nameof(CompletedAt));
         }
+        ValidateFinite(VerticalSpeedFeetPerMinute, nameof(VerticalSpeedFeetPerMinute));
+        ValidateFinite(NormalAccelerationG, nameof(NormalAccelerationG));
+        ValidateFinite(IndicatedAirspeedKnots, nameof(IndicatedAirspeedKnots));
+        ValidateFinite(PitchDegrees, nameof(PitchDegrees));
+        ValidateFinite(BankDegrees, nameof(BankDegrees));
+
+        if (IndicatedAirspeedKnots is { } indicatedAirspeedKnots
+            && indicatedAirspeedKnots < 0)
+            throw new ArgumentOutOfRangeException(nameof(IndicatedAirspeedKnots));
+    }
+
+    private static void ValidateFinite(double? value, string parameterName)
+    {
+        if (value is { } actual && !double.IsFinite(actual))
+            throw new ArgumentOutOfRangeException(parameterName);
     }
 }

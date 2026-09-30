@@ -369,7 +369,16 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
                         ContinuityAnchor:
                             anchor,
                         Observation:
-                            observation),
+                            observation,
+                        TouchdownMetrics:
+                            evidence.TouchdownConfirmed
+                                ? new FlightSessionTouchdownMetrics(
+                                    telemetry.VerticalSpeedFeetPerMinute,
+                                    telemetry.NormalAccelerationG,
+                                    telemetry.IndicatedAirspeedKnots,
+                                    telemetry.PitchDegrees,
+                                    telemetry.BankDegrees)
+                                : null),
                     cancellationToken)
                 .ConfigureAwait(false);
         }

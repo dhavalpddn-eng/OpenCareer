@@ -1086,6 +1086,13 @@ public sealed class FlightSessionRuntimeTests
         Assert.Equal(Epoch.AddSeconds(6.25), beforeFailure.UpdatedAt);
         Assert.Equal(1, beforeFailure.Tracking.LandingEpisodeCount);
         Assert.Equal(0, beforeFailure.Tracking.BounceCount);
+        FlightSessionLandingEpisode firstTouchdown =
+            Assert.Single(beforeFailure.EffectiveLandingEpisodes);
+        Assert.NotNull(firstTouchdown.VerticalSpeedFeetPerMinute);
+        Assert.NotNull(firstTouchdown.NormalAccelerationG);
+        Assert.NotNull(firstTouchdown.IndicatedAirspeedKnots);
+        Assert.NotNull(firstTouchdown.PitchDegrees);
+        Assert.NotNull(firstTouchdown.BankDegrees);
         Assert.Equal(TimeSpan.FromMilliseconds(750), beforeFailure.TimeLedger.ObservedWallTime);
         Assert.Equal(TimeSpan.FromMilliseconds(750), beforeFailure.TimeLedger.MovementFlightTime);
         Assert.Equal(TimeSpan.FromMilliseconds(750), beforeFailure.TimeLedger.AirborneTime);
@@ -1116,6 +1123,13 @@ public sealed class FlightSessionRuntimeTests
         Assert.Equal(Epoch.AddSeconds(6.5), failedAttempt.UpdatedAt);
         Assert.Equal(1, failedAttempt.Tracking.LandingEpisodeCount);
         Assert.Equal(1, failedAttempt.Tracking.BounceCount);
+        FlightSessionLandingEpisode failedLanding =
+            Assert.Single(failedAttempt.EffectiveLandingEpisodes);
+        Assert.Equal(firstTouchdown.VerticalSpeedFeetPerMinute, failedLanding.VerticalSpeedFeetPerMinute);
+        Assert.Equal(firstTouchdown.NormalAccelerationG, failedLanding.NormalAccelerationG);
+        Assert.Equal(firstTouchdown.IndicatedAirspeedKnots, failedLanding.IndicatedAirspeedKnots);
+        Assert.Equal(firstTouchdown.PitchDegrees, failedLanding.PitchDegrees);
+        Assert.Equal(firstTouchdown.BankDegrees, failedLanding.BankDegrees);
         Assert.Equal(TimeSpan.FromSeconds(1), failedAttempt.TimeLedger.ObservedWallTime);
         Assert.Equal(TimeSpan.FromSeconds(1), failedAttempt.TimeLedger.MovementFlightTime);
         Assert.Equal(TimeSpan.FromSeconds(1), failedAttempt.TimeLedger.AirborneTime);
