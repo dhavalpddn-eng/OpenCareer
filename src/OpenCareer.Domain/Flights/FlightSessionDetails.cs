@@ -53,8 +53,12 @@ public sealed record FlightLeg(
     DateTimeOffset StartedAt,
     FlightSessionPlan? Plan = null,
     FlightLegStatus Status = FlightLegStatus.Active,
-    DateTimeOffset? CompletedAt = null)
+    DateTimeOffset? CompletedAt = null,
+    FlightTimeLedger? TimeLedger = null)
 {
+    public FlightTimeLedger EffectiveTimeLedger =>
+        TimeLedger ?? FlightTimeLedger.Empty;
+
     public static FlightLeg First(
         Guid sessionId,
         DateTimeOffset startedAt,
@@ -63,7 +67,8 @@ public sealed record FlightLeg(
             sessionId,
             Sequence: 1,
             startedAt,
-            plan);
+            plan,
+            TimeLedger: FlightTimeLedger.Empty);
 
     public void Validate()
     {
@@ -105,6 +110,20 @@ public sealed record FlightLeg(
         {
             Status = FlightLegStatus.Completed,
             CompletedAt = completedAt
+        };
+    }
+
+    public FlightLeg AddTime(FlightTimeInterval interval)
+    {
+        if (Status != FlightLegStatus.Active)
+        {
+            throw new InvalidOperationException(
+                "Completed flight-leg time is immutable.");
+        }
+
+        return this with
+        {
+            TimeLedger = EffectiveTimeLedger.Add(interval)
         };
     }
 }

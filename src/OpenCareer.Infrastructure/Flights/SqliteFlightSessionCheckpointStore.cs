@@ -64,7 +64,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
-        session = session.EnsureLegLifecycle();
+        session = session.EnsureLegTimeAccounting();
         ValidateForPersistence(session);
 
         string payload =
@@ -538,7 +538,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
             ?? throw new InvalidDataException(
                 "Flight-session checkpoint payload is empty.");
 
-        session = session.EnsureLegLifecycle();
+        session = session.EnsureLegTimeAccounting();
 
         ValidateLoadedCheckpoint(
             session,

@@ -8,6 +8,91 @@ public sealed class FlightSessionEngineTests
         new(2026, 9, 19, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void TimeIntervalsAccumulateInParentAndOnlyActiveLeg()
+    {
+        FlightSession first = FlightSession.Start(Epoch);
+        FlightTimeInterval firstInterval = TimeInterval(2, simulationRate: 2, night: true);
+        first = AdvanceWithTime(first, Epoch.AddMinutes(2), firstInterval);
+
+        FlightTimeLedger firstLedger = Assert.Single(first.EffectiveLegs).EffectiveTimeLedger;
+        Assert.Equal(first.TimeLedger, firstLedger);
+        Assert.Equal(TimeSpan.FromMinutes(2), firstLedger.CareerCreditTime);
+        Assert.Equal(TimeSpan.FromMinutes(2), firstLedger.NightCareerCreditTime);
+
+        FlightSession betweenLegs =
+            first with
+            {
+                UpdatedAt = Epoch.AddMinutes(2),
+                Legs = [first.EffectiveLegs[0].Complete(Epoch.AddMinutes(2))]
+            };
+
+        FlightSession second =
+            FlightSessionEngine.StartNextLeg(
+                betweenLegs,
+                Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                new FlightSessionPlan("KBOS", "KPHL"),
+                Epoch.AddMinutes(3));
+
+        Assert.Equal(FlightTimeLedger.Empty, second.EffectiveLegs[1].EffectiveTimeLedger);
+
+        FlightTimeInterval secondInterval = TimeInterval(1, actualInstrument: true);
+        second = AdvanceWithTime(second, Epoch.AddMinutes(4), secondInterval);
+
+        Assert.Equal(firstLedger, second.EffectiveLegs[0].EffectiveTimeLedger);
+        Assert.Equal(TimeSpan.FromMinutes(1), second.EffectiveLegs[1].EffectiveTimeLedger.CareerCreditTime);
+        Assert.Equal(TimeSpan.FromMinutes(1), second.EffectiveLegs[1].EffectiveTimeLedger.ActualInstrumentCareerCreditTime);
+        Assert.Equal(TimeSpan.FromMinutes(3), second.TimeLedger.CareerCreditTime);
+        Assert.Equal(TimeSpan.FromMinutes(2), second.TimeLedger.NightCareerCreditTime);
+        Assert.Equal(TimeSpan.FromMinutes(1), second.TimeLedger.ActualInstrumentCareerCreditTime);
+    }
+
+    [Fact]
+    public void CompletedLegTimeCannotChange()
+    {
+        FlightLeg completed =
+            Assert.Single(FlightSession.Start(Epoch).EffectiveLegs)
+                .Complete(Epoch.AddMinutes(1));
+
+        Assert.Throws<InvalidOperationException>(
+            () => completed.AddTime(TimeInterval(1)));
+        Assert.Equal(FlightTimeLedger.Empty, completed.EffectiveTimeLedger);
+    }
+
+    private static FlightSession AdvanceWithTime(
+        FlightSession session,
+        DateTimeOffset timestamp,
+        FlightTimeInterval interval) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    timestamp,
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true),
+                TimeInterval: interval));
+
+    private static FlightTimeInterval TimeInterval(
+        int wallMinutes,
+        double simulationRate = 1,
+        bool night = false,
+        bool actualInstrument = false) =>
+        new(
+            TimeSpan.FromMinutes(wallMinutes),
+            simulationRate,
+            ValidOperationalEvidence: true,
+            Paused: false,
+            SlewActive: false,
+            CountsTowardBlockTime: true,
+            CountsTowardFlightTime: true,
+            Airborne: true,
+            TaxiOut: false,
+            TaxiIn: false,
+            Night: night,
+            ActualInstrument: actualInstrument);
+
+    [Fact]
     public void StartingNextLegResetsBoundaryStateAndPreservesCumulativeAggregates()
     {
         FlightSession started =

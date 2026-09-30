@@ -91,6 +91,68 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Fact]
+    public async Task TwoLegTimeLedgersSurviveStoreReopen()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        FlightSession session = FlightSession.Start(
+            new DateTimeOffset(2026, 9, 19, 12, 0, 0, TimeSpan.Zero));
+        FlightTimeInterval interval =
+            new(
+                TimeSpan.FromMinutes(1),
+                1,
+                ValidOperationalEvidence: true,
+                Paused: false,
+                SlewActive: false,
+                CountsTowardBlockTime: true,
+                CountsTowardFlightTime: true,
+                Airborne: true,
+                TaxiOut: false,
+                TaxiIn: false,
+                Night: false,
+                ActualInstrument: false);
+        session = FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    session.CreatedAt.AddMinutes(1),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true),
+                TimeInterval: interval));
+        session = session with
+        {
+            Legs =
+            [
+                session.EffectiveLegs[0].Complete(session.UpdatedAt)
+            ]
+        };
+        session = FlightSessionEngine.StartNextLeg(
+            session,
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            new FlightSessionPlan("KBOS", "KPHL"),
+            session.UpdatedAt.AddMinutes(1));
+        session = FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    session.UpdatedAt.AddMinutes(1),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true),
+                TimeInterval: interval));
+
+        await new SqliteFlightSessionCheckpointStore(databasePath).SaveAsync(session);
+        FlightSession restored = Assert.IsType<FlightSession>(
+            await new SqliteFlightSessionCheckpointStore(databasePath).LoadAsync());
+
+        Assert.Equal(session.TimeLedger, restored.TimeLedger);
+        Assert.Equal(session.EffectiveLegs[0].TimeLedger, restored.EffectiveLegs[0].TimeLedger);
+        Assert.Equal(session.EffectiveLegs[1].TimeLedger, restored.EffectiveLegs[1].TimeLedger);
+    }
+
+    [Fact]
     public async Task DuplicateLegIdentityFailsClosed()
     {
         FlightSession session = CreateMultiLegSession(2, finalLegActive: true);
@@ -182,6 +244,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(legacy.SessionId, leg.LegId);
         Assert.Equal(legacy.CreatedAt, leg.StartedAt);
         Assert.Equal(legacy.Plan, leg.Plan);
+        Assert.Equal(legacy.TimeLedger, leg.EffectiveTimeLedger);
         Assert.NotNull(legacy.Legs);
     }
 

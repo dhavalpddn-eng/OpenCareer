@@ -74,7 +74,16 @@ public sealed record FlightSession(
             ? this
             : this with
             {
-                Legs = EffectiveLegs
+                Legs =
+                [
+                    FlightLeg.First(
+                        SessionId,
+                        CreatedAt,
+                        Plan) with
+                    {
+                        TimeLedger = TimeLedger
+                    }
+                ]
             };
 
     public FlightSession EnsureLegLifecycle()
@@ -95,6 +104,28 @@ public sealed record FlightSession(
             Legs =
             [
                 session.Legs[0].Complete(completedAt)
+            ]
+        };
+    }
+
+    public FlightSession EnsureLegTimeAccounting()
+    {
+        FlightSession session = EnsureLegLifecycle();
+
+        if (session.Legs is not { Count: 1 }
+            || session.Legs[0].TimeLedger is not null)
+        {
+            return session;
+        }
+
+        return session with
+        {
+            Legs =
+            [
+                session.Legs[0] with
+                {
+                    TimeLedger = session.TimeLedger
+                }
             ]
         };
     }

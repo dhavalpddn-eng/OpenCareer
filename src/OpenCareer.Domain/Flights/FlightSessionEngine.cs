@@ -52,7 +52,8 @@ public static class FlightSessionEngine
                 nextLegId,
                 final.Sequence + 1,
                 startedAt,
-                nextPlan);
+                nextPlan,
+                TimeLedger: FlightTimeLedger.Empty);
 
         FlightSession next =
             current with
@@ -103,10 +104,23 @@ public static class FlightSessionEngine
                 previousTracking,
                 update.Evidence);
 
-        FlightTimeLedger ledger =
-            update.TimeInterval is null
-                ? current.TimeLedger
-                : current.TimeLedger.Add(update.TimeInterval);
+        FlightTimeLedger ledger = current.TimeLedger;
+        FlightLeg[] legs = current.EffectiveLegs.ToArray();
+
+        if (update.TimeInterval is not null)
+        {
+            int activeLegIndex =
+                Array.FindLastIndex(
+                    legs,
+                    leg => leg.Status == FlightLegStatus.Active);
+
+            if (activeLegIndex >= 0)
+            {
+                ledger = ledger.Add(update.TimeInterval);
+                legs[activeLegIndex] =
+                    legs[activeLegIndex].AddTime(update.TimeInterval);
+            }
+        }
 
         FlightSessionStatus status =
             ResolveStatus(nextTracking);
@@ -142,9 +156,6 @@ public static class FlightSessionEngine
                 nextTracking,
                 update.Evidence.Timestamp);
 
-        IReadOnlyList<FlightLeg> legs =
-            current.EffectiveLegs;
-
         if (update.ShutdownConfirmed
             && nextTracking.State == FlightTrackingState.Parked)
         {
@@ -155,10 +166,8 @@ public static class FlightSessionEngine
         {
             operationState = FlightOperationState.Complete;
             status = FlightSessionStatus.Completed;
-            FlightLeg[] completedLegs = legs.ToArray();
-            completedLegs[^1] =
-                completedLegs[^1].Complete(update.Evidence.Timestamp);
-            legs = completedLegs;
+            legs[^1] =
+                legs[^1].Complete(update.Evidence.Timestamp);
         }
 
         return current with

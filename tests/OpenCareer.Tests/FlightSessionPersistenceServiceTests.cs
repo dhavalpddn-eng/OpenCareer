@@ -84,6 +84,49 @@ public sealed class FlightSessionPersistenceServiceTests
     }
 
     [Fact]
+    public async Task FailedTimedCheckpointRetryDoesNotDoubleCountLegOrSessionTime()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service = new FlightSessionPersistenceService(coordinator, store);
+        FlightSession started = await service.StartAsync(Epoch);
+        var update =
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(1),
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true),
+                TimeInterval:
+                    new FlightTimeInterval(
+                        TimeSpan.FromSeconds(1),
+                        1,
+                        ValidOperationalEvidence: true,
+                        Paused: false,
+                        SlewActive: false,
+                        CountsTowardBlockTime: true,
+                        CountsTowardFlightTime: true,
+                        Airborne: true,
+                        TaxiOut: false,
+                        TaxiIn: false,
+                        Night: true,
+                        ActualInstrument: true));
+
+        store.FailWrites = true;
+        await Assert.ThrowsAsync<IOException>(() => service.AdvanceAsync(update));
+        Assert.Equal(started, coordinator.Current);
+
+        store.FailWrites = false;
+        FlightSession retried = await service.AdvanceAsync(update);
+
+        Assert.Equal(TimeSpan.FromSeconds(1), retried.TimeLedger.CareerCreditTime);
+        Assert.Equal(
+            retried.TimeLedger,
+            Assert.Single(retried.EffectiveLegs).EffectiveTimeLedger);
+    }
+
+    [Fact]
     public async Task InsufficientTerminalEvidenceDoesNotCompleteCurrentLeg()
     {
         var coordinator = new FlightSessionCoordinator();
