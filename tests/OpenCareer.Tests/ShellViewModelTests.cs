@@ -1,6 +1,7 @@
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Flights;
