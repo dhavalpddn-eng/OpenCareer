@@ -42,8 +42,6 @@ public static class FlightSessionDebriefProjector
         FlightSessionStatistics statistics =
             session.EffectiveStatistics;
 
-        session.ValidateLegs();
-
         FlightLeg[] runtimeLegs =
             session.EffectiveLegs
                 .OrderBy(leg => leg.Sequence)
