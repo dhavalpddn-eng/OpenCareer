@@ -60,7 +60,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<IAiNarrativeProvider, OpenAiNarrativeProvider>();
         services.AddSingleton<IAiNarrativeService, AiNarrativeService>();
 
-        services.AddSingleton<IDashboardSnapshotSource, UnavailableDashboardSnapshotSource>();
+        services.AddSingleton<IDashboardSnapshotSource, PlayerCareerDashboardSnapshotSource>();
         services.AddSingleton(provider =>
             new OpenCareerDatabaseOptions(
                 provider.GetRequiredService<OpenCareerDataPaths>().DatabaseFile));

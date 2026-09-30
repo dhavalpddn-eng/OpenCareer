@@ -1,0 +1,77 @@
+using OpenCareer.Application.Careers;
+using OpenCareer.Domain.Careers;
+
+namespace OpenCareer.Application.Dashboard;
+
+public sealed class PlayerCareerDashboardSnapshotSource(
+    PlayerCareerRuntimeState career)
+    : IDashboardSnapshotSource
+{
+    private readonly PlayerCareerRuntimeState _career =
+        career ?? throw new ArgumentNullException(nameof(career));
+
+    public async Task<DashboardSnapshot> GetAsync(
+        CancellationToken cancellationToken = default)
+    {
+        PlayerCareerProfileStoreRecord? current = await _career
+            .InitializeAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (current is null)
+            return DashboardSnapshot.Empty;
+
+        current.Validate();
+        PlayerCareerProfile profile = current.Profile;
+
+        return DashboardSnapshot.Empty with
+        {
+            Career = new DashboardCareerSummary(
+                Level: null,
+                CurrentXp: null,
+                XpForNextLevel: null,
+                LicenseSummary: FormatQualifications(profile.Qualifications),
+                TotalFlightHours: profile.Experience.CareerCreditTime.TotalHours,
+                AircraftOwned: null,
+                NextMilestone: null,
+                RecentAchievement: null),
+            World = new DashboardWorldSummary(
+                PlayerLocation: profile.Location.CurrentAirportIcao,
+                HomeBase: profile.Location.HomeAirportIcao,
+                NearbyOpportunityCount: null,
+                ActiveWorldEventCount: null,
+                ActiveMarketSignalCount: null,
+                ActiveGovernmentSignalCount: null)
+        };
+    }
+
+    private static string FormatQualifications(
+        PilotQualificationState qualifications)
+    {
+        qualifications.Validate();
+
+        string license = qualifications.License switch
+        {
+            PilotLicenseLevel.None => "No pilot license",
+            PilotLicenseLevel.Student => "Student pilot",
+            PilotLicenseLevel.Private => "Private pilot",
+            PilotLicenseLevel.Commercial => "Commercial pilot",
+            PilotLicenseLevel.AirlineTransport => "Airline transport pilot",
+            _ => throw new ArgumentOutOfRangeException(nameof(qualifications))
+        };
+
+        string[] ratings = qualifications.Ratings
+            .OrderBy(static rating => rating)
+            .Select(static rating => rating switch
+            {
+                PilotRating.AirplaneSingleEngineLand => "Airplane single-engine land",
+                PilotRating.AirplaneMultiEngineLand => "Airplane multi-engine land",
+                PilotRating.InstrumentAirplane => "Instrument airplane",
+                _ => throw new ArgumentOutOfRangeException(nameof(rating))
+            })
+            .ToArray();
+
+        return ratings.Length == 0
+            ? license
+            : $"{license} • {string.Join(", ", ratings)}";
+    }
+}

@@ -141,10 +141,10 @@ public sealed record DashboardSocialPost(
 public sealed record DashboardWorldSummary(
     string? PlayerLocation,
     string? HomeBase,
-    int NearbyOpportunityCount,
-    int ActiveWorldEventCount,
-    int ActiveMarketSignalCount,
-    int ActiveGovernmentSignalCount);
+    int? NearbyOpportunityCount,
+    int? ActiveWorldEventCount,
+    int? ActiveMarketSignalCount,
+    int? ActiveGovernmentSignalCount);
 
 public sealed record DashboardSnapshot(
     DashboardCareerSummary? Career,
