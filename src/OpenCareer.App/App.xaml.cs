@@ -95,6 +95,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<PlayerCareerExperienceCoordinator>();
         services.AddSingleton<CareerLogbookExperienceCoordinator>();
+        services.AddSingleton<ManualFlightPostflightCoordinator>();
 
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>

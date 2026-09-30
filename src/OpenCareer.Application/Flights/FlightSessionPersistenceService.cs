@@ -528,7 +528,7 @@ public sealed class FlightSessionPersistenceService
 
     public async Task ClearTerminalAsync(
         Guid expectedSessionId,
-        Guid expectedContractId,
+        Guid? expectedContractId,
         CancellationToken cancellationToken = default)
     {
         if (expectedSessionId == Guid.Empty)
@@ -560,13 +560,12 @@ public sealed class FlightSessionPersistenceService
                 ?? throw new InvalidOperationException(
                     "No flight session exists.");
 
-            if (expectedSessionId is { } sessionId
-                && expectedContractId is { } contractId)
+            if (expectedSessionId is { } sessionId)
             {
                 ValidateExpectedIdentity(
                     current,
                     sessionId,
-                    contractId);
+                    expectedContractId);
             }
 
             if (!current.IsTerminal)
@@ -592,7 +591,7 @@ public sealed class FlightSessionPersistenceService
     private static void ValidateExpectedIdentity(
         FlightSession current,
         Guid expectedSessionId,
-        Guid expectedContractId)
+        Guid? expectedContractId)
     {
         if (current.SessionId != expectedSessionId
             || current.ContractId != expectedContractId)
