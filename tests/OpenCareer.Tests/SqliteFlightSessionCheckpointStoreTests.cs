@@ -119,7 +119,25 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
                     StableTelemetry: true,
                     ValidLoadedAircraft: true,
                     ContinuityPlausible: true),
-                TimeInterval: interval));
+                TimeInterval: interval,
+                ContinuityAnchor:
+                    new FlightContinuityAnchor(
+                        session.CreatedAt.AddMinutes(1),
+                        40,
+                        -73,
+                        2_000,
+                        OnGround: false),
+                Observation:
+                    new FlightSessionObservation(
+                        session.CreatedAt.AddMinutes(1),
+                        40,
+                        -73,
+                        2_000,
+                        100,
+                        100,
+                        100,
+                        10,
+                        CaptureTrackPoint: true)));
         session = session with
         {
             Legs =
@@ -141,7 +159,25 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
                     StableTelemetry: true,
                     ValidLoadedAircraft: true,
                     ContinuityPlausible: true),
-                TimeInterval: interval));
+                TimeInterval: interval,
+                ContinuityAnchor:
+                    new FlightContinuityAnchor(
+                        session.UpdatedAt.AddMinutes(1),
+                        42,
+                        -71,
+                        2_000,
+                        OnGround: false),
+                Observation:
+                    new FlightSessionObservation(
+                        session.UpdatedAt.AddMinutes(1),
+                        42,
+                        -71,
+                        2_000,
+                        100,
+                        100,
+                        80,
+                        20,
+                        CaptureTrackPoint: true)));
 
         await new SqliteFlightSessionCheckpointStore(databasePath).SaveAsync(session);
         FlightSession restored = Assert.IsType<FlightSession>(
@@ -150,6 +186,11 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(session.TimeLedger, restored.TimeLedger);
         Assert.Equal(session.EffectiveLegs[0].TimeLedger, restored.EffectiveLegs[0].TimeLedger);
         Assert.Equal(session.EffectiveLegs[1].TimeLedger, restored.EffectiveLegs[1].TimeLedger);
+        Assert.Equal(session.EffectiveLegs[0].Statistics, restored.EffectiveLegs[0].Statistics);
+        Assert.Equal(session.EffectiveLegs[1].Statistics, restored.EffectiveLegs[1].Statistics);
+        Assert.Equal(
+            session.EffectiveLegs[1].StatisticsContinuityAnchor,
+            restored.EffectiveLegs[1].StatisticsContinuityAnchor);
     }
 
     [Fact]
@@ -245,6 +286,8 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(legacy.CreatedAt, leg.StartedAt);
         Assert.Equal(legacy.Plan, leg.Plan);
         Assert.Equal(legacy.TimeLedger, leg.EffectiveTimeLedger);
+        Assert.Equal(legacy.EffectiveStatistics, leg.EffectiveStatistics);
+        Assert.Equal(legacy.ContinuityAnchor, leg.StatisticsContinuityAnchor);
         Assert.NotNull(legacy.Legs);
     }
 

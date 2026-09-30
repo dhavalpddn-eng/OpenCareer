@@ -58,6 +58,88 @@ public sealed class FlightSessionEngineTests
         Assert.Equal(FlightTimeLedger.Empty, completed.EffectiveTimeLedger);
     }
 
+    [Fact]
+    public void ObservationsAccumulateOnlyInActiveLegWithFreshBoundaryBaseline()
+    {
+        FlightSession first = FlightSession.Start(Epoch);
+        first = Observe(first, Epoch.AddMinutes(1), 40, -73, 100, 10);
+        first = Observe(first, Epoch.AddMinutes(2), 40.1, -73, 90, 10);
+        FlightSessionStatistics firstStatistics =
+            Assert.Single(first.EffectiveLegs).EffectiveStatistics;
+        Assert.True(firstStatistics.DistanceNauticalMiles > 0);
+        Assert.Equal(10, firstStatistics.FuelBurnedPounds);
+
+        first = first with
+        {
+            Legs = [first.EffectiveLegs[0].Complete(first.UpdatedAt)]
+        };
+        FlightSession second = FlightSessionEngine.StartNextLeg(
+            first,
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            new FlightSessionPlan("KBOS", "KPHL"),
+            Epoch.AddMinutes(3));
+
+        second = Observe(second, Epoch.AddMinutes(4), 42, -71, 70, 20);
+        Assert.Equal(firstStatistics, second.EffectiveLegs[0].EffectiveStatistics);
+        Assert.Equal(0, second.EffectiveLegs[1].EffectiveStatistics.DistanceNauticalMiles);
+        Assert.Equal(0, second.EffectiveLegs[1].EffectiveStatistics.FuelBurnedPounds);
+        Assert.Equal(70, second.EffectiveLegs[1].EffectiveStatistics.StartFuelPounds);
+        Assert.Equal(20, second.EffectiveLegs[1].EffectiveStatistics.StartPayloadPounds);
+
+        second = Observe(second, Epoch.AddMinutes(5), 42.1, -71, 60, 20);
+        Assert.True(second.EffectiveLegs[1].EffectiveStatistics.DistanceNauticalMiles > 0);
+        Assert.Equal(10, second.EffectiveLegs[1].EffectiveStatistics.FuelBurnedPounds);
+        Assert.Equal(40, second.EffectiveStatistics.FuelBurnedPounds);
+        Assert.Equal(4, second.EffectiveStatistics.RouteTrack.Count);
+    }
+
+    [Fact]
+    public void CompletedLegStatisticsCannotChange()
+    {
+        FlightLeg completed =
+            Assert.Single(FlightSession.Start(Epoch).EffectiveLegs)
+                .Complete(Epoch.AddMinutes(1));
+
+        Assert.Throws<InvalidOperationException>(
+            () => completed.Observe(
+                Observation(Epoch.AddMinutes(2), 40, -73, 100, 10),
+                Anchor(Epoch.AddMinutes(2), 40, -73)));
+        Assert.Equal(FlightSessionStatistics.Empty, completed.EffectiveStatistics);
+    }
+
+    private static FlightSession Observe(
+        FlightSession session,
+        DateTimeOffset timestamp,
+        double latitude,
+        double longitude,
+        double fuel,
+        double payload) =>
+        FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    timestamp,
+                    Connected: true,
+                    StableTelemetry: true,
+                    ValidLoadedAircraft: true,
+                    ContinuityPlausible: true),
+                ContinuityAnchor: Anchor(timestamp, latitude, longitude),
+                Observation: Observation(timestamp, latitude, longitude, fuel, payload)));
+
+    private static FlightSessionObservation Observation(
+        DateTimeOffset timestamp,
+        double latitude,
+        double longitude,
+        double fuel,
+        double payload) =>
+        new(timestamp, latitude, longitude, 2_000, 100, 100, fuel, payload, true);
+
+    private static FlightContinuityAnchor Anchor(
+        DateTimeOffset timestamp,
+        double latitude,
+        double longitude) =>
+        new(timestamp, latitude, longitude, 2_000, OnGround: false);
+
     private static FlightSession AdvanceWithTime(
         FlightSession session,
         DateTimeOffset timestamp,

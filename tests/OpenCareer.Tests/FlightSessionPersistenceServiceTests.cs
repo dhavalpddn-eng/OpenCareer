@@ -111,7 +111,25 @@ public sealed class FlightSessionPersistenceServiceTests
                         TaxiOut: false,
                         TaxiIn: false,
                         Night: true,
-                        ActualInstrument: true));
+                        ActualInstrument: true),
+                ContinuityAnchor:
+                    new FlightContinuityAnchor(
+                        Epoch.AddSeconds(1),
+                        40,
+                        -73,
+                        2_000,
+                        OnGround: false),
+                Observation:
+                    new FlightSessionObservation(
+                        Epoch.AddSeconds(1),
+                        40,
+                        -73,
+                        2_000,
+                        100,
+                        100,
+                        100,
+                        10,
+                        CaptureTrackPoint: true));
 
         store.FailWrites = true;
         await Assert.ThrowsAsync<IOException>(() => service.AdvanceAsync(update));
@@ -124,6 +142,10 @@ public sealed class FlightSessionPersistenceServiceTests
         Assert.Equal(
             retried.TimeLedger,
             Assert.Single(retried.EffectiveLegs).EffectiveTimeLedger);
+        Assert.Single(retried.EffectiveStatistics.RouteTrack);
+        Assert.Single(
+            Assert.Single(retried.EffectiveLegs)
+                .EffectiveStatistics.RouteTrack);
     }
 
     [Fact]

@@ -53,7 +53,8 @@ public static class FlightSessionEngine
                 final.Sequence + 1,
                 startedAt,
                 nextPlan,
-                TimeLedger: FlightTimeLedger.Empty);
+                TimeLedger: FlightTimeLedger.Empty,
+                Statistics: FlightSessionStatistics.Empty);
 
         FlightSession next =
             current with
@@ -147,6 +148,19 @@ public static class FlightSessionEngine
                 statistics.Observe(
                     update.Observation,
                     current.ContinuityAnchor);
+
+            int activeLegIndex =
+                Array.FindLastIndex(
+                    legs,
+                    leg => leg.Status == FlightLegStatus.Active);
+
+            if (activeLegIndex >= 0)
+            {
+                legs[activeLegIndex] =
+                    legs[activeLegIndex].Observe(
+                        update.Observation,
+                        update.ContinuityAnchor);
+            }
         }
 
         IReadOnlyList<FlightSessionLandingEpisode> landingEpisodes =

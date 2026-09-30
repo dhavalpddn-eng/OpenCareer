@@ -81,7 +81,9 @@ public sealed record FlightSession(
                         CreatedAt,
                         Plan) with
                     {
-                        TimeLedger = TimeLedger
+                        TimeLedger = TimeLedger,
+                        Statistics = EffectiveStatistics,
+                        StatisticsContinuityAnchor = ContinuityAnchor
                     }
                 ]
             };
@@ -125,6 +127,29 @@ public sealed record FlightSession(
                 session.Legs[0] with
                 {
                     TimeLedger = session.TimeLedger
+                }
+            ]
+        };
+    }
+
+    public FlightSession EnsureLegStatistics()
+    {
+        FlightSession session = EnsureLegTimeAccounting();
+
+        if (session.Legs is not { Count: 1 }
+            || session.Legs[0].Statistics is not null)
+        {
+            return session;
+        }
+
+        return session with
+        {
+            Legs =
+            [
+                session.Legs[0] with
+                {
+                    Statistics = session.EffectiveStatistics,
+                    StatisticsContinuityAnchor = session.ContinuityAnchor
                 }
             ]
         };

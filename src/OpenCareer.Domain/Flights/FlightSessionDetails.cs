@@ -54,10 +54,15 @@ public sealed record FlightLeg(
     FlightSessionPlan? Plan = null,
     FlightLegStatus Status = FlightLegStatus.Active,
     DateTimeOffset? CompletedAt = null,
-    FlightTimeLedger? TimeLedger = null)
+    FlightTimeLedger? TimeLedger = null,
+    FlightSessionStatistics? Statistics = null,
+    FlightContinuityAnchor? StatisticsContinuityAnchor = null)
 {
     public FlightTimeLedger EffectiveTimeLedger =>
         TimeLedger ?? FlightTimeLedger.Empty;
+
+    public FlightSessionStatistics EffectiveStatistics =>
+        Statistics ?? FlightSessionStatistics.Empty;
 
     public static FlightLeg First(
         Guid sessionId,
@@ -68,7 +73,8 @@ public sealed record FlightLeg(
             Sequence: 1,
             startedAt,
             plan,
-            TimeLedger: FlightTimeLedger.Empty);
+            TimeLedger: FlightTimeLedger.Empty,
+            Statistics: FlightSessionStatistics.Empty);
 
     public void Validate()
     {
@@ -124,6 +130,28 @@ public sealed record FlightLeg(
         return this with
         {
             TimeLedger = EffectiveTimeLedger.Add(interval)
+        };
+    }
+
+    public FlightLeg Observe(
+        FlightSessionObservation observation,
+        FlightContinuityAnchor? nextAnchor)
+    {
+        if (Status != FlightLegStatus.Active)
+        {
+            throw new InvalidOperationException(
+                "Completed flight-leg statistics are immutable.");
+        }
+
+        return this with
+        {
+            Statistics =
+                EffectiveStatistics.Observe(
+                    observation,
+                    StatisticsContinuityAnchor),
+            StatisticsContinuityAnchor =
+                nextAnchor
+                ?? StatisticsContinuityAnchor
         };
     }
 }
