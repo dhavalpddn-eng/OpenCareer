@@ -1,3 +1,4 @@
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Planning;
 using OpenCareer.Application.Simulator;
