@@ -38,9 +38,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
 
         Assert.NotNull(actual);
         AssertSessionEquivalent(expected, actual);
-        Assert.Equal(
-            expected.EffectiveLegs,
-            actual.EffectiveLegs);
+        AssertLegsEquivalent(expected.EffectiveLegs, actual.EffectiveLegs);
         Assert.Equal(
             "msfs-title:Cessna 172 Skyhawk",
             actual.Plan?.ExpectedCanonicalAircraftId);
@@ -62,7 +60,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
 
         FlightLeg expectedLeg = Assert.Single(completed.EffectiveLegs);
         FlightLeg actualLeg = Assert.Single(restored.EffectiveLegs);
-        Assert.Equal(expectedLeg, actualLeg);
+        AssertLegEquivalent(expectedLeg, actualLeg);
         Assert.Equal(FlightLegStatus.Completed, actualLeg.Status);
         Assert.Equal(completed.Milestones.CompletedAt, actualLeg.CompletedAt);
     }
@@ -87,7 +85,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
                     .LoadAsync());
 
         AssertSessionEquivalent(expected, actual);
-        Assert.Equal(expected.EffectiveLegs, actual.EffectiveLegs);
+        AssertLegsEquivalent(expected.EffectiveLegs, actual.EffectiveLegs);
     }
 
     [Fact]
@@ -186,8 +184,12 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(session.TimeLedger, restored.TimeLedger);
         Assert.Equal(session.EffectiveLegs[0].TimeLedger, restored.EffectiveLegs[0].TimeLedger);
         Assert.Equal(session.EffectiveLegs[1].TimeLedger, restored.EffectiveLegs[1].TimeLedger);
-        Assert.Equal(session.EffectiveLegs[0].Statistics, restored.EffectiveLegs[0].Statistics);
-        Assert.Equal(session.EffectiveLegs[1].Statistics, restored.EffectiveLegs[1].Statistics);
+        AssertStatisticsEquivalent(
+            session.EffectiveLegs[0].EffectiveStatistics,
+            restored.EffectiveLegs[0].EffectiveStatistics);
+        AssertStatisticsEquivalent(
+            session.EffectiveLegs[1].EffectiveStatistics,
+            restored.EffectiveLegs[1].EffectiveStatistics);
         Assert.Equal(
             session.EffectiveLegs[1].StatisticsContinuityAnchor,
             restored.EffectiveLegs[1].StatisticsContinuityAnchor);
@@ -641,7 +643,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
         Assert.Equal(expected.ContinuityAnchor, actual.ContinuityAnchor);
         Assert.Equal(expected.Plan, actual.Plan);
-        Assert.Equal(expected.EffectiveLegs, actual.EffectiveLegs);
+        AssertLegsEquivalent(expected.EffectiveLegs, actual.EffectiveLegs);
 
         FlightSessionStatistics expectedStatistics =
             expected.EffectiveStatistics;
@@ -696,6 +698,51 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         Assert.Equal(
             expected.EffectiveLandingEpisodes,
             actual.EffectiveLandingEpisodes);
+    }
+
+    private static void AssertLegsEquivalent(
+        IReadOnlyList<FlightLeg> expected,
+        IReadOnlyList<FlightLeg> actual)
+    {
+        Assert.Equal(expected.Count, actual.Count);
+        for (int index = 0; index < expected.Count; index++)
+            AssertLegEquivalent(expected[index], actual[index]);
+    }
+
+    private static void AssertLegEquivalent(
+        FlightLeg expected,
+        FlightLeg actual)
+    {
+        Assert.Equal(expected.LegId, actual.LegId);
+        Assert.Equal(expected.Sequence, actual.Sequence);
+        Assert.Equal(expected.StartedAt, actual.StartedAt);
+        Assert.Equal(expected.Plan, actual.Plan);
+        Assert.Equal(expected.Status, actual.Status);
+        Assert.Equal(expected.CompletedAt, actual.CompletedAt);
+        Assert.Equal(expected.TimeLedger, actual.TimeLedger);
+        Assert.Equal(
+            expected.StatisticsContinuityAnchor,
+            actual.StatisticsContinuityAnchor);
+        AssertStatisticsEquivalent(
+            expected.EffectiveStatistics,
+            actual.EffectiveStatistics);
+    }
+
+    private static void AssertStatisticsEquivalent(
+        FlightSessionStatistics expected,
+        FlightSessionStatistics actual)
+    {
+        Assert.Equal(expected.DistanceNauticalMiles, actual.DistanceNauticalMiles);
+        Assert.Equal(expected.MaximumAltitudeMslFeet, actual.MaximumAltitudeMslFeet);
+        Assert.Equal(expected.MaximumIndicatedAirspeedKnots, actual.MaximumIndicatedAirspeedKnots);
+        Assert.Equal(expected.MaximumGroundSpeedKnots, actual.MaximumGroundSpeedKnots);
+        Assert.Equal(expected.StartFuelPounds, actual.StartFuelPounds);
+        Assert.Equal(expected.LastFuelPounds, actual.LastFuelPounds);
+        Assert.Equal(expected.FuelBurnedPounds, actual.FuelBurnedPounds);
+        Assert.Equal(expected.FuelAddedPounds, actual.FuelAddedPounds);
+        Assert.Equal(expected.StartPayloadPounds, actual.StartPayloadPounds);
+        Assert.Equal(expected.LastPayloadPounds, actual.LastPayloadPounds);
+        Assert.Equal(expected.RouteTrack, actual.RouteTrack);
     }
 
     private static FlightSession CreateAirborneSession()
