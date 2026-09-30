@@ -123,6 +123,10 @@ public sealed partial class MainWindow : Window
                 await ViewModel
                     .RefreshCareerAbandonActionAsync(
                         _lifetimeCts.Token);
+
+                await ViewModel
+                    .RefreshManualPostflightAsync(
+                        _lifetimeCts.Token);
             }
         }
         catch (OperationCanceledException)

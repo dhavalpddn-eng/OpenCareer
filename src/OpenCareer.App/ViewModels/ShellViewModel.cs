@@ -20,8 +20,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly CareerJobPlayableLoopReadinessSource? _careerReadiness;
     private readonly ICareerJobCompletionAction? _careerCompletionAction;
     private readonly ICareerFlightAbandonAction? _careerAbandonAction;
+    private readonly IManualFlightPostflightAction? _manualPostflightAction;
     private readonly ILogger<ShellViewModel>? _logger;
     private readonly SemaphoreSlim _careerActionGate = new(1, 1);
+    private readonly SemaphoreSlim _manualPostflightGate = new(1, 1);
 
     private SimulatorConnectionSnapshot? _lastConnectionSnapshot;
     private AircraftTelemetrySnapshot? _lastTelemetry;
@@ -70,6 +72,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "Flight abandonment availability has not been checked yet.";
     private Guid? _abandonSessionId;
     private Guid? _abandonContractId;
+    private bool _isManualPostflightVisible;
+    private bool _canLogManualFlight;
+    private bool _canDiscardManualFlight;
+    private bool _isManualPostflightBusy;
+    private string _manualPostflightDetail =
+        "Manual postflight readiness has not been checked yet.";
+    private ManualFlightPostflightLogRequest? _manualPostflightRequest;
 
 
     public ShellViewModel(
@@ -158,7 +167,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         CareerJobPlayableLoopReadinessSource? careerReadiness,
         ICareerJobCompletionAction? careerCompletionAction,
         ICareerFlightAbandonAction? careerAbandonAction,
-        ILogger<ShellViewModel>? logger)
+        ILogger<ShellViewModel>? logger,
+        IManualFlightPostflightAction? manualPostflightAction = null)
     {
         _connection =
             connection
@@ -180,6 +190,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _careerReadiness = careerReadiness;
         _careerCompletionAction = careerCompletionAction;
         _careerAbandonAction = careerAbandonAction;
+        _manualPostflightAction = manualPostflightAction;
         _logger = logger;
         _settings.Changed += OnSettingsChanged;
     }
@@ -218,6 +229,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public bool IsCareerAbandonBusy => _isCareerAbandonBusy;
     public string CareerAbandonActionText => _careerAbandonActionText;
     public string CareerAbandonActionDetail => _careerAbandonActionDetail;
+    public bool IsManualPostflightVisible => _isManualPostflightVisible;
+    public bool CanLogManualFlight => _canLogManualFlight;
+    public bool CanDiscardManualFlight => _canDiscardManualFlight;
+    public bool IsManualPostflightBusy => _isManualPostflightBusy;
+    public string ManualPostflightDetail => _manualPostflightDetail;
     private bool _hasFlightSession;
     private bool _hasRecoveredFlightSession;
 
@@ -795,6 +811,140 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ref _careerAbandonActionDetail,
             "Current flight was abandoned successfully, but the Jobs view could not refresh. Reopen Jobs to retry its authoritative refresh.",
             nameof(CareerAbandonActionDetail));
+    }
+
+    public async Task RefreshManualPostflightAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_manualPostflightAction is null)
+        {
+            SetManualPostflightState(false, false, null, "Manual postflight actions are not connected to this view.");
+            return;
+        }
+
+        bool entered = await _manualPostflightGate.WaitAsync(0, cancellationToken);
+        if (!entered)
+            return;
+
+        try
+        {
+            await RefreshManualPostflightLockedAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Manual postflight readiness refresh failed.");
+            SetManualPostflightState(false, false, null, "Manual postflight readiness could not be verified.");
+        }
+        finally
+        {
+            _manualPostflightGate.Release();
+        }
+    }
+
+    public Task<bool> LogManualFlightAsync(CancellationToken cancellationToken = default) =>
+        RunManualPostflightActionAsync(logFlight: true, cancellationToken);
+
+    public Task<bool> DiscardManualFlightAsync(CancellationToken cancellationToken = default) =>
+        RunManualPostflightActionAsync(logFlight: false, cancellationToken);
+
+    private async Task<bool> RunManualPostflightActionAsync(
+        bool logFlight,
+        CancellationToken cancellationToken)
+    {
+        if (_manualPostflightAction is null)
+            return false;
+
+        bool entered = await _manualPostflightGate.WaitAsync(0, cancellationToken);
+        if (!entered)
+            return false;
+
+        try
+        {
+            ManualFlightPostflightLogRequest? request = _manualPostflightRequest;
+            if ((logFlight && request is null)
+                || (!logFlight && !_canDiscardManualFlight))
+                return false;
+
+            SetBoolean(ref _isManualPostflightBusy, true, nameof(IsManualPostflightBusy));
+            SetBoolean(ref _canLogManualFlight, false, nameof(CanLogManualFlight));
+            SetBoolean(ref _canDiscardManualFlight, false, nameof(CanDiscardManualFlight));
+            SetField(
+                ref _manualPostflightDetail,
+                logFlight ? "Logging the authoritative completed flight…" : "Discarding the completed flight without Logbook or experience credit…",
+                nameof(ManualPostflightDetail));
+
+            if (logFlight)
+                await _manualPostflightAction.LogAsync(request!, cancellationToken);
+            else
+                await _manualPostflightAction.DiscardAsync(cancellationToken);
+
+            RefreshConnectionStatus();
+            await RefreshManualPostflightLockedAsync(cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, logFlight ? "Manual flight logging failed." : "Manual flight discard failed.");
+
+            try
+            {
+                await RefreshManualPostflightLockedAsync(cancellationToken);
+            }
+            catch (Exception refreshEx)
+            {
+                _logger?.LogWarning(refreshEx, "Manual postflight readiness could not be refreshed after a failed action.");
+                SetManualPostflightState(false, false, null, "Manual postflight readiness could not be verified after the failed action.");
+            }
+
+            SetField(
+                ref _manualPostflightDetail,
+                $"{(logFlight ? "Log Flight" : "Discard")} failed: {ex.Message}",
+                nameof(ManualPostflightDetail));
+            return false;
+        }
+        finally
+        {
+            SetBoolean(ref _isManualPostflightBusy, false, nameof(IsManualPostflightBusy));
+            _manualPostflightGate.Release();
+        }
+    }
+
+    private async Task RefreshManualPostflightLockedAsync(CancellationToken cancellationToken)
+    {
+        ManualFlightPostflightInputSnapshot snapshot = await _manualPostflightAction!
+            .ReadAsync(cancellationToken);
+
+        bool visible = snapshot.State is
+            ManualFlightPostflightInputState.Ready or
+            ManualFlightPostflightInputState.AircraftIdentityUnavailable or
+            ManualFlightPostflightInputState.AircraftIdentityConflict or
+            ManualFlightPostflightInputState.AircraftDebriefUnavailable;
+
+        SetBoolean(ref _isManualPostflightVisible, visible, nameof(IsManualPostflightVisible));
+        SetManualPostflightState(
+            snapshot.IsReady,
+            snapshot.IsReady,
+            snapshot.Request,
+            snapshot.Detail);
+    }
+
+    private void SetManualPostflightState(
+        bool canLog,
+        bool canDiscard,
+        ManualFlightPostflightLogRequest? request,
+        string detail)
+    {
+        _manualPostflightRequest = request;
+        SetBoolean(ref _canLogManualFlight, canLog, nameof(CanLogManualFlight));
+        SetBoolean(ref _canDiscardManualFlight, canDiscard, nameof(CanDiscardManualFlight));
+        SetField(ref _manualPostflightDetail, detail, nameof(ManualPostflightDetail));
     }
 
     private void RefreshCareerWorkflow()

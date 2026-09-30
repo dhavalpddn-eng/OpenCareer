@@ -246,6 +246,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<CareerFlightAbandonCoordinator>();
         services.AddSingleton<ICareerFlightAbandonAction>(provider =>
             provider.GetRequiredService<CareerFlightAbandonCoordinator>());
+        services.AddSingleton<ManualFlightPostflightActionService>();
+        services.AddSingleton<IManualFlightPostflightAction>(provider =>
+            provider.GetRequiredService<ManualFlightPostflightActionService>());
 
         services.AddSingleton<ITutorialCatalog, AppTutorialCatalog>();
         services.AddSingleton<FlightSessionTutorialEvidenceSource>();

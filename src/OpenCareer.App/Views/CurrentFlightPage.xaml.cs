@@ -34,6 +34,9 @@ public sealed partial class CurrentFlightPage : Page
 
         await context.Shell.RefreshCareerAbandonActionAsync(
             _navigationCts.Token);
+
+        await context.Shell.RefreshManualPostflightAsync(
+            _navigationCts.Token);
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -128,5 +131,36 @@ public sealed partial class CurrentFlightPage : Page
             viewModel.ReportCareerAbandonProjectionRefreshFailure(
                 jobsRefreshFailure);
         }
+    }
+
+    private async void LogManualFlight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel viewModel)
+            return;
+
+        await viewModel.LogManualFlightAsync(
+            _navigationCts?.Token ?? CancellationToken.None);
+    }
+
+    private async void DiscardManualFlight_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel viewModel)
+            return;
+
+        var confirmation = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Discard Completed Flight?",
+            Content = "This removes the completed flight checkpoint without creating a Logbook entry or applying experience. This cannot be undone.",
+            PrimaryButtonText = "Discard Flight",
+            CloseButtonText = "Keep Flight",
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+            return;
+
+        await viewModel.DiscardManualFlightAsync(
+            _navigationCts?.Token ?? CancellationToken.None);
     }
 }

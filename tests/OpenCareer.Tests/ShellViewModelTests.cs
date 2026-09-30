@@ -4,6 +4,7 @@ using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Domain.Logbook;
 using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.Tests;
@@ -364,6 +365,119 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task ManualPostflightControlsStayHiddenForNonApplicableFlight()
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.FlightNotCompleted)
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.False(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+        Assert.False(viewModel.CanDiscardManualFlight);
+        Assert.Equal(0, action.LogCount + action.DiscardCount);
+    }
+
+    [Fact]
+    public async Task ManualLogUsesExactReadyRequestOnceAndClearsUi()
+    {
+        ManualFlightPostflightLogRequest request = ManualRequest();
+        var action = new FakeManualPostflightAction { Snapshot = ReadyManualSnapshot(request) };
+        ShellViewModel viewModel = ManualViewModel(action);
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.True(viewModel.IsManualPostflightVisible);
+        Assert.True(viewModel.CanLogManualFlight);
+        Assert.True(viewModel.CanDiscardManualFlight);
+
+        Assert.True(await viewModel.LogManualFlightAsync());
+
+        Assert.Equal(1, action.LogCount);
+        Assert.Same(request, action.LastRequest);
+        Assert.False(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+    }
+
+    [Fact]
+    public async Task ManualDiscardRunsOnlyWhenReadyAndClearsUi()
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.ContractLinked)
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.False(await viewModel.DiscardManualFlightAsync());
+        Assert.Equal(0, action.DiscardCount);
+
+        action.Snapshot = ReadyManualSnapshot(ManualRequest());
+        await viewModel.RefreshManualPostflightAsync();
+        Assert.True(await viewModel.DiscardManualFlightAsync());
+        Assert.Equal(1, action.DiscardCount);
+        Assert.False(viewModel.IsManualPostflightVisible);
+    }
+
+    [Fact]
+    public async Task FailedManualLogRefreshesAndRemainsRetryable()
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = ReadyManualSnapshot(ManualRequest()),
+            FailNextLog = true
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.False(await viewModel.LogManualFlightAsync());
+
+        Assert.Equal(1, action.LogCount);
+        Assert.True(viewModel.CanLogManualFlight);
+        Assert.Contains("failed", viewModel.ManualPostflightDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.True(await viewModel.LogManualFlightAsync());
+        Assert.Equal(2, action.LogCount);
+    }
+
+    private static ShellViewModel ManualViewModel(IManualFlightPostflightAction action) =>
+        new(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: null,
+            careerAbandonAction: null,
+            logger: null,
+            manualPostflightAction: action);
+
+    private static ManualFlightPostflightLogRequest ManualRequest() =>
+        new(
+            new FlightSessionDebriefContext(
+                LogbookEntryKind.FreeFlight,
+                new AircraftDebrief("Test Aircraft"),
+                null,
+                null,
+                null,
+                new PayloadDebrief(null, null, null, null, EvidenceQuality.Unavailable),
+                FlightSafetyOutcome.CompletedNormally,
+                MissionOutcome.NotApplicable,
+                FlightSettlementRecord.NotApplicable),
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
+
+    private static ManualFlightPostflightInputSnapshot ReadyManualSnapshot(
+        ManualFlightPostflightLogRequest request) =>
+        new(ManualFlightPostflightInputState.Ready, Guid.NewGuid(), request, "Ready.");
+
+    private static ManualFlightPostflightInputSnapshot BlockedManualSnapshot(
+        ManualFlightPostflightInputState state) =>
+        new(state, Guid.NewGuid(), null, "Blocked.");
+
+    [Fact]
     public void MissingRuntimeIsDistinguishedFromWaitingForSimulator()
     {
         var connection = new TestConnection
@@ -488,6 +602,44 @@ public sealed class ShellViewModelTests
                     SessionWasAlreadyCancelled: false,
                     ContractWasAlreadyCancelled: false,
                     ReservationWasAlreadyReleased: false));
+        }
+    }
+
+    private sealed class FakeManualPostflightAction : IManualFlightPostflightAction
+    {
+        public ManualFlightPostflightInputSnapshot Snapshot { get; set; } =
+            BlockedManualSnapshot(ManualFlightPostflightInputState.NoFlightSession);
+
+        public int LogCount { get; private set; }
+        public int DiscardCount { get; private set; }
+        public bool FailNextLog { get; set; }
+        public ManualFlightPostflightLogRequest? LastRequest { get; private set; }
+
+        public Task<ManualFlightPostflightInputSnapshot> ReadAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot);
+
+        public Task LogAsync(
+            ManualFlightPostflightLogRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            LogCount++;
+            LastRequest = request;
+            if (FailNextLog)
+            {
+                FailNextLog = false;
+                throw new IOException("Synthetic manual Logbook failure.");
+            }
+
+            Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.NoFlightSession);
+            return Task.CompletedTask;
+        }
+
+        public Task DiscardAsync(CancellationToken cancellationToken = default)
+        {
+            DiscardCount++;
+            Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.NoFlightSession);
+            return Task.CompletedTask;
         }
     }
 
