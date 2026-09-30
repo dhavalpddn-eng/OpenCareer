@@ -124,6 +124,18 @@ public sealed class FlightSessionLandingEpisodeTests
         Assert.Null(episode.BankDegrees);
     }
 
+    [Fact]
+    public void InvalidTouchdownMetricsFailClosed()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => Advance(
+                Airborne(),
+                6,
+                touchdown: true,
+                touchdownMetrics:
+                    Metrics(double.NaN, 1, 70, 2, 0)));
+    }
+
     private static FlightSession Airborne()
     {
         FlightSession session =
