@@ -59,6 +59,10 @@ public sealed class FlightSessionDebriefProjectorTests
         Assert.Equal(runtimeLeg.StartedAt, debriefLeg.StartedAt);
         Assert.Equal(FlightLegStatus.Completed, runtimeLeg.Status);
         Assert.Equal(runtimeLeg.CompletedAt, debriefLeg.EndedAt);
+        Assert.Equal(runtimeLeg.EffectiveTimeLedger, debriefLeg.Time);
+        Assert.Equal(
+            runtimeLeg.EffectiveLandingEpisodeNumbers,
+            debriefLeg.LandingEpisodeNumbers);
 
         Assert.Equal(
             "KDFW",
@@ -121,6 +125,42 @@ public sealed class FlightSessionDebriefProjectorTests
                 FlightSessionDebriefProjector.Create(
                     session,
                     context));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void MultiLegSessionProjectsIndependentOrderedLegEvidence(int legCount)
+    {
+        FlightSession session = MultiLegSession(legCount);
+        FlightSessionDebriefContext context = Context(
+            actualDeparture: "KDFW",
+            actualArrival: "KMIA",
+            diversionLocation: "KFLL");
+
+        FlightDebrief debrief =
+            FlightSessionDebriefProjector.Create(session, context);
+
+        Assert.Equal(legCount, debrief.Legs.Count);
+        Assert.Equal(session.TimeLedger, debrief.Time);
+        Assert.Equal(session.EffectiveStatistics.DistanceNauticalMiles, debrief.Route.DistanceNauticalMiles);
+
+        for (int index = 0; index < legCount; index++)
+        {
+            FlightLeg runtimeLeg = session.EffectiveLegs[index];
+            FlightLegDebrief projected = debrief.Legs[index];
+            Assert.Equal(index + 1, projected.Sequence);
+            Assert.Equal(runtimeLeg.LegId, projected.LegId);
+            Assert.Equal(runtimeLeg.StartedAt, projected.StartedAt);
+            Assert.Equal(runtimeLeg.CompletedAt, projected.EndedAt);
+            Assert.Equal(runtimeLeg.EffectiveTimeLedger, projected.Time);
+            Assert.Equal(runtimeLeg.EffectiveStatistics.DistanceNauticalMiles, projected.Route.DistanceNauticalMiles);
+            Assert.Equal(runtimeLeg.EffectiveStatistics.RouteTrack.Count, projected.RouteTrack.Count);
+            Assert.Equal(runtimeLeg.EffectiveLandingEpisodeNumbers, projected.LandingEpisodeNumbers);
+            Assert.Equal(index == 0 ? "KDFW" : null, projected.Route.ActualDeparture);
+            Assert.Equal(index == legCount - 1 ? "KMIA" : null, projected.Route.ActualArrival);
+            Assert.Equal(index == legCount - 1 ? "KFLL" : null, projected.Route.DiversionLocation);
+        }
     }
 
     private static FlightSession CompletedSession()
@@ -223,6 +263,90 @@ public sealed class FlightSessionDebriefProjectorTests
                     OperationCompleteConfirmed: true),
                 ShutdownConfirmed: true));
     }
+
+    private static FlightSession MultiLegSession(int legCount)
+    {
+        FlightSession session = CompletedSession();
+        var legs = new List<FlightLeg>(legCount);
+        var landings = new List<FlightSessionLandingEpisode>(legCount);
+
+        for (int index = 0; index < legCount; index++)
+        {
+            int sequence = index + 1;
+            int startSecond = index * 3;
+            int endSecond =
+                index == legCount - 1
+                    ? 9
+                    : (index + 1) * 3;
+            var plan =
+                index switch
+                {
+                    0 => session.Plan!,
+                    1 => new FlightSessionPlan("KIAH", "KATL"),
+                    _ => new FlightSessionPlan("KATL", "KMIA")
+                };
+            var statistics =
+                FlightSessionStatistics.Empty with
+                {
+                    DistanceNauticalMiles = sequence * 10,
+                    RouteTrack =
+                    [
+                        new FlightSessionTrackPoint(
+                            Epoch.AddSeconds(startSecond + 1),
+                            30 + sequence,
+                            -90 + sequence,
+                            2_000 + sequence)
+                    ]
+                };
+            FlightTimeLedger time =
+                FlightTimeLedger.Empty with
+                {
+                    BlockTime = TimeSpan.FromMinutes(sequence),
+                    CareerCreditTime = TimeSpan.FromMinutes(sequence)
+                };
+
+            legs.Add(
+                new FlightLeg(
+                    index == 0 ? session.SessionId : Guid.NewGuid(),
+                    sequence,
+                    Epoch.AddSeconds(startSecond),
+                    plan,
+                    FlightLegStatus.Completed,
+                    Epoch.AddSeconds(endSecond),
+                    time,
+                    statistics,
+                    StatisticsContinuityAnchor: null,
+                    LandingEpisodeNumbers: [sequence]));
+            landings.Add(
+                new FlightSessionLandingEpisode(
+                    sequence,
+                    Epoch.AddSeconds(endSecond),
+                    FlightSessionLandingKind.FullStop,
+                    0,
+                    Epoch.AddSeconds(endSecond)));
+        }
+
+        return session with
+        {
+            Legs = legs,
+            LandingEpisodes = landings
+        };
+    }
+
+    private static FlightSessionDebriefContext Context(
+        string? actualDeparture,
+        string? actualArrival,
+        string? diversionLocation) =>
+        new(
+            LogbookEntryKind.FreeFlight,
+            new AircraftDebrief("Test Aircraft", Family: "Test"),
+            actualDeparture,
+            actualArrival,
+            diversionLocation,
+            new PayloadDebrief(null, null, null, null, EvidenceQuality.Unavailable),
+            FlightSafetyOutcome.CompletedNormally,
+            MissionOutcome.NotApplicable,
+            FlightSettlementRecord.NotApplicable);
 
     private static FlightSession Advance(
         FlightSession session,
