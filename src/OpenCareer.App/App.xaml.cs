@@ -257,6 +257,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ITutorialFeatureReadiness, CurrentTutorialFeatureReadiness>();
         services.AddSingleton<ITutorialProgressStore, JsonTutorialProgressStore>();
         services.AddSingleton<TutorialCoordinator>();
+        services.AddSingleton<FirstJobTutorialAutoTrigger>();
 
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<DashboardViewModel>();

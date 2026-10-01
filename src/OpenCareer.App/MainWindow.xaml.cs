@@ -15,6 +15,7 @@ public sealed partial class MainWindow : Window
 {
     private readonly DispatcherQueueTimer _statusTimer;
     private readonly FlightSessionRuntime _flightRuntime;
+    private readonly FirstJobTutorialAutoTrigger _firstJobTutorial;
     private readonly ILogger<MainWindow> _logger;
     private readonly CancellationTokenSource _lifetimeCts = new();
     private bool _tutorialInitialized;
@@ -29,6 +30,7 @@ public sealed partial class MainWindow : Window
         TutorialViewModel tutorial,
         SettingsViewModel settings,
         FlightSessionRuntime flightRuntime,
+        FirstJobTutorialAutoTrigger firstJobTutorial,
         ILogger<MainWindow> logger)
     {
         ViewModel = viewModel;
@@ -42,6 +44,9 @@ public sealed partial class MainWindow : Window
         _flightRuntime =
             flightRuntime
             ?? throw new ArgumentNullException(nameof(flightRuntime));
+        _firstJobTutorial =
+            firstJobTutorial
+            ?? throw new ArgumentNullException(nameof(firstJobTutorial));
         _logger =
             logger
             ?? throw new ArgumentNullException(nameof(logger));
@@ -93,6 +98,8 @@ public sealed partial class MainWindow : Window
 
         if (Settings.AutomaticallyOfferTutorials)
             await Tutorial.InitializeAsync();
+
+        await _firstJobTutorial.TryStartAsync();
 
         UpdateTutorialLayer();
     }

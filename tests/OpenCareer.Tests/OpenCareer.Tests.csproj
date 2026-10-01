@@ -30,6 +30,7 @@
     <Compile Include="../../src/OpenCareer.App/ViewModels/CareerViewModel.cs" Link="ViewModels/CareerViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/MilitaryGovernmentViewModel.cs" Link="ViewModels/MilitaryGovernmentViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/OpenCareerDataPaths.cs" Link="Services/OpenCareerDataPaths.cs" />
+    <Compile Include="../../src/OpenCareer.App/Services/CurrentTutorialFeatureReadiness.cs" Link="Services/CurrentTutorialFeatureReadiness.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/OpenCareerDevelopmentDataProfile.cs" Link="Services/OpenCareerDevelopmentDataProfile.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/KjfkLiveTestDiagnosticJournal.cs" Link="Services/KjfkLiveTestDiagnosticJournal.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/KjfkLiveTestDiagnosticsService.cs" Link="Services/KjfkLiveTestDiagnosticsService.cs" />

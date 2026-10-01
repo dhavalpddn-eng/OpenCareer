@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Careers;
+using OpenCareer.Application.Tutorials;
 using OpenCareer.Domain.Careers;
 
 namespace OpenCareer.App.ViewModels;
@@ -17,6 +18,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private readonly CareerJobAircraftSelectionSource? _aircraftSelection;
     private readonly ICareerJobStartAction? _startAction;
     private readonly ILogger<JobsViewModel>? _logger;
+    private readonly FirstJobTutorialAutoTrigger? _firstJobTutorial;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly SemaphoreSlim _startGate = new(1, 1);
 
@@ -65,7 +67,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         ILogger<JobsViewModel>? logger,
         ICareerJobBoardRefillService? boardRefill = null,
         ICareerJobPreFlightSessionRecoveryService? startRecovery = null,
-        DevelopmentFlightService? developmentFlights = null)
+        DevelopmentFlightService? developmentFlights = null,
+        FirstJobTutorialAutoTrigger? firstJobTutorial = null)
     {
         _jobBoards =
             jobBoards
@@ -88,6 +91,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             startAction;
         _logger =
             logger;
+        _firstJobTutorial =
+            firstJobTutorial;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -273,6 +278,13 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                         ? $"The persisted {currentAirport} board currently has no offers."
                         : $"{_offers.Count} persisted offer{(_offers.Count == 1 ? string.Empty : "s")} · {actionable} active · {locked} locked preview{(locked == 1 ? string.Empty : "s")} · {expired} expired.",
                 nameof(StatusText));
+
+            if (_firstJobTutorial is not null)
+            {
+                await _firstJobTutorial
+                    .TryStartAsync(cancellationToken)
+                    .ConfigureAwait(true);
+            }
         }
         finally
         {
