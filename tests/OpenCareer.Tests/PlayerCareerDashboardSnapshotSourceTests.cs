@@ -2,8 +2,11 @@ using System.Collections.Immutable;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Economy;
+using OpenCareer.Application.Logbook;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
+using OpenCareer.Domain.Flights;
+using OpenCareer.Domain.Logbook;
 
 namespace OpenCareer.Tests;
 
@@ -20,6 +23,7 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
         var source = new PlayerCareerDashboardSnapshotSource(
             new PlayerCareerRuntimeState(store),
             ledger,
+            new FakeLogbookSource(),
             new FixedTimeProvider(Epoch));
 
         DashboardSnapshot snapshot = await source.GetAsync();
@@ -85,6 +89,7 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
         var source = new PlayerCareerDashboardSnapshotSource(
             runtime,
             ledger,
+            new FakeLogbookSource(),
             new FixedTimeProvider(Epoch));
 
         DashboardSnapshot snapshot = await source.GetAsync();
@@ -149,6 +154,7 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
         var source = new PlayerCareerDashboardSnapshotSource(
             new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
             ledger,
+            new FakeLogbookSource(),
             new FixedTimeProvider(
                 new DateTimeOffset(2026, 10, 1, 0, 30, 0, TimeSpan.Zero),
                 TimeZoneInfo.CreateCustomTimeZone(
@@ -163,6 +169,170 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
             Assert.IsType<DashboardFinanceSummary>(snapshot.Finances);
         Assert.Equal(25m, finances.TodayNet);
         Assert.Equal(0, ledger.PostCount);
+    }
+
+    [Fact]
+    public async Task RecentCommittedFlightsProjectNewestFirstWithBoundedRead()
+    {
+        LogbookEntry free = Entry(
+            "10000000-0000-0000-0000-000000000001",
+            LogbookEntryKind.FreeFlight,
+            Epoch.AddHours(-3),
+            "Cessna 172",
+            plannedOrigin: null,
+            plannedDestination: null,
+            actualDeparture: null,
+            actualArrival: null);
+        LogbookEntry career = Entry(
+            "10000000-0000-0000-0000-000000000002",
+            LogbookEntryKind.CareerJob,
+            Epoch.AddHours(-1),
+            "Beechcraft King Air",
+            plannedOrigin: "KDFW",
+            plannedDestination: "KAUS",
+            actualDeparture: "KDFW",
+            actualArrival: "KAUS");
+        LogbookEntry training = Entry(
+            "10000000-0000-0000-0000-000000000003",
+            LogbookEntryKind.Training,
+            Epoch.AddHours(-2),
+            "Cessna 152",
+            plannedOrigin: "KDAL",
+            plannedDestination: "KADS",
+            actualDeparture: null,
+            actualArrival: null);
+        var logbook = new FakeLogbookSource([free, career, training]);
+        var source = new PlayerCareerDashboardSnapshotSource(
+            new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
+            new FakeLedgerStore(cash: 50m),
+            logbook,
+            new FixedTimeProvider(Epoch));
+
+        DashboardSnapshot snapshot = await source.GetAsync();
+
+        Assert.Equal(6, logbook.LastQuery?.Limit);
+        Assert.Equal(1, logbook.QueryCount);
+        Assert.Equal(0, logbook.GetCount);
+        Assert.Equal(0, logbook.AppendCount);
+        Assert.Collection(
+            snapshot.RecentActivity,
+            activity =>
+            {
+                Assert.Equal(career.Debrief.EndedAt, activity.Timestamp);
+                Assert.Equal("Career flight", activity.Category);
+                Assert.Equal(
+                    "Beechcraft King Air • Actual KDFW → KAUS • Mission succeeded; completed normally",
+                    activity.Text);
+                Assert.Equal(DashboardActionTarget.Logbook, activity.Target);
+            },
+            activity =>
+            {
+                Assert.Equal(training.Debrief.EndedAt, activity.Timestamp);
+                Assert.Equal("Training flight", activity.Category);
+                Assert.Equal(
+                    "Cessna 152 • Planned KDAL → KADS • Completed normally",
+                    activity.Text);
+                Assert.Equal(DashboardActionTarget.Logbook, activity.Target);
+            },
+            activity =>
+            {
+                Assert.Equal(free.Debrief.EndedAt, activity.Timestamp);
+                Assert.Equal("Free flight", activity.Category);
+                Assert.Equal(
+                    "Cessna 172 • Route unknown • Completed normally",
+                    activity.Text);
+                Assert.Equal(DashboardActionTarget.Logbook, activity.Target);
+            });
+
+        Assert.Null(snapshot.Career);
+        Assert.Null(snapshot.World);
+        DashboardFinanceSummary finances =
+            Assert.IsType<DashboardFinanceSummary>(snapshot.Finances);
+        Assert.Equal(50m, finances.Cash);
+        Assert.Equal(0m, finances.TodayNet);
+    }
+
+    private static LogbookEntry Entry(
+        string entryId,
+        LogbookEntryKind kind,
+        DateTimeOffset endedAt,
+        string aircraft,
+        string? plannedOrigin,
+        string? plannedDestination,
+        string? actualDeparture,
+        string? actualArrival)
+    {
+        DateTimeOffset startedAt = endedAt.AddHours(-1);
+        var route = new FlightRouteDebrief(
+            plannedOrigin,
+            plannedDestination,
+            actualDeparture,
+            actualArrival,
+            null,
+            null);
+        Guid? contractId = kind == LogbookEntryKind.CareerJob
+            ? Guid.Parse("20000000-0000-0000-0000-000000000001")
+            : null;
+        FlightSettlementRecord settlement = kind == LogbookEntryKind.CareerJob
+            ? new FlightSettlementRecord(
+                SettlementRecordStatus.Settled,
+                "dashboard-career-settlement",
+                "dashboard-transaction",
+                endedAt.AddMinutes(1),
+                100m,
+                1d)
+            : FlightSettlementRecord.NotApplicable;
+        MissionOutcome missionOutcome = kind == LogbookEntryKind.CareerJob
+            ? MissionOutcome.Succeeded
+            : MissionOutcome.NotApplicable;
+        FlightDebrief debrief = FlightDebriefFactory.Create(
+            new FlightDebriefDraft(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                contractId,
+                kind,
+                startedAt,
+                endedAt,
+                route,
+                new AircraftDebrief(aircraft),
+                FlightTimeLedger.Empty,
+                new FlightTrackingSnapshot(
+                    FlightTrackingState.Complete,
+                    null,
+                    endedAt,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    false),
+                [
+                    new FlightLegDebrief(
+                        Guid.NewGuid(),
+                        1,
+                        startedAt,
+                        endedAt,
+                        route,
+                        FlightTimeLedger.Empty,
+                        [],
+                        [])
+                ],
+                new FlightFuelDebrief(null, null, null, EvidenceQuality.Unavailable),
+                new PayloadDebrief(null, null, null, null, EvidenceQuality.Unavailable),
+                new FlightAssistanceDebrief(false, false, false, false, false),
+                FlightSafetyOutcome.CompletedNormally,
+                missionOutcome,
+                [],
+                [],
+                settlement));
+
+        return LogbookEntry.Commit(
+            Guid.Parse(entryId),
+            debrief,
+            endedAt.AddMinutes(1),
+            kind == LogbookEntryKind.CareerJob
+                ? LogbookCommitKind.AutomaticCareerSettlement
+                : LogbookCommitKind.ManualPilotLog);
     }
 
     private static EconomyLedgerTransaction Transaction(
@@ -257,6 +427,44 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
             RecentReadCount++;
             Assert.Equal(500, limit);
             return Task.FromResult(transactions ?? []);
+        }
+    }
+
+    private sealed class FakeLogbookSource(
+        IReadOnlyList<LogbookEntry>? entries = null)
+        : ILogbookSource, ILogbookWriter
+    {
+        public int QueryCount { get; private set; }
+        public int GetCount { get; private set; }
+        public int AppendCount { get; private set; }
+        public LogbookQuery? LastQuery { get; private set; }
+
+        public Task<IReadOnlyList<LogbookEntry>> QueryAsync(
+            LogbookQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            QueryCount++;
+            LastQuery = query;
+            return Task.FromResult(
+                LogbookQueryMatcher.Apply(entries ?? [], query));
+        }
+
+        public Task<LogbookEntry?> GetAsync(
+            Guid entryId,
+            CancellationToken cancellationToken = default)
+        {
+            GetCount++;
+            return Task.FromResult(
+                (entries ?? []).SingleOrDefault(entry => entry.EntryId == entryId));
+        }
+
+        public Task<LogbookAppendResult> TryAppendAsync(
+            LogbookEntry entry,
+            string idempotencyKey,
+            CancellationToken cancellationToken = default)
+        {
+            AppendCount++;
+            throw new InvalidOperationException("Dashboard reads must not append Logbook entries.");
         }
     }
 
