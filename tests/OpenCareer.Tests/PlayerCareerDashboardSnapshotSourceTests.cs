@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Economy;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
@@ -20,7 +21,7 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
     {
         var store = new FakeProfileStore(record: null);
         var ledger = new FakeLedgerStore();
-        var source = new PlayerCareerDashboardSnapshotSource(
+        PlayerCareerDashboardSnapshotSource source = Source(
             new PlayerCareerRuntimeState(store),
             ledger,
             new FakeLogbookSource(),
@@ -86,7 +87,7 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
                 Transaction("today-negative", Epoch.AddHours(-12), -40.25m),
                 Transaction("prior-day", Epoch.AddDays(-1), 999m)
             ]);
-        var source = new PlayerCareerDashboardSnapshotSource(
+        PlayerCareerDashboardSnapshotSource source = Source(
             runtime,
             ledger,
             new FakeLogbookSource(),
@@ -151,7 +152,7 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
                 Transaction("local-today", new DateTimeOffset(2026, 10, 1, 4, 59, 0, TimeSpan.Zero), 25m),
                 Transaction("local-prior", new DateTimeOffset(2026, 9, 30, 4, 59, 0, TimeSpan.Zero), 75m)
             ]);
-        var source = new PlayerCareerDashboardSnapshotSource(
+        PlayerCareerDashboardSnapshotSource source = Source(
             new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
             ledger,
             new FakeLogbookSource(),
@@ -202,7 +203,7 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
             actualDeparture: null,
             actualArrival: null);
         var logbook = new FakeLogbookSource([free, career, training]);
-        var source = new PlayerCareerDashboardSnapshotSource(
+        PlayerCareerDashboardSnapshotSource source = Source(
             new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
             new FakeLedgerStore(cash: 50m),
             logbook,
@@ -251,6 +252,241 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
         Assert.Equal(50m, finances.Cash);
         Assert.Equal(0m, finances.TodayNet);
     }
+
+    [Fact]
+    public async Task NoCurrentContractProjectsNoActiveOperation()
+    {
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
+            new FakeLedgerStore(),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch)).GetAsync();
+
+        Assert.Null(snapshot.ActiveOperation);
+    }
+
+    [Fact]
+    public async Task AcceptedReadyContractProjectsDeterministicStartAction()
+    {
+        Guid currentId = Guid.Parse("30000000-0000-0000-0000-000000000001");
+        PersistedJobContract older = Contract(
+            Guid.Parse("30000000-0000-0000-0000-000000000002"),
+            ContractStatus.Accepted,
+            Epoch.AddHours(-2));
+        PersistedJobContract current = Contract(
+            currentId,
+            ContractStatus.Accepted,
+            Epoch.AddHours(-1));
+        var contracts = new FakeContracts(older, current);
+        var sessions = new FlightSessionCoordinator();
+        sessions.Restore(Session(currentId, FlightOperationState.ReadyForStart));
+        FlightSession retainedSession = sessions.Current!;
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
+            new FakeLedgerStore(cash: 80m),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            contracts,
+            sessions).GetAsync();
+
+        DashboardActiveOperationSummary operation =
+            Assert.IsType<DashboardActiveOperationSummary>(snapshot.ActiveOperation);
+        Assert.Equal(currentId.ToString("D"), operation.JobId);
+        Assert.Equal("Cargo", operation.Title);
+        Assert.Equal("KDFW", operation.Origin);
+        Assert.Equal("KAUS", operation.Destination);
+        Assert.Equal(450m, operation.GrossPay);
+        Assert.Null(operation.EstimatedNetPay);
+        Assert.Equal(ActiveOperationStage.ReadyToStart, operation.Stage);
+        Assert.Equal(DashboardActionTarget.CurrentFlight, operation.NextActionTarget);
+        Assert.Equal("Open Current Flight", operation.NextActionTitle);
+        Assert.False(operation.IsBlocked);
+        Assert.Null(operation.BlockingReason);
+        Assert.Same(retainedSession, sessions.Current);
+        Assert.Same(current, contracts.Find(currentId));
+    }
+
+    [Fact]
+    public async Task AcceptedContractWithoutSessionUsesAuthoritativeBlocker()
+    {
+        Guid contractId = Guid.Parse("30000000-0000-0000-0000-000000000003");
+        var contracts = new FakeContracts(
+            Contract(contractId, ContractStatus.Accepted, Epoch.AddHours(-1)));
+        var sessions = new FlightSessionCoordinator();
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
+            new FakeLedgerStore(),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            contracts,
+            sessions).GetAsync();
+
+        DashboardActiveOperationSummary operation =
+            Assert.IsType<DashboardActiveOperationSummary>(snapshot.ActiveOperation);
+        Assert.Equal(ActiveOperationStage.Accepted, operation.Stage);
+        Assert.True(operation.IsBlocked);
+        Assert.Equal(
+            "Accept and start a career job to create a contract-linked FlightSession.",
+            operation.BlockingReason);
+        Assert.Equal(DashboardActionTarget.Jobs, operation.NextActionTarget);
+    }
+
+    [Fact]
+    public async Task ActiveFlightProjectsCurrentFlightAction()
+    {
+        Guid contractId = Guid.Parse("30000000-0000-0000-0000-000000000004");
+        var contracts = new FakeContracts(
+            Contract(contractId, ContractStatus.InProgress, Epoch.AddHours(-1)));
+        var sessions = new FlightSessionCoordinator();
+        sessions.Restore(Session(contractId, FlightOperationState.Airborne));
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
+            new FakeLedgerStore(),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            contracts,
+            sessions).GetAsync();
+
+        DashboardActiveOperationSummary operation =
+            Assert.IsType<DashboardActiveOperationSummary>(snapshot.ActiveOperation);
+        Assert.Equal(ActiveOperationStage.InProgress, operation.Stage);
+        Assert.Equal(DashboardActionTarget.CurrentFlight, operation.NextActionTarget);
+        Assert.False(operation.IsBlocked);
+        Assert.Contains("Airborne", operation.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShutdownFlightProjectsBlockedPostflightEvidenceState()
+    {
+        Guid contractId = Guid.Parse("30000000-0000-0000-0000-000000000005");
+        var contracts = new FakeContracts(
+            Contract(contractId, ContractStatus.InProgress, Epoch.AddHours(-1)));
+        var sessions = new FlightSessionCoordinator();
+        sessions.Restore(Session(contractId, FlightOperationState.Shutdown));
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
+            new FakeLedgerStore(),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            contracts,
+            sessions).GetAsync();
+
+        DashboardActiveOperationSummary operation =
+            Assert.IsType<DashboardActiveOperationSummary>(snapshot.ActiveOperation);
+        Assert.Equal(ActiveOperationStage.PostFlight, operation.Stage);
+        Assert.True(operation.IsBlocked);
+        Assert.Contains("sequence is not complete", operation.BlockingReason);
+        Assert.Equal(DashboardActionTarget.CurrentFlight, operation.NextActionTarget);
+    }
+
+    [Fact]
+    public async Task CompletedTerminalStateAwaitsSettlementWorkflow()
+    {
+        Guid contractId = Guid.Parse("30000000-0000-0000-0000-000000000006");
+        var contracts = new FakeContracts(
+            Contract(contractId, ContractStatus.Completed, Epoch.AddHours(-1)));
+        var sessions = new FlightSessionCoordinator();
+        sessions.Restore(
+            Session(contractId, FlightOperationState.Complete) with
+            {
+                Status = FlightSessionStatus.Completed
+            });
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
+            new FakeLedgerStore(),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            contracts,
+            sessions).GetAsync();
+
+        DashboardActiveOperationSummary operation =
+            Assert.IsType<DashboardActiveOperationSummary>(snapshot.ActiveOperation);
+        Assert.Equal(ActiveOperationStage.AwaitingSettlement, operation.Stage);
+        Assert.False(operation.IsBlocked);
+        Assert.Contains("Settlement", operation.Detail, StringComparison.Ordinal);
+        Assert.Equal(DashboardActionTarget.CurrentFlight, operation.NextActionTarget);
+    }
+
+    private static PlayerCareerDashboardSnapshotSource Source(
+        PlayerCareerRuntimeState career,
+        IEconomyLedgerStore ledger,
+        ILogbookSource logbook,
+        TimeProvider timeProvider,
+        FakeContracts? contracts = null,
+        FlightSessionCoordinator? sessions = null)
+    {
+        contracts ??= new FakeContracts();
+        sessions ??= new FlightSessionCoordinator();
+        var readiness = new CareerJobPlayableLoopReadinessSource(
+            sessions,
+            contracts,
+            new JobFlightCompletionEvidenceTracker(
+                sessions,
+                new FakeEvidenceSource()));
+
+        return new PlayerCareerDashboardSnapshotSource(
+            career,
+            ledger,
+            logbook,
+            contracts,
+            sessions,
+            readiness,
+            timeProvider);
+    }
+
+    private static PersistedJobContract Contract(
+        Guid contractId,
+        ContractStatus status,
+        DateTimeOffset acceptedAt)
+    {
+        DateTimeOffset? startedAt = status is
+            ContractStatus.InProgress or ContractStatus.Completed
+            ? acceptedAt.AddMinutes(5)
+            : null;
+        DateTimeOffset? completedAt = status == ContractStatus.Completed
+            ? acceptedAt.AddHours(1)
+            : null;
+        var contract = new JobContract(
+            ContractId: contractId,
+            EmployerId: Guid.Parse("30000000-0000-0000-0000-000000000099"),
+            Kind: ContractKind.Cargo,
+            ServiceTrack: ServiceTrack.CivilianEmployment,
+            OriginIcao: "KDFW",
+            DestinationIcao: "KAUS",
+            Compensation: new ContractCompensation(
+                CompensationModel.PilotWage,
+                GrossCustomerRevenue: 1_250m,
+                PilotCompensation: 450m,
+                EmployerCoversFuel: true,
+                EmployerCoversMaintenance: true,
+                EmployerCoversAirportFees: true),
+            OfferedAt: acceptedAt.AddHours(-1),
+            MustStartBy: null,
+            MustCompleteBy: acceptedAt.AddHours(3),
+            AircraftRequirements: new AircraftMissionRequirements(
+                OpenCareer.Domain.Aircraft.AircraftCapability.Cargo,
+                OpenCareer.Domain.Aircraft.AircraftAccess.Civilian),
+            Status: status,
+            AcceptedAt: acceptedAt,
+            StartedAt: startedAt,
+            CompletedAt: completedAt);
+        contract.Validate();
+        return new PersistedJobContract(contract, Version: 1);
+    }
+
+    private static FlightSession Session(
+        Guid contractId,
+        FlightOperationState operationState) =>
+        FlightSession.Start(Epoch, contractId, contractId) with
+        {
+            UpdatedAt = Epoch.AddMinutes(1),
+            OperationState = operationState
+        };
 
     private static LogbookEntry Entry(
         string entryId,
@@ -361,6 +597,30 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
             "dashboard-test",
             key,
             postings);
+    }
+
+    private sealed class FakeContracts(
+        params PersistedJobContract[] contracts)
+        : IJobContractRuntimeSource
+    {
+        public bool IsInitialized => true;
+
+        public IReadOnlyList<PersistedJobContract> Current => contracts;
+
+        public PersistedJobContract? Find(Guid contractId) =>
+            contracts.SingleOrDefault(
+                item => item.Contract.ContractId == contractId);
+    }
+
+    private sealed class FakeEvidenceSource : IFlightStateEvidenceSource
+    {
+        public FlightStateEvidence? Current => null;
+
+        public event Action<FlightStateEvidence?>? EvidenceChanged
+        {
+            add { }
+            remove { }
+        }
     }
 
     private sealed class FakeProfileStore(PlayerCareerProfileStoreRecord? record)
