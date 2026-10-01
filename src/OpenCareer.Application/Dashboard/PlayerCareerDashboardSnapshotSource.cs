@@ -1,14 +1,24 @@
 using OpenCareer.Application.Careers;
+using OpenCareer.Application.Economy;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 
 namespace OpenCareer.Application.Dashboard;
 
 public sealed class PlayerCareerDashboardSnapshotSource(
-    PlayerCareerRuntimeState career)
+    PlayerCareerRuntimeState career,
+    IEconomyLedgerStore ledger,
+    TimeProvider timeProvider)
     : IDashboardSnapshotSource
 {
+    private const int RecentTransactionLimit = 500;
+
     private readonly PlayerCareerRuntimeState _career =
         career ?? throw new ArgumentNullException(nameof(career));
+    private readonly IEconomyLedgerStore _ledger =
+        ledger ?? throw new ArgumentNullException(nameof(ledger));
+    private readonly TimeProvider _timeProvider =
+        timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public async Task<DashboardSnapshot> GetAsync(
         CancellationToken cancellationToken = default)
@@ -16,16 +26,22 @@ public sealed class PlayerCareerDashboardSnapshotSource(
         PlayerCareerProfileStoreRecord? current = await _career
             .InitializeAsync(cancellationToken)
             .ConfigureAwait(false);
+        decimal cash = await _ledger
+            .ReadCashBalanceAsync(cancellationToken)
+            .ConfigureAwait(false);
+        IReadOnlyList<EconomyLedgerTransaction> recent = await _ledger
+            .ReadRecentAsync(RecentTransactionLimit, cancellationToken)
+            .ConfigureAwait(false);
 
-        if (current is null)
-            return DashboardSnapshot.Empty;
+        DashboardCareerSummary? careerSummary = null;
+        DashboardWorldSummary? worldSummary = null;
 
-        current.Validate();
-        PlayerCareerProfile profile = current.Profile;
-
-        return DashboardSnapshot.Empty with
+        if (current is not null)
         {
-            Career = new DashboardCareerSummary(
+            current.Validate();
+            PlayerCareerProfile profile = current.Profile;
+
+            careerSummary = new DashboardCareerSummary(
                 Level: null,
                 CurrentXp: null,
                 XpForNextLevel: null,
@@ -33,14 +49,32 @@ public sealed class PlayerCareerDashboardSnapshotSource(
                 TotalFlightHours: profile.Experience.CareerCreditTime.TotalHours,
                 AircraftOwned: null,
                 NextMilestone: null,
-                RecentAchievement: null),
-            World = new DashboardWorldSummary(
+                RecentAchievement: null);
+            worldSummary = new DashboardWorldSummary(
                 PlayerLocation: profile.Location.CurrentAirportIcao,
                 HomeBase: profile.Location.HomeAirportIcao,
                 NearbyOpportunityCount: null,
                 ActiveWorldEventCount: null,
                 ActiveMarketSignalCount: null,
-                ActiveGovernmentSignalCount: null)
+                ActiveGovernmentSignalCount: null);
+        }
+
+        DateTime localToday = _timeProvider.GetLocalNow().Date;
+        decimal todayNet = recent
+            .Where(transaction =>
+                TimeZoneInfo.ConvertTime(
+                    transaction.OccurredAt,
+                    _timeProvider.LocalTimeZone).Date == localToday)
+            .Sum(transaction => transaction.CashChange);
+
+        return DashboardSnapshot.Empty with
+        {
+            Career = careerSummary,
+            Finances = new DashboardFinanceSummary(
+                Cash: cash,
+                TodayNet: todayNet,
+                UpcomingObligations: null),
+            World = worldSummary
         };
     }
 
