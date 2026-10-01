@@ -4,6 +4,7 @@ using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Economy;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
