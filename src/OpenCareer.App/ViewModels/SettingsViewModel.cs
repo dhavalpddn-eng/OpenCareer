@@ -2,8 +2,10 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using OpenCareer.App.Services;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.App.ViewModels;
@@ -17,6 +19,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private readonly AppDataBackupService _backup;
     private readonly ShellOpenService _shell;
     private readonly OpenCareerDataPaths _paths;
+    private readonly FlightSessionCoordinator _flightSessions;
 
     private string _actionStatus = "Ready.";
     private bool _isBusy;
@@ -28,6 +31,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private string _telemetryState = "No telemetry";
     private string _lastTelemetry = "—";
     private string _aircraftRuntimeState = "—";
+    private string _careerRecoveryStatus;
 
     public SettingsViewModel(
         IAppSettingsService settings,
@@ -36,7 +40,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         DiagnosticBundleService diagnostics,
         AppDataBackupService backup,
         ShellOpenService shell,
-        OpenCareerDataPaths paths)
+        OpenCareerDataPaths paths,
+        FlightSessionCoordinator flightSessions)
     {
         _settings = settings;
         _connection = connection;
@@ -45,8 +50,14 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _backup = backup;
         _shell = shell;
         _paths = paths;
+        _flightSessions =
+            flightSessions
+            ?? throw new ArgumentNullException(nameof(flightSessions));
+        _careerRecoveryStatus =
+            FormatCareerRecoveryStatus(_flightSessions.Current);
 
         _settings.Changed += OnSettingsChanged;
+        _flightSessions.SessionChanged += OnFlightSessionChanged;
         RefreshDiagnostics();
     }
 
@@ -102,8 +113,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public string InputBindingStatus =>
         "Binding resolver is not implemented yet (MBL-05). This preference controls which verified hint is shown first once bindings are available.";
 
-    public string CareerRecoveryStatus =>
-        "Settings, tutorial state and logs can be backed up now. Authoritative FlightSession/SQLite recovery will be added with MBL-07 before career saves rely on it.";
+    public string CareerRecoveryStatus => _careerRecoveryStatus;
 
     public string OptionalServicesStatus =>
         AllowOptionalOnlineServices
@@ -314,6 +324,33 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(AllowOptionalOnlineServices));
         OnPropertyChanged(nameof(OptionalServicesStatus));
     }
+
+    private void OnFlightSessionChanged(
+        object? sender,
+        FlightSessionChangedEventArgs e) =>
+        SetField(
+            ref _careerRecoveryStatus,
+            FormatCareerRecoveryStatus(e.Session),
+            nameof(CareerRecoveryStatus));
+
+    private static string FormatCareerRecoveryStatus(
+        FlightSession? session) =>
+        session?.Status switch
+        {
+            null =>
+                "SQLite-backed FlightSession checkpoint recovery, including previous-valid fallback, is enabled. No flight session is currently loaded.",
+            FlightSessionStatus.Active =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. An active flight session is loaded and remains eligible for restart checkpoints.",
+            FlightSessionStatus.Suspended =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. A suspended flight session is retained for continuity-safe resume; it is not completed.",
+            FlightSessionStatus.Interrupted =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. An interrupted terminal session is retained for retryable postflight or cleanup handling; it is not completed.",
+            FlightSessionStatus.Completed =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. A completed terminal session remains retained until required postflight processing and checkpoint cleanup succeed.",
+            FlightSessionStatus.Cancelled =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. A cancelled terminal session remains retained until checkpoint cleanup succeeds.",
+            _ => throw new ArgumentOutOfRangeException(nameof(session))
+        };
 
     private void SetField(
         ref string field,
