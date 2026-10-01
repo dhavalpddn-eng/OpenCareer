@@ -2,8 +2,10 @@ using System.Collections.Immutable;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Dashboard;
 using OpenCareer.Application.Economy;
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
@@ -257,13 +259,123 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
     [Fact]
     public async Task NoCurrentContractProjectsNoActiveOperation()
     {
+        var reservations = new FakeReservationLookup();
+        var registry = new FakeAircraftRegistry();
         DashboardSnapshot snapshot = await Source(
             new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
             new FakeLedgerStore(),
             new FakeLogbookSource(),
-            new FixedTimeProvider(Epoch)).GetAsync();
+            new FixedTimeProvider(Epoch),
+            reservations: reservations,
+            aircraftRegistry: registry).GetAsync();
 
         Assert.Null(snapshot.ActiveOperation);
+        Assert.Null(snapshot.Aircraft);
+        Assert.Equal(0, reservations.ReadCount);
+        Assert.Equal(0, registry.ReadCount);
+    }
+
+    [Fact]
+    public async Task CurrentOperationProjectsReservedInstalledAircraftIdentity()
+    {
+        Guid contractId = Guid.Parse("30000000-0000-0000-0000-000000000007");
+        string reservationId = JobAcceptanceFleetBridge.GetReservationId(contractId);
+        var reservations = new FakeReservationLookup(
+            new AircraftReservationOwnership("msfs:c172", reservationId));
+        var registry = new FakeAircraftRegistry(
+            Resolution("msfs:c172", "Cessna 172 Skyhawk"));
+        var contracts = new FakeContracts(
+            Contract(contractId, ContractStatus.Accepted, Epoch.AddHours(-1)));
+        var sessions = new FlightSessionCoordinator();
+        sessions.Restore(Session(contractId, FlightOperationState.ReadyForStart));
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(
+                new FakeProfileStore(ProfileAt("KDAL"))),
+            new FakeLedgerStore(cash: 80m),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            contracts,
+            sessions,
+            reservations,
+            registry).GetAsync();
+
+        DashboardAircraftSummary aircraft =
+            Assert.IsType<DashboardAircraftSummary>(snapshot.Aircraft);
+        Assert.Equal("Cessna 172 Skyhawk", aircraft.AircraftName);
+        Assert.Equal("Contract-reserved", aircraft.AccessType);
+        Assert.Equal("KDAL", aircraft.PlayerLocation);
+        AssertUnknownAircraftFields(aircraft);
+        Assert.Equal(1, reservations.ReadCount);
+        Assert.Equal(reservationId, reservations.LastReservationId);
+        Assert.Equal(1, registry.ReadCount);
+        Assert.Equal("msfs:c172", registry.LastAircraftId);
+
+        DashboardActiveOperationSummary operation =
+            Assert.IsType<DashboardActiveOperationSummary>(snapshot.ActiveOperation);
+        Assert.Equal(contractId.ToString("D"), operation.JobId);
+        Assert.Equal(ActiveOperationStage.ReadyToStart, operation.Stage);
+        Assert.Equal(80m, Assert.IsType<DashboardFinanceSummary>(snapshot.Finances).Cash);
+        Assert.Equal("KDAL", Assert.IsType<DashboardWorldSummary>(snapshot.World).PlayerLocation);
+    }
+
+    [Fact]
+    public async Task MissingReservationProjectsOnlyAuthoritativePlayerLocation()
+    {
+        Guid contractId = Guid.Parse("30000000-0000-0000-0000-000000000008");
+        var reservations = new FakeReservationLookup();
+        var registry = new FakeAircraftRegistry(
+            Resolution("msfs:c172", "Cessna 172 Skyhawk"));
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(
+                new FakeProfileStore(ProfileAt("KDAL"))),
+            new FakeLedgerStore(),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            new FakeContracts(
+                Contract(contractId, ContractStatus.Accepted, Epoch.AddHours(-1))),
+            reservations: reservations,
+            aircraftRegistry: registry).GetAsync();
+
+        DashboardAircraftSummary aircraft =
+            Assert.IsType<DashboardAircraftSummary>(snapshot.Aircraft);
+        Assert.Null(aircraft.AircraftName);
+        Assert.Null(aircraft.AccessType);
+        Assert.Equal("KDAL", aircraft.PlayerLocation);
+        AssertUnknownAircraftFields(aircraft);
+        Assert.Equal(1, reservations.ReadCount);
+        Assert.Equal(0, registry.ReadCount);
+    }
+
+    [Fact]
+    public async Task MissingRegistryDisplayDoesNotFabricateIdentityOrLocation()
+    {
+        Guid contractId = Guid.Parse("30000000-0000-0000-0000-000000000009");
+        string reservationId = JobAcceptanceFleetBridge.GetReservationId(contractId);
+        var reservations = new FakeReservationLookup(
+            new AircraftReservationOwnership("msfs:c172", reservationId));
+        var registry = new FakeAircraftRegistry(
+            Resolution("msfs:c172", displayName: null));
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(new FakeProfileStore(record: null)),
+            new FakeLedgerStore(),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            new FakeContracts(
+                Contract(contractId, ContractStatus.InProgress, Epoch.AddHours(-1))),
+            reservations: reservations,
+            aircraftRegistry: registry).GetAsync();
+
+        DashboardAircraftSummary aircraft =
+            Assert.IsType<DashboardAircraftSummary>(snapshot.Aircraft);
+        Assert.Null(aircraft.AircraftName);
+        Assert.Equal("Contract-reserved", aircraft.AccessType);
+        Assert.Null(aircraft.PlayerLocation);
+        AssertUnknownAircraftFields(aircraft);
+        Assert.Equal(1, reservations.ReadCount);
+        Assert.Equal(1, registry.ReadCount);
     }
 
     [Fact]
@@ -419,10 +531,14 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
         ILogbookSource logbook,
         TimeProvider timeProvider,
         FakeContracts? contracts = null,
-        FlightSessionCoordinator? sessions = null)
+        FlightSessionCoordinator? sessions = null,
+        FakeReservationLookup? reservations = null,
+        FakeAircraftRegistry? aircraftRegistry = null)
     {
         contracts ??= new FakeContracts();
         sessions ??= new FlightSessionCoordinator();
+        reservations ??= new FakeReservationLookup();
+        aircraftRegistry ??= new FakeAircraftRegistry();
         var readiness = new CareerJobPlayableLoopReadinessSource(
             sessions,
             contracts,
@@ -437,7 +553,50 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
             contracts,
             sessions,
             readiness,
+            reservations,
+            aircraftRegistry,
             timeProvider);
+    }
+
+    private static PlayerCareerProfileStoreRecord ProfileAt(string currentAirport)
+    {
+        PlayerCareerProfile profile = PlayerCareerProfile.Start(
+            Guid.Parse("26cf77f6-6395-46a5-9785-fac2cd43fd65"),
+            "KDFW",
+            Epoch) with
+        {
+            Location = new CareerLocation(
+                "KDFW",
+                currentAirport,
+                Epoch.AddMinutes(1),
+                ImmutableHashSet.Create("KDFW", currentAirport),
+                ImmutableHashSet<Guid>.Empty)
+        };
+        profile.Validate();
+        return new PlayerCareerProfileStoreRecord(1, profile, Epoch.AddMinutes(1));
+    }
+
+    private static AircraftRegistryResolution Resolution(
+        string canonicalAircraftId,
+        string? displayName) =>
+        AircraftRegistryResolver.Resolve(
+        [
+            new AircraftRegistryObservation(
+                canonicalAircraftId,
+                "dashboard-test",
+                "installed-aircraft",
+                AircraftDataConfidence.Verified,
+                IsInstalled: true,
+                DisplayName: displayName)
+        ]);
+
+    private static void AssertUnknownAircraftFields(
+        DashboardAircraftSummary aircraft)
+    {
+        Assert.Null(aircraft.ReadyForWork);
+        Assert.Null(aircraft.AircraftLocation);
+        Assert.Null(aircraft.DistanceToPlayerNauticalMiles);
+        Assert.Null(aircraft.BlockingReason);
     }
 
     private static PersistedJobContract Contract(
@@ -621,6 +780,40 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
         {
             add { }
             remove { }
+        }
+    }
+
+    private sealed class FakeReservationLookup(
+        AircraftReservationOwnership? ownership = null)
+        : IAircraftReservationLookup
+    {
+        public int ReadCount { get; private set; }
+        public string? LastReservationId { get; private set; }
+
+        public Task<AircraftReservationOwnership?> FindByReservationIdAsync(
+            string reservationId,
+            CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            LastReservationId = reservationId;
+            return Task.FromResult(ownership);
+        }
+    }
+
+    private sealed class FakeAircraftRegistry(
+        AircraftRegistryResolution? resolution = null)
+        : IAircraftRegistrySource
+    {
+        public int ReadCount { get; private set; }
+        public string? LastAircraftId { get; private set; }
+
+        public Task<AircraftRegistryResolution?> FindAircraftAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            LastAircraftId = canonicalAircraftId;
+            return Task.FromResult(resolution);
         }
     }
 

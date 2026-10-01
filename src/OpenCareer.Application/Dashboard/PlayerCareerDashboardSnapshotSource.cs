@@ -1,7 +1,10 @@
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Economy;
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Application.Planning;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
@@ -16,6 +19,8 @@ public sealed class PlayerCareerDashboardSnapshotSource(
     IJobContractRuntimeSource contracts,
     FlightSessionCoordinator flightSessions,
     CareerJobPlayableLoopReadinessSource readiness,
+    IAircraftReservationLookup reservations,
+    IAircraftRegistrySource aircraftRegistry,
     TimeProvider timeProvider)
     : IDashboardSnapshotSource
 {
@@ -34,6 +39,10 @@ public sealed class PlayerCareerDashboardSnapshotSource(
         flightSessions ?? throw new ArgumentNullException(nameof(flightSessions));
     private readonly CareerJobPlayableLoopReadinessSource _readiness =
         readiness ?? throw new ArgumentNullException(nameof(readiness));
+    private readonly IAircraftReservationLookup _reservations =
+        reservations ?? throw new ArgumentNullException(nameof(reservations));
+    private readonly IAircraftRegistrySource _aircraftRegistry =
+        aircraftRegistry ?? throw new ArgumentNullException(nameof(aircraftRegistry));
     private readonly TimeProvider _timeProvider =
         timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -57,11 +66,13 @@ public sealed class PlayerCareerDashboardSnapshotSource(
 
         DashboardCareerSummary? careerSummary = null;
         DashboardWorldSummary? worldSummary = null;
+        string? playerLocation = null;
 
         if (current is not null)
         {
             current.Validate();
             PlayerCareerProfile profile = current.Profile;
+            playerLocation = profile.Location.CurrentAirportIcao;
 
             careerSummary = new DashboardCareerSummary(
                 Level: null,
@@ -88,6 +99,12 @@ public sealed class PlayerCareerDashboardSnapshotSource(
                     transaction.OccurredAt,
                     _timeProvider.LocalTimeZone).Date == localToday)
             .Sum(transaction => transaction.CashChange);
+        PersistedJobContract? activeOperation = SelectCurrentOperation();
+        DashboardAircraftSummary? aircraft = await ProjectAircraftAsync(
+                activeOperation,
+                playerLocation,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         return DashboardSnapshot.Empty with
         {
@@ -96,7 +113,8 @@ public sealed class PlayerCareerDashboardSnapshotSource(
                 Cash: cash,
                 TodayNet: todayNet,
                 UpcomingObligations: null),
-            ActiveOperation = ProjectActiveOperation(),
+            Aircraft = aircraft,
+            ActiveOperation = ProjectActiveOperation(activeOperation),
             World = worldSummary,
             RecentActivity = logbookEntries
                 .OrderByDescending(static entry => entry.Debrief.EndedAt)
@@ -106,10 +124,10 @@ public sealed class PlayerCareerDashboardSnapshotSource(
         };
     }
 
-    private DashboardActiveOperationSummary? ProjectActiveOperation()
+    private PersistedJobContract? SelectCurrentOperation()
     {
         FlightSession? session = _flightSessions.Current;
-        PersistedJobContract? persisted = session?.ContractId is { } contractId
+        return session?.ContractId is { } contractId
             ? _contracts.Find(contractId)
             : _contracts.Current
                 .Where(static item => item.Contract.Status is
@@ -117,12 +135,17 @@ public sealed class PlayerCareerDashboardSnapshotSource(
                 .OrderByDescending(static item => item.Contract.AcceptedAt)
                 .ThenBy(static item => item.Contract.ContractId)
                 .FirstOrDefault();
+    }
 
+    private DashboardActiveOperationSummary? ProjectActiveOperation(
+        PersistedJobContract? persisted)
+    {
         if (persisted is null)
             return null;
 
         persisted.Validate();
         JobContract contract = persisted.Contract;
+        FlightSession? session = _flightSessions.Current;
         CareerJobPlayableReadinessSnapshot readiness = _readiness.Current;
         bool matchingSession = session?.ContractId == contract.ContractId;
         ActiveOperationStage stage = MapStage(contract, session, readiness, matchingSession);
@@ -153,6 +176,70 @@ public sealed class PlayerCareerDashboardSnapshotSource(
             GrossPay: ContractPay(contract.Compensation),
             EstimatedNetPay: null);
     }
+
+    private async Task<DashboardAircraftSummary?> ProjectAircraftAsync(
+        PersistedJobContract? persisted,
+        string? playerLocation,
+        CancellationToken cancellationToken)
+    {
+        if (persisted is null)
+            return null;
+
+        string reservationId = JobAcceptanceFleetBridge.GetReservationId(
+            persisted.Contract.ContractId);
+        AircraftReservationOwnership? ownership = await _reservations
+            .FindByReservationIdAsync(reservationId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (ownership is null
+            || !string.Equals(
+                ownership.ReservationId,
+                reservationId,
+                StringComparison.Ordinal))
+        {
+            return UnknownAircraft(playerLocation, accessType: null);
+        }
+
+        ownership.Validate();
+        AircraftRegistryResolution? resolution = await _aircraftRegistry
+            .FindAircraftAsync(
+                ownership.CanonicalAircraftId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        string? displayName = resolution is
+            {
+                InstallationStatus: AircraftInstallationStatus.Installed
+            }
+            && string.Equals(
+                resolution.CanonicalAircraftId,
+                ownership.CanonicalAircraftId,
+                StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(
+                resolution.CapabilityValues.DisplayName)
+                ? resolution.CapabilityValues.DisplayName.Trim()
+                : null;
+
+        return new DashboardAircraftSummary(
+            AircraftName: displayName,
+            AccessType: "Contract-reserved",
+            ReadyForWork: null,
+            AircraftLocation: null,
+            PlayerLocation: playerLocation,
+            DistanceToPlayerNauticalMiles: null,
+            BlockingReason: null);
+    }
+
+    private static DashboardAircraftSummary UnknownAircraft(
+        string? playerLocation,
+        string? accessType) =>
+        new(
+            AircraftName: null,
+            AccessType: accessType,
+            ReadyForWork: null,
+            AircraftLocation: null,
+            PlayerLocation: playerLocation,
+            DistanceToPlayerNauticalMiles: null,
+            BlockingReason: null);
 
     private static ActiveOperationStage MapStage(
         JobContract contract,
