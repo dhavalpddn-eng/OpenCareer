@@ -50,19 +50,18 @@ Implemented:
 - tutorial replay/preview controls,
 - safe preference reset that does not touch career state.
 
-Dependency boundaries remain explicit: MBL-05 owns real controller/keyboard binding discovery, and MBL-07 owns FlightSession persistence/recovery. The MBL-07 core now exists; Settings recovery-status copy still needs reconciliation with that implementation.
+Dependency boundaries remain explicit: MBL-05 owns real controller/keyboard binding discovery, and MBL-07 owns FlightSession persistence/recovery. Settings now projects the existing SQLite-backed FlightSession recovery state from the authoritative runtime without mutating it.
 
 Remaining before removal: local interactive verification of persistence, folders, backup/export and accessibility behavior. Public-repository Windows CI now builds the Settings surface successfully.
 
 ### MBL-03 — Full tutorial engine — IN PROGRESS
 **Estimated remaining direct effort: ~0.5–1.5 developer days**
 
-Core engine is implemented and CI-green: versioned first-run app tour, persistent resume/skip/completion, shell overlay/navigation, Settings replay, first-job walkthrough, and banner/carrier previews.
+Core engine is implemented and CI-green: versioned first-run app tour, persistent resume/skip/completion, shell overlay/navigation, Settings replay, first-job walkthrough, automatic first-job triggering from authoritative career/Jobs state, and banner/carrier previews.
 
 Remaining before removal:
 
 - local interactive/visual acceptance,
-- automatic first-job trigger when Jobs exists,
 - automatic specialized mission-family trigger when those mission families exist,
 - mission/checklist evidence integration.
 
@@ -73,7 +72,9 @@ The production dynamic Home surface and contracts are implemented: split flight/
 
 Dashboard snapshot guidance is centralized and domain-tested for active operations, maintenance blockers, probation/suspension/termination and job recommendations. Home refreshes its non-telemetry snapshot every 10 seconds while visible with overlap protection and cancellation on navigation. Windows WinUI, live-probe, Linux, SimLab and unit-test CI all passed after the first converter namespace defect was fixed.
 
-Production still registers `UnavailableDashboardSnapshotSource` even though Jobs, Career, Fleet, Economy and Logbook authorities now exist. Final completion depends on projecting those available sources without fabricating still-missing Company/World data, plus local visual/runtime acceptance.
+Production now registers `PlayerCareerDashboardSnapshotSource`. It projects authoritative career qualifications/experience and player/home location, cash/today net, recent committed flights, one deterministic active operation with existing readiness/blockers, and its contract-reserved aircraft identity when reservation/registry evidence exists. Unsupported Company/employment, opportunity, ownership, maintenance-readiness, physical-aircraft-location, obligation, social and broader World fields remain explicitly null/empty.
+
+Final completion depends on adding Top Opportunities only when authoritative eligibility/ranking evidence exists, projecting later Company/World authorities without fabrication, and local visual/runtime acceptance.
 
 ### MBL-22 — AI dispatcher / copilot / passengers
 **Estimated effort: ~2–5 developer days for the first production version**
@@ -92,10 +93,10 @@ An application-level idempotent commit coordinator prevents retry-created duplic
 SQLite persistence is implemented in `OpenCareer.Infrastructure`: a versioned `opencareer.db` schema, persistent `ILogbookSource` / `ILogbookWriter`, indexed history/search fields, frozen JSON debrief payloads, WAL mode, startup migration, and idempotent duplicate protection. Supported terminal career flights are projected from the authoritative FlightSession and committed after settlement through the production terminal workflow. Replay uses the settlement-derived key and cannot duplicate the ledger or Logbook entry.
 
 Remaining before removal:
-- wire free/practice **Log Flight / Discard from pilot logbook** postflight flow,
-- implement true multi-leg session/debrief projection,
-- add richer quantitative landing/event evidence where trustworthy inputs exist,
+- add broader event/scoring evidence only where trustworthy aircraft-relative inputs exist,
 - complete local interactive/visual acceptance.
+
+Completed since the prior reconciliation: explicit free/practice **Log Flight / Discard** orchestration and Current Flight actions, persisted multi-leg time/statistics/route/landing ownership with multi-leg debrief projection, and persisted first-touchdown VS/G/IAS/pitch/bank metrics. Retry/restart paths remain idempotent.
 
 MBL-12 does not own mission success or economy settlement; it records their authoritative final results.
 
@@ -109,7 +110,9 @@ Phase-aware preflight through shutdown checklist with trustworthy live auto-veri
 
 Production converts normalized telemetry into stable load, engine-start, taxi, takeoff/reject, airborne, approach, touchdown, bounded bounce/recontact, rollout, parking and shutdown evidence. The runtime drains a bounded ordered high-rate flight-critical stream, preserves the 1 Hz `Latest` contract, rejects pause/slew/stale evidence and transactionally restores processor state when persistence fails. The C172/KJFK full-stop and bounce path is exact-PC accepted.
 
-Remaining: telemetry-derived touch-and-go/go-around/new-approach classification, active-session aircraft-change enforcement, simulation-rate/night/instrument evidence, broader aircraft calibration, richer landing-event capture and long-duration replay.
+Telemetry-derived touch-and-go/go-around/new-approach classification, active-session aircraft-identity enforcement, simulation-rate/night/actual-instrument accounting, persisted first-touchdown quantitative metrics and bounded 1/3/6-hour replay are implemented and CI-covered.
+
+Remaining: broader representative-aircraft/edge calibration, aircraft-relative landing scoring/thresholds, richer event windows where trustworthy evidence exists, and local/live acceptance of the newer evidence paths. The exact-PC live pass remains limited to the established C172/KJFK full-stop/bounce path.
 
 ### MBL-24 — Installer / update / release pipeline
 **Estimated effort: ~4–8 developer days**
@@ -133,11 +136,11 @@ Persistent dealers/lenders, used/new inventory, loans, insurance and atomic owne
 Credit/dealer domain foundations already exist, reducing remaining effort.
 
 ### MBL-07 — Persistent FlightSession / recovery — CORE CHECKPOINT/RECOVERY IMPLEMENTED / HARDENING PENDING
-**Estimated remaining effort: ~5–9 developer days**
+**Estimated remaining effort: ~1–3 developer days plus broader live validation**
 
-The production runtime owns one authoritative FlightSession, persists versioned SQLite checkpoints before publication, checkpoints transitions and bounded steady-state intervals, stores decimated route/landing summaries, suspends on disconnect, recovers at startup, resumes only on plausible continuity and prevents duplicate terminal effects. Interrupted-session recovery and the complete C172/KJFK lifecycle are live accepted.
+The production runtime owns one authoritative FlightSession, persists versioned SQLite checkpoints before publication, checkpoints transitions and bounded steady-state intervals, stores decimated route/landing summaries, suspends on disconnect, recovers at startup, resumes only on plausible continuity and prevents duplicate terminal effects. It falls back to the previous valid checkpoint when the newest generation is corrupt, passes bounded 1/3/6-hour replay, persists ordered multi-leg FlightLeg boundaries/evidence, and resumes interrupted terminal workflows across restart. Interrupted-session recovery and the complete C172/KJFK lifecycle are live accepted.
 
-Remaining: concrete multi-leg/FlightLeg runtime persistence, previous-valid/corrupt-checkpoint fallback, richer event windows, representative 1/3/6-hour replay and automatic restart resumption after failure midway through the terminal workflow.
+Remaining: richer event windows where justified, broader corrupt/restart/live edge validation, and local acceptance beyond the established C172/KJFK path. Multi-leg production creation remains explicit; automatic turnaround detection is intentionally not implemented.
 
 ### MBL-16 — Hangars + Bases
 **Estimated effort: ~5–10 developer days**
