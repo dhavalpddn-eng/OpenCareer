@@ -201,6 +201,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
     public string PlayerLocationText =>
         _snapshot.Aircraft?.PlayerLocation ??
+        _snapshot.World?.PlayerLocation ??
         (_shell.HasTelemetry ? _shell.PositionSummary : "Player location —");
 
     public string DistanceToAircraftText =>
@@ -218,6 +219,11 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     public string WorldSummaryText =>
         _snapshot.World is null
             ? "World layers are waiting for Map / World, Jobs and market systems."
+            : _snapshot.World.NearbyOpportunityCount is null
+                && _snapshot.World.ActiveWorldEventCount is null
+                && _snapshot.World.ActiveMarketSignalCount is null
+                && _snapshot.World.ActiveGovernmentSignalCount is null
+                    ? "World activity is not available yet."
             : $"{_snapshot.World.NearbyOpportunityCount} nearby jobs • " +
               $"{_snapshot.World.ActiveWorldEventCount} events • " +
               $"{_snapshot.World.ActiveMarketSignalCount} market signals • " +

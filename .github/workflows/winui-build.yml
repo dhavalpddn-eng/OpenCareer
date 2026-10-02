@@ -4,14 +4,17 @@ on:
   pull_request:
     branches:
       - main
+      - feature/m1-simulation-core
     paths:
       - "src/OpenCareer.App/**"
       - "src/OpenCareer.Application/**"
       - "src/OpenCareer.Domain/**"
       - "src/OpenCareer.Infrastructure/**"
       - "src/OpenCareer.SimConnect/**"
+      - "tests/OpenCareer.Tests/**"
       - "tools/OpenCareer.LiveProbe/**"
       - "tools/run-live-probe.ps1"
+      - "tools/run-kjfk-live-test.ps1"
       - "Directory.Build.props"
       - "Directory.Packages.props"
       - ".github/workflows/winui-build.yml"
@@ -63,7 +66,7 @@ jobs:
           FILES="$(git diff --name-only "$RANGE")"
           printf '%s\n' "$FILES"
 
-          if printf '%s\n' "$FILES" | grep -Eq '^(src/OpenCareer\.App/|src/OpenCareer\.Application/|src/OpenCareer\.Domain/|src/OpenCareer\.Infrastructure/|src/OpenCareer\.SimConnect/|tools/OpenCareer\.LiveProbe/|tools/run-live-probe\.ps1$|Directory\.Build\.props$|Directory\.Packages\.props$|\.github/workflows/winui-build\.yml$)'; then
+          if printf '%s\n' "$FILES" | grep -Eq '^(src/OpenCareer\.App/|src/OpenCareer\.Application/|src/OpenCareer\.Domain/|src/OpenCareer\.Infrastructure/|src/OpenCareer\.SimConnect/|tests/OpenCareer\.Tests/|tools/OpenCareer\.LiveProbe/|tools/run-live-probe\.ps1$|tools/run-kjfk-live-test\.ps1$|Directory\.Build\.props$|Directory\.Packages\.props$|\.github/workflows/winui-build\.yml$)'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
@@ -76,8 +79,19 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Checkout
+      - name: Checkout exact head
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact head
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $actual = git rev-parse HEAD
+          if ($actual -ne $env:EXPECTED_SHA) { throw "Wrong checkout: $actual" }
+          Write-Host "Certified source SHA: $actual"
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -92,6 +106,9 @@ jobs:
 
       - name: Build live SimConnect probe
         run: dotnet build tools/OpenCareer.LiveProbe/OpenCareer.LiveProbe.csproj --configuration Release -p:Platform=x64
+
+      - name: Certify rapid KJFK playable loop
+        run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release --filter FullyQualifiedName~KjfkPlayableLoopCertificationTests
 
       - name: Test domain and simulator connection lifecycle
         run: dotnet test tests/OpenCareer.Tests/OpenCareer.Tests.csproj --configuration Release

@@ -21,4 +21,7 @@ public sealed record AircraftTelemetrySnapshot(
     double FlapsPositionPercent,
     bool GearDown,
     bool Paused,
-    bool SlewActive);
+    bool SlewActive,
+    double SimulationRate = 1d,
+    bool? IsNight = null,
+    bool? IsInCloud = null);

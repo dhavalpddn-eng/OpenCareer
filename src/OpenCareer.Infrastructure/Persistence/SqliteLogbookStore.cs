@@ -8,7 +8,7 @@ using OpenCareer.Domain.Logbook;
 
 namespace OpenCareer.Infrastructure.Persistence;
 
-public sealed class SqliteLogbookStore : ILogbookSource, ILogbookWriter
+public sealed class SqliteLogbookStore : ILogbookSource, ILogbookWriter, ILogbookIdempotencySource
 {
     private const int PayloadSchemaVersion = 1;
 
@@ -142,6 +142,56 @@ public sealed class SqliteLogbookStore : ILogbookSource, ILogbookWriter
 
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             return null;
+
+        return ReadEntry(
+            reader.GetInt32(0),
+            reader.GetString(1));
+    }
+
+    public async Task<LogbookEntry?> FindByIdempotencyKeyAsync(
+        string idempotencyKey,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            throw new ArgumentException(
+                "Idempotency key is required.",
+                nameof(idempotencyKey));
+        }
+
+        await EnsureInitializedAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await using SqliteConnection connection =
+            await OpenConnectionAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        await using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT payload_schema_version, payload_json
+            FROM logbook_entries
+            WHERE idempotency_key = $idempotency_key
+            LIMIT 1;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$idempotency_key",
+            idempotencyKey);
+
+        await using SqliteDataReader reader =
+            await command
+                .ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!await reader
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return null;
+        }
 
         return ReadEntry(
             reader.GetInt32(0),

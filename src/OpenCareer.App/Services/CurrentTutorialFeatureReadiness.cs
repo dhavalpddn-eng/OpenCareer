@@ -14,7 +14,7 @@ public sealed class CurrentTutorialFeatureReadiness : ITutorialFeatureReadiness
             ["settings"] = TutorialFeatureState.Available,
 
             ["dispatch"] = TutorialFeatureState.ComingLater,
-            ["jobs"] = TutorialFeatureState.ComingLater,
+            ["jobs"] = TutorialFeatureState.Available,
             ["world"] = TutorialFeatureState.ComingLater,
             ["aircraft"] = TutorialFeatureState.ComingLater,
             ["bases"] = TutorialFeatureState.ComingLater,
@@ -25,7 +25,7 @@ public sealed class CurrentTutorialFeatureReadiness : ITutorialFeatureReadiness
             ["military"] = TutorialFeatureState.ComingLater,
             ["logbook"] = TutorialFeatureState.Available,
             ["career"] = TutorialFeatureState.ComingLater,
-            ["first-job"] = TutorialFeatureState.ComingLater,
+            ["first-job"] = TutorialFeatureState.Available,
             ["mission-banner-tow"] = TutorialFeatureState.ComingLater,
             ["mission-carrier-takeoff"] = TutorialFeatureState.ComingLater,
             ["mission-carrier-landing"] = TutorialFeatureState.ComingLater

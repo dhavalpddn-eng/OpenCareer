@@ -1,7 +1,12 @@
 <Page
     x:Class="OpenCareer.App.Views.CurrentFlightPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:OpenCareer.App.Converters">
+
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Page.Resources>
 
     <ScrollViewer>
         <StackPanel MaxWidth="980"
@@ -82,6 +87,71 @@
                                        Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                         </StackPanel>
                     </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="24"
+                    Visibility="{Binding IsManualPostflightVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="MANUAL POSTFLIGHT"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="Log or discard this completed flight"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="{Binding ManualPostflightDetail}"
+                               TextWrapping="Wrap"
+                               Style="{StaticResource OpenCareerInputHelpStyle}" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Log Flight"
+                                IsEnabled="{Binding CanLogManualFlight}"
+                                Click="LogManualFlight_Click"
+                                Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
+                        <Button Content="Discard"
+                                IsEnabled="{Binding CanDiscardManualFlight}"
+                                Click="DiscardManualFlight_Click"
+                                Style="{StaticResource OpenCareerDangerButtonStyle}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="24">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="CAREER WORKFLOW"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="{Binding CareerWorkflowStatus}"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="{Binding CareerWorkflowDetail}"
+                               TextWrapping="Wrap"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+
+                    <Border Margin="0,8,0,0"
+                            Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding CareerCompletionActionDetail}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                            <Button Content="{Binding CareerCompletionActionText}"
+                                    IsEnabled="{Binding CanCompleteCareerFlight}"
+                                    Click="CompleteCareerFlight_Click"
+                                    Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                    HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,8,0,0"
+                            Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding CareerAbandonActionDetail}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                            <Button Content="{Binding CareerAbandonActionText}"
+                                    IsEnabled="{Binding CanAbandonCurrentFlight}"
+                                    Click="AbandonCurrentFlight_Click"
+                                    Style="{StaticResource OpenCareerDangerButtonStyle}"
+                                    HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 
