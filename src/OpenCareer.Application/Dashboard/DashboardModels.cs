@@ -50,21 +50,27 @@ public enum DashboardGuidancePriority
     Critical = 300
 }
 
+public sealed record DashboardOpportunityAircraft(
+    string AircraftId,
+    string DisplayName);
+
 public sealed record DashboardOpportunity(
     string Id,
     string Title,
     string Origin,
     string Destination,
     string JobFamily,
-    OpportunityTier Tier,
+    OpportunityTier? Tier,
     bool IsAvailable,
-    double FitScore,
+    double? FitScore,
     decimal? GrossPay = null,
     decimal? EstimatedNetPay = null,
     TimeSpan? EstimatedDuration = null,
     double? RepositionDistanceNauticalMiles = null,
     string? AircraftRequirement = null,
-    string? UnavailableReason = null);
+    string? UnavailableReason = null,
+    double? RouteDistanceNauticalMiles = null,
+    IReadOnlyList<DashboardOpportunityAircraft>? QualifyingAircraft = null);
 
 public sealed record DashboardGuidanceCandidate(
     string Id,

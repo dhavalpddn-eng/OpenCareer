@@ -336,7 +336,7 @@
                         <StackPanel Spacing="3">
                             <TextBlock Text="TOP OPPORTUNITIES"
                                        Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
-                            <TextBlock Text="Your four highest available jobs"
+                            <TextBlock Text="Up to four currently eligible jobs"
                                        Style="{StaticResource OpenCareerPaperTitleStyle}" />
                             <TextBlock Text="{Binding OpportunityStatusText}"
                                        Style="{StaticResource OpenCareerPaperBodyStyle}" />

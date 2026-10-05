@@ -24,7 +24,14 @@ public sealed record CareerJobOfferEligibilitySnapshot(
         State == CareerJobOfferEligibilityState.Ready;
 }
 
+public interface ICareerJobOfferEligibilitySource
+{
+    Task<CareerJobOfferEligibilitySnapshot> ReadAsync(
+        CancellationToken cancellationToken = default);
+}
+
 public sealed class CareerJobOfferEligibilitySource
+    : ICareerJobOfferEligibilitySource
 {
     private readonly IJobBoardStateStore _jobBoards;
     private readonly PlayerCareerRuntimeState _career;

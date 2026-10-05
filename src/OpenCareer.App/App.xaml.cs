@@ -226,6 +226,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<CareerJobStartActionService>();
         services.AddSingleton<ICareerJobStartAction>(provider =>
             provider.GetRequiredService<CareerJobStartActionService>());
+        services.AddSingleton<CareerJobOfferEligibilitySource>();
+        services.AddSingleton<ICareerJobOfferEligibilitySource>(provider =>
+            provider.GetRequiredService<CareerJobOfferEligibilitySource>());
 
         services.AddSingleton<CareerJobPlayableLoopReadinessSource>();
 

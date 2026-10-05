@@ -1,4 +1,5 @@
 using OpenCareer.Application.Dashboard;
+using OpenCareer.App.ViewModels;
 
 namespace OpenCareer.Tests;
 
@@ -42,6 +43,52 @@ public sealed class DashboardFoundationTests
 
         Assert.Single(selected);
         Assert.Equal("better-fit", selected[0].Id);
+    }
+
+    [Fact]
+    public void UnknownRankingPreservesAuthoritativeSourceOrderAndTakesFour()
+    {
+        DashboardOpportunity[] opportunities =
+            Enumerable.Range(1, 5)
+                .Select(index => new DashboardOpportunity(
+                    $"offer-{index}",
+                    $"Offer {index}",
+                    "KAAA",
+                    "KBBB",
+                    "Ferry",
+                    Tier: null,
+                    IsAvailable: true,
+                    FitScore: null))
+                .ToArray();
+
+        IReadOnlyList<DashboardOpportunity> selected =
+            DashboardOpportunitySelector.SelectTopAvailable(opportunities);
+
+        Assert.Equal(
+            ["offer-1", "offer-2", "offer-3", "offer-4"],
+            selected.Select(static item => item.Id));
+    }
+
+    [Fact]
+    public void UnknownTierAndFitRenderAsUnknown()
+    {
+        var item = new DashboardOpportunityItemViewModel(
+            new DashboardOpportunity(
+                "offer-1",
+                "Ferry",
+                "KAAA",
+                "KBBB",
+                "Civilian employment",
+                Tier: null,
+                IsAvailable: true,
+                FitScore: null,
+                AircraftRequirement: "Cessna 172",
+                RouteDistanceNauticalMiles: 125));
+
+        Assert.Equal("TIER —", item.TierText);
+        Assert.Equal("Fit —", item.Fit);
+        Assert.Equal("125 NM route", item.Reposition);
+        Assert.Equal("Cessna 172", item.Aircraft);
     }
 
     [Fact]

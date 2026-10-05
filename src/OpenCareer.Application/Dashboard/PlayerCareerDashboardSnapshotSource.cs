@@ -21,6 +21,7 @@ public sealed class PlayerCareerDashboardSnapshotSource(
     CareerJobPlayableLoopReadinessSource readiness,
     IAircraftReservationLookup reservations,
     IAircraftRegistrySource aircraftRegistry,
+    ICareerJobOfferEligibilitySource offerEligibility,
     TimeProvider timeProvider)
     : IDashboardSnapshotSource
 {
@@ -43,6 +44,8 @@ public sealed class PlayerCareerDashboardSnapshotSource(
         reservations ?? throw new ArgumentNullException(nameof(reservations));
     private readonly IAircraftRegistrySource _aircraftRegistry =
         aircraftRegistry ?? throw new ArgumentNullException(nameof(aircraftRegistry));
+    private readonly ICareerJobOfferEligibilitySource _offerEligibility =
+        offerEligibility ?? throw new ArgumentNullException(nameof(offerEligibility));
     private readonly TimeProvider _timeProvider =
         timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -62,6 +65,9 @@ public sealed class PlayerCareerDashboardSnapshotSource(
             .QueryAsync(
                 new LogbookQuery(Limit: RecentActivityLimit),
                 cancellationToken)
+            .ConfigureAwait(false);
+        CareerJobOfferEligibilitySnapshot eligibility = await _offerEligibility
+            .ReadAsync(cancellationToken)
             .ConfigureAwait(false);
 
         DashboardCareerSummary? careerSummary = null;
@@ -116,12 +122,52 @@ public sealed class PlayerCareerDashboardSnapshotSource(
             Aircraft = aircraft,
             ActiveOperation = ProjectActiveOperation(activeOperation),
             World = worldSummary,
+            Opportunities = eligibility.IsReady
+                ? eligibility.Offers.Select(ProjectOpportunity).ToArray()
+                : Array.Empty<DashboardOpportunity>(),
             RecentActivity = logbookEntries
                 .OrderByDescending(static entry => entry.Debrief.EndedAt)
                 .ThenBy(static entry => entry.EntryId)
                 .Select(ProjectActivity)
                 .ToArray()
         };
+    }
+
+    private static DashboardOpportunity ProjectOpportunity(
+        CareerJobEligibleOffer eligible)
+    {
+        JobMarketOfferDraft offer = eligible.Offer;
+        TimeSpan? duration = offer.ContractTerms is { } terms
+            ? TimeSpan.FromHours(terms.EstimatedFlightHours)
+            : offer.EstimatedFlightHours is { } hours
+                ? TimeSpan.FromHours(hours)
+                : null;
+        string aircraft = string.Join(
+            ", ",
+            eligible.QualifyingAircraft.Select(static item => item.DisplayName));
+
+        return new DashboardOpportunity(
+            offer.OfferId.ToString("D"),
+            Friendly(offer.Kind),
+            offer.OriginIcao,
+            offer.DestinationIcao,
+            Friendly(offer.ServiceTrack),
+            Tier: null,
+            IsAvailable: true,
+            FitScore: null,
+            GrossPay: null,
+            EstimatedNetPay: null,
+            EstimatedDuration: duration,
+            RepositionDistanceNauticalMiles: null,
+            AircraftRequirement: aircraft.Length == 0 ? null : aircraft,
+            UnavailableReason: null,
+            RouteDistanceNauticalMiles: offer.DistanceNm,
+            QualifyingAircraft: eligible.QualifyingAircraft
+                .Select(static item =>
+                    new DashboardOpportunityAircraft(
+                        item.AircraftId,
+                        item.DisplayName))
+                .ToArray());
     }
 
     private PersistedJobContract? SelectCurrentOperation()

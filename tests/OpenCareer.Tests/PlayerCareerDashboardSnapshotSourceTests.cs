@@ -146,6 +146,96 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
     }
 
     [Fact]
+    public async Task ReadyEligibilityProjectsAuthoritativeOfferFactsWithoutRankingClaims()
+    {
+        JobMarketOfferDraft first = Offer(
+            Guid.Parse("50000000-0000-0000-0000-000000000001"),
+            ContractKind.Ferry,
+            "KDFW",
+            "KDAL",
+            distanceNm: 25,
+            estimatedHours: 0.4);
+        JobMarketOfferDraft second = Offer(
+            Guid.Parse("50000000-0000-0000-0000-000000000002"),
+            ContractKind.Reposition,
+            "KDFW",
+            "KACT",
+            distanceNm: 80,
+            estimatedHours: null);
+        var eligibility = new FakeEligibilitySource(
+            new CareerJobOfferEligibilitySnapshot(
+                CareerJobOfferEligibilityState.Ready,
+                [
+                    new CareerJobEligibleOffer(
+                        first,
+                        [
+                            new CareerJobAircraftOption("c172", "Cessna 172"),
+                            new CareerJobAircraftOption("pa28", "Piper Archer")
+                        ]),
+                    new CareerJobEligibleOffer(
+                        second,
+                        [new CareerJobAircraftOption("c172", "Cessna 172")])
+                ],
+                "Ready."));
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(
+                new FakeProfileStore(ProfileAt("KDFW"))),
+            new FakeLedgerStore(),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            eligibility: eligibility).GetAsync();
+
+        Assert.Equal(2, snapshot.Opportunities.Count);
+        DashboardOpportunity projected = snapshot.Opportunities[0];
+        Assert.Equal(first.OfferId.ToString("D"), projected.Id);
+        Assert.Equal("Ferry", projected.Title);
+        Assert.Equal("KDFW", projected.Origin);
+        Assert.Equal("KDAL", projected.Destination);
+        Assert.Equal("Civilian Employment", projected.JobFamily);
+        Assert.Equal(TimeSpan.FromHours(0.4), projected.EstimatedDuration);
+        Assert.Equal(25, projected.RouteDistanceNauticalMiles);
+        Assert.Equal("Cessna 172, Piper Archer", projected.AircraftRequirement);
+        Assert.Equal(
+            ["c172", "pa28"],
+            Assert.IsAssignableFrom<IReadOnlyList<DashboardOpportunityAircraft>>(
+                    projected.QualifyingAircraft)
+                .Select(static item => item.AircraftId));
+        Assert.Null(projected.Tier);
+        Assert.Null(projected.FitScore);
+        Assert.Null(projected.GrossPay);
+        Assert.Null(projected.EstimatedNetPay);
+        Assert.Equal(second.OfferId.ToString("D"), snapshot.Opportunities[1].Id);
+        Assert.Equal(1, eligibility.ReadCount);
+    }
+
+    [Theory]
+    [InlineData(CareerJobOfferEligibilityState.NoCareer)]
+    [InlineData(CareerJobOfferEligibilityState.NoBoard)]
+    [InlineData(CareerJobOfferEligibilityState.AircraftDiscoveryUnavailable)]
+    [InlineData(CareerJobOfferEligibilityState.NoEligibleOffers)]
+    public async Task NonReadyEligibilityProjectsNoOpportunities(
+        CareerJobOfferEligibilityState state)
+    {
+        var eligibility = new FakeEligibilitySource(
+            new CareerJobOfferEligibilitySnapshot(
+                state,
+                Array.Empty<CareerJobEligibleOffer>(),
+                "Unavailable."));
+
+        DashboardSnapshot snapshot = await Source(
+            new PlayerCareerRuntimeState(
+                new FakeProfileStore(ProfileAt("KDFW"))),
+            new FakeLedgerStore(),
+            new FakeLogbookSource(),
+            new FixedTimeProvider(Epoch),
+            eligibility: eligibility).GetAsync();
+
+        Assert.Empty(snapshot.Opportunities);
+        Assert.Equal(1, eligibility.ReadCount);
+    }
+
+    [Fact]
     public async Task TodayNetUsesConfiguredLocalCalendarDayBoundaries()
     {
         var ledger = new FakeLedgerStore(
@@ -533,12 +623,18 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
         FakeContracts? contracts = null,
         FlightSessionCoordinator? sessions = null,
         FakeReservationLookup? reservations = null,
-        FakeAircraftRegistry? aircraftRegistry = null)
+        FakeAircraftRegistry? aircraftRegistry = null,
+        ICareerJobOfferEligibilitySource? eligibility = null)
     {
         contracts ??= new FakeContracts();
         sessions ??= new FlightSessionCoordinator();
         reservations ??= new FakeReservationLookup();
         aircraftRegistry ??= new FakeAircraftRegistry();
+        eligibility ??= new FakeEligibilitySource(
+            new CareerJobOfferEligibilitySnapshot(
+                CareerJobOfferEligibilityState.NoEligibleOffers,
+                Array.Empty<CareerJobEligibleOffer>(),
+                "No eligible offers."));
         var readiness = new CareerJobPlayableLoopReadinessSource(
             sessions,
             contracts,
@@ -555,7 +651,46 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
             readiness,
             reservations,
             aircraftRegistry,
+            eligibility,
             timeProvider);
+    }
+
+    private static JobMarketOfferDraft Offer(
+        Guid offerId,
+        ContractKind kind,
+        string origin,
+        string destination,
+        double distanceNm,
+        double? estimatedHours) =>
+        new(
+            offerId,
+            ServiceTrack.CivilianEmployment,
+            kind,
+            JobScenarioKind.Standard,
+            origin,
+            destination,
+            distanceNm,
+            estimatedHours,
+            Epoch.AddHours(-1),
+            Epoch.AddHours(2),
+            IsLockedPreview: false,
+            RouteStrength: 0.5,
+            RelationshipStrength: 0.5,
+            MarketSelectionWeight: 1);
+
+    private sealed class FakeEligibilitySource(
+        CareerJobOfferEligibilitySnapshot snapshot)
+        : ICareerJobOfferEligibilitySource
+    {
+        public int ReadCount { get; private set; }
+
+        public Task<CareerJobOfferEligibilitySnapshot> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ReadCount++;
+            return Task.FromResult(snapshot);
+        }
     }
 
     private static PlayerCareerProfileStoreRecord ProfileAt(string currentAirport)

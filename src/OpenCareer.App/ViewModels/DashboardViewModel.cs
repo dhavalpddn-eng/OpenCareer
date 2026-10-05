@@ -57,7 +57,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     public string OpportunityStatusText =>
         _topOpportunities.Count == 0
             ? "No eligible jobs are available from the Jobs system yet."
-            : $"Showing the {_topOpportunities.Count} highest-ranked eligible opportunities.";
+            : $"Showing {_topOpportunities.Count} eligible opportunities in authoritative source order.";
 
     public string SocialFeedStatusText =>
         _socialFeed.Count == 0
@@ -455,7 +455,9 @@ public sealed class DashboardOpportunityItemViewModel
     public DashboardOpportunityItemViewModel(DashboardOpportunity opportunity)
     {
         Tier = opportunity.Tier;
-        TierText = opportunity.Tier.ToString().ToUpperInvariant();
+        TierText = opportunity.Tier is { } tier
+            ? tier.ToString().ToUpperInvariant()
+            : "TIER —";
         Title = opportunity.Title;
         Route = $"{opportunity.Origin} → {opportunity.Destination}";
         JobFamily = opportunity.JobFamily;
@@ -464,14 +466,18 @@ public sealed class DashboardOpportunityItemViewModel
         Duration = opportunity.EstimatedDuration is TimeSpan duration
             ? $"{duration.TotalHours:0.#} hr"
             : "Duration —";
-        Reposition = opportunity.RepositionDistanceNauticalMiles is double distance
-            ? $"{distance:0} NM reposition"
-            : "No reposition estimate";
+        Reposition = opportunity.RouteDistanceNauticalMiles is double routeDistance
+            ? $"{routeDistance:0} NM route"
+            : opportunity.RepositionDistanceNauticalMiles is double repositionDistance
+                ? $"{repositionDistance:0} NM reposition"
+                : "Distance —";
         Aircraft = opportunity.AircraftRequirement ?? "Aircraft requirement —";
-        Fit = $"{Math.Clamp(opportunity.FitScore, 0, 100):0}% fit";
+        Fit = opportunity.FitScore is double fit && double.IsFinite(fit)
+            ? $"{Math.Clamp(fit, 0, 100):0}% fit"
+            : "Fit —";
     }
 
-    public OpportunityTier Tier { get; }
+    public OpportunityTier? Tier { get; }
     public string TierText { get; }
     public string Title { get; }
     public string Route { get; }
