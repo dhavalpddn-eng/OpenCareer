@@ -1,5 +1,4 @@
 using OpenCareer.Application.Dashboard;
-using OpenCareer.App.ViewModels;
 
 namespace OpenCareer.Tests;
 
@@ -70,25 +69,30 @@ public sealed class DashboardFoundationTests
     }
 
     [Fact]
-    public void UnknownTierAndFitRenderAsUnknown()
+    public void UnknownTierAndFitUseHonestDashboardCopy()
     {
-        var item = new DashboardOpportunityItemViewModel(
-            new DashboardOpportunity(
-                "offer-1",
-                "Ferry",
-                "KAAA",
-                "KBBB",
-                "Civilian employment",
-                Tier: null,
-                IsAvailable: true,
-                FitScore: null,
-                AircraftRequirement: "Cessna 172",
-                RouteDistanceNauticalMiles: 125));
+        string viewModel = File.ReadAllText(
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "UiContracts",
+                "DashboardViewModel.cs"));
+        string page = File.ReadAllText(
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "UiButtons",
+                "DashboardPage.xaml"));
 
-        Assert.Equal("TIER —", item.TierText);
-        Assert.Equal("Fit —", item.Fit);
-        Assert.Equal("125 NM route", item.Reposition);
-        Assert.Equal("Cessna 172", item.Aircraft);
+        Assert.Contains("\"TIER —\"", viewModel, StringComparison.Ordinal);
+        Assert.Contains("\"Fit —\"", viewModel, StringComparison.Ordinal);
+        Assert.DoesNotContain("0)% fit", viewModel, StringComparison.Ordinal);
+        Assert.Contains(
+            "Up to four currently eligible jobs",
+            page,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "highest available jobs",
+            page,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
