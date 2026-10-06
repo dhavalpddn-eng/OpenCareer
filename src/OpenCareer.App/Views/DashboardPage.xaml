@@ -96,7 +96,7 @@
                                 <StackPanel HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
                                             Spacing="6">
-                                    <TextBlock Text="AIRCRAFT / LOCATION HERO"
+                                    <TextBlock Text="CURRENT AIRCRAFT / LOCATION"
                                                Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
                                                FontSize="11"
                                                FontWeight="SemiBold"
@@ -334,9 +334,9 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Spacing="3">
-                            <TextBlock Text="TOP OPPORTUNITIES"
+                            <TextBlock Text="ELIGIBLE OPPORTUNITIES"
                                        Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
-                            <TextBlock Text="Up to four currently eligible jobs"
+                            <TextBlock Text="Startable local jobs"
                                        Style="{StaticResource OpenCareerPaperTitleStyle}" />
                             <TextBlock Text="{Binding OpportunityStatusText}"
                                        Style="{StaticResource OpenCareerPaperBodyStyle}" />
@@ -518,9 +518,9 @@
                     <StackPanel Grid.Column="1" Spacing="10">
                         <TextBlock Text="WORLD / MAP"
                                    Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
-                        <TextBlock Text="Jobs, routes, markets, events and government activity"
+                        <TextBlock Text="Career location and eligible local jobs"
                                    Style="{StaticResource OpenCareerPaperTitleStyle}" />
-                        <TextBlock Text="Home uses a condensed live world view. The Map / World tab remains the full exploration workspace."
+                        <TextBlock Text="Broader market, event and government activity remains unavailable until authoritative sources exist."
                                    Style="{StaticResource OpenCareerPaperBodyStyle}" />
                         <Button Content="Open Map / World"
                                 Style="{StaticResource OpenCareerPrimaryButtonStyle}"
@@ -532,7 +532,9 @@
             </Border>
 
             <!-- In-world social feed -->
-            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="22"
+                    Visibility="{Binding HasSocialFeed, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <StackPanel Spacing="12">
                     <Grid ColumnSpacing="14">
                         <Grid.ColumnDefinitions>
@@ -542,7 +544,7 @@
                         <StackPanel Spacing="3">
                             <TextBlock Text="OPENCAREER NETWORK"
                                        Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
-                            <TextBlock Text="Live in-world social feed"
+                            <TextBlock Text="Authoritative in-world activity"
                                        Style="{StaticResource OpenCareerPaperTitleStyle}" />
                             <TextBlock Text="Search an airport, city, region, company or topic to see what passengers, employers and local organizations are saying inside the simulated career world."
                                        Style="{StaticResource OpenCareerPaperBodyStyle}" />

@@ -73,6 +73,12 @@ public sealed class PlayerCareerDashboardSnapshotSource(
         DashboardCareerSummary? careerSummary = null;
         DashboardWorldSummary? worldSummary = null;
         string? playerLocation = null;
+        int? eligibleLocalOpportunityCount = eligibility.State switch
+        {
+            CareerJobOfferEligibilityState.Ready => eligibility.Offers.Count,
+            CareerJobOfferEligibilityState.NoEligibleOffers => 0,
+            _ => null
+        };
 
         if (current is not null)
         {
@@ -92,7 +98,7 @@ public sealed class PlayerCareerDashboardSnapshotSource(
             worldSummary = new DashboardWorldSummary(
                 PlayerLocation: profile.Location.CurrentAirportIcao,
                 HomeBase: profile.Location.HomeAirportIcao,
-                NearbyOpportunityCount: null,
+                NearbyOpportunityCount: eligibleLocalOpportunityCount,
                 ActiveWorldEventCount: null,
                 ActiveMarketSignalCount: null,
                 ActiveGovernmentSignalCount: null);
@@ -129,7 +135,8 @@ public sealed class PlayerCareerDashboardSnapshotSource(
                 .OrderByDescending(static entry => entry.Debrief.EndedAt)
                 .ThenBy(static entry => entry.EntryId)
                 .Select(ProjectActivity)
-                .ToArray()
+                .ToArray(),
+            OpportunityStatusDetail = eligibility.Detail
         };
     }
 

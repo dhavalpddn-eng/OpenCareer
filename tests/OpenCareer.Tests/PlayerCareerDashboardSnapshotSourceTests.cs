@@ -113,7 +113,7 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
         DashboardWorldSummary world = Assert.IsType<DashboardWorldSummary>(snapshot.World);
         Assert.Equal("KDAL", world.PlayerLocation);
         Assert.Equal("KDFW", world.HomeBase);
-        Assert.Null(world.NearbyOpportunityCount);
+        Assert.Equal(0, world.NearbyOpportunityCount);
         Assert.Null(world.ActiveWorldEventCount);
         Assert.Null(world.ActiveMarketSignalCount);
         Assert.Null(world.ActiveGovernmentSignalCount);
@@ -127,6 +127,7 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
         Assert.Null(snapshot.Aircraft);
         Assert.Null(snapshot.ActiveOperation);
         Assert.Empty(snapshot.Opportunities);
+        Assert.Equal("No eligible offers.", snapshot.OpportunityStatusDetail);
         Assert.Empty(snapshot.RecentActivity);
         Assert.Empty(snapshot.SocialFeed);
         Assert.Empty(snapshot.Guidance);
@@ -187,6 +188,11 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
             eligibility: eligibility).GetAsync();
 
         Assert.Equal(2, snapshot.Opportunities.Count);
+        Assert.Equal("Ready.", snapshot.OpportunityStatusDetail);
+        Assert.Equal(
+            2,
+            Assert.IsType<DashboardWorldSummary>(snapshot.World)
+                .NearbyOpportunityCount);
         DashboardOpportunity projected = snapshot.Opportunities[0];
         Assert.Equal(first.OfferId.ToString("D"), projected.Id);
         Assert.Equal("Ferry", projected.Title);
@@ -233,6 +239,13 @@ public sealed class PlayerCareerDashboardSnapshotSourceTests
 
         Assert.Empty(snapshot.Opportunities);
         Assert.Equal(1, eligibility.ReadCount);
+        Assert.Equal("Unavailable.", snapshot.OpportunityStatusDetail);
+        DashboardWorldSummary world =
+            Assert.IsType<DashboardWorldSummary>(snapshot.World);
+        if (state == CareerJobOfferEligibilityState.NoEligibleOffers)
+            Assert.Equal(0, world.NearbyOpportunityCount);
+        else
+            Assert.Null(world.NearbyOpportunityCount);
     }
 
     [Fact]

@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-02 against `feature/playable-loop-integration` code head `e8403313`, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-06 through P33 on `feature/playable-loop-integration`; P32 exact-head Linux/Windows CI passed at `698275d`, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -56,8 +56,8 @@ flowchart TD
     A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P28 foundations<br/>CI COMPLETE"]
     B --> C["Ordinary compensated job<br/>live certification"]
     C --> D["Broader aircraft/evidence<br/>live calibration"]
-    D --> E["Top Opportunities<br/>eligibility authority"]
-    E --> F["Registry / jobs breadth<br/>career progression"]
+    D --> E["Registry / jobs breadth<br/>career progression"]
+    E --> F["Later Dashboard authorities<br/>rank / pay / company / world"]
 
     classDef next fill:#3b3218,stroke:#F4B942,color:#fff,stroke-width:2px;
     classDef future fill:#172737,stroke:#4EA8DE,color:#fff,stroke-width:1px;
@@ -619,13 +619,17 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement initial Dashboard.
 - [x] Implement production Dashboard layout and data contract without fabricated career/job/economy values.
 - [x] Implement deterministic dynamic Dashboard guidance/routing foundation.
-- [x] Implement Top Opportunities selection: four highest available jobs by tier -> fit -> economics/reposition tie-breakers.
+- [x] Implement the future ranked-opportunity selector: tier -> fit -> economics/reposition tie-breakers when all ranking inputs are authoritative.
 - [x] Lock opportunity tiers: Green Standard / Blue Specialist / Purple Elite / Orange-Gold Legendary with text labels.
 - [x] Add career/company/finance/aircraft/world/recent-activity/social-feed Dashboard modules.
 - [x] Add searchable OpenCareer Network in-world social-feed surface.
 - [x] Remove KRME as a hard-coded production Home base; keep it developer-fixture only.
 - [x] Replace the unavailable Dashboard source with authoritative Career/location, Economy, Logbook activity, Active Operation and contract-reserved aircraft projections.
-- [ ] Project Top Opportunities only after authoritative eligibility/ranking inputs are available; keep Company/employment and unsupported World/Fleet fields unavailable until their authorities exist.
+- [x] Add a read-only persisted-board eligibility source that retains only offers startable through existing aircraft/start-readiness authorities.
+- [x] Project up to four authoritative eligible local offers in deterministic source order with route, duration/distance and qualifying-aircraft evidence.
+- [x] Keep unknown opportunity tier, fit, gross/net pay and ranking genuinely unknown; remove copy that claims unproven ranking.
+- [x] Project authoritative eligible-local count/status and hide unsupported social content; keep Company/employment and unsupported World/Fleet fields unavailable.
+- [ ] Add ranked ordering, offer compensation and later Company/World/Fleet fields only when their authoritative upstream sources exist.
 - [ ] Verify production Dashboard adaptive layout, keyboard navigation and visual hierarchy on Windows.
 - [x] Implement initial Current Flight telemetry page.
 - [x] Define per-flight contextual checklist UX with inline controller/keyboard binding state.
@@ -780,7 +784,7 @@ Do not skip this order without an explicit reason:
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition job through dispatch, settlement, Logbook, location and restart replay.
 2. Live-validate the implemented aircraft-mismatch, touch-and-go/go-around, simulation-rate, night and actual-instrument paths on representative simulator sessions.
 3. Expand registry/capability/job breadth without rebuilding the validated KJFK loop.
-4. Add Dashboard Top Opportunities only when authoritative job eligibility/ranking inputs can be projected without fabrication.
+4. Add Dashboard ranking/pay or Company/World/Fleet values only when authoritative upstream inputs exist; do not rebuild eligible-offer projection.
 5. Continue checklist/binding/specialized-mission work only through their owning MBL prerequisites.
 
 The external aviation APIs, full conflict simulation, dealer expansion and rich production UI are valuable, but they do not replace this critical path.

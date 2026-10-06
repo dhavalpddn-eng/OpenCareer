@@ -162,7 +162,8 @@ public sealed record DashboardSnapshot(
     IReadOnlyList<DashboardOpportunity> Opportunities,
     IReadOnlyList<DashboardRecentActivity> RecentActivity,
     IReadOnlyList<DashboardSocialPost> SocialFeed,
-    IReadOnlyList<DashboardGuidanceCandidate> Guidance)
+    IReadOnlyList<DashboardGuidanceCandidate> Guidance,
+    string? OpportunityStatusDetail = null)
 {
     public static DashboardSnapshot Empty { get; } =
         new(

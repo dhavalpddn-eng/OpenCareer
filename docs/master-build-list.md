@@ -65,16 +65,16 @@ Remaining before removal:
 - automatic specialized mission-family trigger when those mission families exist,
 - mission/checklist evidence integration.
 
-### MBL-01 — Production Home / Dashboard — IN PROGRESS
-**Estimated remaining direct effort: ~0.5–1.5 developer days plus downstream integrations**
+### MBL-01 — Production Home / Dashboard — CURRENT-AUTHORITY CODE COMPLETE / VERIFICATION PENDING
+**Estimated remaining direct effort: ~0.25–0.5 developer day plus downstream integrations**
 
 The production dynamic Home surface and contracts are implemented: split flight/career hero, daily P/L header, deterministic next-action routing, four-tier Top Opportunities foundation, career/company/finance/aircraft/readiness modules, world summary, recent activity, searchable OpenCareer Network feed, and an Active Operation panel for accepted work/checklist/blocker/next-action state.
 
 Dashboard snapshot guidance is centralized and domain-tested for active operations, maintenance blockers, probation/suspension/termination and job recommendations. Home refreshes its non-telemetry snapshot every 10 seconds while visible with overlap protection and cancellation on navigation. Windows WinUI, live-probe, Linux, SimLab and unit-test CI all passed after the first converter namespace defect was fixed.
 
-Production now registers `PlayerCareerDashboardSnapshotSource`. It projects authoritative career qualifications/experience and player/home location, cash/today net, recent committed flights, one deterministic active operation with existing readiness/blockers, and its contract-reserved aircraft identity when reservation/registry evidence exists. Unsupported Company/employment, opportunity, ownership, maintenance-readiness, physical-aircraft-location, obligation, social and broader World fields remain explicitly null/empty.
+Production registers `PlayerCareerDashboardSnapshotSource`. It projects authoritative career qualifications/experience and player/home location, cash/today net, recent committed flights, one deterministic active operation with existing readiness/blockers, and its contract-reserved aircraft identity when reservation/registry evidence exists. `CareerJobOfferEligibilitySource` reads the persisted local board and delegates aircraft readiness to the existing start action; Dashboard projects up to four proven-startable offers in deterministic source order with route, duration/distance and qualifying-aircraft evidence. It also exposes the authoritative eligible-local count and source status.
 
-Final completion depends on adding Top Opportunities only when authoritative eligibility/ranking evidence exists, projecting later Company/World authorities without fabrication, and local visual/runtime acceptance.
+Tier, fit, gross/net offer pay and quality ranking remain explicitly unknown because no current authority provides them. Company/employment, ownership, maintenance readiness, physical aircraft location, obligations, social activity and broader World signals remain null/empty. Final removal depends on local adaptive-layout/keyboard/visual acceptance and projecting later upstream authorities without fabrication; current Dashboard work must not block those systems.
 
 ### MBL-22 — AI dispatcher / copilot / passengers
 **Estimated effort: ~2–5 developer days for the first production version**

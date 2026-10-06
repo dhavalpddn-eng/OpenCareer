@@ -72,8 +72,9 @@ public sealed class DashboardGuidanceEngine
                 DashboardGuidancePriority.Recommended,
                 20,
                 DashboardActionTarget.Jobs,
-                "Review your best available jobs",
-                "The Jobs board has ranked your four strongest eligible opportunities."));
+                "Review eligible local jobs",
+                "These persisted offers are startable with at least one installed aircraft. " +
+                "They are shown in source order because tier and fit ranking are unavailable."));
         }
 
         return candidates;

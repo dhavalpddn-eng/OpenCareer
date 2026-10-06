@@ -22,7 +22,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     private string _socialSearch = string.Empty;
     private string _primaryActionTitle = "No urgent career action";
     private string _primaryActionDetail =
-        "OpenCareer will surface the most important next step here as career systems come online.";
+        "No authoritative career action currently requires attention.";
     private DashboardActionTarget _primaryActionTarget = DashboardActionTarget.None;
 
     public DashboardViewModel(
@@ -56,13 +56,18 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
     public string OpportunityStatusText =>
         _topOpportunities.Count == 0
-            ? "No eligible jobs are available from the Jobs system yet."
-            : $"Showing {_topOpportunities.Count} eligible opportunities in authoritative source order.";
+            ? _snapshot.OpportunityStatusDetail ??
+              "Job eligibility is currently unavailable."
+            : $"{_snapshot.OpportunityStatusDetail} " +
+              $"Showing the first {_topOpportunities.Count} in source order; " +
+              "tier and fit ranking are unavailable.";
 
     public string SocialFeedStatusText =>
         _socialFeed.Count == 0
-            ? "No OpenCareer Network posts are available for this search yet."
+            ? "No authoritative social activity source is available."
             : $"{_socialFeed.Count} OpenCareer Network post(s) match.";
+
+    public bool HasSocialFeed => _snapshot.SocialFeed.Count > 0;
 
     public string ActivityStatusText =>
         _recentActivity.Count == 0
@@ -211,19 +216,21 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
     public string AircraftBlockingText =>
         _snapshot.Aircraft?.BlockingReason ??
-        "Maintenance and dispatch blockers will appear here when available.";
+        "No authoritative aircraft readiness or maintenance status is available.";
 
     public string HomeBaseText =>
         _snapshot.World?.HomeBase ?? "Home base not configured";
 
     public string WorldSummaryText =>
         _snapshot.World is null
-            ? "World layers are waiting for Map / World, Jobs and market systems."
+            ? "Career location and broader world activity are unavailable."
+            : _snapshot.World.NearbyOpportunityCount is int eligibleCount
+                ? $"{eligibleCount} eligible local job(s). Broader world activity is unavailable."
             : _snapshot.World.NearbyOpportunityCount is null
                 && _snapshot.World.ActiveWorldEventCount is null
                 && _snapshot.World.ActiveMarketSignalCount is null
                 && _snapshot.World.ActiveGovernmentSignalCount is null
-                    ? "World activity is not available yet."
+                    ? "Broader world activity is unavailable."
             : $"{_snapshot.World.NearbyOpportunityCount} nearby jobs • " +
               $"{_snapshot.World.ActiveWorldEventCount} events • " +
               $"{_snapshot.World.ActiveMarketSignalCount} market signals • " +
@@ -396,6 +403,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
             nameof(SocialFeed),
             nameof(OpportunityStatusText),
             nameof(SocialFeedStatusText),
+            nameof(HasSocialFeed),
             nameof(ActivityStatusText),
             nameof(CareerLevelText),
             nameof(CareerXpText),

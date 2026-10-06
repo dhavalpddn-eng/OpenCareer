@@ -5,7 +5,7 @@ namespace OpenCareer.Tests;
 public sealed class DashboardFoundationTests
 {
     [Fact]
-    public void TopOpportunitiesShowsFourHighestAvailableJobs()
+    public void RankedOpportunitiesShowFourHighestAvailableJobs()
     {
         DashboardOpportunity[] opportunities =
         [
@@ -85,14 +85,17 @@ public sealed class DashboardFoundationTests
         Assert.Contains("\"TIER —\"", viewModel, StringComparison.Ordinal);
         Assert.Contains("\"Fit —\"", viewModel, StringComparison.Ordinal);
         Assert.DoesNotContain("0)% fit", viewModel, StringComparison.Ordinal);
-        Assert.Contains(
-            "Up to four currently eligible jobs",
-            page,
-            StringComparison.Ordinal);
+        Assert.Contains("Startable local jobs", page, StringComparison.Ordinal);
+        Assert.Contains("ELIGIBLE OPPORTUNITIES", page, StringComparison.Ordinal);
         Assert.DoesNotContain(
-            "highest available jobs",
+            "TOP OPPORTUNITIES",
             page,
             StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("condensed live world view", page, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Visibility=\"{Binding HasSocialFeed",
+            page,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -257,6 +260,10 @@ public sealed class DashboardFoundationTests
         Assert.NotNull(selected);
         Assert.Equal("top-jobs", selected.Id);
         Assert.Equal(DashboardActionTarget.Jobs, selected.Target);
+        Assert.Equal("Review eligible local jobs", selected.Title);
+        Assert.Contains("source order", selected.Detail, StringComparison.Ordinal);
+        Assert.Contains("ranking are unavailable", selected.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("strongest", selected.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     private static DashboardSnapshot EmptySnapshot() =>
