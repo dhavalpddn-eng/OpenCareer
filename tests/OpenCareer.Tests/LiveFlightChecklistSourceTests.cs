@@ -67,7 +67,11 @@ public sealed class LiveFlightChecklistSourceTests
         LiveFlightChecklistSnapshot first = source.Read();
         LiveFlightChecklistSnapshot second = source.Read();
 
-        Assert.Equal(first, second);
+        Assert.Equal(first.SessionId, second.SessionId);
+        Assert.Equal(first.CurrentPhase, second.CurrentPhase);
+        Assert.Equal(first.SessionStatus, second.SessionStatus);
+        Assert.Equal(first.Detail, second.Detail);
+        Assert.Equal(first.Steps.ToArray(), second.Steps.ToArray());
         Assert.Equal(
             LiveFlightChecklistStepState.Satisfied,
             Step(first, "takeoff-roll").State);
