@@ -15,6 +15,7 @@ public sealed partial class MainWindow : Window
 {
     private readonly DispatcherQueueTimer _statusTimer;
     private readonly FlightSessionRuntime _flightRuntime;
+    private readonly FirstJobTutorialAutoTrigger _firstJobTutorial;
     private readonly ILogger<MainWindow> _logger;
     private readonly CancellationTokenSource _lifetimeCts = new();
     private bool _tutorialInitialized;
@@ -23,19 +24,29 @@ public sealed partial class MainWindow : Window
         ShellViewModel viewModel,
         DashboardViewModel dashboard,
         LogbookViewModel logbook,
+        JobsViewModel jobs,
+        CareerViewModel career,
+        MilitaryGovernmentViewModel militaryGovernment,
         TutorialViewModel tutorial,
         SettingsViewModel settings,
         FlightSessionRuntime flightRuntime,
+        FirstJobTutorialAutoTrigger firstJobTutorial,
         ILogger<MainWindow> logger)
     {
         ViewModel = viewModel;
         Dashboard = dashboard;
         Logbook = logbook;
+        Jobs = jobs;
+        Career = career;
+        MilitaryGovernment = militaryGovernment;
         Tutorial = tutorial;
         Settings = settings;
         _flightRuntime =
             flightRuntime
             ?? throw new ArgumentNullException(nameof(flightRuntime));
+        _firstJobTutorial =
+            firstJobTutorial
+            ?? throw new ArgumentNullException(nameof(firstJobTutorial));
         _logger =
             logger
             ?? throw new ArgumentNullException(nameof(logger));
@@ -61,6 +72,9 @@ public sealed partial class MainWindow : Window
     public ShellViewModel ViewModel { get; }
     public DashboardViewModel Dashboard { get; }
     public LogbookViewModel Logbook { get; }
+    public JobsViewModel Jobs { get; }
+    public CareerViewModel Career { get; }
+    public MilitaryGovernmentViewModel MilitaryGovernment { get; }
     public TutorialViewModel Tutorial { get; }
     public SettingsViewModel Settings { get; }
 
@@ -85,6 +99,8 @@ public sealed partial class MainWindow : Window
         if (Settings.AutomaticallyOfferTutorials)
             await Tutorial.InitializeAsync();
 
+        await _firstJobTutorial.TryStartAsync();
+
         UpdateTutorialLayer();
     }
 
@@ -106,6 +122,18 @@ public sealed partial class MainWindow : Window
             {
                 ViewModel.RefreshConnectionStatus();
                 Tutorial.RefreshLiveEvidence();
+
+                await ViewModel
+                    .RefreshCareerCompletionActionAsync(
+                        _lifetimeCts.Token);
+
+                await ViewModel
+                    .RefreshCareerAbandonActionAsync(
+                        _lifetimeCts.Token);
+
+                await ViewModel
+                    .RefreshManualPostflightAsync(
+                        _lifetimeCts.Token);
             }
         }
         catch (OperationCanceledException)
@@ -139,11 +167,26 @@ public sealed partial class MainWindow : Window
             case "dashboard":
                 Navigate(typeof(DashboardPage), Dashboard);
                 break;
+            case "jobs":
+                Navigate(typeof(JobsPage), Jobs);
+                break;
             case "current-flight":
-                Navigate(typeof(CurrentFlightPage), ViewModel);
+                Navigate(
+                    typeof(CurrentFlightPage),
+                    new CurrentFlightPageContext(
+                        ViewModel,
+                        Jobs));
+                break;
+            case "military":
+                Navigate(
+                    typeof(MilitaryGovernmentPage),
+                    MilitaryGovernment);
                 break;
             case "logbook":
                 Navigate(typeof(LogbookPage), Logbook);
+                break;
+            case "career":
+                Navigate(typeof(CareerPage), Career);
                 break;
             case "settings":
                 Navigate(

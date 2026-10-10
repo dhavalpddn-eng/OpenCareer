@@ -44,6 +44,20 @@ public sealed class LogbookCommitCoordinator
         return result;
     }
 
+    public static string BuildCareerSettlementIdempotencyKey(
+        string settlementIdempotencyKey)
+    {
+        if (string.IsNullOrWhiteSpace(
+                settlementIdempotencyKey))
+        {
+            throw new ArgumentException(
+                "Settlement idempotency key is required.",
+                nameof(settlementIdempotencyKey));
+        }
+
+        return $"career:{settlementIdempotencyKey}";
+    }
+
     public static string BuildIdempotencyKey(
         FlightDebrief debrief,
         LogbookCommitKind commitKind)
@@ -55,7 +69,8 @@ public sealed class LogbookCommitCoordinator
             LogbookCommitKind.AutomaticCareerSettlement =>
                 debrief.Settlement.Status == SettlementRecordStatus.Settled &&
                 !string.IsNullOrWhiteSpace(debrief.Settlement.IdempotencyKey)
-                    ? $"career:{debrief.Settlement.IdempotencyKey}"
+                    ? BuildCareerSettlementIdempotencyKey(
+                        debrief.Settlement.IdempotencyKey)
                     : throw new InvalidOperationException(
                         "Career logbook commits require a settled contract idempotency key."),
 

@@ -2,6 +2,80 @@ namespace OpenCareer.Domain.Flights;
 
 public static class FlightSessionEngine
 {
+    public static FlightSession StartNextLeg(
+        FlightSession current,
+        Guid nextLegId,
+        FlightSessionPlan nextPlan,
+        DateTimeOffset requestedAt)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(nextPlan);
+
+        if (nextLegId == Guid.Empty)
+            throw new ArgumentException("Flight leg ID cannot be empty.", nameof(nextLegId));
+
+        if (requestedAt == default || requestedAt < current.CreatedAt)
+            throw new ArgumentOutOfRangeException(nameof(requestedAt));
+
+        if (current.IsTerminal)
+            throw new InvalidOperationException("A terminal FlightSession cannot start another leg.");
+
+        nextPlan.Validate();
+        current.ValidateLegs();
+
+        FlightLeg[] legs = current.EffectiveLegs.ToArray();
+        DateTimeOffset startedAt =
+            requestedAt < current.UpdatedAt
+                ? current.UpdatedAt
+                : requestedAt;
+
+        FlightLeg final = legs[^1];
+        if (final.Status == FlightLegStatus.Active)
+        {
+            if (final.Sequence > 1
+                && final.LegId == nextLegId
+                && final.StartedAt == startedAt
+                && final.Plan == nextPlan)
+            {
+                return current;
+            }
+
+            throw new InvalidOperationException(
+                "The current flight leg must complete before another leg can start.");
+        }
+
+        if (legs.Any(leg => leg.LegId == nextLegId))
+            throw new InvalidOperationException("Flight leg ID already exists in this session.");
+
+        var nextLeg =
+            new FlightLeg(
+                nextLegId,
+                final.Sequence + 1,
+                startedAt,
+                nextPlan,
+                TimeLedger: FlightTimeLedger.Empty,
+                Statistics: FlightSessionStatistics.Empty,
+                LandingEpisodeNumbers: Array.Empty<int>());
+
+        FlightSession next =
+            current with
+            {
+                UpdatedAt = startedAt,
+                Status = FlightSessionStatus.Active,
+                OperationState = FlightOperationState.ReadyForStart,
+                Tracking = current.Tracking with
+                {
+                    State = FlightTrackingState.Preflight,
+                    SuspendedFrom = null,
+                    UpdatedAt = startedAt
+                },
+                Legs = [.. legs, nextLeg]
+            };
+
+        next.ValidateLegs();
+        return next;
+    }
+
     public static FlightSession Advance(
         FlightSession current,
         FlightSessionAdvance update)
@@ -32,10 +106,23 @@ public static class FlightSessionEngine
                 previousTracking,
                 update.Evidence);
 
-        FlightTimeLedger ledger =
-            update.TimeInterval is null
-                ? current.TimeLedger
-                : current.TimeLedger.Add(update.TimeInterval);
+        FlightTimeLedger ledger = current.TimeLedger;
+        FlightLeg[] legs = current.EffectiveLegs.ToArray();
+
+        if (update.TimeInterval is not null)
+        {
+            int activeLegIndex =
+                Array.FindLastIndex(
+                    legs,
+                    leg => leg.Status == FlightLegStatus.Active);
+
+            if (activeLegIndex >= 0)
+            {
+                ledger = ledger.Add(update.TimeInterval);
+                legs[activeLegIndex] =
+                    legs[activeLegIndex].AddTime(update.TimeInterval);
+            }
+        }
 
         FlightSessionStatus status =
             ResolveStatus(nextTracking);
@@ -62,6 +149,19 @@ public static class FlightSessionEngine
                 statistics.Observe(
                     update.Observation,
                     current.ContinuityAnchor);
+
+            int activeLegIndex =
+                Array.FindLastIndex(
+                    legs,
+                    leg => leg.Status == FlightLegStatus.Active);
+
+            if (activeLegIndex >= 0)
+            {
+                legs[activeLegIndex] =
+                    legs[activeLegIndex].Observe(
+                        update.Observation,
+                        update.ContinuityAnchor);
+            }
         }
 
         IReadOnlyList<FlightSessionLandingEpisode> landingEpisodes =
@@ -69,7 +169,27 @@ public static class FlightSessionEngine
                 current.EffectiveLandingEpisodes,
                 previousTracking,
                 nextTracking,
-                update.Evidence.Timestamp);
+                update.Evidence.Timestamp,
+                update.TouchdownMetrics);
+
+        if (landingEpisodes.Count > current.EffectiveLandingEpisodes.Count)
+        {
+            int activeLegIndex =
+                Array.FindLastIndex(
+                    legs,
+                    leg => leg.Status == FlightLegStatus.Active);
+
+            if (activeLegIndex >= 0)
+            {
+                foreach (FlightSessionLandingEpisode episode
+                         in landingEpisodes.Skip(current.EffectiveLandingEpisodes.Count))
+                {
+                    legs[activeLegIndex] =
+                        legs[activeLegIndex]
+                            .ReferenceLandingEpisode(episode.EpisodeNumber);
+                }
+            }
+        }
 
         if (update.ShutdownConfirmed
             && nextTracking.State == FlightTrackingState.Parked)
@@ -81,6 +201,8 @@ public static class FlightSessionEngine
         {
             operationState = FlightOperationState.Complete;
             status = FlightSessionStatus.Completed;
+            legs[^1] =
+                legs[^1].Complete(update.Evidence.Timestamp);
         }
 
         return current with
@@ -95,7 +217,8 @@ public static class FlightSessionEngine
                 update.ContinuityAnchor
                 ?? current.ContinuityAnchor,
             Statistics = statistics,
-            LandingEpisodes = landingEpisodes
+            LandingEpisodes = landingEpisodes,
+            Legs = legs
         };
     }
 
@@ -351,7 +474,8 @@ public static class FlightSessionEngine
         IReadOnlyList<FlightSessionLandingEpisode> current,
         FlightTrackingSnapshot previous,
         FlightTrackingSnapshot next,
-        DateTimeOffset timestamp)
+        DateTimeOffset timestamp,
+        FlightSessionTouchdownMetrics? touchdownMetrics)
     {
         var episodes =
             current.ToList();
@@ -369,7 +493,17 @@ public static class FlightSessionEngine
                         episode,
                         timestamp,
                         FlightSessionLandingKind.Unknown,
-                        BounceCount: 0));
+                        BounceCount: 0,
+                        VerticalSpeedFeetPerMinute:
+                            touchdownMetrics?.VerticalSpeedFeetPerMinute,
+                        NormalAccelerationG:
+                            touchdownMetrics?.NormalAccelerationG,
+                        IndicatedAirspeedKnots:
+                            touchdownMetrics?.IndicatedAirspeedKnots,
+                        PitchDegrees:
+                            touchdownMetrics?.PitchDegrees,
+                        BankDegrees:
+                            touchdownMetrics?.BankDegrees));
             }
         }
 
