@@ -168,6 +168,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<IFlightStateEvidenceSource>(provider =>
             provider.GetRequiredService<FlightSessionRuntime>());
+        services.AddSingleton<ILiveFlightChecklistSource, LiveFlightChecklistSource>();
 
         services.AddSingleton<SimConnectConnection>();
         services.AddSingleton<ISimulatorConnection>(provider =>

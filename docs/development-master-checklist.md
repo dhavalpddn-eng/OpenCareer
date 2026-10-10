@@ -639,7 +639,10 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Automatically start the First Job tutorial once when authoritative career/Jobs state makes it relevant, respecting preference, intro activity and completed/skipped progress.
 - [ ] Require a tutorial definition before a specialized mission family is considered production-ready.
 - [ ] Bind banner-tow and carrier takeoff/landing tutorials automatically to first mission use and live mission/checklist evidence when those mission families are built.
-- [ ] Implement per-flight checklist phases; the persistent **Show checklist every flight** setting is implemented and ready for MBL-04 consumption.
+- [x] Implement the conventional per-flight checklist foundation: deterministic preflight/preparation, engine/start, taxi, takeoff, airborne, approach/landing, parking and shutdown/completion phases projected on Current Flight.
+- [x] Auto-verify checklist steps only from persisted current-leg FlightSession milestones; retain progress across suspension/recovery and keep unsupported cockpit/device procedures explicitly manual or unavailable.
+- [x] Apply the persistent **Show checklist every flight** setting to Current Flight checklist visibility without writing new gameplay state.
+- [ ] Expand checklists with aircraft-specific or specialized-mission steps only when trustworthy evidence/definitions exist, and complete local WinUI/MSFS visual/runtime acceptance.
 - [ ] Implement controller/keyboard binding resolution/profile source without guessed bindings.
 - [ ] Render missing controller/keyboard mappings as visible amber/orange **UNBOUND** and required/critical missing mappings as red **UNBOUND — REQUIRED**.
 - [ ] Implement Dispatch screen against real dispatch services.

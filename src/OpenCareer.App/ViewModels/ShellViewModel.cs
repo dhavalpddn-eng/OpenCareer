@@ -21,6 +21,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly ICareerJobCompletionAction? _careerCompletionAction;
     private readonly ICareerFlightAbandonAction? _careerAbandonAction;
     private readonly IManualFlightPostflightAction? _manualPostflightAction;
+    private readonly ILiveFlightChecklistSource? _flightChecklistSource;
     private readonly ILogger<ShellViewModel>? _logger;
     private readonly SemaphoreSlim _careerActionGate = new(1, 1);
     private readonly SemaphoreSlim _manualPostflightGate = new(1, 1);
@@ -79,6 +80,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _manualPostflightDetail =
         "Manual postflight readiness has not been checked yet.";
     private ManualFlightPostflightLogRequest? _manualPostflightRequest;
+    private bool _isCurrentFlightChecklistVisible;
+    private string _currentFlightChecklistPhase = "NO ACTIVE CHECKLIST";
+    private string _currentFlightChecklistDetail =
+        "No current FlightSession is available for a live checklist.";
+    private IReadOnlyList<LiveFlightChecklistStep> _currentFlightChecklistSteps =
+        Array.Empty<LiveFlightChecklistStep>();
 
 
     public ShellViewModel(
@@ -168,7 +175,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         ICareerJobCompletionAction? careerCompletionAction,
         ICareerFlightAbandonAction? careerAbandonAction,
         ILogger<ShellViewModel>? logger,
-        IManualFlightPostflightAction? manualPostflightAction = null)
+        IManualFlightPostflightAction? manualPostflightAction = null,
+        ILiveFlightChecklistSource? flightChecklistSource = null)
     {
         _connection =
             connection
@@ -191,6 +199,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         _careerCompletionAction = careerCompletionAction;
         _careerAbandonAction = careerAbandonAction;
         _manualPostflightAction = manualPostflightAction;
+        _flightChecklistSource = flightChecklistSource;
         _logger = logger;
         _settings.Changed += OnSettingsChanged;
     }
@@ -234,6 +243,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public bool CanDiscardManualFlight => _canDiscardManualFlight;
     public bool IsManualPostflightBusy => _isManualPostflightBusy;
     public string ManualPostflightDetail => _manualPostflightDetail;
+    public bool IsCurrentFlightChecklistVisible => _isCurrentFlightChecklistVisible;
+    public string CurrentFlightChecklistPhase => _currentFlightChecklistPhase;
+    public string CurrentFlightChecklistDetail => _currentFlightChecklistDetail;
+    public IReadOnlyList<LiveFlightChecklistStep> CurrentFlightChecklistSteps =>
+        _currentFlightChecklistSteps;
     private bool _hasFlightSession;
     private bool _hasRecoveredFlightSession;
 
@@ -264,6 +278,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
 
         RefreshFlightSession();
+        RefreshFlightChecklist();
         RefreshCareerWorkflow();
     }
 
@@ -1146,6 +1161,59 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             nameof(CurrentFlightFuelSummary));
     }
 
+    private void RefreshFlightChecklist()
+    {
+        LiveFlightChecklistSnapshot snapshot =
+            _flightChecklistSource?.Read()
+            ?? LiveFlightChecklistSnapshot.NoSession;
+
+        bool visible =
+            _settings.Current.ShowChecklistEveryFlight
+            && snapshot.SessionId is not null;
+
+        IReadOnlyList<LiveFlightChecklistStep> phaseSteps =
+            snapshot.CurrentPhase is { } phase
+                ? snapshot.Steps.Where(step => step.Phase == phase).ToArray()
+                : Array.Empty<LiveFlightChecklistStep>();
+
+        SetBoolean(
+            ref _isCurrentFlightChecklistVisible,
+            visible,
+            nameof(IsCurrentFlightChecklistVisible));
+
+        SetField(
+            ref _currentFlightChecklistPhase,
+            snapshot.CurrentPhase is { } currentPhase
+                ? FormatChecklistPhase(currentPhase)
+                : "NO ACTIVE CHECKLIST",
+            nameof(CurrentFlightChecklistPhase));
+
+        SetField(
+            ref _currentFlightChecklistDetail,
+            snapshot.Detail,
+            nameof(CurrentFlightChecklistDetail));
+
+        if (!_currentFlightChecklistSteps.SequenceEqual(phaseSteps))
+        {
+            _currentFlightChecklistSteps = phaseSteps;
+            OnPropertyChanged(nameof(CurrentFlightChecklistSteps));
+        }
+    }
+
+    private static string FormatChecklistPhase(LiveFlightChecklistPhase phase) =>
+        phase switch
+        {
+            LiveFlightChecklistPhase.PreflightPreparation => "PREFLIGHT / PREPARATION",
+            LiveFlightChecklistPhase.EngineStart => "ENGINE / START",
+            LiveFlightChecklistPhase.Taxi => "TAXI",
+            LiveFlightChecklistPhase.Takeoff => "TAKEOFF",
+            LiveFlightChecklistPhase.Airborne => "AIRBORNE",
+            LiveFlightChecklistPhase.ApproachLanding => "APPROACH / LANDING",
+            LiveFlightChecklistPhase.Parking => "PARKING",
+            LiveFlightChecklistPhase.ShutdownCompletion => "SHUTDOWN / COMPLETION",
+            _ => "LIVE CHECKLIST"
+        };
+
     private string FormatRouteSummary(
         FlightSession session)
     {
@@ -1308,6 +1376,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             _lastFlightSessionUpdatedAt = null;
             RefreshFlightSession();
         }
+
+        RefreshFlightChecklist();
     }
 
     private static double FeetToMeters(double feet) => feet * 0.3048;

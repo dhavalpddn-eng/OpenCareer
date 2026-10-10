@@ -100,10 +100,12 @@ Completed since the prior reconciliation: explicit free/practice **Log Flight / 
 
 MBL-12 does not own mission success or economy settlement; it records their authoritative final results.
 
-### MBL-04 — Live per-flight checklist
-**Estimated effort: ~3–6 developer days**
+### MBL-04 — Live per-flight checklist — CONVENTIONAL FOUNDATION IMPLEMENTED / EXPANSION AND LIVE ACCEPTANCE PENDING
+**Estimated remaining effort: ~2–5 developer days plus live validation**
 
-Phase-aware preflight through shutdown checklist with trustworthy live auto-verification.
+Current Flight now renders a deterministic conventional checklist from preflight/preparation through shutdown/completion. Automatic completion uses only persisted FlightSession milestones scoped to the current leg; raw telemetry snapshots cannot backfill earlier steps. Aircraft-specific cockpit, configuration and procedural items remain explicitly manual or unavailable when OpenCareer lacks trustworthy universal evidence. The persistent **Show checklist every flight** preference controls visibility without changing gameplay state.
+
+Remaining: trustworthy binding/profile discovery under MBL-05, richer aircraft-specific and specialized-mission definitions after their authorities exist, manual-step interaction only if a durable authority is designed, and local WinUI/MSFS visual and runtime acceptance.
 
 ### MBL-06 — FlightEvidenceProcessor — CORE FULL-STOP PATH IMPLEMENTED / EDGE CALIBRATION PENDING
 **Estimated remaining effort: ~4–7 developer days plus live validation**

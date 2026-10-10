@@ -213,6 +213,64 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task LiveChecklistUsesSourceAndRespectsPersistentVisibilityPreference()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
+        FlightSession session = FlightSession.Start(timestamp);
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+        var settings = new TestSettingsService();
+        var checklist = new TestLiveFlightChecklistSource(
+            new LiveFlightChecklistSnapshot(
+                session.SessionId,
+                LiveFlightChecklistPhase.PreflightPreparation,
+                FlightSessionStatus.Active,
+                [
+                    new LiveFlightChecklistStep(
+                        "aircraft-ready",
+                        LiveFlightChecklistPhase.PreflightPreparation,
+                        "Aircraft readiness established",
+                        LiveFlightChecklistVerificationMode.Automatic,
+                        LiveFlightChecklistStepState.Pending,
+                        "Pending authoritative flight evidence."),
+                    new LiveFlightChecklistStep(
+                        "engine-start",
+                        LiveFlightChecklistPhase.EngineStart,
+                        "Engine start observed",
+                        LiveFlightChecklistVerificationMode.Automatic,
+                        LiveFlightChecklistStepState.Pending,
+                        "Pending authoritative flight evidence.")
+                ],
+                "Authoritative checklist detail."));
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            settings,
+            coordinator,
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: null,
+            careerAbandonAction: null,
+            logger: null,
+            manualPostflightAction: null,
+            flightChecklistSource: checklist);
+
+        viewModel.RefreshConnectionStatus();
+
+        Assert.True(viewModel.IsCurrentFlightChecklistVisible);
+        Assert.Equal("PREFLIGHT / PREPARATION", viewModel.CurrentFlightChecklistPhase);
+        Assert.Equal("Authoritative checklist detail.", viewModel.CurrentFlightChecklistDetail);
+        Assert.Single(viewModel.CurrentFlightChecklistSteps);
+        Assert.Equal("aircraft-ready", viewModel.CurrentFlightChecklistSteps[0].Id);
+
+        await settings.UpdateAsync(
+            settings.Current with { ShowChecklistEveryFlight = false });
+
+        Assert.False(viewModel.IsCurrentFlightChecklistVisible);
+    }
+
+    [Fact]
     public async Task CareerCompletionActionEnablesOnlyWhenAuthoritativeInputsAreReady()
     {
         var action =
@@ -704,5 +762,11 @@ public sealed class ShellViewModelTests
 
         public Task ResetAsync(CancellationToken cancellationToken = default) =>
             UpdateAsync(AppPreferences.Default, cancellationToken);
+    }
+
+    private sealed class TestLiveFlightChecklistSource(
+        LiveFlightChecklistSnapshot snapshot) : ILiveFlightChecklistSource
+    {
+        public LiveFlightChecklistSnapshot Read() => snapshot;
     }
 }

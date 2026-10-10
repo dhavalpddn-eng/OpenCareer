@@ -92,6 +92,52 @@
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="24"
+                    Visibility="{Binding IsCurrentFlightChecklistVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="LIVE CHECKLIST"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="{Binding CurrentFlightChecklistPhase}"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                        <TextBlock Text="{Binding CurrentFlightChecklistDetail}"
+                                   TextWrapping="Wrap"
+                                   Style="{StaticResource OpenCareerInputHelpStyle}" />
+                    </StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding CurrentFlightChecklistSteps}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,0,8"
+                                        Style="{StaticResource OpenCareerPaperInsetStyle}">
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="3">
+                                            <TextBlock Text="{Binding State}"
+                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                            <TextBlock Text="{Binding VerificationMode}"
+                                                       TextWrapping="Wrap"
+                                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="3">
+                                            <TextBlock Text="{Binding Title}"
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                            <TextBlock Text="{Binding EvidenceDetail}"
+                                                       TextWrapping="Wrap"
+                                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="24"
                     Visibility="{Binding IsManualPostflightVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <StackPanel Spacing="10">
                     <TextBlock Text="MANUAL POSTFLIGHT"
