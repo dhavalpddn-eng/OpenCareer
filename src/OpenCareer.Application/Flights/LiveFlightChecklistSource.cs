@@ -143,6 +143,10 @@ public sealed class LiveFlightChecklistSource(
                 ? candidate
                 : null;
         bool satisfied = verifiedAt is not null;
+        string detail =
+            verifiedAt is { } persistedAt
+                ? $"Verified from persisted flight evidence at {persistedAt:O}."
+                : PendingDetail(session);
         steps.Add(
             new LiveFlightChecklistStep(
                 id,
@@ -152,9 +156,7 @@ public sealed class LiveFlightChecklistSource(
                 satisfied
                     ? LiveFlightChecklistStepState.Satisfied
                     : LiveFlightChecklistStepState.Pending,
-                satisfied
-                    ? $"Verified from persisted flight evidence at {verifiedAt.Value:O}."
-                    : PendingDetail(session)));
+                detail));
     }
 
     private static void AddManual(
