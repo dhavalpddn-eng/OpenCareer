@@ -123,12 +123,14 @@ Packaging, migrations, backups, production logging, performance validation, sign
 
 Final release acceptance naturally waits until the app is much closer to feature-complete.
 
-### MBL-05 — Controller + keyboard binding system
-**Estimated effort: ~4–8 developer days**
+### MBL-05 — Controller + keyboard binding system — AUTHORITY BOUNDARY IMPLEMENTED / ASSIGNMENT DISCOVERY BLOCKED
+**Estimated remaining effort: ~3–7 developer days, conditional on a supported binding authority**
 
-Per-step verified bindings, UNBOUND states and aircraft/device-sensitive mapping.
+Deterministic action, device, profile, state and evidence models are implemented behind an isolated simulator/application source. `BOUND`, `UNBOUND`, `UNKNOWN` and `UNAVAILABLE` are distinct. Current Flight and Settings report the production source state, while binding evidence cannot complete checklist steps.
 
-This is more uncertain than its size suggests because MSFS binding/profile accessibility must be proven rather than guessed.
+Official MSFS 2024 SDK evidence currently exposes connected-controller enumeration (`SimConnect_EnumerateControllers`), current-aircraft input-event descriptors (`SimConnect_EnumerateInputEvents`) and client-owned input mapping (`SimConnect_MapInputEventToClientEvent_EX1`). It does not expose the user's active Controls profile or action-to-key/button assignments. Production therefore reports `UNAVAILABLE`; it does not parse undocumented profile files, infer assignments, or claim `UNBOUND`. No checklist step receives a binding hint until an authoritative action mapping exists.
+
+Remaining: implement actual assignment discovery only if Microsoft exposes a supported runtime/profile API or another explicitly authoritative source is adopted; then add device/aircraft-sensitive hints and validated UNBOUND presentation plus local MSFS acceptance.
 
 ### MBL-15 — Aircraft purchasing + financing
 **Estimated effort: ~5–8 developer days**

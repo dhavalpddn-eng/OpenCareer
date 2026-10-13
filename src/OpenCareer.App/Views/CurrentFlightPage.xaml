@@ -102,6 +102,9 @@
                         <TextBlock Text="{Binding CurrentFlightChecklistDetail}"
                                    TextWrapping="Wrap"
                                    Style="{StaticResource OpenCareerInputHelpStyle}" />
+                        <TextBlock Text="{Binding CurrentFlightInputBindingStatus}"
+                                   TextWrapping="Wrap"
+                                   Style="{StaticResource OpenCareerInputHelpStyle}" />
                     </StackPanel>
 
                     <ItemsControl ItemsSource="{Binding CurrentFlightChecklistSteps}">
@@ -125,6 +128,9 @@
                                             <TextBlock Text="{Binding Title}"
                                                        Style="{StaticResource OpenCareerPaperDataValueStyle}" />
                                             <TextBlock Text="{Binding EvidenceDetail}"
+                                                       TextWrapping="Wrap"
+                                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                                            <TextBlock Text="{Binding BindingHint.BindingDisplayText}"
                                                        TextWrapping="Wrap"
                                                        Style="{StaticResource OpenCareerInputHelpStyle}" />
                                         </StackPanel>

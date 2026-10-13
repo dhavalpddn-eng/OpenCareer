@@ -1,4 +1,5 @@
 using OpenCareer.Domain.Flights;
+using OpenCareer.Application.Simulator;
 
 namespace OpenCareer.Application.Flights;
 
@@ -34,14 +35,16 @@ public sealed record LiveFlightChecklistStep(
     string Title,
     LiveFlightChecklistVerificationMode VerificationMode,
     LiveFlightChecklistStepState State,
-    string EvidenceDetail);
+    string EvidenceDetail,
+    InputBindingEvidence? BindingHint = null);
 
 public sealed record LiveFlightChecklistSnapshot(
     Guid? SessionId,
     LiveFlightChecklistPhase? CurrentPhase,
     FlightSessionStatus? SessionStatus,
     IReadOnlyList<LiveFlightChecklistStep> Steps,
-    string Detail)
+    string Detail,
+    InputBindingDiscoverySnapshot? InputBindings = null)
 {
     public static LiveFlightChecklistSnapshot NoSession { get; } =
         new(
@@ -59,13 +62,16 @@ public interface ILiveFlightChecklistSource
 
 public sealed class LiveFlightChecklistSource(
     FlightSessionCoordinator flightSessions,
-    IFlightStateEvidenceSource evidenceSource) : ILiveFlightChecklistSource
+    IFlightStateEvidenceSource evidenceSource,
+    IInputBindingDiscoverySource? inputBindings = null) : ILiveFlightChecklistSource
 {
     private readonly FlightSessionCoordinator _flightSessions =
         flightSessions ?? throw new ArgumentNullException(nameof(flightSessions));
 
     private readonly IFlightStateEvidenceSource _evidenceSource =
         evidenceSource ?? throw new ArgumentNullException(nameof(evidenceSource));
+
+    private readonly IInputBindingDiscoverySource? _inputBindings = inputBindings;
 
     public LiveFlightChecklistSnapshot Read()
     {
@@ -126,7 +132,8 @@ public sealed class LiveFlightChecklistSource(
             phase,
             session.Status,
             steps,
-            BuildDetail(session));
+            BuildDetail(session),
+            _inputBindings?.Read(Array.Empty<InputBindingActionIdentity>()));
     }
 
     private void AddAutomatic(

@@ -1,4 +1,5 @@
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Flights;
 
 namespace OpenCareer.Tests;
@@ -213,6 +214,38 @@ public sealed class LiveFlightChecklistSourceTests
         Assert.Equal(LiveFlightChecklistStepState.Pending, Step(snapshot, "takeoff").State);
     }
 
+    [Fact]
+    public void BindingDiscoveryCannotCompleteChecklistSteps()
+    {
+        FlightSession session = Session(FlightTrackingState.EngineStart);
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+        var bindingSource = new TestBindingSource(
+            new InputBindingDiscoverySnapshot(
+                InputBindingState.Bound,
+                [
+                    new InputBindingEvidence(
+                        new("engine-start", "Engine start"),
+                        new("device", "Test device"),
+                        new("profile", "Test profile"),
+                        InputBindingState.Bound,
+                        "Button 1",
+                        "Test evidence")
+                ],
+                "Test binding is available."));
+        var source = new LiveFlightChecklistSource(
+            coordinator,
+            StableEvidence(),
+            bindingSource);
+
+        LiveFlightChecklistSnapshot snapshot = source.Read();
+
+        Assert.Equal(InputBindingState.Bound, snapshot.InputBindings?.State);
+        Assert.Empty(bindingSource.RequestedActions);
+        Assert.All(snapshot.Steps, step => Assert.Null(step.BindingHint));
+        Assert.Equal(LiveFlightChecklistStepState.Pending, Step(snapshot, "engine-start").State);
+    }
+
     private static FlightSession Session(FlightTrackingState state) =>
         FlightSession.Start(Epoch) with
         {
@@ -257,6 +290,20 @@ public sealed class LiveFlightChecklistSourceTests
         {
             add { }
             remove { }
+        }
+    }
+
+    private sealed class TestBindingSource(
+        InputBindingDiscoverySnapshot snapshot) : IInputBindingDiscoverySource
+    {
+        public IReadOnlyList<InputBindingActionIdentity> RequestedActions { get; private set; } =
+            Array.Empty<InputBindingActionIdentity>();
+
+        public InputBindingDiscoverySnapshot Read(
+            IReadOnlyList<InputBindingActionIdentity> actions)
+        {
+            RequestedActions = actions;
+            return snapshot;
         }
     }
 }

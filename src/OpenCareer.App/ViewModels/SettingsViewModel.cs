@@ -20,6 +20,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private readonly ShellOpenService _shell;
     private readonly OpenCareerDataPaths _paths;
     private readonly FlightSessionCoordinator _flightSessions;
+    private readonly IInputBindingDiscoverySource? _inputBindings;
 
     private string _actionStatus = "Ready.";
     private bool _isBusy;
@@ -32,6 +33,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private string _lastTelemetry = "—";
     private string _aircraftRuntimeState = "—";
     private string _careerRecoveryStatus;
+    private string _inputBindingStatus =
+        "UNAVAILABLE · No supported binding source is connected.";
 
     public SettingsViewModel(
         IAppSettingsService settings,
@@ -41,7 +44,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         AppDataBackupService backup,
         ShellOpenService shell,
         OpenCareerDataPaths paths,
-        FlightSessionCoordinator flightSessions)
+        FlightSessionCoordinator flightSessions,
+        IInputBindingDiscoverySource? inputBindings = null)
     {
         _settings = settings;
         _connection = connection;
@@ -53,6 +57,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _flightSessions =
             flightSessions
             ?? throw new ArgumentNullException(nameof(flightSessions));
+        _inputBindings = inputBindings;
         _careerRecoveryStatus =
             FormatCareerRecoveryStatus(_flightSessions.Current);
 
@@ -110,8 +115,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public string BackupsFolder => _paths.BackupsFolder;
     public string DiagnosticsFolder => _paths.DiagnosticsFolder;
 
-    public string InputBindingStatus =>
-        "Binding resolver is not implemented yet (MBL-05). This preference controls which verified hint is shown first once bindings are available.";
+    public string InputBindingStatus => _inputBindingStatus;
 
     public string CareerRecoveryStatus => _careerRecoveryStatus;
 
@@ -137,6 +141,15 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public void RefreshDiagnostics()
     {
+        InputBindingDiscoverySnapshot? bindingSnapshot =
+            _inputBindings?.Read(Array.Empty<InputBindingActionIdentity>());
+        SetField(
+            ref _inputBindingStatus,
+            bindingSnapshot is null
+                ? "UNAVAILABLE · No supported binding source is connected."
+                : $"{bindingSnapshot.State.ToString().ToUpperInvariant()} · {bindingSnapshot.Detail}",
+            nameof(InputBindingStatus));
+
         SimulatorConnectionSnapshot snapshot = _connection.Current;
         AircraftTelemetrySnapshot? telemetry = snapshot.State == SimulatorConnectionState.Connected
             ? _telemetrySource.Latest

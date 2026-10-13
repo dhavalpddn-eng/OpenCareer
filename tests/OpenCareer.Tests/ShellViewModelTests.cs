@@ -242,7 +242,9 @@ public sealed class ShellViewModelTests
                         LiveFlightChecklistStepState.Pending,
                         "Pending authoritative flight evidence.")
                 ],
-                "Authoritative checklist detail."));
+                "Authoritative checklist detail.",
+                InputBindingDiscoverySnapshot.Unavailable(
+                    "Official runtime profile assignments are not exposed.")));
         var viewModel = new ShellViewModel(
             new TestConnection(),
             new TestTelemetrySource(),
@@ -261,6 +263,8 @@ public sealed class ShellViewModelTests
         Assert.True(viewModel.IsCurrentFlightChecklistVisible);
         Assert.Equal("PREFLIGHT / PREPARATION", viewModel.CurrentFlightChecklistPhase);
         Assert.Equal("Authoritative checklist detail.", viewModel.CurrentFlightChecklistDetail);
+        Assert.Contains("UNAVAILABLE", viewModel.CurrentFlightInputBindingStatus);
+        Assert.Contains("not exposed", viewModel.CurrentFlightInputBindingStatus);
         Assert.Single(viewModel.CurrentFlightChecklistSteps);
         Assert.Equal("aircraft-ready", viewModel.CurrentFlightChecklistSteps[0].Id);
 

@@ -178,6 +178,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<SimConnectCurrentLoadedAircraftIdentitySource>();
         services.AddSingleton<ICurrentLoadedAircraftIdentitySource>(provider =>
             provider.GetRequiredService<SimConnectCurrentLoadedAircraftIdentitySource>());
+        services.AddSingleton<IInputBindingDiscoverySource, SimConnectInputBindingDiscoverySource>();
 
         services.AddOpenCareerPlanningServices();
 

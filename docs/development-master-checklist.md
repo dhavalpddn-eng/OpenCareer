@@ -643,7 +643,10 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Auto-verify checklist steps only from persisted current-leg FlightSession milestones; retain progress across suspension/recovery and keep unsupported cockpit/device procedures explicitly manual or unavailable.
 - [x] Apply the persistent **Show checklist every flight** setting to Current Flight checklist visibility without writing new gameplay state.
 - [ ] Expand checklists with aircraft-specific or specialized-mission steps only when trustworthy evidence/definitions exist, and complete local WinUI/MSFS visual/runtime acceptance.
-- [ ] Implement controller/keyboard binding resolution/profile source without guessed bindings.
+- [x] Establish deterministic binding action/device/profile/evidence models and an isolated production source without guessed bindings.
+- [x] Verify the official SDK boundary: connected controllers and aircraft input-event descriptors are enumerable, but active user Controls profile assignments are not exposed; report **UNAVAILABLE**, not **UNBOUND**, and do not parse undocumented profile files.
+- [x] Connect the binding-discovery state to Current Flight checklist and Settings; keep per-step hints absent until an authoritative action mapping exists and prohibit binding state from completing checklist steps.
+- [ ] Implement actual action-to-key/button discovery only when a supported authoritative source exists, then validate aircraft/device-sensitive hints in MSFS.
 - [ ] Render missing controller/keyboard mappings as visible amber/orange **UNBOUND** and required/critical missing mappings as red **UNBOUND — REQUIRED**.
 - [ ] Implement Dispatch screen against real dispatch services.
 - [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.

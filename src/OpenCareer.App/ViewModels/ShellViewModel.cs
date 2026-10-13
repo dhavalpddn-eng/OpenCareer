@@ -84,6 +84,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _currentFlightChecklistPhase = "NO ACTIVE CHECKLIST";
     private string _currentFlightChecklistDetail =
         "No current FlightSession is available for a live checklist.";
+    private string _currentFlightInputBindingStatus =
+        "INPUT BINDINGS UNAVAILABLE";
     private IReadOnlyList<LiveFlightChecklistStep> _currentFlightChecklistSteps =
         Array.Empty<LiveFlightChecklistStep>();
 
@@ -246,6 +248,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public bool IsCurrentFlightChecklistVisible => _isCurrentFlightChecklistVisible;
     public string CurrentFlightChecklistPhase => _currentFlightChecklistPhase;
     public string CurrentFlightChecklistDetail => _currentFlightChecklistDetail;
+    public string CurrentFlightInputBindingStatus => _currentFlightInputBindingStatus;
     public IReadOnlyList<LiveFlightChecklistStep> CurrentFlightChecklistSteps =>
         _currentFlightChecklistSteps;
     private bool _hasFlightSession;
@@ -1193,6 +1196,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             snapshot.Detail,
             nameof(CurrentFlightChecklistDetail));
 
+        SetField(
+            ref _currentFlightInputBindingStatus,
+            FormatInputBindingStatus(snapshot.InputBindings),
+            nameof(CurrentFlightInputBindingStatus));
+
         if (!_currentFlightChecklistSteps.SequenceEqual(phaseSteps))
         {
             _currentFlightChecklistSteps = phaseSteps;
@@ -1213,6 +1221,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             LiveFlightChecklistPhase.ShutdownCompletion => "SHUTDOWN / COMPLETION",
             _ => "LIVE CHECKLIST"
         };
+
+    private static string FormatInputBindingStatus(
+        InputBindingDiscoverySnapshot? snapshot) =>
+        snapshot is null
+            ? "INPUT BINDINGS UNAVAILABLE · No supported binding source is connected."
+            : $"INPUT BINDINGS {snapshot.State.ToString().ToUpperInvariant()} · {snapshot.Detail}";
 
     private string FormatRouteSummary(
         FlightSession session)

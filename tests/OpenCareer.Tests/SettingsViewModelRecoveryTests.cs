@@ -29,6 +29,20 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public void BindingStatusUsesReadOnlyDiscoverySourceWithoutClaimingUnbound()
+    {
+        TestContext context = Create(
+            new FakeBindingSource(
+                InputBindingDiscoverySnapshot.Unavailable(
+                    "Official runtime profile assignments are not exposed.")));
+
+        Assert.Contains("UNAVAILABLE", context.ViewModel.InputBindingStatus);
+        Assert.Contains("not exposed", context.ViewModel.InputBindingStatus);
+        Assert.DoesNotContain("UNBOUND", context.ViewModel.InputBindingStatus);
+        Assert.Equal(0, context.Settings.WriteCount);
+    }
+
+    [Fact]
     public void ActiveSessionRefreshesStatusWithoutPersistenceWrites()
     {
         TestContext context = Create();
@@ -88,7 +102,8 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         Assert.Equal(0, context.Settings.WriteCount);
     }
 
-    private TestContext Create()
+    private TestContext Create(
+        IInputBindingDiscoverySource? inputBindings = null)
     {
         var paths = new OpenCareerDataPaths(_root);
         var settings = new FakeSettings();
@@ -116,7 +131,8 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
             backup,
             shell,
             paths,
-            sessions);
+            sessions,
+            inputBindings);
 
         return new TestContext(
             viewModel,
@@ -151,6 +167,13 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         SettingsViewModel ViewModel,
         FakeSettings Settings,
         FlightSessionCoordinator Sessions);
+
+    private sealed class FakeBindingSource(
+        InputBindingDiscoverySnapshot snapshot) : IInputBindingDiscoverySource
+    {
+        public InputBindingDiscoverySnapshot Read(
+            IReadOnlyList<InputBindingActionIdentity> actions) => snapshot;
+    }
 
     private sealed class FakeSettings : IAppSettingsService
     {
