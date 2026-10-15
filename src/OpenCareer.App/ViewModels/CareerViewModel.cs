@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using OpenCareer.Application.Careers;
+using OpenCareer.Domain.Careers;
 
 namespace OpenCareer.App.ViewModels;
 
@@ -8,6 +9,7 @@ public sealed class CareerViewModel : INotifyPropertyChanged
 {
     private readonly PlayerCareerOnboardingCoordinator _onboarding;
     private readonly PlayerCareerRuntimeState _runtime;
+    private readonly ICareerQualificationRoadmapSource _qualificationRoadmap;
     private readonly TimeProvider _timeProvider;
 
     private string _homeAirportIcao = string.Empty;
@@ -17,11 +19,30 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         "No career profile exists yet.";
     private bool _hasCareer;
     private bool _isCreating;
+    private string _currentLicenseText = "No career profile exists yet.";
+    private string _earnedRatingsText = "None";
+    private string _nextQualificationsText = "Complete onboarding to view the qualification roadmap.";
+    private string _qualificationPolicyText = "Qualifications are awarded only from authoritative completion evidence.";
+    private IReadOnlyList<CareerQualificationItemViewModel> _qualificationRoadmapItems =
+        Array.Empty<CareerQualificationItemViewModel>();
 
     public CareerViewModel(
         PlayerCareerOnboardingCoordinator onboarding,
         PlayerCareerRuntimeState runtime,
         TimeProvider timeProvider)
+        : this(
+            onboarding,
+            runtime,
+            timeProvider,
+            new CareerQualificationRoadmapSource(runtime))
+    {
+    }
+
+    public CareerViewModel(
+        PlayerCareerOnboardingCoordinator onboarding,
+        PlayerCareerRuntimeState runtime,
+        TimeProvider timeProvider,
+        ICareerQualificationRoadmapSource qualificationRoadmap)
     {
         _onboarding =
             onboarding
@@ -32,6 +53,8 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         _timeProvider =
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
+        _qualificationRoadmap = qualificationRoadmap
+            ?? throw new ArgumentNullException(nameof(qualificationRoadmap));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -57,6 +80,17 @@ public sealed class CareerViewModel : INotifyPropertyChanged
     public bool HasCareer => _hasCareer;
 
     public bool IsCreating => _isCreating;
+
+    public string CurrentLicenseText => _currentLicenseText;
+
+    public string EarnedRatingsText => _earnedRatingsText;
+
+    public string NextQualificationsText => _nextQualificationsText;
+
+    public string QualificationPolicyText => _qualificationPolicyText;
+
+    public IReadOnlyList<CareerQualificationItemViewModel> QualificationRoadmapItems =>
+        _qualificationRoadmapItems;
 
     public bool CanStartCareer =>
         !_hasCareer
@@ -89,10 +123,12 @@ public sealed class CareerViewModel : INotifyPropertyChanged
                     "Choose your starting airport where your civilian career will begin.",
                 location:
                     "No career profile exists yet.");
+            ApplyRoadmap(null);
             return;
         }
 
         ApplyCurrent(current);
+        await RefreshRoadmapAsync(cancellationToken);
     }
 
     public async Task StartCareerAsync(
@@ -138,6 +174,7 @@ public sealed class CareerViewModel : INotifyPropertyChanged
                     .ConfigureAwait(true);
 
             ApplyCurrent(created);
+            await RefreshRoadmapAsync(cancellationToken);
 
             SetField(
                 ref _statusText,
@@ -189,6 +226,79 @@ public sealed class CareerViewModel : INotifyPropertyChanged
                 "Career onboarding is complete.",
             location:
                 $"HOME {home} · CURRENT {location}");
+    }
+
+    private async Task RefreshRoadmapAsync(
+        CancellationToken cancellationToken)
+    {
+        CareerQualificationRoadmap? roadmap =
+            await _qualificationRoadmap
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(true);
+
+        ApplyRoadmap(roadmap);
+    }
+
+    private void ApplyRoadmap(
+        CareerQualificationRoadmap? roadmap)
+    {
+        if (roadmap is null)
+        {
+            SetField(ref _currentLicenseText, "No career profile exists yet.", nameof(CurrentLicenseText));
+            SetField(ref _earnedRatingsText, "None", nameof(EarnedRatingsText));
+            SetField(ref _nextQualificationsText, "Complete onboarding to view the qualification roadmap.", nameof(NextQualificationsText));
+            SetField(ref _qualificationPolicyText, "Qualifications are awarded only from authoritative completion evidence.", nameof(QualificationPolicyText));
+            SetField(ref _qualificationRoadmapItems, Array.Empty<CareerQualificationItemViewModel>(), nameof(QualificationRoadmapItems));
+            return;
+        }
+
+        string currentLicense = roadmap.EarnedQualifications.License switch
+        {
+            PilotLicenseLevel.None => "No civilian license",
+            PilotLicenseLevel.Student => "Student pilot",
+            PilotLicenseLevel.Private => "Private pilot",
+            PilotLicenseLevel.Commercial => "Commercial pilot",
+            PilotLicenseLevel.AirlineTransport => "Airline transport pilot",
+            _ => throw new ArgumentOutOfRangeException(nameof(roadmap))
+        };
+        string[] earnedRatings = roadmap.Items
+            .Where(static item =>
+                item.Identity.Kind == CareerQualificationKind.Rating
+                && item.Status == CareerQualificationRoadmapStatus.Earned)
+            .Select(static item => item.Title)
+            .ToArray();
+        string[] available = roadmap.Items
+            .Where(static item => item.Status == CareerQualificationRoadmapStatus.Available)
+            .Select(static item => item.Title)
+            .ToArray();
+        CareerQualificationItemViewModel[] items = roadmap.Items
+            .OrderBy(static item => item.Sequence)
+            .Select(static item => new CareerQualificationItemViewModel(
+                item.Title,
+                item.Identity.Kind == CareerQualificationKind.License ? "LICENSE" : "RATING",
+                item.Status.ToString().ToUpperInvariant(),
+                item.Description,
+                FormatPrerequisites(item.Prerequisites)))
+            .ToArray();
+
+        SetField(ref _currentLicenseText, currentLicense, nameof(CurrentLicenseText));
+        SetField(ref _earnedRatingsText, earnedRatings.Length == 0 ? "None" : string.Join(" · ", earnedRatings), nameof(EarnedRatingsText));
+        SetField(ref _nextQualificationsText, available.Length == 0 ? "No next qualification is currently available." : string.Join(" · ", available), nameof(NextQualificationsText));
+        SetField(ref _qualificationPolicyText, roadmap.TrainingPolicyDetail, nameof(QualificationPolicyText));
+        SetField(ref _qualificationRoadmapItems, items, nameof(QualificationRoadmapItems));
+    }
+
+    private static string FormatPrerequisites(
+        IEnumerable<CareerQualificationPrerequisite> prerequisites)
+    {
+        CareerQualificationPrerequisite[] values = prerequisites.ToArray();
+        if (values.Length == 0)
+            return "Prerequisites: none";
+
+        return "Prerequisites: " + string.Join(
+            " · ",
+            values.Select(static prerequisite =>
+                $"{prerequisite.Title} ({(prerequisite.IsMet ? "met" : "unmet")})"));
     }
 
     private void SetCareerState(
@@ -264,3 +374,10 @@ public sealed class CareerViewModel : INotifyPropertyChanged
             this,
             new PropertyChangedEventArgs(propertyName));
 }
+
+public sealed record CareerQualificationItemViewModel(
+    string Title,
+    string Kind,
+    string Status,
+    string Description,
+    string Prerequisites);

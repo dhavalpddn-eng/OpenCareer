@@ -136,6 +136,44 @@ public sealed class CareerViewModelTests
         Assert.Equal(0, store.SaveCount);
     }
 
+    [Fact]
+    public async Task ExistingCareerProjectsTruthfulQualificationRoadmapWithoutWrites()
+    {
+        PlayerCareerProfile existing =
+            PlayerCareerProfile.Start(
+                Guid.Parse("f6dad84c-5ad1-4718-bad9-134a318ebfb4"),
+                "KAFW",
+                Now.AddHours(-1)) with
+            {
+                Qualifications =
+                    new PilotQualificationState(
+                        PilotLicenseLevel.Private,
+                        System.Collections.Immutable.ImmutableHashSet.Create(
+                            PilotRating.AirplaneSingleEngineLand))
+            };
+        var store =
+            new FakeProfileStore(
+                new PlayerCareerProfileStoreRecord(
+                    3,
+                    existing,
+                    Now.AddMinutes(-30)));
+        var runtime = new PlayerCareerRuntimeState(store);
+        CareerViewModel viewModel = ViewModel(store, runtime);
+
+        await viewModel.InitializeAsync();
+
+        Assert.Equal("Private pilot", viewModel.CurrentLicenseText);
+        Assert.Equal("Airplane single-engine land", viewModel.EarnedRatingsText);
+        Assert.Contains("Commercial pilot", viewModel.NextQualificationsText, StringComparison.Ordinal);
+        Assert.Contains("future authoritative", viewModel.QualificationPolicyText, StringComparison.Ordinal);
+        Assert.Equal(7, viewModel.QualificationRoadmapItems.Count);
+        Assert.Equal("EARNED", viewModel.QualificationRoadmapItems[1].Status);
+        Assert.Equal("AVAILABLE", viewModel.QualificationRoadmapItems[2].Status);
+        Assert.Equal("LOCKED", viewModel.QualificationRoadmapItems[3].Status);
+        Assert.Contains("unmet", viewModel.QualificationRoadmapItems[3].Prerequisites, StringComparison.Ordinal);
+        Assert.Equal(0, store.SaveCount);
+    }
+
     private static CareerViewModel ViewModel(
         FakeProfileStore store,
         PlayerCareerRuntimeState runtime) =>

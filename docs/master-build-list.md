@@ -154,9 +154,9 @@ Physical fleet geography, storage, local services, relationships, expansion and 
 ### MBL-13 — Career progression — IN PROGRESS
 **Estimated remaining effort: ~6–10 developer days**
 
-Persistent career profile, onboarding/home location, qualifications foundation and exactly-once experience/travel application from committed career Logbook entries are implemented. Development/Test flights remain progression-neutral.
+Persistent career profile, onboarding/home location, qualifications foundation and exactly-once experience/travel application from committed career Logbook entries are implemented. The initial civilian roadmap now deterministically projects Student -> Private -> Commercial -> Airline Transport licenses plus the existing airplane single-engine land, multi-engine land and instrument ratings. It exposes Earned / Available / Locked state and explicit persisted-profile prerequisites through one read-only application authority. Career UI shows current license, earned ratings, next eligible qualifications and unmet prerequisites without awarding anything. No free-training entitlement is claimed, and Development/Test flights remain progression-neutral.
 
-Remaining: the licensing/training ladder, ratings, recency, civilian reputation/relationships, category/model experience, milestones and their job/employer gates.
+Remaining: authoritative training missions/completion evidence and qualification award orchestration, recency, civilian reputation/relationships, category/model experience, milestones and their job/employer gates. The roadmap is eligibility/read authority only; training cost/delivery remains unavailable until implemented.
 
 ### MBL-20 — World Map
 **Estimated effort: ~6–12 developer days**

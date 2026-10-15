@@ -45,6 +45,65 @@
                             Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
                 </StackPanel>
             </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="CIVILIAN QUALIFICATIONS"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <Grid ColumnSpacing="18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="CURRENT LICENSE"
+                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentLicenseText}"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="3">
+                            <TextBlock Text="EARNED RATINGS"
+                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding EarnedRatingsText}"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="{Binding NextQualificationsText}"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                    <TextBlock Text="{Binding QualificationPolicyText}"
+                               Style="{StaticResource OpenCareerInputHelpStyle}" />
+
+                    <ItemsControl ItemsSource="{Binding QualificationRoadmapItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,0,8"
+                                        Style="{StaticResource OpenCareerPaperInsetStyle}">
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Text="{Binding Status}"
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                            <TextBlock Text="{Binding Kind}"
+                                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="3">
+                                            <TextBlock Text="{Binding Title}"
+                                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                            <TextBlock Text="{Binding Description}"
+                                                       Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                            <TextBlock Text="{Binding Prerequisites}"
+                                                       Style="{StaticResource OpenCareerInputHelpStyle}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </Page>

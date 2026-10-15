@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-06 through P33 on `feature/playable-loop-integration`; P32 exact-head Linux/Windows CI passed at `698275d`, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-15 through P36 on `feature/playable-loop-integration`; P36 exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -313,6 +313,10 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 ## Remaining
 
 - [x] Create player career onboarding foundation; licensing/training onboarding remains later MBL-13 work.
+- [x] Define one deterministic initial civilian qualification roadmap for Student, Private, Commercial and Airline Transport licenses plus existing airplane ratings.
+- [x] Project persisted qualifications as Earned / Available / Locked with explicit prerequisites through a read-only application source and Career UI.
+- [x] Preserve monotonic qualification updates and prevent roadmap/UI reads from awarding qualifications.
+- [ ] Implement authoritative training missions/completion evidence and qualification award orchestration; no free-training entitlement is currently established.
 - [x] Home-airport selection foundation.
 - [x] Persist player location/home base.
 - [x] Build deterministic board refill foundation; authoritative market-demand integration remains open.

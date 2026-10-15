@@ -92,6 +92,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<PlayerCareerOnboardingCoordinator>();
         services.AddSingleton<PlayerCareerLocationCoordinator>();
         services.AddSingleton<PlayerCareerQualificationCoordinator>();
+        services.AddSingleton<CareerQualificationRoadmapSource>();
+        services.AddSingleton<ICareerQualificationRoadmapSource>(provider =>
+            provider.GetRequiredService<CareerQualificationRoadmapSource>());
 
         services.AddSingleton<PlayerCareerExperienceCoordinator>();
         services.AddSingleton<CareerLogbookExperienceCoordinator>();
