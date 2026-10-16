@@ -684,6 +684,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement read-only Aircraft screen against installed discovery, registry enrichment and authoritative Fleet availability/reservation state, with explicit unknown capability/access state and no ownership inference.
 - [x] Project registry-proven payload/range, seats, IFR capability, pressurization and landing-gear facts individually on Aircraft; preserve each missing value as explicit unknown.
 - [x] Require per-field registry provenance before Aircraft displays a capability fact, show provider/confidence evidence, and fail unproven values closed to unknown.
+- [x] Project explicit MSFS cabin passenger capacity separately from crew-inclusive total seats; do not use it as passenger-job authority without the remaining seat/access requirements.
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.

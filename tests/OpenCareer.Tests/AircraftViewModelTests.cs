@@ -30,7 +30,8 @@ public sealed class AircraftViewModelTests
                     IfrCapabilityText: "IFR capable",
                     PressurizationText: "Not pressurized",
                     LandingGearText: "Fixed/non-retractable gear",
-                    CapabilityEvidenceText: "Evidence: payload — cfg (Verified)")
+                    CapabilityEvidenceText: "Evidence: payload — cfg (Verified)",
+                    PassengerCapacityText: "Passenger capacity 3 (cabin value; crew and total seats not inferred)")
             ]));
         var viewModel = new AircraftViewModel(source);
 
@@ -47,6 +48,9 @@ public sealed class AircraftViewModelTests
         Assert.Equal("Career access unknown", Assert.Single(viewModel.Aircraft).AccessText);
         Assert.Equal("Maximum payload 950 lb", Assert.Single(viewModel.Aircraft).MaximumPayloadText);
         Assert.Equal("IFR capable", Assert.Single(viewModel.Aircraft).IfrCapabilityText);
+        Assert.Equal(
+            "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
+            Assert.Single(viewModel.Aircraft).PassengerCapacityText);
         Assert.Equal(
             "Evidence: payload — cfg (Verified)",
             Assert.Single(viewModel.Aircraft).CapabilityEvidenceText);

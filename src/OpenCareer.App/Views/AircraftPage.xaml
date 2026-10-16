@@ -114,6 +114,7 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <StackPanel Spacing="3">
                                         <TextBlock Text="PAYLOAD"
@@ -148,6 +149,11 @@
                                     <TextBlock Grid.Row="1"
                                                Grid.Column="2"
                                                Text="{Binding LandingGearText}"
+                                               Style="{StaticResource OpenCareerInputHelpStyle}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="2"
+                                               Grid.ColumnSpan="3"
+                                               Text="{Binding PassengerCapacityText}"
                                                Style="{StaticResource OpenCareerInputHelpStyle}"
                                                TextWrapping="Wrap" />
                                 </Grid>

@@ -52,6 +52,7 @@ public sealed class InstalledAircraftInventorySourceTests
                 new(AircraftEngineType.Piston, 1, AircraftEngineMultiplicity.Single),
                 new("icao-family:CESSNA/172%20SKYHAWK", "CESSNA", "172 SKYHAWK"),
                 new("powerplant-class:piston:single", AircraftEngineType.Piston, AircraftEngineMultiplicity.Single),
+                passengerCapacity: 3,
                 maximumPayloadPounds: 950,
                 maximumRangeNauticalMiles: 640,
                 seats: 4,
@@ -87,11 +88,15 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Maximum payload 950 lb", alpha.MaximumPayloadText);
         Assert.Equal("Maximum range 640 nm", alpha.MaximumRangeText);
         Assert.Equal("4 seat(s)", alpha.SeatsText);
+        Assert.Equal(
+            "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
+            alpha.PassengerCapacityText);
         Assert.Equal("IFR capable", alpha.IfrCapabilityText);
         Assert.Equal("Not pressurized", alpha.PressurizationText);
         Assert.Equal("Fixed/non-retractable gear", alpha.LandingGearText);
         Assert.Contains("payload — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Contains("IFR — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
+        Assert.Contains("passenger capacity — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Contains("access unknown", alpha.AccessText, StringComparison.OrdinalIgnoreCase);
 
         InstalledAircraftInventoryItem zulu = result.Aircraft[1];
@@ -100,6 +105,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Powerplant class unknown", zulu.PowerplantClassText);
         Assert.Equal("Powerplant unknown", zulu.PowerplantText);
         Assert.Equal("Maximum payload unknown", zulu.MaximumPayloadText);
+        Assert.Equal("Passenger capacity unknown", zulu.PassengerCapacityText);
         Assert.Equal("IFR capability unknown", zulu.IfrCapabilityText);
     }
 
@@ -126,6 +132,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Maximum payload unknown", item.MaximumPayloadText);
         Assert.Equal("Maximum range unknown", item.MaximumRangeText);
         Assert.Equal("Seats unknown", item.SeatsText);
+        Assert.Equal("Passenger capacity unknown", item.PassengerCapacityText);
         Assert.Equal("IFR capability unknown", item.IfrCapabilityText);
         Assert.Equal("Pressurization unknown", item.PressurizationText);
         Assert.Equal("Landing gear configuration unknown", item.LandingGearText);
@@ -189,6 +196,7 @@ public sealed class InstalledAircraftInventorySourceTests
                 "Unproven",
                 null,
                 null,
+                passengerCapacity: 5,
                 maximumPayloadPounds: 1200,
                 maximumRangeNauticalMiles: 800,
                 seats: 6,
@@ -201,6 +209,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Maximum payload unknown", item.MaximumPayloadText);
         Assert.Equal("Maximum range unknown", item.MaximumRangeText);
         Assert.Equal("Seats unknown", item.SeatsText);
+        Assert.Equal("Passenger capacity unknown", item.PassengerCapacityText);
         Assert.Equal("Capability evidence sources unavailable", item.CapabilityEvidenceText);
     }
 
@@ -252,6 +261,7 @@ public sealed class InstalledAircraftInventorySourceTests
         AircraftPowerplantClassification? powerplant,
         AircraftFamilyIdentity? family = null,
         AircraftPowerplantClassIdentity? powerplantClass = null,
+        int? passengerCapacity = null,
         double? maximumPayloadPounds = null,
         double? maximumRangeNauticalMiles = null,
         int? seats = null,
@@ -269,6 +279,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Add(AircraftRegistryField.IfrCapable, ifrCapable is not null);
         Add(AircraftRegistryField.Pressurized, pressurized is not null);
         Add(AircraftRegistryField.RetractableGear, retractableGear is not null);
+        Add(AircraftRegistryField.ReferenceMetadata, passengerCapacity is not null);
 
         var resolution = new AircraftRegistryResolution(
             aircraftId,
@@ -286,7 +297,9 @@ public sealed class InstalledAircraftInventorySourceTests
                 pressurized,
                 retractableGear),
             null,
-            null,
+            passengerCapacity is null
+                ? null
+                : new AircraftReferenceMetadata(PassengerCapacity: passengerCapacity),
             type,
             powerplant,
             null,
