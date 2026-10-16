@@ -111,7 +111,7 @@
                                                Style="{StaticResource OpenCareerPaperDataLabelStyle}"
                                                TextWrapping="Wrap" />
 
-                                    <Button Content="Accept &amp; Start Flight"
+                                    <Button Content="{Binding ActionButtonText}"
                                             IsEnabled="{Binding CanStart}"
                                             Click="AcceptStartFlight_Click"
                                             Style="{StaticResource OpenCareerPrimaryButtonStyle}"

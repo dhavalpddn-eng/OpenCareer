@@ -386,6 +386,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             _selectedAircraftId
             ?? throw new InvalidOperationException(
                 "Select an installed aircraft before starting a career flight.");
+        CareerJobActionKind actionKind = _offers
+            .Single(offer => offer.OfferId == offerId)
+            .ActionKind;
 
         await _startGate
             .WaitAsync(cancellationToken)
@@ -411,9 +414,33 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 _refreshGate.Release();
             }
 
+            if (actionKind == CareerJobActionKind.AcceptForDispatch)
+            {
+                SetField(
+                    ref _acceptanceStatus,
+                    "Accepting offer and reserving its exact aircraft for Dispatch preparation…",
+                    nameof(AcceptanceStatus));
+
+                await _startAction
+                    .AcceptAsync(
+                        offerId,
+                        aircraftId,
+                        cancellationToken);
+
+                await RefreshAsync(cancellationToken);
+
+                SetField(
+                    ref _acceptanceStatus,
+                    "Job accepted and aircraft reserved. Open Dispatch, prepare the exact plan, then return to Jobs for authoritative start/recovery.",
+                    nameof(AcceptanceStatus));
+                return;
+            }
+
             SetField(
                 ref _acceptanceStatus,
-                "Accepting offer, reserving aircraft, verifying dispatch, and starting the persistent FlightSession…",
+                actionKind == CareerJobActionKind.AcceptAndStartDevelopmentFlight
+                    ? "Accepting the development flight, verifying dispatch, and starting its persistent FlightSession…"
+                    : "Revalidating the prepared dispatch plan and starting the persistent FlightSession…",
                 nameof(AcceptanceStatus));
 
             CareerJobPlayableStartResult result =
@@ -444,7 +471,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
             SetField(
                 ref _acceptanceStatus,
-                $"Accept & Start failed: {ex.Message}",
+                $"Job action failed: {ex.Message}",
                 nameof(AcceptanceStatus));
 
             await _refreshGate
@@ -516,7 +543,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             item.Offer, now, item.CanStart,
             now < item.Offer.OfferedAt || now >= item.Offer.ExpiresAt
                 ? "This persisted offer is no longer active." : item.ActionText,
-            item.StartInputState)).ToArray());
+            item.StartInputState,
+            item.ActionKind)).ToArray());
     }
 
     private async Task RebuildOffersLockedAsync(
@@ -551,6 +579,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
             CareerJobStartInputState? startState =
                 null;
+            CareerJobActionKind actionKind =
+                CareerJobActionKind.StartPreparedFlight;
 
             string actionText =
                 locked
@@ -562,7 +592,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                             : !_aircraftDiscoveryAvailable
                                 ? "Aircraft discovery is temporarily unavailable. Waiting for current installed-aircraft evidence."
                             : _startAction is null
-                                ? "Accept & Start is not connected to the playable-loop action."
+                                ? "Job acceptance and start actions are not connected to the playable loop."
                                 : "Checking authoritative dispatch readiness…";
 
             if (active
@@ -584,6 +614,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                         availability.CanStart;
                     startState =
                         availability.State;
+                    actionKind =
+                        availability.ActionKind;
                     actionText =
                         availability.State == CareerJobStartInputState.Ready
                             ? availability.Detail
@@ -607,7 +639,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     now,
                     canStart,
                     actionText,
-                    startState));
+                    startState,
+                    actionKind));
         }
 
         SetOffers(
@@ -627,10 +660,10 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 : !_aircraftDiscoveryAvailable
                     ? "Aircraft selection retained. Start is disabled until current installed-aircraft evidence returns."
                 : projected.Any(static offer => offer.CanStart)
-                    ? "Selected aircraft has at least one verified startable career offer."
+                    ? "Selected aircraft has at least one verified actionable career offer."
                     : firstBlocked is not null
                         ? $"Blocked: {firstBlocked.ActionText}"
-                        : "No active offer is currently startable with the selected aircraft.",
+                        : "No active offer is currently actionable with the selected aircraft.",
             nameof(AcceptanceStatus));
     }
 
@@ -696,7 +729,8 @@ public sealed class JobOfferItemViewModel
         DateTimeOffset now,
         bool canStart = false,
         string? actionText = null,
-        CareerJobStartInputState? startInputState = null)
+        CareerJobStartInputState? startInputState = null,
+        CareerJobActionKind actionKind = CareerJobActionKind.StartPreparedFlight)
     {
         Offer =
             offer
@@ -720,6 +754,9 @@ public sealed class JobOfferItemViewModel
         StartInputState =
             startInputState;
 
+        ActionKind =
+            actionKind;
+
         ActionText =
             actionText
             ?? (IsLockedPreview
@@ -736,6 +773,13 @@ public sealed class JobOfferItemViewModel
     public bool IsActive { get; }
     public bool CanStart { get; }
     public CareerJobStartInputState? StartInputState { get; }
+    public CareerJobActionKind ActionKind { get; }
+    public string ActionButtonText => ActionKind switch
+    {
+        CareerJobActionKind.AcceptForDispatch => "Accept for Dispatch",
+        CareerJobActionKind.AcceptAndStartDevelopmentFlight => "Accept & Start Test Flight",
+        _ => "Start Prepared Flight"
+    };
     public string ActionText { get; }
 
     public string Route =>

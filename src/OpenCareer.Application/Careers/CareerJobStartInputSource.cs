@@ -143,7 +143,8 @@ public sealed record CareerJobStartInputSnapshot(
     CareerJobStartInputState State,
     Guid OfferId,
     CareerJobPlayableStartRequest? Request,
-    string Detail)
+    string Detail,
+    bool IsAcceptedContract = false)
 {
     public bool IsReady =>
         State == CareerJobStartInputState.Ready
@@ -580,7 +581,9 @@ public sealed class CareerJobStartInputSource
                 dispatchRequirements),
             existing?.Contract.Status == ContractStatus.Accepted
                 ? "The accepted contract's exact prepared dispatch plan was revalidated and is ready to start."
-                : "Authoritative contract terms, selected aircraft, dispatch authority, and physical preflight are ready.");
+                : "Authoritative contract terms, selected aircraft, dispatch authority, and physical preflight are ready.",
+            IsAcceptedContract:
+                existing?.Contract.Status == ContractStatus.Accepted);
     }
 
     private static string FormatPreflightIssues(

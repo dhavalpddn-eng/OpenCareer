@@ -213,6 +213,35 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task FirstTimeOfferDelegatesAcceptanceWithoutStartingFlight()
+    {
+        JobMarketOfferDraft offer = Offer("KRME", "KSYR", locked: false);
+        var action = new FakeStartAction
+        {
+            ActionKind = CareerJobActionKind.AcceptForDispatch
+        };
+        var viewModel = new JobsViewModel(
+            new FakeBoardStore(Board("KRME", offer)),
+            CareerRuntime("KRME"),
+            new FixedTimeProvider(Now),
+            new CareerJobAircraftSelectionSource(new FakeDiscovery()),
+            action,
+            logger: null);
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync(
+            Assert.Single(viewModel.AircraftOptions).AircraftId);
+
+        JobOfferItemViewModel projected = Assert.Single(viewModel.Offers);
+        Assert.Equal("Accept for Dispatch", projected.ActionButtonText);
+
+        await viewModel.StartOfferAsync(projected.OfferId);
+
+        Assert.Equal(1, action.AcceptCount);
+        Assert.Equal(0, action.StartCount);
+        Assert.Contains("Open Dispatch", viewModel.AcceptanceStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AircraftOnlyRefreshConsumesLateDiscoveryWithoutRefillingBoard()
     {
         JobBoardState board =
@@ -734,8 +763,11 @@ public sealed class JobsViewModelTests
     {
         public int AvailabilityCount { get; private set; }
         public int StartCount { get; private set; }
+        public int AcceptCount { get; private set; }
         public Guid? LastOfferId { get; private set; }
         public string? LastAircraftId { get; private set; }
+        public CareerJobActionKind ActionKind { get; init; } =
+            CareerJobActionKind.StartPreparedFlight;
 
         public Func<Task>? BeforeRead { get; init; }
 
@@ -752,7 +784,20 @@ public sealed class JobsViewModelTests
                     CanStart:
                         true,
                     CareerJobStartInputState.Ready,
-                    "Authoritative start inputs are ready.");
+                    "Authoritative start inputs are ready.",
+                    ActionKind);
+        }
+
+        public Task<JobAcceptanceFleetResult> AcceptAsync(
+            Guid offerId,
+            string aircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AcceptCount++;
+            LastOfferId = offerId;
+            LastAircraftId = aircraftId;
+            return Task.FromResult<JobAcceptanceFleetResult>(null!);
         }
 
         public Task<CareerJobPlayableStartResult> StartAsync(

@@ -562,6 +562,7 @@ public sealed class CareerJobStartInputSourceTests
         Assert.Equal(
             acceptedAt,
             request.DispatchContext.Time);
+        Assert.True(snapshot.IsAcceptedContract);
         Assert.Equal(
             180d,
             request.DispatchRequirements.PlannedFuelPounds);
