@@ -26,6 +26,7 @@ public sealed partial class MainWindow : Window
         LogbookViewModel logbook,
         JobsViewModel jobs,
         CareerViewModel career,
+        AircraftViewModel aircraft,
         MilitaryGovernmentViewModel militaryGovernment,
         TutorialViewModel tutorial,
         SettingsViewModel settings,
@@ -38,6 +39,7 @@ public sealed partial class MainWindow : Window
         Logbook = logbook;
         Jobs = jobs;
         Career = career;
+        Aircraft = aircraft;
         MilitaryGovernment = militaryGovernment;
         Tutorial = tutorial;
         Settings = settings;
@@ -74,6 +76,7 @@ public sealed partial class MainWindow : Window
     public LogbookViewModel Logbook { get; }
     public JobsViewModel Jobs { get; }
     public CareerViewModel Career { get; }
+    public AircraftViewModel Aircraft { get; }
     public MilitaryGovernmentViewModel MilitaryGovernment { get; }
     public TutorialViewModel Tutorial { get; }
     public SettingsViewModel Settings { get; }
@@ -176,6 +179,9 @@ public sealed partial class MainWindow : Window
                     new CurrentFlightPageContext(
                         ViewModel,
                         Jobs));
+                break;
+            case "aircraft":
+                Navigate(typeof(AircraftPage), Aircraft);
                 break;
             case "military":
                 Navigate(

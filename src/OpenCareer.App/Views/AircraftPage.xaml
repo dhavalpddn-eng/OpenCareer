@@ -1,0 +1,97 @@
+<Page
+    x:Class="OpenCareer.App.Views.AircraftPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel Margin="28"
+                    Spacing="18"
+                    MaxWidth="900"
+                    HorizontalAlignment="Left">
+            <Grid ColumnSpacing="18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="AIRCRAFT"
+                               Style="{StaticResource OpenCareerPageTitleStyle}" />
+                    <TextBlock Text="Aircraft currently reported as installed, enriched only by authoritative registry metadata."
+                               Style="{StaticResource OpenCareerPageSubtitleStyle}" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="{Binding RefreshButtonText}"
+                        IsEnabled="{Binding CanRefresh}"
+                        Click="RefreshAircraft_Click"
+                        VerticalAlignment="Bottom"
+                        Style="{StaticResource OpenCareerSecondaryButtonStyle}" />
+            </Grid>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="INSTALLED INVENTORY"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="{Binding StatusText}"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="Installed means detected in MSFS. Ownership, rental, employer access, assignment, location and airworthiness remain separate authorities."
+                               Style="{StaticResource OpenCareerInputHelpStyle}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <ItemsControl ItemsSource="{Binding Aircraft}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,0,12"
+                                Style="{StaticResource OpenCareerPaperCardStyle}">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{Binding DisplayName}"
+                                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                                        <TextBlock Text="{Binding CanonicalAircraftId}"
+                                                   Style="{StaticResource OpenCareerInputHelpStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding InstallationText}"
+                                               Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                </Grid>
+
+                                <Grid ColumnSpacing="18">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="TYPE IDENTITY"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding TypeIdentityText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="POWERPLANT"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding PowerplantText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="{Binding CapabilityText}"
+                                           Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                <TextBlock Text="{Binding AccessText}"
+                                           Style="{StaticResource OpenCareerInputHelpStyle}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

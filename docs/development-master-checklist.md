@@ -663,7 +663,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement Dispatch screen against real dispatch services.
 - [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.
 - [ ] Implement Map / World screen against real world state.
-- [ ] Implement Aircraft screen against registry.
+- [x] Implement read-only Aircraft screen against installed discovery and registry enrichment, with explicit unknown capability/access state and no ownership inference.
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.

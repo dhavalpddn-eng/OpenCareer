@@ -1,0 +1,72 @@
+using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Planning;
+
+namespace OpenCareer.Tests;
+
+public sealed class AircraftViewModelTests
+{
+    [Fact]
+    public async Task RefreshProjectsReadOnlyInventorySnapshot()
+    {
+        var source = new StubInventorySource(new(
+            InstalledAircraftInventoryStatus.Ready,
+            "1 installed aircraft record(s) reported by current discovery.",
+            [
+                new(
+                    "msfs-title:Cessna 172 Skyhawk",
+                    "Cessna 172 Skyhawk",
+                    "INSTALLED",
+                    "ICAO type C172",
+                    "Single piston engine",
+                    "Capability profile available",
+                    "Career access unknown")
+            ]));
+        var viewModel = new AircraftViewModel(source);
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.HasAircraft);
+        Assert.True(viewModel.CanRefresh);
+        Assert.False(viewModel.IsRefreshing);
+        Assert.Equal(1, source.ReadCount);
+        Assert.Equal("Cessna 172 Skyhawk", Assert.Single(viewModel.Aircraft).DisplayName);
+        Assert.Equal("Career access unknown", Assert.Single(viewModel.Aircraft).AccessText);
+        Assert.Equal("Refresh Aircraft", viewModel.RefreshButtonText);
+    }
+
+    [Fact]
+    public async Task UnavailableSnapshotClearsPreviouslyProjectedAircraft()
+    {
+        var source = new StubInventorySource(new(
+            InstalledAircraftInventoryStatus.Ready,
+            "ready",
+            [new("id", "name", "INSTALLED", "type", "engine", "capability", "access")]));
+        var viewModel = new AircraftViewModel(source);
+        await viewModel.RefreshAsync();
+
+        source.Current = new(
+            InstalledAircraftInventoryStatus.DiscoveryUnavailable,
+            "Discovery unavailable.",
+            []);
+        await viewModel.RefreshAsync();
+
+        Assert.False(viewModel.HasAircraft);
+        Assert.Empty(viewModel.Aircraft);
+        Assert.Equal("Discovery unavailable.", viewModel.StatusText);
+        Assert.Equal(2, source.ReadCount);
+    }
+
+    private sealed class StubInventorySource(InstalledAircraftInventorySnapshot current)
+        : IInstalledAircraftInventorySource
+    {
+        public InstalledAircraftInventorySnapshot Current { get; set; } = current;
+        public int ReadCount { get; private set; }
+
+        public Task<InstalledAircraftInventorySnapshot> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            return Task.FromResult(Current);
+        }
+    }
+}
