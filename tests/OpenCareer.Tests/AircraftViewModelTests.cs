@@ -21,7 +21,13 @@ public sealed class AircraftViewModelTests
                     "Capability profile available",
                     "AVAILABLE",
                     "No reservation recorded",
-                    "Career access unknown")
+                    "Career access unknown",
+                    MaximumPayloadText: "Maximum payload 950 lb",
+                    MaximumRangeText: "Maximum range 640 nm",
+                    SeatsText: "4 seat(s)",
+                    IfrCapabilityText: "IFR capable",
+                    PressurizationText: "Not pressurized",
+                    LandingGearText: "Fixed/non-retractable gear")
             ]));
         var viewModel = new AircraftViewModel(source);
 
@@ -34,6 +40,8 @@ public sealed class AircraftViewModelTests
         Assert.Equal("Cessna 172 Skyhawk", Assert.Single(viewModel.Aircraft).DisplayName);
         Assert.Equal("AVAILABLE", Assert.Single(viewModel.Aircraft).FleetStatusText);
         Assert.Equal("Career access unknown", Assert.Single(viewModel.Aircraft).AccessText);
+        Assert.Equal("Maximum payload 950 lb", Assert.Single(viewModel.Aircraft).MaximumPayloadText);
+        Assert.Equal("IFR capable", Assert.Single(viewModel.Aircraft).IfrCapabilityText);
         Assert.Equal("Refresh Aircraft", viewModel.RefreshButtonText);
     }
 

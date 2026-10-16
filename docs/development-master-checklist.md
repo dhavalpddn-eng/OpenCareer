@@ -672,6 +672,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.
 - [ ] Implement Map / World screen against real world state.
 - [x] Implement read-only Aircraft screen against installed discovery, registry enrichment and authoritative Fleet availability/reservation state, with explicit unknown capability/access state and no ownership inference.
+- [x] Project registry-proven payload/range, seats, IFR capability, pressurization and landing-gear facts individually on Aircraft; preserve each missing value as explicit unknown.
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.

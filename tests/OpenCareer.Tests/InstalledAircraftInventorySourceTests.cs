@@ -49,7 +49,13 @@ public sealed class InstalledAircraftInventorySourceTests
                 alphaId,
                 "Alpha Aircraft",
                 new("icao-type:C172", "C172"),
-                new(AircraftEngineType.Piston, 1, AircraftEngineMultiplicity.Single))),
+                new(AircraftEngineType.Piston, 1, AircraftEngineMultiplicity.Single),
+                maximumPayloadPounds: 950,
+                maximumRangeNauticalMiles: 640,
+                seats: 4,
+                ifrCapable: true,
+                pressurized: false,
+                retractableGear: false)),
             (zuluId, Resolution(zuluId, "Zulu Aircraft", null, null)));
         var source = new InstalledAircraftInventorySource(
             new StubDiscovery(new(
@@ -74,11 +80,19 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("INSTALLED", alpha.InstallationText);
         Assert.Equal("ICAO type C172", alpha.TypeIdentityText);
         Assert.Equal("Single piston engine", alpha.PowerplantText);
+        Assert.Equal("Maximum payload 950 lb", alpha.MaximumPayloadText);
+        Assert.Equal("Maximum range 640 nm", alpha.MaximumRangeText);
+        Assert.Equal("4 seat(s)", alpha.SeatsText);
+        Assert.Equal("IFR capable", alpha.IfrCapabilityText);
+        Assert.Equal("Not pressurized", alpha.PressurizationText);
+        Assert.Equal("Fixed/non-retractable gear", alpha.LandingGearText);
         Assert.Contains("access unknown", alpha.AccessText, StringComparison.OrdinalIgnoreCase);
 
         InstalledAircraftInventoryItem zulu = result.Aircraft[1];
         Assert.Equal("ICAO type unknown", zulu.TypeIdentityText);
         Assert.Equal("Powerplant unknown", zulu.PowerplantText);
+        Assert.Equal("Maximum payload unknown", zulu.MaximumPayloadText);
+        Assert.Equal("IFR capability unknown", zulu.IfrCapabilityText);
     }
 
     [Fact]
@@ -99,6 +113,12 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Registry metadata unavailable", item.CapabilityText);
         Assert.Equal("ICAO type unknown", item.TypeIdentityText);
         Assert.Equal("Powerplant unknown", item.PowerplantText);
+        Assert.Equal("Maximum payload unknown", item.MaximumPayloadText);
+        Assert.Equal("Maximum range unknown", item.MaximumRangeText);
+        Assert.Equal("Seats unknown", item.SeatsText);
+        Assert.Equal("IFR capability unknown", item.IfrCapabilityText);
+        Assert.Equal("Pressurization unknown", item.PressurizationText);
+        Assert.Equal("Landing gear configuration unknown", item.LandingGearText);
         Assert.Equal("Fleet status not tracked", item.FleetStatusText);
         Assert.Equal("No operational availability record exists", item.ReservationText);
     }
@@ -146,6 +166,24 @@ public sealed class InstalledAircraftInventorySourceTests
     }
 
     [Fact]
+    public async Task MismatchedRegistryIdentityIsRejected()
+    {
+        const string id = "msfs-title:Expected";
+        var source = new InstalledAircraftInventorySource(
+            new StubDiscovery(new(
+                InstalledAircraftDiscoveryAvailability.Available,
+                [Observation(id, "one")])),
+            new StubRegistry((id, Resolution(
+                "msfs-title:Different",
+                "Different",
+                null,
+                null))),
+            new StubAvailability());
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => source.ReadAsync());
+    }
+
+    [Fact]
     public async Task NonInstalledDiscoveryObservationIsRejected()
     {
         var source = new InstalledAircraftInventorySource(
@@ -172,7 +210,13 @@ public sealed class InstalledAircraftInventorySourceTests
         string aircraftId,
         string displayName,
         AircraftTypeIdentity? type,
-        AircraftPowerplantClassification? powerplant) =>
+        AircraftPowerplantClassification? powerplant,
+        double? maximumPayloadPounds = null,
+        double? maximumRangeNauticalMiles = null,
+        int? seats = null,
+        bool? ifrCapable = null,
+        bool? pressurized = null,
+        bool? retractableGear = null) =>
         new(
             aircraftId,
             AircraftInstallationStatus.Installed,
@@ -180,14 +224,14 @@ public sealed class InstalledAircraftInventorySourceTests
                 displayName,
                 null,
                 null,
+                maximumPayloadPounds,
+                maximumRangeNauticalMiles,
                 null,
-                null,
-                null,
-                null,
+                seats,
                 powerplant?.EngineCount,
-                null,
-                null,
-                null),
+                ifrCapable,
+                pressurized,
+                retractableGear),
             null,
             null,
             type,

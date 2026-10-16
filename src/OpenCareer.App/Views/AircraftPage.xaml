@@ -84,6 +84,52 @@
 
                                 <TextBlock Text="{Binding CapabilityText}"
                                            Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                <Grid ColumnSpacing="18" RowSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="PAYLOAD"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding MaximumPayloadText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="RANGE"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding MaximumRangeText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Spacing="3">
+                                        <TextBlock Text="SEATS"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding SeatsText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Row="1"
+                                               Text="{Binding IfrCapabilityText}"
+                                               Style="{StaticResource OpenCareerInputHelpStyle}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="1"
+                                               Grid.Column="1"
+                                               Text="{Binding PressurizationText}"
+                                               Style="{StaticResource OpenCareerInputHelpStyle}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="1"
+                                               Grid.Column="2"
+                                               Text="{Binding LandingGearText}"
+                                               Style="{StaticResource OpenCareerInputHelpStyle}"
+                                               TextWrapping="Wrap" />
+                                </Grid>
                                 <Grid ColumnSpacing="18">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />

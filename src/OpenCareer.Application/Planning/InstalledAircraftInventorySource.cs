@@ -1,5 +1,6 @@
 using OpenCareer.Application.Fleet;
 using OpenCareer.Domain.Aircraft;
+using System.Globalization;
 
 namespace OpenCareer.Application.Planning;
 
@@ -19,7 +20,13 @@ public sealed record InstalledAircraftInventoryItem(
     string CapabilityText,
     string FleetStatusText,
     string ReservationText,
-    string AccessText);
+    string AccessText,
+    string MaximumPayloadText = "Maximum payload unknown",
+    string MaximumRangeText = "Maximum range unknown",
+    string SeatsText = "Seats unknown",
+    string IfrCapabilityText = "IFR capability unknown",
+    string PressurizationText = "Pressurization unknown",
+    string LandingGearText = "Landing gear configuration unknown");
 
 public sealed record InstalledAircraftInventorySnapshot(
     InstalledAircraftInventoryStatus Status,
@@ -83,6 +90,16 @@ public sealed class InstalledAircraftInventorySource(
             AircraftRegistryResolution? resolution = await _registry
                 .FindAircraftAsync(aircraftId, cancellationToken)
                 .ConfigureAwait(false);
+            if (resolution is not null
+                && !string.Equals(
+                    resolution.CanonicalAircraftId,
+                    aircraftId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    "Aircraft registry returned inventory evidence for a different canonical identity.");
+            }
+
             AircraftAvailabilityState? availability = await _availability
                 .FindAsync(aircraftId, cancellationToken)
                 .ConfigureAwait(false);
@@ -143,6 +160,7 @@ public sealed class InstalledAircraftInventorySource(
         (string fleetStatus, string reservation) = FormatAvailability(
             aircraftId,
             availability);
+        ResolvedAircraftCapabilities? facts = resolution?.CapabilityValues;
 
         return new(
             aircraftId,
@@ -153,7 +171,33 @@ public sealed class InstalledAircraftInventorySource(
             capabilities,
             fleetStatus,
             reservation,
-            "Career access unknown — installation does not prove ownership, rental, or assignment");
+            "Career access unknown — installation does not prove ownership, rental, or assignment",
+            FormatOptionalNumber(
+                facts?.MaximumPayloadPounds,
+                "Maximum payload",
+                "lb"),
+            FormatOptionalNumber(
+                facts?.MaximumRangeNauticalMiles,
+                "Maximum range",
+                "nm"),
+            facts?.Seats is { } seats
+                ? $"{seats} seat(s)"
+                : "Seats unknown",
+            FormatOptionalFlag(
+                facts?.IfrCapable,
+                "IFR capable",
+                "Not IFR capable",
+                "IFR capability unknown"),
+            FormatOptionalFlag(
+                facts?.Pressurized,
+                "Pressurized",
+                "Not pressurized",
+                "Pressurization unknown"),
+            FormatOptionalFlag(
+                facts?.RetractableGear,
+                "Retractable gear",
+                "Fixed/non-retractable gear",
+                "Landing gear configuration unknown"));
     }
 
     private static (string Status, string Reservation) FormatAvailability(
@@ -209,4 +253,26 @@ public sealed class InstalledAircraftInventorySource(
             _ => throw new ArgumentOutOfRangeException(nameof(classification))
         };
     }
+
+    private static string FormatOptionalNumber(
+        double? value,
+        string label,
+        string unit) =>
+        value is { } number
+            ? string.Create(
+                CultureInfo.InvariantCulture,
+                $"{label} {number:0.#} {unit}")
+            : $"{label} unknown";
+
+    private static string FormatOptionalFlag(
+        bool? value,
+        string whenTrue,
+        string whenFalse,
+        string whenUnknown) =>
+        value switch
+        {
+            true => whenTrue,
+            false => whenFalse,
+            null => whenUnknown
+        };
 }
