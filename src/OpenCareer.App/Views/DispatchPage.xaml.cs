@@ -48,12 +48,36 @@ public sealed partial class DispatchPage : Page
         base.OnNavigatedFrom(e);
     }
 
-    private void AircraftSelection_Changed(
+    private async void AircraftSelection_Changed(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (DataContext is not DispatchViewModel viewModel)
+            return;
+
+        try
+        {
+            await viewModel.SetSelectedAircraftAsync(
+                AircraftPicker.SelectedValue?.ToString(),
+                _navigationCts?.Token ?? CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+            when (_navigationCts?.IsCancellationRequested == true)
+        {
+        }
+    }
+
+    private void CruiseProfileSelection_Changed(
         object sender,
         SelectionChangedEventArgs e)
     {
         if (DataContext is DispatchViewModel viewModel)
-            viewModel.SetSelectedAircraft(AircraftPicker.SelectedValue?.ToString());
+        {
+            viewModel.SetSelectedCruiseProfile(
+                CruiseProfilePicker.SelectedValue is int index
+                    ? index
+                    : null);
+        }
     }
 
     private async void EvaluatePlan_Click(object sender, RoutedEventArgs e)
@@ -67,8 +91,6 @@ public sealed partial class DispatchPage : Page
             PayloadPoundsBox.Text,
             TotalRouteDistanceBox.Text,
             CruiseSegmentDistanceBox.Text,
-            ProfileIndexBox.Text,
-            FuelTypeIndexBox.Text,
             CruiseWeightBox.Text,
             IsaDeviationBox.Text,
             PressureAltitudeBox.Text,

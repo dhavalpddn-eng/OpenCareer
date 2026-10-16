@@ -13,8 +13,6 @@ public sealed record DispatchPlanningFormInput(
     string PayloadPounds,
     string TotalRouteDistanceNauticalMiles,
     string CruiseSegmentDistanceNauticalMiles,
-    string ProfileIndex,
-    string FuelTypeIndex,
     string PlannedCruiseWeightPounds,
     string IsaDeviationCelsius,
     string PressureAltitudeFeet,
@@ -37,11 +35,18 @@ public sealed record DispatchPlanningFormInput(
 public sealed class DispatchViewModel : INotifyPropertyChanged
 {
     private readonly IInstalledAircraftInventorySource _aircraftInventory;
+    private readonly IDispatchCruiseProfileSource _cruiseProfiles;
     private readonly ICompositeDispatchPlanningService _planning;
     private readonly IAcceptedDispatchPlanningContextSource _acceptedContext;
     private IReadOnlyList<DispatchAircraftOptionViewModel> _aircraftOptions =
         Array.Empty<DispatchAircraftOptionViewModel>();
     private string? _selectedAircraftId;
+    private IReadOnlyList<DispatchCruiseProfileOptionViewModel> _cruiseProfileOptions =
+        Array.Empty<DispatchCruiseProfileOptionViewModel>();
+    private int? _selectedCruiseProfileIndex;
+    private string _selectedCruiseProfileEvidence = "No cruise profile selected.";
+    private string _cruiseProfileStatus =
+        "Select an installed aircraft to load authoritative cruise profiles.";
     private string _inventoryStatus = "Installed aircraft have not been loaded.";
     private string _acceptedContextText =
         "Accepted-job dispatch context has not been loaded.";
@@ -62,11 +67,14 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
 
     public DispatchViewModel(
         IInstalledAircraftInventorySource aircraftInventory,
+        IDispatchCruiseProfileSource cruiseProfiles,
         ICompositeDispatchPlanningService planning,
         IAcceptedDispatchPlanningContextSource acceptedContext)
     {
         _aircraftInventory = aircraftInventory
             ?? throw new ArgumentNullException(nameof(aircraftInventory));
+        _cruiseProfiles = cruiseProfiles
+            ?? throw new ArgumentNullException(nameof(cruiseProfiles));
         _planning = planning
             ?? throw new ArgumentNullException(nameof(planning));
         _acceptedContext = acceptedContext
@@ -77,6 +85,11 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
 
     public IReadOnlyList<DispatchAircraftOptionViewModel> AircraftOptions => _aircraftOptions;
     public string? SelectedAircraftId => _selectedAircraftId;
+    public IReadOnlyList<DispatchCruiseProfileOptionViewModel> CruiseProfileOptions =>
+        _cruiseProfileOptions;
+    public int? SelectedCruiseProfileIndex => _selectedCruiseProfileIndex;
+    public string CruiseProfileStatus => _cruiseProfileStatus;
+    public string SelectedCruiseProfileEvidence => _selectedCruiseProfileEvidence;
     public string InventoryStatus => _inventoryStatus;
     public string AcceptedContextText => _acceptedContextText;
     public string? AcceptedOriginIcao => _acceptedOriginIcao;
@@ -89,7 +102,10 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     public string RunwaySummary => _runwaySummary;
     public IReadOnlyList<DispatchIssueViewModel> Issues => _issues;
     public bool IsBusy => _isBusy;
-    public bool CanEvaluate => !_isBusy && _selectedAircraftId is not null;
+    public bool CanEvaluate =>
+        !_isBusy
+        && _selectedAircraftId is not null
+        && _selectedCruiseProfileIndex is not null;
     public string EvaluateButtonText => _isBusy ? "Evaluating…" : "Evaluate Plan";
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -120,7 +136,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 StringComparison.OrdinalIgnoreCase))
             ? preferred
             : _aircraftOptions.FirstOrDefault()?.AircraftId;
-        SetSelectedAircraft(selection);
+        await SetSelectedAircraftAsync(selection, cancellationToken, forceReload: true)
+            .ConfigureAwait(true);
 
         if (_acceptedAircraftId is not null
             && !string.Equals(
@@ -136,7 +153,10 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         }
     }
 
-    public void SetSelectedAircraft(string? aircraftId)
+    public async Task SetSelectedAircraftAsync(
+        string? aircraftId,
+        CancellationToken cancellationToken = default,
+        bool forceReload = false)
     {
         string? normalized = string.IsNullOrWhiteSpace(aircraftId)
             ? null
@@ -151,11 +171,91 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             normalized = null;
         }
 
-        if (SetField(
-                ref _selectedAircraftId,
+        if (!forceReload
+            && string.Equals(
+                _selectedAircraftId,
                 normalized,
-                nameof(SelectedAircraftId)))
+                StringComparison.OrdinalIgnoreCase))
         {
+            return;
+        }
+
+        SetField(
+            ref _selectedAircraftId,
+            normalized,
+            nameof(SelectedAircraftId));
+        SetField(
+            ref _cruiseProfileOptions,
+            Array.Empty<DispatchCruiseProfileOptionViewModel>(),
+            nameof(CruiseProfileOptions));
+        SetField(
+            ref _selectedCruiseProfileIndex,
+            null,
+            nameof(SelectedCruiseProfileIndex));
+        SetField(
+            ref _selectedCruiseProfileEvidence,
+            "No cruise profile selected.",
+            nameof(SelectedCruiseProfileEvidence));
+        SetField(
+            ref _cruiseProfileStatus,
+            normalized is null
+                ? "Select an installed aircraft to load authoritative cruise profiles."
+                : "Loading authoritative cruise profiles…",
+            nameof(CruiseProfileStatus));
+        OnPropertyChanged(nameof(CanEvaluate));
+
+        if (normalized is null)
+            return;
+
+        DispatchCruiseProfileCatalog catalog = await _cruiseProfiles
+            .ReadAsync(normalized, cancellationToken)
+            .ConfigureAwait(true);
+
+        if (!string.Equals(
+                _selectedAircraftId,
+                normalized,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        SetField(
+            ref _cruiseProfileOptions,
+            catalog.Profiles
+                .Select(static profile => new DispatchCruiseProfileOptionViewModel(
+                    profile.ProfileIndex,
+                    profile.FuelTypeIndex,
+                    profile.DisplayName,
+                    profile.EvidenceDetail))
+                .ToArray(),
+            nameof(CruiseProfileOptions));
+        SetField(
+            ref _cruiseProfileStatus,
+            catalog.Detail,
+            nameof(CruiseProfileStatus));
+    }
+
+    public void SetSelectedCruiseProfile(int? profileIndex)
+    {
+        int? normalized = profileIndex is { } index
+            && _cruiseProfileOptions.Any(profile => profile.ProfileIndex == index)
+                ? index
+                : null;
+
+        if (SetField(
+                ref _selectedCruiseProfileIndex,
+                normalized,
+                nameof(SelectedCruiseProfileIndex)))
+        {
+            string evidence = normalized is { } selected
+                ? _cruiseProfileOptions
+                    .Single(profile => profile.ProfileIndex == selected)
+                    .EvidenceDetail
+                : "No cruise profile selected.";
+            SetField(
+                ref _selectedCruiseProfileEvidence,
+                evidence,
+                nameof(SelectedCruiseProfileEvidence));
             OnPropertyChanged(nameof(CanEvaluate));
         }
     }
@@ -179,13 +279,27 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             return;
         }
 
+        DispatchCruiseProfileOptionViewModel? selectedProfile =
+            _cruiseProfileOptions.SingleOrDefault(profile =>
+                profile.ProfileIndex == _selectedCruiseProfileIndex);
+        if (selectedProfile is null)
+        {
+            SetResult(
+                "NOT EVALUATED",
+                "Select an authoritative cruise profile before evaluating dispatch.",
+                "Fuel plan —",
+                "Runway selection —",
+                []);
+            return;
+        }
+
         SetBusy(true);
         try
         {
             ParsedDispatchInput parsed;
             try
             {
-                parsed = Parse(input);
+                parsed = Parse(input, selectedProfile);
             }
             catch (Exception ex)
                 when (ex is FormatException
@@ -335,7 +449,9 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             issues);
     }
 
-    private static ParsedDispatchInput Parse(DispatchPlanningFormInput input)
+    private static ParsedDispatchInput Parse(
+        DispatchPlanningFormInput input,
+        DispatchCruiseProfileOptionViewModel selectedProfile)
     {
         string origin = ParseIcao(input.OriginIcao, "Origin ICAO");
         string destination = ParseIcao(input.DestinationIcao, "Destination ICAO");
@@ -344,8 +460,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             "Total route distance");
 
         var cruise = new CruisePerformancePlanningRequest(
-            ParseInt(input.ProfileIndex, "Cruise profile index"),
-            ParseInt(input.FuelTypeIndex, "Fuel type index"),
+            selectedProfile.ProfileIndex,
+            selectedProfile.FuelTypeIndex,
             ParseDouble(input.PlannedCruiseWeightPounds, "Planned cruise weight"),
             ParseDouble(input.IsaDeviationCelsius, "ISA deviation"),
             ParseDouble(input.PressureAltitudeFeet, "Pressure altitude"));
@@ -408,20 +524,6 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             || !double.IsFinite(result))
         {
             throw new FormatException($"{label} must be a finite number.");
-        }
-
-        return result;
-    }
-
-    private static int ParseInt(string value, string label)
-    {
-        if (!int.TryParse(
-                value,
-                NumberStyles.Integer,
-                CultureInfo.CurrentCulture,
-                out int result))
-        {
-            throw new FormatException($"{label} must be a whole number.");
         }
 
         return result;
@@ -544,6 +646,12 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
 public sealed record DispatchAircraftOptionViewModel(
     string AircraftId,
     string DisplayName);
+
+public sealed record DispatchCruiseProfileOptionViewModel(
+    int ProfileIndex,
+    int FuelTypeIndex,
+    string DisplayName,
+    string EvidenceDetail);
 
 public sealed record DispatchIssueViewModel(
     string Reason,

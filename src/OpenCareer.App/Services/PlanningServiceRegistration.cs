@@ -59,6 +59,9 @@ internal static class PlanningServiceRegistration
         services.AddSingleton<InstalledAircraftInventorySource>();
         services.AddSingleton<IInstalledAircraftInventorySource>(provider =>
             provider.GetRequiredService<InstalledAircraftInventorySource>());
+        services.AddSingleton<DispatchCruiseProfileSource>();
+        services.AddSingleton<IDispatchCruiseProfileSource>(provider =>
+            provider.GetRequiredService<DispatchCruiseProfileSource>());
 
         services.AddSingleton<CruisePerformancePlanningService>(provider =>
             new CruisePerformancePlanningService(

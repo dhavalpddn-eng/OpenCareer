@@ -15,6 +15,7 @@ public sealed class DispatchViewModelTests
             Inventory(
                 Item("aircraft-b", "Bravo"),
                 Item("aircraft-a", "Alpha")),
+            Profiles(),
             planning,
             NoAcceptedContext());
 
@@ -22,8 +23,50 @@ public sealed class DispatchViewModelTests
 
         Assert.Equal(2, viewModel.AircraftOptions.Count);
         Assert.Equal("aircraft-b", viewModel.SelectedAircraftId);
-        Assert.True(viewModel.CanEvaluate);
+        Assert.Single(viewModel.CruiseProfileOptions);
+        Assert.False(viewModel.CanEvaluate);
         Assert.Equal(0, planning.CallCount);
+    }
+
+    [Fact]
+    public async Task EvaluationRequiresAnExplicitRegistryProfileSelection()
+    {
+        var planning = new StubPlanning();
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            planning,
+            NoAcceptedContext());
+        await viewModel.InitializeAsync();
+
+        await viewModel.EvaluateAsync(ValidInput());
+
+        Assert.Equal(0, planning.CallCount);
+        Assert.Equal("NOT EVALUATED", viewModel.ResultStatus);
+        Assert.Contains("authoritative cruise profile", viewModel.ResultDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AircraftChangeClearsPriorProfileSelection()
+    {
+        var profiles = new StubProfiles(new(
+            DispatchCruiseProfileCatalogStatus.Ready,
+            "Authoritative profile available.",
+            [new(0, 0, "Economy · fuel type 0", "Registry evidence")]));
+        var viewModel = new DispatchViewModel(
+            Inventory(
+                Item("aircraft-a", "Alpha"),
+                Item("aircraft-b", "Bravo")),
+            profiles,
+            new StubPlanning(),
+            NoAcceptedContext());
+        await InitializeReadyAsync(viewModel);
+
+        await viewModel.SetSelectedAircraftAsync("aircraft-b");
+
+        Assert.Null(viewModel.SelectedCruiseProfileIndex);
+        Assert.False(viewModel.CanEvaluate);
+        Assert.Equal(["aircraft-a", "aircraft-b"], profiles.Requests);
     }
 
     [Fact]
@@ -47,9 +90,10 @@ public sealed class DispatchViewModelTests
         };
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
             planning,
             NoAcceptedContext());
-        await viewModel.InitializeAsync();
+        await InitializeReadyAsync(viewModel);
 
         await viewModel.EvaluateAsync(ValidInput());
 
@@ -62,6 +106,7 @@ public sealed class DispatchViewModelTests
         Assert.Equal(10, planning.Requirements.RangeSafetyMarginPercent);
         Assert.Equal(15, planning.Requirements.RunwayLengthSafetyMarginPercent);
         Assert.Equal(0, planning.Cruise!.ProfileIndex);
+        Assert.Equal(0, planning.Cruise.FuelTypeIndex);
         Assert.Equal(6000, planning.Cruise.PlannedCruiseWeightPounds);
         Assert.Equal(260, planning.RouteFuel!.CruiseSegmentDistanceNauticalMiles);
         Assert.Equal("FEASIBLE", viewModel.ResultStatus);
@@ -76,9 +121,10 @@ public sealed class DispatchViewModelTests
         var planning = new StubPlanning();
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
             planning,
             NoAcceptedContext());
-        await viewModel.InitializeAsync();
+        await InitializeReadyAsync(viewModel);
 
         await viewModel.EvaluateAsync(
             ValidInput() with { OriginIcao = "JFK" });
@@ -105,9 +151,10 @@ public sealed class DispatchViewModelTests
         };
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
             planning,
             NoAcceptedContext());
-        await viewModel.InitializeAsync();
+        await InitializeReadyAsync(viewModel);
 
         await viewModel.EvaluateAsync(ValidInput());
 
@@ -145,9 +192,10 @@ public sealed class DispatchViewModelTests
         };
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
             planning,
             NoAcceptedContext());
-        await viewModel.InitializeAsync();
+        await InitializeReadyAsync(viewModel);
 
         await viewModel.EvaluateAsync(ValidInput());
 
@@ -177,10 +225,11 @@ public sealed class DispatchViewModelTests
             Inventory(
                 Item("aircraft-a", "Alpha"),
                 Item("aircraft-b", "Bravo")),
+            Profiles(),
             planning,
             accepted);
 
-        await viewModel.InitializeAsync();
+        await InitializeReadyAsync(viewModel);
         await viewModel.EvaluateAsync(ValidInput());
 
         Assert.Equal("aircraft-b", viewModel.SelectedAircraftId);
@@ -190,7 +239,8 @@ public sealed class DispatchViewModelTests
         Assert.Equal("245", viewModel.AcceptedPayloadPoundsText);
         Assert.Equal("contract:fixture:aircraft-v1", planning.ReservationId);
 
-        viewModel.SetSelectedAircraft("aircraft-a");
+        await viewModel.SetSelectedAircraftAsync("aircraft-a");
+        viewModel.SetSelectedCruiseProfile(0);
         await viewModel.EvaluateAsync(ValidInput());
         Assert.Null(planning.ReservationId);
     }
@@ -201,9 +251,10 @@ public sealed class DispatchViewModelTests
         var planning = new StubPlanning();
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
             planning,
             NoAcceptedContext());
-        await viewModel.InitializeAsync();
+        await InitializeReadyAsync(viewModel);
 
         await viewModel.EvaluateAsync(
             ValidInput() with
@@ -231,9 +282,10 @@ public sealed class DispatchViewModelTests
         var planning = new StubPlanning();
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
             planning,
             NoAcceptedContext());
-        await viewModel.InitializeAsync();
+        await InitializeReadyAsync(viewModel);
 
         await viewModel.EvaluateAsync(ValidInput());
 
@@ -246,9 +298,10 @@ public sealed class DispatchViewModelTests
         var planning = new StubPlanning();
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
             planning,
             NoAcceptedContext());
-        await viewModel.InitializeAsync();
+        await InitializeReadyAsync(viewModel);
 
         await viewModel.EvaluateAsync(
             ValidInput() with { ApplyWeatherLimits = true });
@@ -287,9 +340,10 @@ public sealed class DispatchViewModelTests
         };
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
             planning,
             NoAcceptedContext());
-        await viewModel.InitializeAsync();
+        await InitializeReadyAsync(viewModel);
 
         await viewModel.EvaluateAsync(
             ValidInput() with
@@ -312,8 +366,6 @@ public sealed class DispatchViewModelTests
             "250",
             "300",
             "260",
-            "0",
-            "0",
             "6000",
             "0",
             "12000",
@@ -333,6 +385,13 @@ public sealed class DispatchViewModelTests
             string.Empty,
             string.Empty);
 
+    private static async Task InitializeReadyAsync(DispatchViewModel viewModel)
+    {
+        await viewModel.InitializeAsync();
+        viewModel.SetSelectedCruiseProfile(0);
+        Assert.True(viewModel.CanEvaluate);
+    }
+
     private static IInstalledAircraftInventorySource Inventory(
         params InstalledAircraftInventoryItem[] items) =>
         new StubInventory(new(
@@ -344,6 +403,12 @@ public sealed class DispatchViewModelTests
         new StubAcceptedContext(new(
             AcceptedDispatchPlanningContextStatus.NoAcceptedContract,
             "No accepted job is waiting for dispatch preparation."));
+
+    private static IDispatchCruiseProfileSource Profiles() =>
+        new StubProfiles(new(
+            DispatchCruiseProfileCatalogStatus.Ready,
+            "1 authoritative profile available.",
+            [new(0, 0, "Economy · fuel type 0", "Profile 0 · Verified evidence")]));
 
     private static InstalledAircraftInventoryItem Item(
         string id,
@@ -373,6 +438,20 @@ public sealed class DispatchViewModelTests
         public Task<AcceptedDispatchPlanningContext> ReadAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult(context);
+    }
+
+    private sealed class StubProfiles(DispatchCruiseProfileCatalog catalog)
+        : IDispatchCruiseProfileSource
+    {
+        public List<string> Requests { get; } = [];
+
+        public Task<DispatchCruiseProfileCatalog> ReadAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(canonicalAircraftId);
+            return Task.FromResult(catalog);
+        }
     }
 
     private sealed class StubPlanning : ICompositeDispatchPlanningService
