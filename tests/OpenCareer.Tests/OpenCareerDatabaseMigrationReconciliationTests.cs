@@ -348,6 +348,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
             "world_simulation_checkpoints",
             "job_board_states",
             "job_contracts",
+            "prepared_dispatch_plans",
             "career_terminal_recovery",
             "economy_ledger_transactions",
             "economy_ledger_postings",
@@ -369,7 +370,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            15L,
+            16L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));

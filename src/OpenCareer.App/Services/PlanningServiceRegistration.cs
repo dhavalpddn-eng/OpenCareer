@@ -4,6 +4,7 @@ using OpenCareer.Application.Careers;
 using OpenCareer.Application.Planning;
 using OpenCareer.Infrastructure.Aircraft;
 using OpenCareer.Infrastructure.Airports;
+using OpenCareer.Infrastructure.Persistence;
 using OpenCareer.Infrastructure.Weather;
 using OpenCareer.SimConnect;
 
@@ -115,6 +116,10 @@ internal static class PlanningServiceRegistration
                 provider.GetRequiredService<OperationDispatchPlanningService>()));
         services.AddSingleton<ICompositeDispatchPlanningService>(provider =>
             provider.GetRequiredService<CompositeDispatchPlanningService>());
+        services.AddSingleton<SqlitePreparedDispatchPlanStore>();
+        services.AddSingleton<IPreparedDispatchPlanStore>(provider =>
+            provider.GetRequiredService<SqlitePreparedDispatchPlanStore>());
+        services.AddSingleton<PreparedDispatchPlanService>();
         services.AddSingleton<AcceptedDispatchPlanningContextSource>();
         services.AddSingleton<IAcceptedDispatchPlanningContextSource>(provider =>
             provider.GetRequiredService<AcceptedDispatchPlanningContextSource>());

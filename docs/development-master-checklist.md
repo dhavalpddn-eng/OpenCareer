@@ -665,6 +665,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement the first dedicated Dispatch screen against the composite cruise/fuel-weight/physical-feasibility service with explicit inputs, deterministic issues and no operation-state writes.
 - [x] Prepopulate Dispatch from one unambiguous Accepted contract's persisted route and exact Fleet-reserved aircraft; fail closed on missing/ambiguous reservation state and never reuse that reservation for another aircraft.
 - [x] Lock accepted route/payload/distance fields and allow the Fleet reservation only when aircraft and every immutable contract planning term match exactly; legacy missing terms fail closed.
+- [x] Add schema-v16 prepared-dispatch persistence plus an application service that rechecks Accepted-contract/reservation authority before and after composite evaluation and stores only feasible fuel/runway plans without granting start authority.
 - [x] Add optional explicit Dispatch weather limits for crosswind, tailwind, density altitude, visibility and ceiling; query existing authoritative weather only when enabled and preserve missing evidence as insufficient.
 - [x] Persist immutable accepted offer distance/payload in the `JobContract` JSON, project it to Dispatch after restart, and keep legacy missing terms explicit.
 - [x] Replace free-form Dispatch cruise/fuel indexes with selected-aircraft registry profile choices that require complete TAS, fuel-consumption and matching fuel-density evidence; require explicit selection and clear it on aircraft change.
