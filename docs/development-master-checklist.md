@@ -321,7 +321,8 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Resolve production civilian training completion evidence only from immutable committed Training Logbook entries carrying validated career, operation and catalog qualification identities, a successful outcome and no settlement.
 - [x] Preserve generic/historical Training entries without qualification metadata as valid history that cannot award a qualification.
 - [x] Implement the first authoritative Student local-circuit operation: persist career/operation/aircraft authority in FlightSession, require registry-proven training capability, and create no-settlement qualifying evidence only after takeoff, full-stop landing, parking, shutdown and successful completion.
-- [ ] Expose the Student operation through a bounded briefing/start surface and add later qualification missions with distinct authoritative requirements; UI actions must never directly complete training or grant qualifications.
+- [x] Expose the Student operation through a bounded Career briefing/readiness/start surface with automatic evidence-driven completion and restart finalization; UI actions cannot directly complete training or grant qualifications.
+- [ ] Add later qualification missions with distinct authoritative definitions and completion requirements.
 - [x] Home-airport selection foundation.
 - [x] Persist player location/home base.
 - [x] Build deterministic board refill foundation; authoritative market-demand integration remains open.

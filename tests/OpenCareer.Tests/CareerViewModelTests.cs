@@ -1,6 +1,7 @@
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Careers;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Flights;
 
 namespace OpenCareer.Tests;
 
@@ -165,12 +166,83 @@ public sealed class CareerViewModelTests
         Assert.Equal("Private pilot", viewModel.CurrentLicenseText);
         Assert.Equal("Airplane single-engine land", viewModel.EarnedRatingsText);
         Assert.Contains("Commercial pilot", viewModel.NextQualificationsText, StringComparison.Ordinal);
-        Assert.Contains("future authoritative", viewModel.QualificationPolicyText, StringComparison.Ordinal);
+        Assert.Contains("authoritative qualification-specific", viewModel.QualificationPolicyText, StringComparison.Ordinal);
         Assert.Equal(7, viewModel.QualificationRoadmapItems.Count);
         Assert.Equal("EARNED", viewModel.QualificationRoadmapItems[1].Status);
         Assert.Equal("AVAILABLE", viewModel.QualificationRoadmapItems[2].Status);
         Assert.Equal("LOCKED", viewModel.QualificationRoadmapItems[3].Status);
         Assert.Contains("unmet", viewModel.QualificationRoadmapItems[3].Prerequisites, StringComparison.Ordinal);
+        Assert.Equal(0, store.SaveCount);
+    }
+
+    [Fact]
+    public async Task ReadyStudentTrainingProjectsBriefingAndStartsOnlyThroughAction()
+    {
+        PlayerCareerProfile existing =
+            PlayerCareerProfile.Start(
+                Guid.Parse("b8100000-0000-0000-0000-000000000001"),
+                "KAFW",
+                Now.AddHours(-1));
+        var store = new FakeProfileStore(
+            new PlayerCareerProfileStoreRecord(1, existing, Now));
+        var runtime = new PlayerCareerRuntimeState(store);
+        var training = new FakeStudentTrainingAccess(
+            new(
+                StudentTrainingOperationReadinessState.Ready,
+                "Ready for verified Student training.",
+                AirportIcao: "KAFW",
+                AircraftDisplayName: "Cessna 172"));
+        var viewModel = new CareerViewModel(
+            new PlayerCareerOnboardingCoordinator(store, runtime),
+            runtime,
+            new FixedTimeProvider(Now),
+            new CareerQualificationRoadmapSource(runtime),
+            training,
+            training);
+
+        await viewModel.InitializeAsync();
+
+        Assert.True(viewModel.CanStartStudentTraining);
+        Assert.Equal("KAFW → KAFW · LOCAL CIRCUIT", viewModel.StudentTrainingRouteText);
+        Assert.Contains("Cessna 172", viewModel.StudentTrainingAircraftText, StringComparison.Ordinal);
+
+        await viewModel.StartStudentTrainingAsync();
+
+        Assert.Equal(1, training.StartCount);
+        Assert.False(viewModel.CanStartStudentTraining);
+        Assert.Contains("active", viewModel.StudentTrainingStatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, store.SaveCount);
+    }
+
+    [Fact]
+    public async Task BlockedStudentTrainingCannotInvokeStartAction()
+    {
+        PlayerCareerProfile existing =
+            PlayerCareerProfile.Start(
+                Guid.Parse("b8100000-0000-0000-0000-000000000002"),
+                "KAFW",
+                Now.AddHours(-1));
+        var store = new FakeProfileStore(
+            new PlayerCareerProfileStoreRecord(1, existing, Now));
+        var runtime = new PlayerCareerRuntimeState(store);
+        var training = new FakeStudentTrainingAccess(
+            new(
+                StudentTrainingOperationReadinessState.AircraftIdentityUnavailable,
+                "Load an aircraft before training.",
+                AirportIcao: "KAFW"));
+        var viewModel = new CareerViewModel(
+            new PlayerCareerOnboardingCoordinator(store, runtime),
+            runtime,
+            new FixedTimeProvider(Now),
+            new CareerQualificationRoadmapSource(runtime),
+            training,
+            training);
+
+        await viewModel.InitializeAsync();
+        await viewModel.StartStudentTrainingAsync();
+
+        Assert.False(viewModel.CanStartStudentTraining);
+        Assert.Equal(0, training.StartCount);
         Assert.Equal(0, store.SaveCount);
     }
 
@@ -189,6 +261,56 @@ public sealed class CareerViewModelTests
     {
         public override DateTimeOffset GetUtcNow() =>
             now;
+    }
+
+    private sealed class FakeStudentTrainingAccess(
+        StudentTrainingOperationReadiness readiness)
+        : IStudentTrainingOperationReadinessSource,
+          IStudentTrainingOperationStartAction
+    {
+        private StudentTrainingOperationReadiness _readiness = readiness;
+
+        public int StartCount { get; private set; }
+
+        public Task<StudentTrainingOperationReadiness> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(_readiness);
+        }
+
+        public Task<StudentTrainingOperationStartResult> StartAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_readiness.CanStart)
+                throw new InvalidOperationException(_readiness.Detail);
+
+            StartCount++;
+            Guid operationId =
+                Guid.Parse("b8100000-0000-0000-0000-000000000003");
+            var plan = new FlightSessionPlan(
+                _readiness.AirportIcao,
+                _readiness.AirportIcao,
+                SourceProvider: StudentTrainingOperationService.SourceProvider,
+                ExpectedCanonicalAircraftId: "msfs-title:c172");
+            FlightSession session = FlightSession.Start(
+                Now,
+                sessionId: operationId,
+                plan: plan);
+            _readiness = new(
+                StudentTrainingOperationReadinessState.Active,
+                "Student training is active.",
+                operationId,
+                _readiness.AirportIcao,
+                _readiness.AircraftDisplayName);
+
+            return Task.FromResult(
+                new StudentTrainingOperationStartResult(
+                    StudentTrainingOperationService.CreateOperationIdentity(operationId),
+                    session,
+                    _readiness.AircraftDisplayName ?? "Cessna 172"));
+        }
     }
 
     private sealed class FakeProfileStore

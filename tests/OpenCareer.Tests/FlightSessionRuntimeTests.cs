@@ -133,6 +133,37 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task ContractlessSessionWithExpectedAircraftFailsClosedOnMismatch()
+    {
+        var plan = new FlightSessionPlan(
+            "KDFW",
+            "KDFW",
+            ExpectedCanonicalAircraftId: "aircraft-a");
+        FlightSession active = FlightSession.Start(Epoch, plan: plan);
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(active);
+        var store = new MemoryStore { Checkpoint = active };
+
+        var runtime = new FlightSessionRuntime(
+            coordinator,
+            new FlightSessionPersistenceService(coordinator, store),
+            Processor(),
+            new FlightContinuityPolicy(),
+            Connected(),
+            new TestTelemetrySource
+            {
+                Latest = Telemetry(Epoch.AddSeconds(1), 32, -97, onGround: true)
+            },
+            new TestLoadedAircraftIdentitySource("aircraft-b"),
+            new FixedTimeProvider(Epoch.AddSeconds(1)));
+
+        Assert.True(await runtime.RefreshAsync());
+        Assert.Equal(FlightSessionStatus.Suspended, coordinator.Current?.Status);
+        Assert.Equal(active.OperationState, coordinator.Current?.OperationState);
+        Assert.Equal(active.Tracking.TakeoffCount, coordinator.Current?.Tracking.TakeoffCount);
+    }
+
+    [Fact]
     public async Task UnknownLoadedAircraftSuspendsWithoutAdvancingContractSession()
     {
         FlightSession active = ContractSession(ApproachSession(), "aircraft-a");

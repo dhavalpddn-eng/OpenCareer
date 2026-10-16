@@ -10,6 +10,8 @@ public sealed class CareerViewModel : INotifyPropertyChanged
     private readonly PlayerCareerOnboardingCoordinator _onboarding;
     private readonly PlayerCareerRuntimeState _runtime;
     private readonly ICareerQualificationRoadmapSource _qualificationRoadmap;
+    private readonly IStudentTrainingOperationReadinessSource _studentTrainingReadiness;
+    private readonly IStudentTrainingOperationStartAction _studentTrainingStart;
     private readonly TimeProvider _timeProvider;
 
     private string _homeAirportIcao = string.Empty;
@@ -25,6 +27,17 @@ public sealed class CareerViewModel : INotifyPropertyChanged
     private string _qualificationPolicyText = "Qualifications are awarded only from authoritative completion evidence.";
     private IReadOnlyList<CareerQualificationItemViewModel> _qualificationRoadmapItems =
         Array.Empty<CareerQualificationItemViewModel>();
+    private StudentTrainingOperationReadiness _studentTraining =
+        new(
+            StudentTrainingOperationReadinessState.NoCareer,
+            "Complete career onboarding before starting Student training.");
+    private string _studentTrainingStatusText =
+        "Complete career onboarding before starting Student training.";
+    private string _studentTrainingRouteText =
+        "LOCAL CIRCUIT · airport unavailable";
+    private string _studentTrainingAircraftText =
+        "Training aircraft: unavailable";
+    private bool _isStartingStudentTraining;
 
     public CareerViewModel(
         PlayerCareerOnboardingCoordinator onboarding,
@@ -34,7 +47,9 @@ public sealed class CareerViewModel : INotifyPropertyChanged
             onboarding,
             runtime,
             timeProvider,
-            new CareerQualificationRoadmapSource(runtime))
+            new CareerQualificationRoadmapSource(runtime),
+            UnavailableStudentTrainingAccess.Instance,
+            UnavailableStudentTrainingAccess.Instance)
     {
     }
 
@@ -43,6 +58,23 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         PlayerCareerRuntimeState runtime,
         TimeProvider timeProvider,
         ICareerQualificationRoadmapSource qualificationRoadmap)
+        : this(
+            onboarding,
+            runtime,
+            timeProvider,
+            qualificationRoadmap,
+            UnavailableStudentTrainingAccess.Instance,
+            UnavailableStudentTrainingAccess.Instance)
+    {
+    }
+
+    public CareerViewModel(
+        PlayerCareerOnboardingCoordinator onboarding,
+        PlayerCareerRuntimeState runtime,
+        TimeProvider timeProvider,
+        ICareerQualificationRoadmapSource qualificationRoadmap,
+        IStudentTrainingOperationReadinessSource studentTrainingReadiness,
+        IStudentTrainingOperationStartAction studentTrainingStart)
     {
         _onboarding =
             onboarding
@@ -55,6 +87,10 @@ public sealed class CareerViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(timeProvider));
         _qualificationRoadmap = qualificationRoadmap
             ?? throw new ArgumentNullException(nameof(qualificationRoadmap));
+        _studentTrainingReadiness = studentTrainingReadiness
+            ?? throw new ArgumentNullException(nameof(studentTrainingReadiness));
+        _studentTrainingStart = studentTrainingStart
+            ?? throw new ArgumentNullException(nameof(studentTrainingStart));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -92,6 +128,23 @@ public sealed class CareerViewModel : INotifyPropertyChanged
     public IReadOnlyList<CareerQualificationItemViewModel> QualificationRoadmapItems =>
         _qualificationRoadmapItems;
 
+    public string StudentTrainingStatusText => _studentTrainingStatusText;
+
+    public string StudentTrainingRouteText => _studentTrainingRouteText;
+
+    public string StudentTrainingAircraftText => _studentTrainingAircraftText;
+
+    public bool IsStartingStudentTraining => _isStartingStudentTraining;
+
+    public bool CanStartStudentTraining =>
+        !_isStartingStudentTraining
+        && _studentTraining.CanStart;
+
+    public string StudentTrainingButtonText =>
+        _isStartingStudentTraining
+            ? "Starting Training…"
+            : "Start Student Training";
+
     public bool CanStartCareer =>
         !_hasCareer
         && !_isCreating
@@ -124,11 +177,16 @@ public sealed class CareerViewModel : INotifyPropertyChanged
                 location:
                     "No career profile exists yet.");
             ApplyRoadmap(null);
+            ApplyStudentTraining(
+                new(
+                    StudentTrainingOperationReadinessState.NoCareer,
+                    "Complete career onboarding before starting Student training."));
             return;
         }
 
         ApplyCurrent(current);
         await RefreshRoadmapAsync(cancellationToken);
+        await RefreshStudentTrainingAsync(cancellationToken);
     }
 
     public async Task StartCareerAsync(
@@ -175,6 +233,7 @@ public sealed class CareerViewModel : INotifyPropertyChanged
 
             ApplyCurrent(created);
             await RefreshRoadmapAsync(cancellationToken);
+            await RefreshStudentTrainingAsync(cancellationToken);
 
             SetField(
                 ref _statusText,
@@ -203,6 +262,51 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         finally
         {
             SetCreating(false);
+        }
+    }
+
+    public async Task StartStudentTrainingAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_isStartingStudentTraining
+            || !_studentTraining.CanStart)
+        {
+            return;
+        }
+
+        SetStartingStudentTraining(true);
+        try
+        {
+            await _studentTrainingStart
+                .StartAsync(cancellationToken)
+                .ConfigureAwait(true);
+
+            await RefreshStudentTrainingAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            await RefreshStudentTrainingAsync(cancellationToken);
+            SetField(
+                ref _studentTrainingStatusText,
+                $"Student training could not start: {ex.Message}",
+                nameof(StudentTrainingStatusText));
+        }
+        catch (InvalidOperationException ex)
+        {
+            await RefreshStudentTrainingAsync(cancellationToken);
+            SetField(
+                ref _studentTrainingStatusText,
+                $"Student training could not start: {ex.Message}",
+                nameof(StudentTrainingStatusText));
+        }
+        finally
+        {
+            SetStartingStudentTraining(false);
         }
     }
 
@@ -237,6 +341,42 @@ public sealed class CareerViewModel : INotifyPropertyChanged
                 .ConfigureAwait(true);
 
         ApplyRoadmap(roadmap);
+    }
+
+    private async Task RefreshStudentTrainingAsync(
+        CancellationToken cancellationToken)
+    {
+        StudentTrainingOperationReadiness readiness =
+            await _studentTrainingReadiness
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(true);
+
+        ApplyStudentTraining(readiness);
+    }
+
+    private void ApplyStudentTraining(
+        StudentTrainingOperationReadiness readiness)
+    {
+        ArgumentNullException.ThrowIfNull(readiness);
+
+        _studentTraining = readiness;
+        SetField(
+            ref _studentTrainingStatusText,
+            readiness.Detail,
+            nameof(StudentTrainingStatusText));
+        SetField(
+            ref _studentTrainingRouteText,
+            string.IsNullOrWhiteSpace(readiness.AirportIcao)
+                ? "LOCAL CIRCUIT · airport unavailable"
+                : $"{readiness.AirportIcao} → {readiness.AirportIcao} · LOCAL CIRCUIT",
+            nameof(StudentTrainingRouteText));
+        SetField(
+            ref _studentTrainingAircraftText,
+            string.IsNullOrWhiteSpace(readiness.AircraftDisplayName)
+                ? "Training aircraft: unavailable"
+                : $"Training aircraft: {readiness.AircraftDisplayName}",
+            nameof(StudentTrainingAircraftText));
+        OnPropertyChanged(nameof(CanStartStudentTraining));
     }
 
     private void ApplyRoadmap(
@@ -338,6 +478,17 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StartButtonText));
     }
 
+    private void SetStartingStudentTraining(bool value)
+    {
+        if (_isStartingStudentTraining == value)
+            return;
+
+        _isStartingStudentTraining = value;
+        OnPropertyChanged(nameof(IsStartingStudentTraining));
+        OnPropertyChanged(nameof(CanStartStudentTraining));
+        OnPropertyChanged(nameof(StudentTrainingButtonText));
+    }
+
     private static bool IsValidAirportIcao(
         string value)
     {
@@ -373,6 +524,31 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(
             this,
             new PropertyChangedEventArgs(propertyName));
+
+    private sealed class UnavailableStudentTrainingAccess
+        : IStudentTrainingOperationReadinessSource,
+          IStudentTrainingOperationStartAction
+    {
+        public static UnavailableStudentTrainingAccess Instance { get; } = new();
+
+        public Task<StudentTrainingOperationReadiness> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                new StudentTrainingOperationReadiness(
+                    StudentTrainingOperationReadinessState.AuthorityUnavailable,
+                    "Student training is unavailable in this application context."));
+        }
+
+        public Task<StudentTrainingOperationStartResult> StartAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException(
+                "Student training is unavailable in this application context.");
+        }
+    }
 }
 
 public sealed record CareerQualificationItemViewModel(

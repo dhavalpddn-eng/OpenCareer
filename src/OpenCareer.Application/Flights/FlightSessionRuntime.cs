@@ -195,11 +195,14 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
     private bool IsExpectedLoadedAircraft(
         FlightSession session)
     {
-        if (session.ContractId is null)
-            return true;
-
         string? expectedCanonicalAircraftId =
             session.Plan?.ExpectedCanonicalAircraftId;
+        bool requiresExpectedAircraft =
+            session.ContractId is not null
+            || !string.IsNullOrWhiteSpace(expectedCanonicalAircraftId);
+
+        if (!requiresExpectedAircraft)
+            return true;
 
         if (string.IsNullOrWhiteSpace(expectedCanonicalAircraftId))
             return false;

@@ -48,6 +48,46 @@
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}">
                 <StackPanel Spacing="14">
+                    <TextBlock Text="STUDENT TRAINING"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <TextBlock Text="First Solo Circuit"
+                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="Fly one local circuit with an authoritative takeoff, full-stop landing, parking and shutdown. Completion is verified from the FlightSession; this screen cannot grant a qualification."
+                               Style="{StaticResource OpenCareerPaperBodyStyle}"
+                               TextWrapping="Wrap" />
+                    <Grid ColumnSpacing="18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="ROUTE"
+                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding StudentTrainingRouteText}"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="3">
+                            <TextBlock Text="AIRCRAFT"
+                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding StudentTrainingAircraftText}"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="{Binding StudentTrainingStatusText}"
+                               Style="{StaticResource OpenCareerInputHelpStyle}"
+                               TextWrapping="Wrap" />
+                    <Button Content="{Binding StudentTrainingButtonText}"
+                            IsEnabled="{Binding CanStartStudentTraining}"
+                            Click="StartStudentTraining_Click"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}">
+                <StackPanel Spacing="14">
                     <TextBlock Text="CIVILIAN QUALIFICATIONS"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                     <Grid ColumnSpacing="18">

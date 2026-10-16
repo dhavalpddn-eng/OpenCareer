@@ -106,6 +106,11 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ManualFlightPostflightCoordinator>();
         services.AddSingleton<ManualFlightPostflightInputSource>();
         services.AddSingleton<StudentTrainingOperationService>();
+        services.AddSingleton<IStudentTrainingOperationReadinessSource>(provider =>
+            provider.GetRequiredService<StudentTrainingOperationService>());
+        services.AddSingleton<IStudentTrainingOperationStartAction>(provider =>
+            provider.GetRequiredService<StudentTrainingOperationService>());
+        services.AddSingleton<StudentTrainingOperationRuntime>();
 
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>
@@ -507,6 +512,25 @@ public partial class App : Microsoft.UI.Xaml.Application
             logger.LogWarning(
                 ex,
                 "Local MSFS installed-aircraft discovery failed; live SimConnect discovery remains available.");
+        }
+
+        try
+        {
+            bool finalized = await _services
+                .GetRequiredService<StudentTrainingOperationRuntime>()
+                .InitializeAsync();
+
+            if (finalized)
+            {
+                logger.LogInformation(
+                    "Recovered and finalized a completed Student training operation.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Student training recovery failed. Persisted FlightSession evidence remains available for retry.");
         }
 
         if (dataPaths.IsDevelopmentLiveTest)

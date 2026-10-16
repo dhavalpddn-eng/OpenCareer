@@ -89,4 +89,24 @@ public sealed partial class CareerPage : Page
         {
         }
     }
+
+    private async void StartStudentTraining_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (DataContext is not CareerViewModel viewModel)
+            return;
+
+        try
+        {
+            await viewModel
+                .StartStudentTrainingAsync(
+                    _navigationCts?.Token
+                        ?? CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+            when (_navigationCts?.IsCancellationRequested == true)
+        {
+        }
+    }
 }

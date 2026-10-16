@@ -625,7 +625,7 @@ public sealed class KjfkPlayableLoopCertificationTests
         string registration = Read("App.xaml.cs");
         foreach (string authority in new[] { "CareerJobStartActionService", "CareerJobCompletionActionService",
             "CareerJobPlayableLoopCoordinator", "CareerFlightAbandonCoordinator", "FlightSessionRuntime",
-            "SqliteJobContractStore", "SqliteEconomyLedgerStore", "SqliteLogbookStore" })
+            "StudentTrainingOperationRuntime", "SqliteJobContractStore", "SqliteEconomyLedgerStore", "SqliteLogbookStore" })
             Assert.Contains(authority, registration);
         Assert.Contains("PlayableLoopReferenceAircraftObservationSource", Read("PlanningServiceRegistration.cs"));
         Assert.Contains("PlayableLoopReferenceAirportObservationSource", Read("PlanningServiceRegistration.cs"));

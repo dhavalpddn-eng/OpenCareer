@@ -328,6 +328,30 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
+    public void CareerStudentTrainingSurfaceCanStartButCannotCompleteOrGrant()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
+        XDocument page = XDocument.Load(Path.Combine(directory, "CareerPage.xaml"));
+        string code = File.ReadAllText(Path.Combine(directory, "CareerPage.xaml.cs"));
+
+        XElement start = page
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Button"
+                && string.Equals(
+                    element.Attribute("Click")?.Value,
+                    "StartStudentTraining_Click",
+                    StringComparison.Ordinal));
+
+        Assert.Equal(
+            "{Binding CanStartStudentTraining}",
+            start.Attribute("IsEnabled")?.Value);
+        Assert.Contains("StartStudentTrainingAsync", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("CompleteAsync", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("AwardAsync", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ButtonDesignSystemDoesNotUsePointerHandlers()
     {
         foreach (string path in GetProductionButtonXamlPaths())

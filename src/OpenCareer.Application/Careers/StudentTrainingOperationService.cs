@@ -18,12 +18,50 @@ public sealed record StudentTrainingOperationCompletionResult(
     LogbookAppendResult Logbook,
     CivilianQualificationAwardResult Award);
 
+public enum StudentTrainingOperationReadinessState
+{
+    NoCareer = 0,
+    Ready = 1,
+    Active = 2,
+    CompletedAwaitingFinalization = 3,
+    AlreadyEarned = 4,
+    OtherFlightActive = 5,
+    AircraftIdentityUnavailable = 6,
+    AircraftNotEligible = 7,
+    AuthorityUnavailable = 8
+}
+
+public sealed record StudentTrainingOperationReadiness(
+    StudentTrainingOperationReadinessState State,
+    string Detail,
+    Guid? OperationId = null,
+    string? AirportIcao = null,
+    string? AircraftDisplayName = null)
+{
+    public bool CanStart =>
+        State == StudentTrainingOperationReadinessState.Ready;
+}
+
+public interface IStudentTrainingOperationReadinessSource
+{
+    Task<StudentTrainingOperationReadiness> ReadAsync(
+        CancellationToken cancellationToken = default);
+}
+
+public interface IStudentTrainingOperationStartAction
+{
+    Task<StudentTrainingOperationStartResult> StartAsync(
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Owns the first production civilian training operation. Starting the operation
 /// creates a persisted, local-circuit FlightSession. Completion remains derived
 /// from that session's authoritative lifecycle and landing evidence.
 /// </summary>
 public sealed class StudentTrainingOperationService
+    : IStudentTrainingOperationReadinessSource,
+      IStudentTrainingOperationStartAction
 {
     public const string SourceProvider = "OpenCareer.CivilianTraining.Student";
 
@@ -72,12 +110,163 @@ public sealed class StudentTrainingOperationService
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
+    public async Task<StudentTrainingOperationReadiness> ReadAsync(
+        CancellationToken cancellationToken = default)
+    {
+        PlayerCareerProfileStoreRecord? profile = await _career
+            .InitializeAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (profile is null)
+        {
+            return new(
+                StudentTrainingOperationReadinessState.NoCareer,
+                "Complete career onboarding before starting Student training.");
+        }
+
+        if (!_catalog.TryGet(TargetIdentity, out CivilianQualificationDefinition? definition)
+            || definition is null
+            || definition.License != PilotLicenseLevel.Student)
+        {
+            return new(
+                StudentTrainingOperationReadinessState.AuthorityUnavailable,
+                "The authoritative Student training definition is unavailable.",
+                AirportIcao: profile.Profile.Location.CurrentAirportIcao);
+        }
+
+        if (definition.IsEarned(profile.Profile.Qualifications))
+        {
+            return new(
+                StudentTrainingOperationReadinessState.AlreadyEarned,
+                "The Student pilot qualification is already earned.",
+                AirportIcao: profile.Profile.Location.CurrentAirportIcao);
+        }
+
+        if (!_catalog.ArePrerequisitesMet(
+                definition,
+                profile.Profile.Qualifications))
+        {
+            return new(
+                StudentTrainingOperationReadinessState.AuthorityUnavailable,
+                "Student training prerequisites are not met.",
+                AirportIcao: profile.Profile.Location.CurrentAirportIcao);
+        }
+
+        FlightSession? current = _sessions.Current;
+        if (current is not null)
+        {
+            if (TryGetOperationAuthority(
+                    current,
+                    out Guid plannedCareerId,
+                    out Guid operationId)
+                && plannedCareerId == profile.Profile.CareerId)
+            {
+                FlightSessionPlan currentPlan = current.Plan!;
+                string? displayName = null;
+                string? expectedAircraftId =
+                    currentPlan.ExpectedCanonicalAircraftId;
+                if (!string.IsNullOrWhiteSpace(expectedAircraftId))
+                {
+                    AircraftRegistryResolution? activeAircraft =
+                        await _aircraftRegistry
+                            .FindAircraftAsync(
+                                expectedAircraftId.Trim(),
+                                cancellationToken)
+                            .ConfigureAwait(false);
+                    IsEligibleTrainingAircraft(
+                        activeAircraft,
+                        expectedAircraftId.Trim(),
+                        out displayName);
+                }
+
+                if (current.Status is FlightSessionStatus.Interrupted
+                    or FlightSessionStatus.Cancelled)
+                {
+                    return new(
+                        StudentTrainingOperationReadinessState.OtherFlightActive,
+                        "Student training ended without qualifying completion; clear the terminal session before retrying.",
+                        operationId,
+                        currentPlan.PlannedOrigin,
+                        displayName);
+                }
+
+                return new(
+                    current.Status == FlightSessionStatus.Completed
+                        ? StudentTrainingOperationReadinessState.CompletedAwaitingFinalization
+                        : StudentTrainingOperationReadinessState.Active,
+                    current.Status == FlightSessionStatus.Completed
+                        ? "The completed Student training flight is awaiting authoritative finalization."
+                        : "Student training is active. Complete a takeoff, full-stop landing, parking and shutdown local circuit.",
+                    operationId,
+                    currentPlan.PlannedOrigin,
+                    displayName);
+            }
+
+            return new(
+                StudentTrainingOperationReadinessState.OtherFlightActive,
+                "Finish and clear the current flight before starting Student training.",
+                AirportIcao: profile.Profile.Location.CurrentAirportIcao);
+        }
+
+        CurrentLoadedAircraftIdentitySnapshot loaded = _loadedAircraft.Current;
+        try
+        {
+            loaded.Validate();
+        }
+        catch (ArgumentException)
+        {
+            return new(
+                StudentTrainingOperationReadinessState.AircraftIdentityUnavailable,
+                "Authoritative loaded-aircraft identity is unavailable for Student training.",
+                AirportIcao: profile.Profile.Location.CurrentAirportIcao);
+        }
+
+        if (loaded.Status != CurrentLoadedAircraftIdentityStatus.Identified
+            || string.IsNullOrWhiteSpace(loaded.CanonicalAircraftId))
+        {
+            return new(
+                StudentTrainingOperationReadinessState.AircraftIdentityUnavailable,
+                "Load an aircraft so OpenCareer can verify its Student training capability.",
+                AirportIcao: profile.Profile.Location.CurrentAirportIcao);
+        }
+
+        string canonicalAircraftId = loaded.CanonicalAircraftId.Trim();
+        AircraftRegistryResolution? resolution = await _aircraftRegistry
+            .FindAircraftAsync(canonicalAircraftId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!IsEligibleTrainingAircraft(
+                resolution,
+                canonicalAircraftId,
+                out string? displayName))
+        {
+            return new(
+                StudentTrainingOperationReadinessState.AircraftNotEligible,
+                "The loaded aircraft is not authoritatively verified as installed and training-capable.",
+                AirportIcao: profile.Profile.Location.CurrentAirportIcao);
+        }
+
+        return new(
+            StudentTrainingOperationReadinessState.Ready,
+            "Ready to start a no-settlement Student local circuit. Qualification remains evidence-gated.",
+            AirportIcao: profile.Profile.Location.CurrentAirportIcao,
+            AircraftDisplayName: displayName);
+    }
+
     public async Task<StudentTrainingOperationStartResult> StartAsync(
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            StudentTrainingOperationReadiness readiness = await ReadAsync(
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (!readiness.CanStart)
+            {
+                throw new InvalidOperationException(readiness.Detail);
+            }
+
             PlayerCareerProfileStoreRecord profile =
                 await RequireCareerAsync(cancellationToken).ConfigureAwait(false);
 
@@ -243,6 +432,28 @@ public sealed class StudentTrainingOperationService
         return $"{OperationIdentityPrefix}{operationId:N}";
     }
 
+    public static bool TryGetOperationAuthority(
+        FlightSession? session,
+        out Guid careerId,
+        out Guid operationId)
+    {
+        careerId = Guid.Empty;
+        operationId = Guid.Empty;
+
+        return session is not null
+            && session.ContractId is null
+            && session.Plan is not null
+            && string.Equals(
+                session.Plan.SourceProvider,
+                SourceProvider,
+                StringComparison.Ordinal)
+            && TryParseSourceReference(
+                session.Plan.SourceReference,
+                out careerId,
+                out operationId)
+            && operationId == session.SessionId;
+    }
+
     private async Task<PlayerCareerProfileStoreRecord> RequireCareerAsync(
         CancellationToken cancellationToken) =>
         await _career
@@ -330,30 +541,50 @@ public sealed class StudentTrainingOperationService
         string? expectedCanonicalAircraftId,
         CancellationToken cancellationToken)
     {
-        CurrentLoadedAircraftIdentitySnapshot loaded = _loadedAircraft.Current;
-        loaded.Validate();
-
-        if (loaded.Status != CurrentLoadedAircraftIdentityStatus.Identified
-            || string.IsNullOrWhiteSpace(loaded.CanonicalAircraftId))
+        string canonicalAircraftId;
+        if (!string.IsNullOrWhiteSpace(expectedCanonicalAircraftId))
         {
-            throw new InvalidOperationException(
-                "Authoritative loaded-aircraft identity is unavailable for Student training.");
+            canonicalAircraftId = expectedCanonicalAircraftId.Trim();
         }
-
-        string canonicalAircraftId = loaded.CanonicalAircraftId.Trim();
-        if (!string.IsNullOrWhiteSpace(expectedCanonicalAircraftId)
-            && !string.Equals(
-                expectedCanonicalAircraftId.Trim(),
-                canonicalAircraftId,
-                StringComparison.OrdinalIgnoreCase))
+        else
         {
-            throw new InvalidOperationException(
-                "Loaded aircraft does not match the Student training FlightSession.");
+            CurrentLoadedAircraftIdentitySnapshot loaded = _loadedAircraft.Current;
+            loaded.Validate();
+
+            if (loaded.Status != CurrentLoadedAircraftIdentityStatus.Identified
+                || string.IsNullOrWhiteSpace(loaded.CanonicalAircraftId))
+            {
+                throw new InvalidOperationException(
+                    "Authoritative loaded-aircraft identity is unavailable for Student training.");
+            }
+
+            canonicalAircraftId = loaded.CanonicalAircraftId.Trim();
         }
 
         AircraftRegistryResolution? resolution = await _aircraftRegistry
             .FindAircraftAsync(canonicalAircraftId, cancellationToken)
             .ConfigureAwait(false);
+
+        if (!IsEligibleTrainingAircraft(
+                resolution,
+                canonicalAircraftId,
+                out string? displayName))
+        {
+            throw new InvalidOperationException(
+                "Student training requires an installed aircraft with authoritative training capability and display identity.");
+        }
+
+        return new(
+            canonicalAircraftId,
+            displayName!);
+    }
+
+    private static bool IsEligibleTrainingAircraft(
+        AircraftRegistryResolution? resolution,
+        string canonicalAircraftId,
+        out string? displayName)
+    {
+        displayName = null;
 
         if (resolution is null
             || resolution.InstallationStatus != AircraftInstallationStatus.Installed
@@ -365,13 +596,11 @@ public sealed class StudentTrainingOperationService
             || resolution.CapabilityValues.Capabilities is not { } capabilities
             || (capabilities & AircraftCapability.Training) == 0)
         {
-            throw new InvalidOperationException(
-                "Student training requires an installed aircraft with authoritative training capability and display identity.");
+            return false;
         }
 
-        return new(
-            canonicalAircraftId,
-            resolution.CapabilityValues.DisplayName.Trim());
+        displayName = resolution.CapabilityValues.DisplayName.Trim();
+        return true;
     }
 
     private static LogbookEntry ValidateCommittedEntry(

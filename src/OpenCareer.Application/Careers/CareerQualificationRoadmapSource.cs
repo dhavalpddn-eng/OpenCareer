@@ -59,7 +59,7 @@ public sealed class CareerQualificationRoadmapSource
     : ICareerQualificationRoadmapSource
 {
     private const string TrainingPolicy =
-        "Training delivery and cost are not yet authoritative. Available means prerequisites are met; only a future authoritative training-completion workflow may award a qualification.";
+        "Available means prerequisites are met, not that training is complete. Only an authoritative qualification-specific training operation may award; Student local-circuit training is supported and later qualifications remain pending.";
 
     private readonly PlayerCareerRuntimeState _runtime;
     private readonly ICivilianQualificationCatalog _catalog;

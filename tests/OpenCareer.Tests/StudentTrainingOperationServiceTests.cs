@@ -7,6 +7,7 @@ using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Logbook;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OpenCareer.Tests;
 
@@ -51,6 +52,49 @@ public sealed class StudentTrainingOperationServiceTests
     }
 
     [Fact]
+    public async Task ReadinessProjectsVerifiedAircraftWithoutWritingAuthority()
+    {
+        Fixture fixture = Fixture.Create();
+
+        StudentTrainingOperationReadiness ready =
+            await fixture.Subject.ReadAsync();
+
+        Assert.Equal(StudentTrainingOperationReadinessState.Ready, ready.State);
+        Assert.True(ready.CanStart);
+        Assert.Equal("KDFW", ready.AirportIcao);
+        Assert.Equal("Training Aircraft", ready.AircraftDisplayName);
+        Assert.Equal(0, fixture.Profiles.SaveCount);
+        Assert.Equal(0, fixture.Logbook.AppendCount);
+
+        StudentTrainingOperationStartResult started =
+            await fixture.Subject.StartAsync();
+        StudentTrainingOperationReadiness active =
+            await fixture.Subject.ReadAsync();
+
+        Assert.Equal(StudentTrainingOperationReadinessState.Active, active.State);
+        Assert.False(active.CanStart);
+        Assert.Equal(started.FlightSession.SessionId, active.OperationId);
+        Assert.Equal(0, fixture.Profiles.SaveCount);
+        Assert.Equal(0, fixture.Logbook.AppendCount);
+    }
+
+    [Fact]
+    public async Task ReadinessFailsClosedWhenTrainingCapabilityIsNotVerified()
+    {
+        Fixture fixture = Fixture.Create(trainingCapable: false);
+
+        StudentTrainingOperationReadiness readiness =
+            await fixture.Subject.ReadAsync();
+
+        Assert.Equal(
+            StudentTrainingOperationReadinessState.AircraftNotEligible,
+            readiness.State);
+        Assert.False(readiness.CanStart);
+        Assert.Null(fixture.Sessions.Current);
+        Assert.Equal(0, fixture.Profiles.SaveCount);
+    }
+
+    [Fact]
     public async Task CompletedOperationCommitsEvidenceAndAwardsStudent()
     {
         Fixture fixture = Fixture.Create();
@@ -78,6 +122,27 @@ public sealed class StudentTrainingOperationServiceTests
         Assert.Equal(CareerId, metadata.CareerId);
         Assert.Equal(started.OperationIdentity, metadata.TrainingOperationIdentity);
         Assert.Equal("license.student", metadata.TargetQualificationIdentity);
+    }
+
+    [Fact]
+    public async Task RuntimeFinalizesRecoveredCompletedTrainingWithoutUiAuthority()
+    {
+        Fixture fixture = Fixture.Create();
+        await fixture.Subject.StartAsync();
+        fixture.CompleteCurrent(FlightSessionLandingKind.FullStop);
+
+        using var runtime = new StudentTrainingOperationRuntime(
+            fixture.Sessions,
+            fixture.Subject,
+            NullLogger<StudentTrainingOperationRuntime>.Instance);
+
+        Assert.True(await runtime.InitializeAsync());
+        Assert.Equal(
+            PilotLicenseLevel.Student,
+            fixture.Profiles.Record.Profile.Qualifications.License);
+        Assert.Equal(1, fixture.Logbook.AppendCount);
+        Assert.Null(fixture.Sessions.Current);
+        Assert.Null(fixture.Checkpoints.Checkpoint);
     }
 
     [Fact]
