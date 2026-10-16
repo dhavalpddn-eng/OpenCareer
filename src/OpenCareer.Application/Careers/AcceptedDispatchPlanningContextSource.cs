@@ -112,8 +112,8 @@ public sealed class AcceptedDispatchPlanningContextSource(
         return new(
             AcceptedDispatchPlanningContextStatus.Ready,
             contract.PlanningTerms is null
-                ? "Accepted legacy job route and reserved aircraft loaded. Payload and distance were not persisted; all planning values remain explicit."
-                : "Accepted job route, payload, distance and reserved aircraft loaded. Cruise, fuel, reserve and safety-margin inputs remain explicit.",
+                ? "Accepted legacy job route and reserved aircraft loaded. Payload and distance were not persisted, so the reservation cannot prepare a dispatch plan."
+                : "Accepted job route, payload, distance and reserved aircraft loaded and locked to this contract. Cruise, fuel, reserve and safety-margin inputs remain explicit.",
             contract.ContractId,
             contract.Kind,
             contract.OriginIcao,

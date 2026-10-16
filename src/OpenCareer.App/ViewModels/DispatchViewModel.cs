@@ -54,8 +54,11 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     private string? _acceptedDestinationIcao;
     private string? _acceptedPayloadPoundsText;
     private string? _acceptedRouteDistanceText;
+    private double? _acceptedPayloadPounds;
+    private double? _acceptedRouteDistanceNauticalMiles;
     private string? _acceptedAircraftId;
     private string? _acceptedReservationId;
+    private bool _isAcceptedContextLocked;
     private string _resultStatus = "NOT EVALUATED";
     private string _resultDetail =
         "Enter explicit planning inputs, then evaluate. No operation is created or started here.";
@@ -96,6 +99,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     public string? AcceptedDestinationIcao => _acceptedDestinationIcao;
     public string? AcceptedPayloadPoundsText => _acceptedPayloadPoundsText;
     public string? AcceptedRouteDistanceText => _acceptedRouteDistanceText;
+    public bool IsAcceptedContextLocked => _isAcceptedContextLocked;
     public string ResultStatus => _resultStatus;
     public string ResultDetail => _resultDetail;
     public string FuelSummary => _fuelSummary;
@@ -297,6 +301,26 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         SetBusy(true);
         try
         {
+            bool useAcceptedReservation =
+                _acceptedReservationId is not null
+                && string.Equals(
+                    _selectedAircraftId,
+                    _acceptedAircraftId,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (useAcceptedReservation
+                && (_acceptedPayloadPounds is null
+                    || _acceptedRouteDistanceNauticalMiles is null))
+            {
+                SetResult(
+                    "ACCEPTED PLAN UNAVAILABLE",
+                    "The accepted contract has no complete authoritative payload and route-distance terms. Its Fleet reservation cannot prepare a dispatch plan.",
+                    "Fuel plan —",
+                    "Runway selection —",
+                    []);
+                return;
+            }
+
             ParsedDispatchInput parsed;
             try
             {
@@ -315,12 +339,19 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 return;
             }
 
-            bool useAcceptedReservation =
-                _acceptedReservationId is not null
-                && string.Equals(
-                    _selectedAircraftId,
-                    _acceptedAircraftId,
-                    StringComparison.OrdinalIgnoreCase);
+            if (useAcceptedReservation
+                && !MatchesAcceptedContext(
+                    parsed,
+                    out string mismatchDetail))
+            {
+                SetResult(
+                    "ACCEPTED PLAN MISMATCH",
+                    mismatchDetail,
+                    "Fuel plan —",
+                    "Runway selection —",
+                    []);
+                return;
+            }
 
             CompositeDispatchPlanningResult result =
                 useAcceptedReservation
@@ -389,6 +420,51 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             context.Status == AcceptedDispatchPlanningContextStatus.Ready
                 ? context.ReservationId
                 : null;
+        _acceptedPayloadPounds = context.PayloadPounds;
+        _acceptedRouteDistanceNauticalMiles =
+            context.RouteDistanceNauticalMiles;
+        SetField(
+            ref _isAcceptedContextLocked,
+            _acceptedReservationId is not null,
+            nameof(IsAcceptedContextLocked));
+    }
+
+    private bool MatchesAcceptedContext(
+        ParsedDispatchInput parsed,
+        out string detail)
+    {
+        if (_acceptedOriginIcao is null
+            || _acceptedDestinationIcao is null
+            || _acceptedPayloadPounds is not { } acceptedPayload
+            || _acceptedRouteDistanceNauticalMiles is not { } acceptedDistance)
+        {
+            detail =
+                "The accepted contract has no complete authoritative payload and route-distance terms. Its Fleet reservation cannot prepare a dispatch plan.";
+            return false;
+        }
+
+        if (!string.Equals(
+                parsed.OriginIcao,
+                _acceptedOriginIcao,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                parsed.DestinationIcao,
+                _acceptedDestinationIcao,
+                StringComparison.Ordinal)
+            || Math.Abs(
+                parsed.Requirements.PayloadPounds
+                - acceptedPayload) > 1e-9
+            || Math.Abs(
+                parsed.RouteFuel.TotalRouteDistanceNauticalMiles
+                - acceptedDistance) > 1e-9)
+        {
+            detail =
+                "The supplied origin, destination, payload, or route distance does not match the immutable accepted contract. Its Fleet reservation was not used.";
+            return false;
+        }
+
+        detail = string.Empty;
+        return true;
     }
 
     private void ApplyResult(
@@ -555,7 +631,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             : ParseDouble(value, label);
 
     private static string? FormatOptionalInput(double? value) =>
-        value?.ToString("0.###", CultureInfo.CurrentCulture);
+        value?.ToString("R", CultureInfo.CurrentCulture);
 
     private static string FormatFuel(CompositeDispatchPlanningResult result)
     {

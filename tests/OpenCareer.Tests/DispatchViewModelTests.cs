@@ -23,6 +23,7 @@ public sealed class DispatchViewModelTests
 
         Assert.Equal(2, viewModel.AircraftOptions.Count);
         Assert.Equal("aircraft-b", viewModel.SelectedAircraftId);
+        Assert.False(viewModel.IsAcceptedContextLocked);
         Assert.Single(viewModel.CruiseProfileOptions);
         Assert.False(viewModel.CanEvaluate);
         Assert.Equal(0, planning.CallCount);
@@ -238,8 +239,8 @@ public sealed class DispatchViewModelTests
             "KBOS",
             "aircraft-b",
             "contract:fixture:aircraft-v1",
-            RouteDistanceNauticalMiles: 187,
-            PayloadPounds: 245));
+            RouteDistanceNauticalMiles: 300,
+            PayloadPounds: 250));
         var viewModel = new DispatchViewModel(
             Inventory(
                 Item("aircraft-a", "Alpha"),
@@ -252,16 +253,87 @@ public sealed class DispatchViewModelTests
         await viewModel.EvaluateAsync(ValidInput());
 
         Assert.Equal("aircraft-b", viewModel.SelectedAircraftId);
+        Assert.True(viewModel.IsAcceptedContextLocked);
         Assert.Equal("KJFK", viewModel.AcceptedOriginIcao);
         Assert.Equal("KBOS", viewModel.AcceptedDestinationIcao);
-        Assert.Equal("187", viewModel.AcceptedRouteDistanceText);
-        Assert.Equal("245", viewModel.AcceptedPayloadPoundsText);
+        Assert.Equal("300", viewModel.AcceptedRouteDistanceText);
+        Assert.Equal("250", viewModel.AcceptedPayloadPoundsText);
         Assert.Equal("contract:fixture:aircraft-v1", planning.ReservationId);
 
         await viewModel.SetSelectedAircraftAsync("aircraft-a");
         viewModel.SetSelectedCruiseProfile(0);
         await viewModel.EvaluateAsync(ValidInput());
         Assert.Null(planning.ReservationId);
+    }
+
+    [Theory]
+    [InlineData("KTEB", "KBOS", "250", "300")]
+    [InlineData("KJFK", "KTEB", "250", "300")]
+    [InlineData("KJFK", "KBOS", "249", "300")]
+    [InlineData("KJFK", "KBOS", "250", "299")]
+    public async Task AcceptedReservationRejectsAlteredImmutableTerms(
+        string origin,
+        string destination,
+        string payload,
+        string distance)
+    {
+        var planning = new StubPlanning();
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            planning,
+            new StubAcceptedContext(new(
+                AcceptedDispatchPlanningContextStatus.Ready,
+                "Accepted job loaded.",
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                OpenCareer.Domain.Careers.ContractKind.Ferry,
+                "KJFK",
+                "KBOS",
+                "aircraft-a",
+                "contract:fixture:aircraft-v1",
+                RouteDistanceNauticalMiles: 300,
+                PayloadPounds: 250)));
+        await InitializeReadyAsync(viewModel);
+
+        await viewModel.EvaluateAsync(
+            ValidInput() with
+            {
+                OriginIcao = origin,
+                DestinationIcao = destination,
+                PayloadPounds = payload,
+                TotalRouteDistanceNauticalMiles = distance
+            });
+
+        Assert.Equal(0, planning.CallCount);
+        Assert.Equal("ACCEPTED PLAN MISMATCH", viewModel.ResultStatus);
+        Assert.Contains("immutable accepted contract", viewModel.ResultDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LegacyAcceptedContractCannotUseReservationWithoutPlanningTerms()
+    {
+        var planning = new StubPlanning();
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            planning,
+            new StubAcceptedContext(new(
+                AcceptedDispatchPlanningContextStatus.Ready,
+                "Accepted legacy job loaded.",
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                OpenCareer.Domain.Careers.ContractKind.Ferry,
+                "KJFK",
+                "KBOS",
+                "aircraft-a",
+                "contract:fixture:aircraft-v1")));
+        await InitializeReadyAsync(viewModel);
+
+        await viewModel.EvaluateAsync(ValidInput());
+
+        Assert.Equal(0, planning.CallCount);
+        Assert.True(viewModel.IsAcceptedContextLocked);
+        Assert.Equal("ACCEPTED PLAN UNAVAILABLE", viewModel.ResultStatus);
+        Assert.Contains("no complete authoritative", viewModel.ResultDetail, StringComparison.Ordinal);
     }
 
     [Fact]
