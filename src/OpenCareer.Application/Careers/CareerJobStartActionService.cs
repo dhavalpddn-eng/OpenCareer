@@ -1,3 +1,5 @@
+using OpenCareer.Domain.Careers;
+
 namespace OpenCareer.Application.Careers;
 
 public enum CareerJobActionKind
