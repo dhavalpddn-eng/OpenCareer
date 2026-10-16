@@ -29,6 +29,8 @@ public sealed partial class DispatchPage : Page
         {
             await viewModel.InitializeAsync(_navigationCts.Token);
             AircraftPicker.SelectedValue = viewModel.SelectedAircraftId;
+            OriginIcaoBox.Text = viewModel.AcceptedOriginIcao ?? string.Empty;
+            DestinationIcaoBox.Text = viewModel.AcceptedDestinationIcao ?? string.Empty;
         }
         catch (OperationCanceledException)
             when (_navigationCts.IsCancellationRequested)

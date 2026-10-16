@@ -1,4 +1,5 @@
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Planning;
 
@@ -14,7 +15,8 @@ public sealed class DispatchViewModelTests
             Inventory(
                 Item("aircraft-b", "Bravo"),
                 Item("aircraft-a", "Alpha")),
-            planning);
+            planning,
+            NoAcceptedContext());
 
         await viewModel.InitializeAsync();
 
@@ -45,7 +47,8 @@ public sealed class DispatchViewModelTests
         };
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
-            planning);
+            planning,
+            NoAcceptedContext());
         await viewModel.InitializeAsync();
 
         await viewModel.EvaluateAsync(ValidInput());
@@ -73,7 +76,8 @@ public sealed class DispatchViewModelTests
         var planning = new StubPlanning();
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
-            planning);
+            planning,
+            NoAcceptedContext());
         await viewModel.InitializeAsync();
 
         await viewModel.EvaluateAsync(
@@ -101,7 +105,8 @@ public sealed class DispatchViewModelTests
         };
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
-            planning);
+            planning,
+            NoAcceptedContext());
         await viewModel.InitializeAsync();
 
         await viewModel.EvaluateAsync(ValidInput());
@@ -140,7 +145,8 @@ public sealed class DispatchViewModelTests
         };
         var viewModel = new DispatchViewModel(
             Inventory(Item("aircraft-a", "Alpha")),
-            planning);
+            planning,
+            NoAcceptedContext());
         await viewModel.InitializeAsync();
 
         await viewModel.EvaluateAsync(ValidInput());
@@ -150,6 +156,39 @@ public sealed class DispatchViewModelTests
         Assert.Equal("Runway Too Short", issue.Reason);
         Assert.Contains("required 9000 ft", issue.Detail, StringComparison.Ordinal);
         Assert.Contains("available 8000 ft", issue.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AcceptedContextPrefillsRouteAndUsesOnlyMatchingReservation()
+    {
+        var planning = new StubPlanning();
+        var accepted = new StubAcceptedContext(new(
+            AcceptedDispatchPlanningContextStatus.Ready,
+            "Accepted job loaded.",
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            OpenCareer.Domain.Careers.ContractKind.Ferry,
+            "KJFK",
+            "KBOS",
+            "aircraft-b",
+            "contract:fixture:aircraft-v1"));
+        var viewModel = new DispatchViewModel(
+            Inventory(
+                Item("aircraft-a", "Alpha"),
+                Item("aircraft-b", "Bravo")),
+            planning,
+            accepted);
+
+        await viewModel.InitializeAsync();
+        await viewModel.EvaluateAsync(ValidInput());
+
+        Assert.Equal("aircraft-b", viewModel.SelectedAircraftId);
+        Assert.Equal("KJFK", viewModel.AcceptedOriginIcao);
+        Assert.Equal("KBOS", viewModel.AcceptedDestinationIcao);
+        Assert.Equal("contract:fixture:aircraft-v1", planning.ReservationId);
+
+        viewModel.SetSelectedAircraft("aircraft-a");
+        await viewModel.EvaluateAsync(ValidInput());
+        Assert.Null(planning.ReservationId);
     }
 
     private static DispatchPlanningFormInput ValidInput() =>
@@ -181,6 +220,11 @@ public sealed class DispatchViewModelTests
             $"{items.Length} installed aircraft record(s).",
             items));
 
+    private static IAcceptedDispatchPlanningContextSource NoAcceptedContext() =>
+        new StubAcceptedContext(new(
+            AcceptedDispatchPlanningContextStatus.NoAcceptedContract,
+            "No accepted job is waiting for dispatch preparation."));
+
     private static InstalledAircraftInventoryItem Item(
         string id,
         string displayName) =>
@@ -203,6 +247,14 @@ public sealed class DispatchViewModelTests
             Task.FromResult(snapshot);
     }
 
+    private sealed class StubAcceptedContext(AcceptedDispatchPlanningContext context)
+        : IAcceptedDispatchPlanningContextSource
+    {
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(context);
+    }
+
     private sealed class StubPlanning : ICompositeDispatchPlanningService
     {
         public CompositeDispatchPlanningResult Result { get; set; } =
@@ -223,6 +275,7 @@ public sealed class DispatchViewModelTests
         public CruisePerformancePlanningRequest? Cruise { get; private set; }
         public RouteFuelPlanningRequest? RouteFuel { get; private set; }
         public OperationDispatchRequirements? Requirements { get; private set; }
+        public string? ReservationId { get; private set; }
 
         public Task<CompositeDispatchPlanningResult> EvaluateAsync(
             string aircraftId,
@@ -240,6 +293,28 @@ public sealed class DispatchViewModelTests
             Cruise = cruiseRequest;
             RouteFuel = routeFuelRequest;
             Requirements = requirements;
+            ReservationId = null;
+            return Task.FromResult(Result);
+        }
+
+        public Task<CompositeDispatchPlanningResult> EvaluateAsync(
+            string aircraftId,
+            string originIcao,
+            string destinationIcao,
+            CruisePerformancePlanningRequest cruiseRequest,
+            RouteFuelPlanningRequest routeFuelRequest,
+            OperationDispatchRequirements requirements,
+            string reservationId,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            AircraftId = aircraftId;
+            OriginIcao = originIcao;
+            DestinationIcao = destinationIcao;
+            Cruise = cruiseRequest;
+            RouteFuel = routeFuelRequest;
+            Requirements = requirements;
+            ReservationId = reservationId;
             return Task.FromResult(Result);
         }
     }

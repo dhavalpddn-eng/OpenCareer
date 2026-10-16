@@ -33,6 +33,16 @@ public interface ICompositeDispatchPlanningService
         RouteFuelPlanningRequest routeFuelRequest,
         OperationDispatchRequirements requirements,
         CancellationToken cancellationToken = default);
+
+    Task<CompositeDispatchPlanningResult> EvaluateAsync(
+        string aircraftId,
+        string originIcao,
+        string destinationIcao,
+        CruisePerformancePlanningRequest cruiseRequest,
+        RouteFuelPlanningRequest routeFuelRequest,
+        OperationDispatchRequirements requirements,
+        string reservationId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

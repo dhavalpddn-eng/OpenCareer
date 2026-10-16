@@ -112,6 +112,9 @@ internal static class PlanningServiceRegistration
                 provider.GetRequiredService<OperationDispatchPlanningService>()));
         services.AddSingleton<ICompositeDispatchPlanningService>(provider =>
             provider.GetRequiredService<CompositeDispatchPlanningService>());
+        services.AddSingleton<AcceptedDispatchPlanningContextSource>();
+        services.AddSingleton<IAcceptedDispatchPlanningContextSource>(provider =>
+            provider.GetRequiredService<AcceptedDispatchPlanningContextSource>());
 
         return services;
     }

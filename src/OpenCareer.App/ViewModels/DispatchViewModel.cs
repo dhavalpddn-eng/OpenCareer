@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Planning;
 
@@ -31,10 +32,17 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
 {
     private readonly IInstalledAircraftInventorySource _aircraftInventory;
     private readonly ICompositeDispatchPlanningService _planning;
+    private readonly IAcceptedDispatchPlanningContextSource _acceptedContext;
     private IReadOnlyList<DispatchAircraftOptionViewModel> _aircraftOptions =
         Array.Empty<DispatchAircraftOptionViewModel>();
     private string? _selectedAircraftId;
     private string _inventoryStatus = "Installed aircraft have not been loaded.";
+    private string _acceptedContextText =
+        "Accepted-job dispatch context has not been loaded.";
+    private string? _acceptedOriginIcao;
+    private string? _acceptedDestinationIcao;
+    private string? _acceptedAircraftId;
+    private string? _acceptedReservationId;
     private string _resultStatus = "NOT EVALUATED";
     private string _resultDetail =
         "Enter explicit planning inputs, then evaluate. No operation is created or started here.";
@@ -46,12 +54,15 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
 
     public DispatchViewModel(
         IInstalledAircraftInventorySource aircraftInventory,
-        ICompositeDispatchPlanningService planning)
+        ICompositeDispatchPlanningService planning,
+        IAcceptedDispatchPlanningContextSource acceptedContext)
     {
         _aircraftInventory = aircraftInventory
             ?? throw new ArgumentNullException(nameof(aircraftInventory));
         _planning = planning
             ?? throw new ArgumentNullException(nameof(planning));
+        _acceptedContext = acceptedContext
+            ?? throw new ArgumentNullException(nameof(acceptedContext));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -59,6 +70,9 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     public IReadOnlyList<DispatchAircraftOptionViewModel> AircraftOptions => _aircraftOptions;
     public string? SelectedAircraftId => _selectedAircraftId;
     public string InventoryStatus => _inventoryStatus;
+    public string AcceptedContextText => _acceptedContextText;
+    public string? AcceptedOriginIcao => _acceptedOriginIcao;
+    public string? AcceptedDestinationIcao => _acceptedDestinationIcao;
     public string ResultStatus => _resultStatus;
     public string ResultDetail => _resultDetail;
     public string FuelSummary => _fuelSummary;
@@ -84,13 +98,32 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             nameof(AircraftOptions));
         SetField(ref _inventoryStatus, snapshot.Detail, nameof(InventoryStatus));
 
+        AcceptedDispatchPlanningContext accepted = await _acceptedContext
+            .ReadAsync(cancellationToken)
+            .ConfigureAwait(true);
+        ApplyAcceptedContext(accepted);
+
+        string? preferred = _acceptedAircraftId ?? _selectedAircraftId;
         string? selection = _aircraftOptions.Any(option => string.Equals(
                 option.AircraftId,
-                _selectedAircraftId,
+                preferred,
                 StringComparison.OrdinalIgnoreCase))
-            ? _selectedAircraftId
+            ? preferred
             : _aircraftOptions.FirstOrDefault()?.AircraftId;
         SetSelectedAircraft(selection);
+
+        if (_acceptedAircraftId is not null
+            && !string.Equals(
+                selection,
+                _acceptedAircraftId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            SetField(
+                ref _acceptedContextText,
+                "The accepted job's reserved aircraft is not in current installed discovery. Its reservation will not authorize another aircraft.",
+                nameof(AcceptedContextText));
+            _acceptedReservationId = null;
+        }
     }
 
     public void SetSelectedAircraft(string? aircraftId)
@@ -157,16 +190,36 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 return;
             }
 
-            CompositeDispatchPlanningResult result = await _planning
-                .EvaluateAsync(
+            bool useAcceptedReservation =
+                _acceptedReservationId is not null
+                && string.Equals(
                     _selectedAircraftId,
-                    parsed.OriginIcao,
-                    parsed.DestinationIcao,
-                    parsed.Cruise,
-                    parsed.RouteFuel,
-                    parsed.Requirements,
-                    cancellationToken)
-                .ConfigureAwait(true);
+                    _acceptedAircraftId,
+                    StringComparison.OrdinalIgnoreCase);
+
+            CompositeDispatchPlanningResult result =
+                useAcceptedReservation
+                    ? await _planning
+                        .EvaluateAsync(
+                            _selectedAircraftId,
+                            parsed.OriginIcao,
+                            parsed.DestinationIcao,
+                            parsed.Cruise,
+                            parsed.RouteFuel,
+                            parsed.Requirements,
+                            _acceptedReservationId!,
+                            cancellationToken)
+                        .ConfigureAwait(true)
+                    : await _planning
+                        .EvaluateAsync(
+                            _selectedAircraftId,
+                            parsed.OriginIcao,
+                            parsed.DestinationIcao,
+                            parsed.Cruise,
+                            parsed.RouteFuel,
+                            parsed.Requirements,
+                            cancellationToken)
+                        .ConfigureAwait(true);
 
             ApplyResult(result);
         }
@@ -174,6 +227,33 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         {
             SetBusy(false);
         }
+    }
+
+    private void ApplyAcceptedContext(
+        AcceptedDispatchPlanningContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        SetField(
+            ref _acceptedContextText,
+            context.Detail,
+            nameof(AcceptedContextText));
+        SetField(
+            ref _acceptedOriginIcao,
+            context.OriginIcao,
+            nameof(AcceptedOriginIcao));
+        SetField(
+            ref _acceptedDestinationIcao,
+            context.DestinationIcao,
+            nameof(AcceptedDestinationIcao));
+
+        _acceptedAircraftId =
+            context.Status == AcceptedDispatchPlanningContextStatus.Ready
+                ? context.CanonicalAircraftId
+                : null;
+        _acceptedReservationId =
+            context.Status == AcceptedDispatchPlanningContextStatus.Ready
+                ? context.ReservationId
+                : null;
     }
 
     private void ApplyResult(CompositeDispatchPlanningResult result)

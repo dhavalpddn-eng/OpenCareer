@@ -661,7 +661,8 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement actual action-to-key/button discovery only when a supported authoritative source exists, then validate aircraft/device-sensitive hints in MSFS.
 - [ ] Render missing controller/keyboard mappings as visible amber/orange **UNBOUND** and required/critical missing mappings as red **UNBOUND — REQUIRED**.
 - [x] Implement the first dedicated Dispatch screen against the composite cruise/fuel-weight/physical-feasibility service with explicit inputs, deterministic issues and no operation-state writes.
-- [ ] Connect Dispatch to authoritative accepted-contract prepopulation, explicit weather limits and a separate prepare-operation handoff without duplicating Jobs acceptance/start authority.
+- [x] Prepopulate Dispatch from one unambiguous Accepted contract's persisted route and exact Fleet-reserved aircraft; fail closed on missing/ambiguous reservation state and never reuse that reservation for another aircraft.
+- [ ] Persist authoritative accepted payload/distance/full planning inputs, add explicit weather limits and provide a separate prepare-operation handoff without duplicating Jobs acceptance/start authority.
 - [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.
 - [ ] Implement Map / World screen against real world state.
 - [x] Implement read-only Aircraft screen against installed discovery, registry enrichment and authoritative Fleet availability/reservation state, with explicit unknown capability/access state and no ownership inference.

@@ -32,6 +32,9 @@
                     <TextBlock Text="{Binding InventoryStatus}"
                                Style="{StaticResource OpenCareerInputHelpStyle}"
                                TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding AcceptedContextText}"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}"
+                               TextWrapping="Wrap" />
 
                     <Grid ColumnSpacing="14" RowSpacing="12">
                         <Grid.ColumnDefinitions>
