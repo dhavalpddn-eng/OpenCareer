@@ -49,6 +49,7 @@ public sealed class CareerJobBoardRefillService
     private readonly JobBoardGenerationService _generation;
     private readonly IJobBoardStateStore _store;
     private readonly ICareerJobMarketAirportSource _airports;
+    private readonly ICareerJobMarketFeasibilitySource _feasibility;
     private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -56,6 +57,7 @@ public sealed class CareerJobBoardRefillService
         JobBoardGenerationService generation,
         IJobBoardStateStore store,
         ICareerJobMarketAirportSource airports,
+        ICareerJobMarketFeasibilitySource feasibility,
         TimeProvider timeProvider)
     {
         _generation =
@@ -67,6 +69,9 @@ public sealed class CareerJobBoardRefillService
         _airports =
             airports
             ?? throw new ArgumentNullException(nameof(airports));
+        _feasibility =
+            feasibility
+            ?? throw new ArgumentNullException(nameof(feasibility));
         _timeProvider =
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -132,6 +137,25 @@ public sealed class CareerJobBoardRefillService
                         cancellationToken)
                     .ConfigureAwait(false);
             }
+
+            CareerJobMarketFeasibilitySnapshot feasibility =
+                await _feasibility
+                    .FilterAsync(
+                        destinations,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (!feasibility.IsReady
+                || feasibility.Destinations.Count == 0)
+            {
+                return await PreserveOrCreateValidBoardAsync(
+                        originIcao,
+                        now,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            destinations = feasibility.Destinations;
 
             AirportCareerProfile marketOrigin =
                 CreateBaselineCivilianProfile(

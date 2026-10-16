@@ -203,6 +203,47 @@ public sealed class CareerJobBoardRefillServiceTests
     }
 
     [Fact]
+    public async Task AircraftFeasibilityFiltersDestinationsBeforeGeneration()
+    {
+        var store = new FakeBoardStore();
+        var feasibility = new FakeMarketFeasibilitySource(
+            destination => destination.Icao == "KSYR");
+        var service = Service(
+            store,
+            Airports(),
+            new FixedTimeProvider(Epoch),
+            feasibility);
+
+        JobBoardState board = await service.RefillAsync(Profile("KRME"));
+
+        Assert.NotEmpty(board.Offers);
+        Assert.All(
+            board.Offers,
+            static offer => Assert.Equal("KSYR", offer.DestinationIcao));
+        Assert.Equal(2, feasibility.LastCandidateCount);
+    }
+
+    [Fact]
+    public async Task NoFeasibleAircraftDestinationPersistsValidEmptyBoard()
+    {
+        var store = new FakeBoardStore();
+        var feasibility = new FakeMarketFeasibilitySource(_ => false);
+        var service = Service(
+            store,
+            Airports(),
+            new FixedTimeProvider(Epoch),
+            feasibility);
+
+        JobBoardState board = await service.RefillAsync(Profile("KRME"));
+
+        board.Validate();
+        Assert.Empty(board.Offers);
+        Assert.Equal("KRME", board.AirportIcao);
+        Assert.Equal(2, feasibility.LastCandidateCount);
+        Assert.Equal(1, store.SaveCount);
+    }
+
+    [Fact]
     public async Task PositionOnlyReferenceAirportsCanGenerateKjfkPlayableBoard()
     {
         var store =
@@ -289,12 +330,14 @@ public sealed class CareerJobBoardRefillServiceTests
     private static CareerJobBoardRefillService Service(
         IJobBoardStateStore store,
         ICareerJobMarketAirportSource airports,
-        TimeProvider timeProvider) =>
+        TimeProvider timeProvider,
+        ICareerJobMarketFeasibilitySource? feasibility = null) =>
         new(
             new JobBoardGenerationService(
                 store),
             store,
             airports,
+            feasibility ?? new FakeMarketFeasibilitySource(),
             timeProvider);
 
     private static PlayerCareerProfile Profile(
@@ -372,6 +415,31 @@ public sealed class CareerJobBoardRefillServiceTests
 
             return Task.FromResult(
                 airport);
+        }
+    }
+
+    private sealed class FakeMarketFeasibilitySource(
+        Func<JobMarketDestination, bool>? predicate = null)
+        : ICareerJobMarketFeasibilitySource
+    {
+        public int LastCandidateCount { get; private set; }
+
+        public Task<CareerJobMarketFeasibilitySnapshot> FilterAsync(
+            IReadOnlyList<JobMarketDestination> destinations,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LastCandidateCount = destinations.Count;
+            JobMarketDestination[] feasible = destinations
+                .Where(predicate ?? (_ => true))
+                .ToArray();
+
+            return Task.FromResult(new CareerJobMarketFeasibilitySnapshot(
+                feasible.Length == 0
+                    ? CareerJobMarketFeasibilityStatus.NoFeasibleDestinations
+                    : CareerJobMarketFeasibilityStatus.Ready,
+                feasible,
+                "Fixture feasibility."));
         }
     }
 
