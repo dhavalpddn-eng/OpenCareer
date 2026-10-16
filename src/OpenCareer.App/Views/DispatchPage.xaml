@@ -12,7 +12,7 @@
             <StackPanel Spacing="4">
                 <TextBlock Text="DISPATCH"
                            Style="{StaticResource OpenCareerPageTitleStyle}" />
-                <TextBlock Text="Evaluate one explicit fuel, weight, range, airport and runway plan. This workspace does not accept jobs, reserve aircraft or start flights."
+                <TextBlock Text="Evaluate explicit dispatch inputs or persist one feasible plan for the exact accepted job. This workspace does not accept jobs, reserve aircraft or start flights."
                            Style="{StaticResource OpenCareerPageSubtitleStyle}"
                            TextWrapping="Wrap" />
             </StackPanel>
@@ -244,11 +244,32 @@
                                  Style="{StaticResource OpenCareerTextBoxStyle}" />
                     </Grid>
 
-                    <Button Content="{Binding EvaluateButtonText}"
-                            IsEnabled="{Binding CanEvaluate}"
-                            Click="EvaluatePlan_Click"
-                            HorizontalAlignment="Left"
-                            Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="10">
+                        <Button Content="{Binding EvaluateButtonText}"
+                                IsEnabled="{Binding CanEvaluate}"
+                                Click="EvaluatePlan_Click"
+                                Style="{StaticResource OpenCareerSecondaryButtonStyle}" />
+                        <Button Content="{Binding PrepareButtonText}"
+                                IsEnabled="{Binding CanPrepare}"
+                                Click="PreparePlan_Click"
+                                Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
+                    </StackPanel>
+
+                    <Border Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="PERSISTED PREPARATION"
+                                       Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                            <TextBlock Text="{Binding PreparationStatus}"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                            <TextBlock Text="{Binding PreparationDetail}"
+                                       Style="{StaticResource OpenCareerInputHelpStyle}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding PreparationSummary}"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 

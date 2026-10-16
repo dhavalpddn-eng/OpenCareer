@@ -38,6 +38,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     private readonly IDispatchCruiseProfileSource _cruiseProfiles;
     private readonly ICompositeDispatchPlanningService _planning;
     private readonly IAcceptedDispatchPlanningContextSource _acceptedContext;
+    private readonly IPreparedDispatchPlanService? _preparation;
     private IReadOnlyList<DispatchAircraftOptionViewModel> _aircraftOptions =
         Array.Empty<DispatchAircraftOptionViewModel>();
     private string? _selectedAircraftId;
@@ -56,6 +57,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     private string? _acceptedRouteDistanceText;
     private double? _acceptedPayloadPounds;
     private double? _acceptedRouteDistanceNauticalMiles;
+    private Guid? _acceptedContractId;
     private string? _acceptedAircraftId;
     private string? _acceptedReservationId;
     private bool _isAcceptedContextLocked;
@@ -66,13 +68,19 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     private string _runwaySummary = "Runway selection —";
     private IReadOnlyList<DispatchIssueViewModel> _issues =
         Array.Empty<DispatchIssueViewModel>();
+    private string _preparationStatus = "NOT PREPARED";
+    private string _preparationDetail =
+        "A complete accepted job and its exact Fleet reservation are required before a feasible plan can be persisted.";
+    private string _preparationSummary = "Persisted plan —";
     private bool _isBusy;
+    private DispatchBusyOperation _busyOperation;
 
     public DispatchViewModel(
         IInstalledAircraftInventorySource aircraftInventory,
         IDispatchCruiseProfileSource cruiseProfiles,
         ICompositeDispatchPlanningService planning,
-        IAcceptedDispatchPlanningContextSource acceptedContext)
+        IAcceptedDispatchPlanningContextSource acceptedContext,
+        IPreparedDispatchPlanService? preparation = null)
     {
         _aircraftInventory = aircraftInventory
             ?? throw new ArgumentNullException(nameof(aircraftInventory));
@@ -82,6 +90,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(planning));
         _acceptedContext = acceptedContext
             ?? throw new ArgumentNullException(nameof(acceptedContext));
+        _preparation = preparation;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -105,12 +114,34 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     public string FuelSummary => _fuelSummary;
     public string RunwaySummary => _runwaySummary;
     public IReadOnlyList<DispatchIssueViewModel> Issues => _issues;
+    public string PreparationStatus => _preparationStatus;
+    public string PreparationDetail => _preparationDetail;
+    public string PreparationSummary => _preparationSummary;
     public bool IsBusy => _isBusy;
     public bool CanEvaluate =>
         !_isBusy
         && _selectedAircraftId is not null
         && _selectedCruiseProfileIndex is not null;
-    public string EvaluateButtonText => _isBusy ? "Evaluating…" : "Evaluate Plan";
+    public bool CanPrepare =>
+        !_isBusy
+        && _preparation is not null
+        && _acceptedContractId is not null
+        && _acceptedReservationId is not null
+        && _acceptedPayloadPounds is not null
+        && _acceptedRouteDistanceNauticalMiles is not null
+        && _selectedCruiseProfileIndex is not null
+        && string.Equals(
+            _selectedAircraftId,
+            _acceptedAircraftId,
+            StringComparison.OrdinalIgnoreCase);
+    public string EvaluateButtonText =>
+        _isBusy && _busyOperation == DispatchBusyOperation.Evaluate
+            ? "Evaluating…"
+            : "Evaluate Plan";
+    public string PrepareButtonText =>
+        _isBusy && _busyOperation == DispatchBusyOperation.Prepare
+            ? "Preparing…"
+            : "Prepare Plan";
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -207,6 +238,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 : "Loading authoritative cruise profiles…",
             nameof(CruiseProfileStatus));
         OnPropertyChanged(nameof(CanEvaluate));
+        OnPropertyChanged(nameof(CanPrepare));
 
         if (normalized is null)
             return;
@@ -262,6 +294,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 evidence,
                 nameof(SelectedCruiseProfileEvidence));
             OnPropertyChanged(nameof(CanEvaluate));
+            OnPropertyChanged(nameof(CanPrepare));
         }
     }
 
@@ -298,7 +331,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             return;
         }
 
-        SetBusy(true);
+        SetBusy(true, DispatchBusyOperation.Evaluate);
         try
         {
             bool useAcceptedReservation =
@@ -387,6 +420,110 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         }
     }
 
+    public async Task PrepareAsync(
+        DispatchPlanningFormInput input,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (_isBusy)
+            return;
+
+        if (_preparation is not { } preparation)
+        {
+            SetPreparation(
+                "PREPARATION UNAVAILABLE",
+                "The production prepared-dispatch authority is unavailable. No plan was persisted.",
+                "Persisted plan —");
+            return;
+        }
+
+        if (_acceptedContractId is not { } contractId
+            || _acceptedReservationId is not { } reservationId
+            || _acceptedAircraftId is not { } acceptedAircraftId
+            || _acceptedPayloadPounds is null
+            || _acceptedRouteDistanceNauticalMiles is null)
+        {
+            SetPreparation(
+                "ACCEPTED PLAN UNAVAILABLE",
+                "One complete accepted contract and its exact Fleet reservation are required. Legacy or ambiguous context cannot prepare a plan.",
+                "Persisted plan —");
+            return;
+        }
+
+        if (_selectedAircraftId is not { } selectedAircraftId
+            || !string.Equals(
+                selectedAircraftId,
+                acceptedAircraftId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            SetPreparation(
+                "AIRCRAFT MISMATCH",
+                "Select the accepted contract's exact reserved aircraft before preparing its plan.",
+                "Persisted plan —");
+            return;
+        }
+
+        DispatchCruiseProfileOptionViewModel? selectedProfile =
+            _cruiseProfileOptions.SingleOrDefault(profile =>
+                profile.ProfileIndex == _selectedCruiseProfileIndex);
+        if (selectedProfile is null)
+        {
+            SetPreparation(
+                "PREPARATION UNAVAILABLE",
+                "Select an authoritative cruise profile before preparing dispatch.",
+                "Persisted plan —");
+            return;
+        }
+
+        ParsedDispatchInput parsed;
+        try
+        {
+            parsed = Parse(input, selectedProfile);
+        }
+        catch (Exception ex)
+            when (ex is FormatException
+                or ArgumentException)
+        {
+            SetPreparation(
+                "INVALID INPUT",
+                ex.Message,
+                "Persisted plan —");
+            return;
+        }
+
+        if (!MatchesAcceptedContext(parsed, out string mismatchDetail))
+        {
+            SetPreparation(
+                "ACCEPTED PLAN MISMATCH",
+                mismatchDetail,
+                "Persisted plan —");
+            return;
+        }
+
+        SetBusy(true, DispatchBusyOperation.Prepare);
+        try
+        {
+            PrepareDispatchPlanResult result = await preparation
+                .PrepareAsync(
+                    new(
+                        contractId,
+                        selectedAircraftId,
+                        reservationId,
+                        parsed.OriginIcao,
+                        parsed.DestinationIcao,
+                        parsed.Cruise,
+                        parsed.RouteFuel,
+                        parsed.Requirements),
+                    cancellationToken)
+                .ConfigureAwait(true);
+            ApplyPreparationResult(result);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
     private void ApplyAcceptedContext(
         AcceptedDispatchPlanningContext context)
     {
@@ -416,6 +553,10 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             context.Status == AcceptedDispatchPlanningContextStatus.Ready
                 ? context.CanonicalAircraftId
                 : null;
+        _acceptedContractId =
+            context.Status == AcceptedDispatchPlanningContextStatus.Ready
+                ? context.ContractId
+                : null;
         _acceptedReservationId =
             context.Status == AcceptedDispatchPlanningContextStatus.Ready
                 ? context.ReservationId
@@ -427,6 +568,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             ref _isAcceptedContextLocked,
             _acceptedReservationId is not null,
             nameof(IsAcceptedContextLocked));
+        OnPropertyChanged(nameof(CanPrepare));
     }
 
     private bool MatchesAcceptedContext(
@@ -524,6 +666,25 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             FormatFuel(result),
             FormatRunways(dispatch),
             issues);
+    }
+
+    private void ApplyPreparationResult(PrepareDispatchPlanResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        string status = result.Status switch
+        {
+            PrepareDispatchPlanStatus.Prepared => "PREPARED",
+            PrepareDispatchPlanStatus.AlreadyPrepared => "ALREADY PREPARED",
+            _ => FormatWords(result.Status.ToString()).ToUpperInvariant()
+        };
+
+        string summary = result.Plan is { } plan
+            ? string.Create(
+                CultureInfo.CurrentCulture,
+                $"Persisted {plan.FuelWeightPlan.RequiredFuelGallons:0.0} gal / {plan.FuelWeightPlan.RequiredFuelPounds:0} lb · runways {plan.OriginRunwayIdentifier} / {plan.DestinationRunwayIdentifier}")
+            : "Persisted plan —";
+
+        SetPreparation(status, result.Detail, summary);
     }
 
     private static ParsedDispatchInput Parse(
@@ -711,11 +872,37 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         SetField(ref _issues, issues, nameof(Issues));
     }
 
-    private void SetBusy(bool value)
+    private void SetPreparation(
+        string status,
+        string detail,
+        string summary)
     {
+        SetField(
+            ref _preparationStatus,
+            status,
+            nameof(PreparationStatus));
+        SetField(
+            ref _preparationDetail,
+            detail,
+            nameof(PreparationDetail));
+        SetField(
+            ref _preparationSummary,
+            summary,
+            nameof(PreparationSummary));
+    }
+
+    private void SetBusy(
+        bool value,
+        DispatchBusyOperation operation = DispatchBusyOperation.None)
+    {
+        _busyOperation = value
+            ? operation
+            : DispatchBusyOperation.None;
         SetField(ref _isBusy, value, nameof(IsBusy));
         OnPropertyChanged(nameof(CanEvaluate));
+        OnPropertyChanged(nameof(CanPrepare));
         OnPropertyChanged(nameof(EvaluateButtonText));
+        OnPropertyChanged(nameof(PrepareButtonText));
     }
 
     private bool SetField<T>(ref T field, T value, string propertyName)
@@ -737,6 +924,13 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         CruisePerformancePlanningRequest Cruise,
         RouteFuelPlanningRequest RouteFuel,
         OperationDispatchRequirements Requirements);
+
+    private enum DispatchBusyOperation
+    {
+        None = 0,
+        Evaluate,
+        Prepare
+    }
 }
 
 public sealed record DispatchAircraftOptionViewModel(

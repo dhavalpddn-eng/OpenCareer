@@ -85,7 +85,37 @@ public sealed partial class DispatchPage : Page
         if (DataContext is not DispatchViewModel viewModel)
             return;
 
-        var input = new DispatchPlanningFormInput(
+        try
+        {
+            await viewModel.EvaluateAsync(
+                ReadInput(),
+                _navigationCts?.Token ?? CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+            when (_navigationCts?.IsCancellationRequested == true)
+        {
+        }
+    }
+
+    private async void PreparePlan_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DispatchViewModel viewModel)
+            return;
+
+        try
+        {
+            await viewModel.PrepareAsync(
+                ReadInput(),
+                _navigationCts?.Token ?? CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+            when (_navigationCts?.IsCancellationRequested == true)
+        {
+        }
+    }
+
+    private DispatchPlanningFormInput ReadInput() =>
+        new(
             OriginIcaoBox.Text,
             DestinationIcaoBox.Text,
             PayloadPoundsBox.Text,
@@ -109,16 +139,4 @@ public sealed partial class DispatchPage : Page
             MaximumDensityAltitudeBox.Text,
             MinimumVisibilityBox.Text,
             MinimumCeilingBox.Text);
-
-        try
-        {
-            await viewModel.EvaluateAsync(
-                input,
-                _navigationCts?.Token ?? CancellationToken.None);
-        }
-        catch (OperationCanceledException)
-            when (_navigationCts?.IsCancellationRequested == true)
-        {
-        }
-    }
 }

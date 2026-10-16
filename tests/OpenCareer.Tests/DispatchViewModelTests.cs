@@ -450,6 +450,116 @@ public sealed class DispatchViewModelTests
         Assert.Contains("limit 17.0 kt", issue.Detail, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task PreparePersistsExactAcceptedPlanAndProjectsSummary()
+    {
+        Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var planning = new StubPlanning();
+        var preparation = new StubPreparation(
+            PrepareDispatchPlanStatus.Prepared,
+            "The exact feasible dispatch plan was persisted. Flight start remains a separate authority.",
+            PreparedPlan(contractId));
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            planning,
+            ReadyAcceptedContext(contractId),
+            preparation);
+        await InitializeReadyAsync(viewModel);
+
+        Assert.True(viewModel.CanPrepare);
+        await viewModel.PrepareAsync(ValidInput());
+
+        Assert.Equal(1, preparation.CallCount);
+        Assert.Equal(0, planning.CallCount);
+        Assert.Equal(contractId, preparation.Request!.ContractId);
+        Assert.Equal("aircraft-a", preparation.Request.CanonicalAircraftId);
+        Assert.Equal("contract:fixture:aircraft-v1", preparation.Request.ReservationId);
+        Assert.Equal("KJFK", preparation.Request.OriginIcao);
+        Assert.Equal("KBOS", preparation.Request.DestinationIcao);
+        Assert.Equal(250, preparation.Request.Requirements.PayloadPounds);
+        Assert.Equal("PREPARED", viewModel.PreparationStatus);
+        Assert.Contains("30.0 gal", viewModel.PreparationSummary, StringComparison.Ordinal);
+        Assert.Contains("04L / 22R", viewModel.PreparationSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AlreadyPreparedRetryProjectsIdempotentStatus()
+    {
+        Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var preparation = new StubPreparation(
+            PrepareDispatchPlanStatus.AlreadyPrepared,
+            "The exact feasible dispatch plan was already prepared.",
+            PreparedPlan(contractId));
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            ReadyAcceptedContext(contractId),
+            preparation);
+        await InitializeReadyAsync(viewModel);
+
+        await viewModel.PrepareAsync(ValidInput());
+
+        Assert.Equal("ALREADY PREPARED", viewModel.PreparationStatus);
+        Assert.Contains("already prepared", viewModel.PreparationDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LegacyAcceptedContextCannotPrepare()
+    {
+        var preparation = new StubPreparation(
+            PrepareDispatchPlanStatus.Prepared,
+            "Should not be reached.");
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            new StubAcceptedContext(new(
+                AcceptedDispatchPlanningContextStatus.Ready,
+                "Accepted legacy job loaded.",
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                OpenCareer.Domain.Careers.ContractKind.Ferry,
+                "KJFK",
+                "KBOS",
+                "aircraft-a",
+                "contract:fixture:aircraft-v1")),
+            preparation);
+        await InitializeReadyAsync(viewModel);
+
+        Assert.False(viewModel.CanPrepare);
+        await viewModel.PrepareAsync(ValidInput());
+
+        Assert.Equal(0, preparation.CallCount);
+        Assert.Equal("ACCEPTED PLAN UNAVAILABLE", viewModel.PreparationStatus);
+    }
+
+    [Fact]
+    public async Task DifferentAircraftCannotPrepareAcceptedPlan()
+    {
+        Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var preparation = new StubPreparation(
+            PrepareDispatchPlanStatus.Prepared,
+            "Should not be reached.");
+        var viewModel = new DispatchViewModel(
+            Inventory(
+                Item("aircraft-a", "Alpha"),
+                Item("aircraft-b", "Bravo")),
+            Profiles(),
+            new StubPlanning(),
+            ReadyAcceptedContext(contractId),
+            preparation);
+        await InitializeReadyAsync(viewModel);
+        await viewModel.SetSelectedAircraftAsync("aircraft-b");
+        viewModel.SetSelectedCruiseProfile(0);
+
+        Assert.False(viewModel.CanPrepare);
+        await viewModel.PrepareAsync(ValidInput());
+
+        Assert.Equal(0, preparation.CallCount);
+        Assert.Equal("AIRCRAFT MISMATCH", viewModel.PreparationStatus);
+    }
+
     private static DispatchPlanningFormInput ValidInput() =>
         new(
             "kjfk",
@@ -494,6 +604,53 @@ public sealed class DispatchViewModelTests
         new StubAcceptedContext(new(
             AcceptedDispatchPlanningContextStatus.NoAcceptedContract,
             "No accepted job is waiting for dispatch preparation."));
+
+    private static IAcceptedDispatchPlanningContextSource ReadyAcceptedContext(
+        Guid contractId) =>
+        new StubAcceptedContext(new(
+            AcceptedDispatchPlanningContextStatus.Ready,
+            "Accepted job loaded.",
+            contractId,
+            OpenCareer.Domain.Careers.ContractKind.Ferry,
+            "KJFK",
+            "KBOS",
+            "aircraft-a",
+            "contract:fixture:aircraft-v1",
+            RouteDistanceNauticalMiles: 300,
+            PayloadPounds: 250));
+
+    private static PreparedDispatchPlan PreparedPlan(Guid contractId)
+    {
+        var routeFuel = new RouteFuelPlanningRequest(
+            300,
+            260,
+            10,
+            8,
+            3,
+            2,
+            new(5, 30, 1));
+        var fuel = new RouteFuelWeightPlan(0, 6, 30, 180, 50, 300);
+        var requirements = fuel.ApplyTo(new(
+            PayloadPounds: 250,
+            RequiredRangeNauticalMiles: 300,
+            RangeSafetyMarginPercent: 10,
+            RunwayLengthSafetyMarginPercent: 15));
+
+        return new(
+            contractId,
+            1,
+            "aircraft-a",
+            "contract:fixture:aircraft-v1",
+            "KJFK",
+            "KBOS",
+            new(0, 0, 6000, 0, 12000),
+            routeFuel,
+            requirements,
+            fuel,
+            "04L",
+            "22R",
+            new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero));
+    }
 
     private static IDispatchCruiseProfileSource Profiles() =>
         new StubProfiles(new(
@@ -620,6 +777,29 @@ public sealed class DispatchViewModelTests
             Requirements = requirements;
             ReservationId = reservationId;
             return Task.FromResult(Result);
+        }
+    }
+
+    private sealed class StubPreparation(
+        PrepareDispatchPlanStatus status,
+        string detail,
+        PreparedDispatchPlan? plan = null)
+        : IPreparedDispatchPlanService
+    {
+        public int CallCount { get; private set; }
+        public PrepareDispatchPlanRequest? Request { get; private set; }
+
+        public Task<PrepareDispatchPlanResult> PrepareAsync(
+            PrepareDispatchPlanRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+            Request = request;
+            return Task.FromResult(new PrepareDispatchPlanResult(
+                status,
+                detail,
+                plan));
         }
     }
 }

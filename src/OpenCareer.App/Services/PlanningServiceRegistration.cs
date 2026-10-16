@@ -120,6 +120,8 @@ internal static class PlanningServiceRegistration
         services.AddSingleton<IPreparedDispatchPlanStore>(provider =>
             provider.GetRequiredService<SqlitePreparedDispatchPlanStore>());
         services.AddSingleton<PreparedDispatchPlanService>();
+        services.AddSingleton<IPreparedDispatchPlanService>(provider =>
+            provider.GetRequiredService<PreparedDispatchPlanService>());
         services.AddSingleton<AcceptedDispatchPlanningContextSource>();
         services.AddSingleton<IAcceptedDispatchPlanningContextSource>(provider =>
             provider.GetRequiredService<AcceptedDispatchPlanningContextSource>());

@@ -174,6 +174,13 @@ public sealed record PrepareDispatchPlanResult(
             or PrepareDispatchPlanStatus.AlreadyPrepared;
 }
 
+public interface IPreparedDispatchPlanService
+{
+    Task<PrepareDispatchPlanResult> PrepareAsync(
+        PrepareDispatchPlanRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Re-evaluates and persists one exact Accepted-contract dispatch plan. This
 /// service prepares no FlightSession and grants no permission to start; a later
@@ -185,6 +192,7 @@ public sealed class PreparedDispatchPlanService(
     ICompositeDispatchPlanningService planning,
     IPreparedDispatchPlanStore plans,
     TimeProvider timeProvider)
+    : IPreparedDispatchPlanService
 {
     private readonly IJobContractStore _contracts =
         contracts ?? throw new ArgumentNullException(nameof(contracts));
