@@ -716,6 +716,8 @@ public sealed class DispatchViewModelTests
             displayName,
             "INSTALLED",
             "ICAO type unknown",
+            "ICAO family unknown",
+            "Powerplant class unknown",
             "Powerplant unknown",
             "Capability data incomplete",
             "Fleet status not tracked",
