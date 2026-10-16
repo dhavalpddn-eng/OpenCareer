@@ -27,7 +27,8 @@ public sealed class AircraftViewModelTests
                     SeatsText: "4 seat(s)",
                     IfrCapabilityText: "IFR capable",
                     PressurizationText: "Not pressurized",
-                    LandingGearText: "Fixed/non-retractable gear")
+                    LandingGearText: "Fixed/non-retractable gear",
+                    CapabilityEvidenceText: "Evidence: payload — cfg (Verified)")
             ]));
         var viewModel = new AircraftViewModel(source);
 
@@ -42,6 +43,9 @@ public sealed class AircraftViewModelTests
         Assert.Equal("Career access unknown", Assert.Single(viewModel.Aircraft).AccessText);
         Assert.Equal("Maximum payload 950 lb", Assert.Single(viewModel.Aircraft).MaximumPayloadText);
         Assert.Equal("IFR capable", Assert.Single(viewModel.Aircraft).IfrCapabilityText);
+        Assert.Equal(
+            "Evidence: payload — cfg (Verified)",
+            Assert.Single(viewModel.Aircraft).CapabilityEvidenceText);
         Assert.Equal("Refresh Aircraft", viewModel.RefreshButtonText);
     }
 

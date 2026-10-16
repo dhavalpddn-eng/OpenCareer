@@ -1,6 +1,6 @@
+using System.Globalization;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Domain.Aircraft;
-using System.Globalization;
 
 namespace OpenCareer.Application.Planning;
 
@@ -26,7 +26,8 @@ public sealed record InstalledAircraftInventoryItem(
     string SeatsText = "Seats unknown",
     string IfrCapabilityText = "IFR capability unknown",
     string PressurizationText = "Pressurization unknown",
-    string LandingGearText = "Landing gear configuration unknown");
+    string LandingGearText = "Landing gear configuration unknown",
+    string CapabilityEvidenceText = "Capability evidence sources unavailable");
 
 public sealed record InstalledAircraftInventorySnapshot(
     InstalledAircraftInventoryStatus Status,
@@ -161,6 +162,30 @@ public sealed class InstalledAircraftInventorySource(
             aircraftId,
             availability);
         ResolvedAircraftCapabilities? facts = resolution?.CapabilityValues;
+        double? maximumPayload = ProvenValue(
+            resolution,
+            AircraftRegistryField.MaximumPayloadPounds,
+            facts?.MaximumPayloadPounds);
+        double? maximumRange = ProvenValue(
+            resolution,
+            AircraftRegistryField.MaximumRangeNauticalMiles,
+            facts?.MaximumRangeNauticalMiles);
+        int? seats = ProvenValue(
+            resolution,
+            AircraftRegistryField.Seats,
+            facts?.Seats);
+        bool? ifrCapable = ProvenValue(
+            resolution,
+            AircraftRegistryField.IfrCapable,
+            facts?.IfrCapable);
+        bool? pressurized = ProvenValue(
+            resolution,
+            AircraftRegistryField.Pressurized,
+            facts?.Pressurized);
+        bool? retractableGear = ProvenValue(
+            resolution,
+            AircraftRegistryField.RetractableGear,
+            facts?.RetractableGear);
 
         return new(
             aircraftId,
@@ -173,31 +198,39 @@ public sealed class InstalledAircraftInventorySource(
             reservation,
             "Career access unknown — installation does not prove ownership, rental, or assignment",
             FormatOptionalNumber(
-                facts?.MaximumPayloadPounds,
+                maximumPayload,
                 "Maximum payload",
                 "lb"),
             FormatOptionalNumber(
-                facts?.MaximumRangeNauticalMiles,
+                maximumRange,
                 "Maximum range",
                 "nm"),
-            facts?.Seats is { } seats
-                ? $"{seats} seat(s)"
+            seats is { } seatCount
+                ? $"{seatCount} seat(s)"
                 : "Seats unknown",
             FormatOptionalFlag(
-                facts?.IfrCapable,
+                ifrCapable,
                 "IFR capable",
                 "Not IFR capable",
                 "IFR capability unknown"),
             FormatOptionalFlag(
-                facts?.Pressurized,
+                pressurized,
                 "Pressurized",
                 "Not pressurized",
                 "Pressurization unknown"),
             FormatOptionalFlag(
-                facts?.RetractableGear,
+                retractableGear,
                 "Retractable gear",
                 "Fixed/non-retractable gear",
-                "Landing gear configuration unknown"));
+                "Landing gear configuration unknown"),
+            FormatCapabilityEvidence(
+                resolution,
+                maximumPayload,
+                maximumRange,
+                seats,
+                ifrCapable,
+                pressurized,
+                retractableGear));
     }
 
     private static (string Status, string Reservation) FormatAvailability(
@@ -275,4 +308,56 @@ public sealed class InstalledAircraftInventorySource(
             false => whenFalse,
             null => whenUnknown
         };
+
+    private static T? ProvenValue<T>(
+        AircraftRegistryResolution? resolution,
+        AircraftRegistryField field,
+        T? value)
+        where T : struct =>
+        value is not null
+        && resolution?.Provenance.ContainsKey(field) == true
+            ? value
+            : null;
+
+    private static string FormatCapabilityEvidence(
+        AircraftRegistryResolution? resolution,
+        double? maximumPayload,
+        double? maximumRange,
+        int? seats,
+        bool? ifrCapable,
+        bool? pressurized,
+        bool? retractableGear)
+    {
+        if (resolution is null)
+            return "Capability evidence sources unavailable";
+
+        var evidence = new List<string>();
+        Add(AircraftRegistryField.MaximumPayloadPounds, "payload", maximumPayload is not null);
+        Add(AircraftRegistryField.MaximumRangeNauticalMiles, "range", maximumRange is not null);
+        Add(AircraftRegistryField.Seats, "seats", seats is not null);
+        Add(AircraftRegistryField.IfrCapable, "IFR", ifrCapable is not null);
+        Add(AircraftRegistryField.Pressurized, "pressurization", pressurized is not null);
+        Add(AircraftRegistryField.RetractableGear, "landing gear", retractableGear is not null);
+
+        return evidence.Count == 0
+            ? "Capability evidence sources unavailable"
+            : "Evidence: " + string.Join(" · ", evidence);
+
+        void Add(
+            AircraftRegistryField field,
+            string label,
+            bool displayed)
+        {
+            if (!displayed
+                || !resolution.Provenance.TryGetValue(
+                    field,
+                    out AircraftRegistryFieldProvenance provenance))
+            {
+                return;
+            }
+
+            evidence.Add(
+                $"{label} — {provenance.ProviderId} ({provenance.Confidence})");
+        }
+    }
 }

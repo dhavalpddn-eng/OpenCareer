@@ -86,6 +86,8 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("IFR capable", alpha.IfrCapabilityText);
         Assert.Equal("Not pressurized", alpha.PressurizationText);
         Assert.Equal("Fixed/non-retractable gear", alpha.LandingGearText);
+        Assert.Contains("payload — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
+        Assert.Contains("IFR — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Contains("access unknown", alpha.AccessText, StringComparison.OrdinalIgnoreCase);
 
         InstalledAircraftInventoryItem zulu = result.Aircraft[1];
@@ -119,6 +121,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("IFR capability unknown", item.IfrCapabilityText);
         Assert.Equal("Pressurization unknown", item.PressurizationText);
         Assert.Equal("Landing gear configuration unknown", item.LandingGearText);
+        Assert.Equal("Capability evidence sources unavailable", item.CapabilityEvidenceText);
         Assert.Equal("Fleet status not tracked", item.FleetStatusText);
         Assert.Equal("No operational availability record exists", item.ReservationText);
     }
@@ -163,6 +166,34 @@ public sealed class InstalledAircraftInventorySourceTests
                 AircraftAvailabilityStatus.Available)));
 
         await Assert.ThrowsAsync<InvalidDataException>(() => source.ReadAsync());
+    }
+
+    [Fact]
+    public async Task CapabilityValueWithoutFieldProvenanceFailsClosedAsUnknown()
+    {
+        const string id = "msfs-title:Unproven";
+        var source = new InstalledAircraftInventorySource(
+            new StubDiscovery(new(
+                InstalledAircraftDiscoveryAvailability.Available,
+                [Observation(id, "one")])),
+            new StubRegistry((id, Resolution(
+                id,
+                "Unproven",
+                null,
+                null,
+                maximumPayloadPounds: 1200,
+                maximumRangeNauticalMiles: 800,
+                seats: 6,
+                includeCapabilityProvenance: false))),
+            new StubAvailability());
+
+        InstalledAircraftInventoryItem item = Assert.Single(
+            (await source.ReadAsync()).Aircraft);
+
+        Assert.Equal("Maximum payload unknown", item.MaximumPayloadText);
+        Assert.Equal("Maximum range unknown", item.MaximumRangeText);
+        Assert.Equal("Seats unknown", item.SeatsText);
+        Assert.Equal("Capability evidence sources unavailable", item.CapabilityEvidenceText);
     }
 
     [Fact]
@@ -216,8 +247,20 @@ public sealed class InstalledAircraftInventorySourceTests
         int? seats = null,
         bool? ifrCapable = null,
         bool? pressurized = null,
-        bool? retractableGear = null) =>
-        new(
+        bool? retractableGear = null,
+        bool includeCapabilityProvenance = true)
+    {
+        var provenance =
+            new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>();
+
+        Add(AircraftRegistryField.MaximumPayloadPounds, maximumPayloadPounds is not null);
+        Add(AircraftRegistryField.MaximumRangeNauticalMiles, maximumRangeNauticalMiles is not null);
+        Add(AircraftRegistryField.Seats, seats is not null);
+        Add(AircraftRegistryField.IfrCapable, ifrCapable is not null);
+        Add(AircraftRegistryField.Pressurized, pressurized is not null);
+        Add(AircraftRegistryField.RetractableGear, retractableGear is not null);
+
+        return new(
             aircraftId,
             AircraftInstallationStatus.Installed,
             new(
@@ -241,7 +284,23 @@ public sealed class InstalledAircraftInventorySourceTests
                 AircraftRegistryField.Capabilities,
                 AircraftRegistryField.Access
             ],
-            new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>());
+            provenance);
+
+        void Add(AircraftRegistryField field, bool hasValue)
+        {
+            if (!includeCapabilityProvenance || !hasValue)
+                return;
+
+            provenance.Add(
+                field,
+                new(
+                    field,
+                    "test-registry",
+                    "fixture",
+                    AircraftDataConfidence.Verified,
+                    InstalledEvidence: true));
+        }
+    }
 
     private sealed class StubDiscovery(InstalledAircraftDiscoverySnapshot current)
         : IInstalledAircraftDiscoverySource

@@ -130,6 +130,9 @@
                                                Style="{StaticResource OpenCareerInputHelpStyle}"
                                                TextWrapping="Wrap" />
                                 </Grid>
+                                <TextBlock Text="{Binding CapabilityEvidenceText}"
+                                           Style="{StaticResource OpenCareerInputHelpStyle}"
+                                           TextWrapping="Wrap" />
                                 <Grid ColumnSpacing="18">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />

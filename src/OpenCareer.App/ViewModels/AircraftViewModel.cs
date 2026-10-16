@@ -57,6 +57,7 @@ public sealed class AircraftViewModel : INotifyPropertyChanged
                         item.IfrCapabilityText,
                         item.PressurizationText,
                         item.LandingGearText,
+                        item.CapabilityEvidenceText,
                         item.FleetStatusText,
                         item.ReservationText,
                         item.AccessText))
@@ -100,6 +101,7 @@ public sealed record InstalledAircraftItemViewModel(
     string IfrCapabilityText,
     string PressurizationText,
     string LandingGearText,
+    string CapabilityEvidenceText,
     string FleetStatusText,
     string ReservationText,
     string AccessText);
