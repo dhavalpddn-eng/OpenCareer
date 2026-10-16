@@ -26,7 +26,13 @@ public sealed record DispatchPlanningFormInput(
     string FinalReserveMinutes,
     string AdditionalReserveFuelGallons,
     string RangeSafetyMarginPercent,
-    string RunwaySafetyMarginPercent);
+    string RunwaySafetyMarginPercent,
+    bool ApplyWeatherLimits,
+    string MaximumCrosswindKnots,
+    string MaximumTailwindKnots,
+    string MaximumDensityAltitudeFeet,
+    string MinimumVisibilityStatuteMiles,
+    string MinimumCeilingFeetAgl);
 
 public sealed class DispatchViewModel : INotifyPropertyChanged
 {
@@ -221,7 +227,9 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                             cancellationToken)
                         .ConfigureAwait(true);
 
-            ApplyResult(result);
+            ApplyResult(
+                result,
+                parsed.Requirements.WeatherLimits is not null);
         }
         finally
         {
@@ -256,7 +264,9 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 : null;
     }
 
-    private void ApplyResult(CompositeDispatchPlanningResult result)
+    private void ApplyResult(
+        CompositeDispatchPlanningResult result,
+        bool weatherLimitsApplied)
     {
         if (result.Status == CompositeDispatchPlanningStatus.InsufficientData)
         {
@@ -304,7 +314,9 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         SetResult(
             status,
             dispatch.Status == DispatchFeasibilityStatus.Feasible
-                ? "Fuel, weight, range, airport and runway checks passed for the supplied plan. Weather was not evaluated because no weather limits were supplied."
+                ? weatherLimitsApplied
+                    ? "Fuel, weight, range, airport, runway and requested weather-limit checks passed for the supplied plan."
+                    : "Fuel, weight, range, airport and runway checks passed for the supplied plan. Weather was not evaluated because no weather limits were supplied."
                 : "The supplied plan is not dispatch-ready. Review every reported issue; unknown data never passes as feasible.",
             FormatFuel(result),
             FormatRunways(dispatch),
@@ -338,13 +350,23 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 ParseDouble(input.FinalReserveMinutes, "Final reserve minutes"),
                 ParseDouble(input.AdditionalReserveFuelGallons, "Additional reserve fuel")));
 
+        DispatchWeatherLimits? weatherLimits = input.ApplyWeatherLimits
+            ? new(
+                ParseDouble(input.MaximumCrosswindKnots, "Maximum crosswind"),
+                ParseDouble(input.MaximumTailwindKnots, "Maximum tailwind"),
+                ParseOptionalDouble(input.MaximumDensityAltitudeFeet, "Maximum density altitude"),
+                ParseOptionalDouble(input.MinimumVisibilityStatuteMiles, "Minimum visibility"),
+                ParseOptionalDouble(input.MinimumCeilingFeetAgl, "Minimum ceiling"))
+            : null;
+
         var requirements = new OperationDispatchRequirements(
             ParseDouble(input.PayloadPounds, "Payload"),
             totalDistance,
             RangeSafetyMarginPercent:
                 ParseDouble(input.RangeSafetyMarginPercent, "Range safety margin"),
             RunwayLengthSafetyMarginPercent:
-                ParseDouble(input.RunwaySafetyMarginPercent, "Runway safety margin"));
+                ParseDouble(input.RunwaySafetyMarginPercent, "Runway safety margin"),
+            WeatherLimits: weatherLimits);
 
         cruise.Validate();
         routeFuel.Validate();
@@ -393,6 +415,11 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         return result;
     }
 
+    private static double? ParseOptionalDouble(string value, string label) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : ParseDouble(value, label);
+
     private static string FormatFuel(CompositeDispatchPlanningResult result)
     {
         if (result.FuelWeightPlan is not { } plan)
@@ -428,6 +455,22 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             details.Add($"required {requiredNm:0} nm");
         if (issue.AvailableNauticalMiles is { } availableNm)
             details.Add($"available {availableNm:0} nm");
+        if (issue.ObservedKnots is { } observedKnots)
+            details.Add($"observed {observedKnots:0.0} kt");
+        if (issue.LimitKnots is { } limitKnots)
+            details.Add($"limit {limitKnots:0.0} kt");
+        if (issue.ObservedDensityAltitudeFeet is { } densityAltitude)
+            details.Add($"observed density altitude {densityAltitude:0} ft");
+        if (issue.MaximumDensityAltitudeFeet is { } maximumDensityAltitude)
+            details.Add($"maximum density altitude {maximumDensityAltitude:0} ft");
+        if (issue.ObservedVisibilityStatuteMiles is { } visibility)
+            details.Add($"observed visibility {visibility:0.0} sm");
+        if (issue.MinimumVisibilityStatuteMiles is { } minimumVisibility)
+            details.Add($"minimum visibility {minimumVisibility:0.0} sm");
+        if (issue.ObservedCeilingFeetAgl is { } ceiling)
+            details.Add($"observed ceiling {ceiling:0} ft AGL");
+        if (issue.MinimumCeilingFeetAgl is { } minimumCeiling)
+            details.Add($"minimum ceiling {minimumCeiling:0} ft AGL");
 
         return details.Count == 0
             ? "No additional quantitative evidence was supplied."

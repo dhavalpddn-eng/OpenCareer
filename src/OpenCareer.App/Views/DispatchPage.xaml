@@ -83,6 +83,55 @@
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}">
                 <StackPanel Spacing="14">
+                    <TextBlock Text="WEATHER LIMITS"
+                               Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                    <CheckBox x:Name="ApplyWeatherLimitsCheckBox"
+                              Content="Evaluate explicit weather limits"
+                              Style="{StaticResource OpenCareerCheckBoxStyle}" />
+                    <TextBlock Text="When enabled, the existing dispatch weather source must provide enough authoritative airport/runway evidence. Blank optional limits remain unconstrained; no hidden defaults are applied."
+                               Style="{StaticResource OpenCareerInputHelpStyle}"
+                               TextWrapping="Wrap" />
+                    <Grid ColumnSpacing="14" RowSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBox x:Name="MaximumCrosswindBox"
+                                 Header="Maximum crosswind (kt)"
+                                 InputScope="Number"
+                                 Style="{StaticResource OpenCareerTextBoxStyle}" />
+                        <TextBox x:Name="MaximumTailwindBox"
+                                 Grid.Column="1"
+                                 Header="Maximum tailwind (kt)"
+                                 InputScope="Number"
+                                 Style="{StaticResource OpenCareerTextBoxStyle}" />
+                        <TextBox x:Name="MaximumDensityAltitudeBox"
+                                 Grid.Column="2"
+                                 Header="Maximum density altitude (ft, optional)"
+                                 InputScope="Number"
+                                 Style="{StaticResource OpenCareerTextBoxStyle}" />
+                        <TextBox x:Name="MinimumVisibilityBox"
+                                 Grid.Row="1"
+                                 Header="Minimum visibility (sm, optional)"
+                                 InputScope="Number"
+                                 Style="{StaticResource OpenCareerTextBoxStyle}" />
+                        <TextBox x:Name="MinimumCeilingBox"
+                                 Grid.Row="1"
+                                 Grid.Column="1"
+                                 Header="Minimum ceiling (ft AGL, optional)"
+                                 InputScope="Number"
+                                 Style="{StaticResource OpenCareerTextBoxStyle}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}">
+                <StackPanel Spacing="14">
                     <TextBlock Text="CRUISE PERFORMANCE EVIDENCE"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                     <TextBlock Text="Use indices and conditions from the selected aircraft's supported MSFS performance data. OpenCareer does not choose or extrapolate a profile."

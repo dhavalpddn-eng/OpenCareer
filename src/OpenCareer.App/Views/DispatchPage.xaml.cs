@@ -78,7 +78,13 @@ public sealed partial class DispatchPage : Page
             FinalReserveMinutesBox.Text,
             AdditionalReserveFuelBox.Text,
             RangeSafetyMarginBox.Text,
-            RunwaySafetyMarginBox.Text);
+            RunwaySafetyMarginBox.Text,
+            ApplyWeatherLimitsCheckBox.IsChecked == true,
+            MaximumCrosswindBox.Text,
+            MaximumTailwindBox.Text,
+            MaximumDensityAltitudeBox.Text,
+            MinimumVisibilityBox.Text,
+            MinimumCeilingBox.Text);
 
         try
         {

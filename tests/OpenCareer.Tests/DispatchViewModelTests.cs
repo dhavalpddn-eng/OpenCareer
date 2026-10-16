@@ -191,6 +191,116 @@ public sealed class DispatchViewModelTests
         Assert.Null(planning.ReservationId);
     }
 
+    [Fact]
+    public async Task ExplicitWeatherLimitsReachCompositePlannerWithoutDefaults()
+    {
+        var planning = new StubPlanning();
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            planning,
+            NoAcceptedContext());
+        await viewModel.InitializeAsync();
+
+        await viewModel.EvaluateAsync(
+            ValidInput() with
+            {
+                ApplyWeatherLimits = true,
+                MaximumCrosswindKnots = "17",
+                MaximumTailwindKnots = "6",
+                MaximumDensityAltitudeFeet = "8500",
+                MinimumVisibilityStatuteMiles = "3",
+                MinimumCeilingFeetAgl = "1200"
+            });
+
+        DispatchWeatherLimits limits = Assert.IsType<DispatchWeatherLimits>(
+            planning.Requirements!.WeatherLimits);
+        Assert.Equal(17, limits.MaximumCrosswindKnots);
+        Assert.Equal(6, limits.MaximumTailwindKnots);
+        Assert.Equal(8500, limits.MaximumDensityAltitudeFeet);
+        Assert.Equal(3, limits.MinimumVisibilityStatuteMiles);
+        Assert.Equal(1200, limits.MinimumCeilingFeetAgl);
+    }
+
+    [Fact]
+    public async Task DisabledWeatherLimitsIgnoreBlankFields()
+    {
+        var planning = new StubPlanning();
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            planning,
+            NoAcceptedContext());
+        await viewModel.InitializeAsync();
+
+        await viewModel.EvaluateAsync(ValidInput());
+
+        Assert.Null(planning.Requirements!.WeatherLimits);
+    }
+
+    [Fact]
+    public async Task EnabledWeatherLimitsRequireExplicitWindLimits()
+    {
+        var planning = new StubPlanning();
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            planning,
+            NoAcceptedContext());
+        await viewModel.InitializeAsync();
+
+        await viewModel.EvaluateAsync(
+            ValidInput() with { ApplyWeatherLimits = true });
+
+        Assert.Equal("INVALID INPUT", viewModel.ResultStatus);
+        Assert.Equal(0, planning.CallCount);
+        Assert.Contains("Maximum crosswind", viewModel.ResultDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WeatherFailureProjectsObservedAndLimitEvidence()
+    {
+        var planning = new StubPlanning
+        {
+            Result = new(
+                CompositeDispatchPlanningStatus.Evaluated,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new(0, 6, 30, 180, 50, 300),
+                DispatchFeasibilityResult.Create(
+                    DispatchFeasibilityStatus.Infeasible,
+                    "18",
+                    "27",
+                    [
+                        new(
+                            DispatchFeasibilityReason.CrosswindExceedsLimit,
+                            DispatchEndpoint.Origin,
+                            "KJFK",
+                            "18",
+                            ObservedKnots: 22,
+                            LimitKnots: 17)
+                    ]))
+        };
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            planning,
+            NoAcceptedContext());
+        await viewModel.InitializeAsync();
+
+        await viewModel.EvaluateAsync(
+            ValidInput() with
+            {
+                ApplyWeatherLimits = true,
+                MaximumCrosswindKnots = "17",
+                MaximumTailwindKnots = "6"
+            });
+
+        DispatchIssueViewModel issue = Assert.Single(viewModel.Issues);
+        Assert.Equal("Crosswind Exceeds Limit", issue.Reason);
+        Assert.Contains("observed 22.0 kt", issue.Detail, StringComparison.Ordinal);
+        Assert.Contains("limit 17.0 kt", issue.Detail, StringComparison.Ordinal);
+    }
+
     private static DispatchPlanningFormInput ValidInput() =>
         new(
             "kjfk",
@@ -211,7 +321,13 @@ public sealed class DispatchViewModelTests
             "30",
             "1",
             "10",
-            "15");
+            "15",
+            false,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty);
 
     private static IInstalledAircraftInventorySource Inventory(
         params InstalledAircraftInventoryItem[] items) =>
