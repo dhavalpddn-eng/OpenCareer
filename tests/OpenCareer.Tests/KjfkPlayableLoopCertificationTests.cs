@@ -801,8 +801,24 @@ public sealed class KjfkPlayableLoopCertificationTests
             var merged = (await _registry.FindAircraftAsync(AircraftId))!;
             Assert.Equal(AircraftInstallationStatus.Installed, merged.InstallationStatus);
             Assert.True(merged.HasCompleteCapabilityProfile);
-            await Jobs.StartOfferAsync(offer.OfferId); // real ICareerJobStartAction.StartAsync
+            var navigationTargets = new List<JobsNavigationTarget>();
+            void OnNavigationRequested(
+                object? sender,
+                JobsNavigationRequestedEventArgs args) =>
+                navigationTargets.Add(args.Target);
+            Jobs.NavigationRequested += OnNavigationRequested;
+            try
+            {
+                await Jobs.StartOfferAsync(offer.OfferId); // real ICareerJobStartAction.StartAsync
+            }
+            finally
+            {
+                Jobs.NavigationRequested -= OnNavigationRequested;
+            }
             Assert.Contains("Career flight started:", Jobs.AcceptanceStatus);
+            Assert.Equal(
+                new[] { JobsNavigationTarget.CurrentFlight },
+                navigationTargets);
             Assert.Empty(Jobs.Offers);
             Assert.Equal(ContractStatus.InProgress, (await ContractStore.ReadJobContractAsync(offer.OfferId))!.Contract.Status);
             Assert.Equal(ContractStatus.InProgress, Contracts.Find(offer.OfferId)!.Contract.Status);

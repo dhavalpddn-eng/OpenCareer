@@ -677,6 +677,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Clear prepared-plan records idempotently at authoritative successful-finalization and abandonment boundaries, retaining retry safety across partial cleanup failures.
 - [x] Navigate Jobs to Dispatch only after authoritative first-time acceptance succeeds so Dispatch reloads the exact persisted planning context; failed acceptance stays on Jobs.
 - [x] Return Dispatch to Jobs only after successful/idempotent plan persistence so the separate start authority rechecks the current plan; unsuccessful preparation stays on Dispatch.
+- [x] Navigate Jobs to Current Flight only after the start authority creates/reuses the persistent FlightSession; failed starts remain on Jobs.
 - [ ] Persist or derive authoritative cruise/fuel/reserve/safety-margin planning inputs.
 - [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.
 - [ ] Implement Map / World screen against real world state.

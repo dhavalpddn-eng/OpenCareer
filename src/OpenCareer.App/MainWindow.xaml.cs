@@ -257,6 +257,7 @@ public sealed partial class MainWindow : Window
         string tag = e.Target switch
         {
             JobsNavigationTarget.Dispatch => "dispatch",
+            JobsNavigationTarget.CurrentFlight => "current-flight",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(e),
                 e.Target,

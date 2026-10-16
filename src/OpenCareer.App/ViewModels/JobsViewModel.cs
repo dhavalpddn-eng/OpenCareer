@@ -9,7 +9,8 @@ namespace OpenCareer.App.ViewModels;
 
 public enum JobsNavigationTarget
 {
-    Dispatch = 0
+    Dispatch = 0,
+    CurrentFlight
 }
 
 public sealed class JobsNavigationRequestedEventArgs(
@@ -473,8 +474,13 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
             SetField(
                 ref _acceptanceStatus,
-                $"Career flight started: {result.StartedFlight.Contract.Contract.OriginIcao} → {result.StartedFlight.Contract.Contract.DestinationIcao}. Open Current Flight to fly the operation.",
+                $"Career flight started: {result.StartedFlight.Contract.Contract.OriginIcao} → {result.StartedFlight.Contract.Contract.DestinationIcao}. Opening Current Flight.",
                 nameof(AcceptanceStatus));
+
+            NavigationRequested?.Invoke(
+                this,
+                new JobsNavigationRequestedEventArgs(
+                    JobsNavigationTarget.CurrentFlight));
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)

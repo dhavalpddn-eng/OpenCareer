@@ -195,6 +195,10 @@ public sealed class JobsViewModelTests
             Assert.Single(
                 viewModel.Offers);
 
+        var navigationTargets = new List<JobsNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
+
         Assert.True(
             projected.CanStart);
 
@@ -210,6 +214,7 @@ public sealed class JobsViewModelTests
         Assert.Equal(
             aircraft.AircraftId,
             action.LastAircraftId);
+        Assert.Empty(navigationTargets);
     }
 
     [Fact]
