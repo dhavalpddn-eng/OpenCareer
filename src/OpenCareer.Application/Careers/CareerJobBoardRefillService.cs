@@ -141,6 +141,7 @@ public sealed class CareerJobBoardRefillService
             CareerJobMarketFeasibilitySnapshot feasibility =
                 await _feasibility
                     .FilterAsync(
+                        originIcao,
                         destinations,
                         cancellationToken)
                     .ConfigureAwait(false);

@@ -220,6 +220,7 @@ public sealed class CareerJobBoardRefillServiceTests
         Assert.All(
             board.Offers,
             static offer => Assert.Equal("KSYR", offer.DestinationIcao));
+        Assert.Equal("KRME", feasibility.LastOriginIcao);
         Assert.Equal(2, feasibility.LastCandidateCount);
     }
 
@@ -423,12 +424,15 @@ public sealed class CareerJobBoardRefillServiceTests
         : ICareerJobMarketFeasibilitySource
     {
         public int LastCandidateCount { get; private set; }
+        public string? LastOriginIcao { get; private set; }
 
         public Task<CareerJobMarketFeasibilitySnapshot> FilterAsync(
+            string originIcao,
             IReadOnlyList<JobMarketDestination> destinations,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            LastOriginIcao = originIcao;
             LastCandidateCount = destinations.Count;
             JobMarketDestination[] feasible = destinations
                 .Where(predicate ?? (_ => true))

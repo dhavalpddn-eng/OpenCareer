@@ -329,8 +329,8 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Persist player location/home base.
 - [x] Build deterministic board refill foundation; authoritative market-demand integration remains open.
 - [x] Fail closed through aircraft/runway/qualification readiness before acceptance/start.
-- [x] Filter ordinary Ferry/Reposition destinations before offer generation unless at least one currently discovered installed civilian aircraft satisfies the shared fail-closed static capability projection.
-- [ ] Add broader generation-time runway/fuel/weather feasibility and ranking only from authoritative inputs; final start must continue to recheck current evidence.
+- [x] Filter ordinary Ferry/Reposition destinations before offer generation unless at least one currently discovered installed civilian aircraft satisfies the shared fail-closed static capability projection and provenance-backed endpoint runway compatibility.
+- [ ] Add generation-time fuel/weather feasibility and ranking only from authoritative inputs; final start must continue to recheck current evidence.
 - [ ] Build a richer dedicated briefing flow beyond the current Jobs offer/readiness surface.
 - [x] Build dispatch-to-active-mission flow for Ferry/Reposition and Development/Test.
 - [x] Bind supported mission evidence to FlightSession.
