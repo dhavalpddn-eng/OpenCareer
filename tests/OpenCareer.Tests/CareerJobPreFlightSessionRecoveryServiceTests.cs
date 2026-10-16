@@ -6,6 +6,7 @@ using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Domain.Planning;
 
 namespace OpenCareer.Tests;
 
@@ -119,6 +120,38 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     }
 
     [Fact]
+    public async Task MissingPreparedPlanLeavesAcceptedContractUntouched()
+    {
+        TestContext context =
+            CreateContext(
+                Persisted(
+                    ContractStatus.Accepted),
+                hasReservation:
+                    true,
+                now:
+                    StartedAt,
+                preparedResult:
+                    new(
+                        PreparedDispatchStartAuthorityStatus.PlanUnavailable,
+                        "No prepared dispatch plan exists for the accepted contract."));
+
+        CareerJobPreFlightSessionRecoveryResult result =
+            await context.Recovery.RecoverAsync();
+
+        Assert.Equal(
+            CareerJobPreFlightSessionRecoveryState.WaitingForPreparedDispatch,
+            result.State);
+        Assert.Equal(
+            ContractStatus.Accepted,
+            context.Contracts.Current.Contract.Status);
+        Assert.Null(
+            context.Sessions.Current);
+        Assert.Equal(
+            0,
+            context.Contracts.UpdateCount);
+    }
+
+    [Fact]
     public async Task RepeatedRecoveryDoesNotDuplicateFlightSession()
     {
         TestContext context =
@@ -152,7 +185,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     private static TestContext CreateContext(
         PersistedJobContract persisted,
         bool hasReservation,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        PreparedDispatchStartAuthorityResult? preparedResult = null)
     {
         var contracts =
             new FakeContractStore(
@@ -209,12 +243,6 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                     43.1112,
                     -76.1063));
 
-        var dispatch =
-            new OperationDispatchPlanningService(
-                aircraftRegistry,
-                new CachedAirportDataSource(
-                    [airports]));
-
         var sessions =
             new FlightSessionCoordinator();
 
@@ -239,7 +267,9 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                 career,
                 reservations,
                 aircraftRegistry,
-                dispatch,
+                new StubPreparedDispatchStartAuthority(
+                    preparedResult
+                    ?? ReadyPreparedResult(persisted)),
                 flightStart,
                 sessions,
                 new FixedTimeProvider(
@@ -251,6 +281,49 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
             sessions,
             checkpoints,
             airports);
+    }
+
+    private static PreparedDispatchStartAuthorityResult ReadyPreparedResult(
+        PersistedJobContract persisted)
+    {
+        string reservationId = JobAcceptanceFleetBridge.GetReservationId(
+            persisted.Contract.ContractId);
+        var routeFuel = new RouteFuelPlanningRequest(
+            120,
+            100,
+            10,
+            8,
+            3,
+            2,
+            new(5, 30, 1));
+        var fuel = new RouteFuelWeightPlan(0, 6, 30, 180, 50, 300);
+        OperationDispatchRequirements requirements = fuel.ApplyTo(new(
+            PayloadPounds: 0,
+            RequiredRangeNauticalMiles: 120));
+        var plan = new PreparedDispatchPlan(
+            persisted.Contract.ContractId,
+            persisted.Version,
+            "fixture-aircraft",
+            reservationId,
+            persisted.Contract.OriginIcao,
+            persisted.Contract.DestinationIcao,
+            new(0, 0, 6000, 0, 12000),
+            routeFuel,
+            requirements,
+            fuel,
+            "01",
+            "19",
+            StartedAt);
+
+        return new(
+            PreparedDispatchStartAuthorityStatus.Ready,
+            "Prepared dispatch remains current.",
+            plan,
+            DispatchFeasibilityResult.Create(
+                DispatchFeasibilityStatus.Feasible,
+                "01",
+                "19",
+                []));
     }
 
     private static PersistedJobContract Persisted(
@@ -570,6 +643,19 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                             SourceId,
                             Authority,
                             OfferedAt)));
+        }
+    }
+
+    private sealed class StubPreparedDispatchStartAuthority(
+        PreparedDispatchStartAuthorityResult result)
+        : IPreparedDispatchStartAuthority
+    {
+        public Task<PreparedDispatchStartAuthorityResult> RevalidateAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(result);
         }
     }
 

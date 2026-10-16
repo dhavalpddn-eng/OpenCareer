@@ -419,3 +419,290 @@ public sealed class PreparedDispatchPlanService(
         PersistedJobContract? Contract,
         PrepareDispatchPlanResult? Blocked);
 }
+
+public enum PreparedDispatchStartAuthorityStatus
+{
+    Ready = 0,
+    PlanUnavailable,
+    PlanInvalid,
+    ContractUnavailable,
+    ContractNotAccepted,
+    ContractTermsUnavailable,
+    ContractMismatch,
+    ReservationUnavailable,
+    ReservationMismatch,
+    PlanningInsufficient,
+    PlanningInfeasible,
+    PlanStale,
+    AuthorityChanged
+}
+
+public sealed record PreparedDispatchStartAuthorityResult(
+    PreparedDispatchStartAuthorityStatus Status,
+    string Detail,
+    PreparedDispatchPlan? Plan = null,
+    DispatchFeasibilityResult? DispatchResult = null)
+{
+    public bool IsReady =>
+        Status == PreparedDispatchStartAuthorityStatus.Ready
+        && Plan is not null
+        && DispatchResult?.Status == DispatchFeasibilityStatus.Feasible;
+}
+
+public interface IPreparedDispatchStartAuthority
+{
+    Task<PreparedDispatchStartAuthorityResult> RevalidateAsync(
+        Guid contractId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Consumes no retained UI decision as authority. It reloads the persisted plan,
+/// accepted contract, and Fleet reservation, reruns composite planning, and grants
+/// a start-ready result only while the exact prepared fuel/runway plan is current.
+/// </summary>
+public sealed class PreparedDispatchStartAuthority(
+    IJobContractStore contracts,
+    IAircraftReservationLookup reservations,
+    IPreparedDispatchPlanStore plans,
+    ICompositeDispatchPlanningService planning)
+    : IPreparedDispatchStartAuthority
+{
+    private readonly IJobContractStore _contracts =
+        contracts ?? throw new ArgumentNullException(nameof(contracts));
+    private readonly IAircraftReservationLookup _reservations =
+        reservations ?? throw new ArgumentNullException(nameof(reservations));
+    private readonly IPreparedDispatchPlanStore _plans =
+        plans ?? throw new ArgumentNullException(nameof(plans));
+    private readonly ICompositeDispatchPlanningService _planning =
+        planning ?? throw new ArgumentNullException(nameof(planning));
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
+    public async Task<PreparedDispatchStartAuthorityResult> RevalidateAsync(
+        Guid contractId,
+        CancellationToken cancellationToken = default)
+    {
+        if (contractId == Guid.Empty)
+            throw new ArgumentException("Contract ID is required.", nameof(contractId));
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            StartAuthority initial = await ReadAuthorityAsync(
+                    contractId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (initial.Blocked is not null)
+                return initial.Blocked;
+
+            PersistedJobContract initialContract = initial.Contract
+                ?? throw new InvalidDataException(
+                    "Unblocked prepared-dispatch authority did not retain its contract.");
+            PreparedDispatchPlan initialPlan = initial.Plan
+                ?? throw new InvalidDataException(
+                    "Unblocked prepared-dispatch authority did not retain its plan.");
+
+            OperationDispatchRequirements baseRequirements =
+                initialPlan.Requirements with
+                {
+                    PlannedFuelPounds = null,
+                    PlannedFuelTypeIndex = null
+                };
+
+            CompositeDispatchPlanningResult evaluated = await _planning
+                .EvaluateAsync(
+                    initialPlan.CanonicalAircraftId,
+                    initialPlan.OriginIcao,
+                    initialPlan.DestinationIcao,
+                    initialPlan.Cruise,
+                    initialPlan.RouteFuel,
+                    baseRequirements,
+                    initialPlan.ReservationId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (evaluated.Status != CompositeDispatchPlanningStatus.Evaluated
+                || evaluated.FuelWeightPlan is null
+                || evaluated.DispatchResult is null
+                || evaluated.DispatchResult.Status
+                    == DispatchFeasibilityStatus.InsufficientData)
+            {
+                return Blocked(
+                    PreparedDispatchStartAuthorityStatus.PlanningInsufficient,
+                    "Current authoritative fuel, performance, airport, runway, or weather evidence is insufficient. Prepare the plan again before start.");
+            }
+
+            if (evaluated.DispatchResult.Status
+                == DispatchFeasibilityStatus.Infeasible)
+            {
+                return Blocked(
+                    PreparedDispatchStartAuthorityStatus.PlanningInfeasible,
+                    "The prepared operation is no longer physically feasible. No flight was started.");
+            }
+
+            OperationDispatchRequirements currentRequirements =
+                evaluated.FuelWeightPlan.ApplyTo(baseRequirements);
+            if (evaluated.FuelWeightPlan != initialPlan.FuelWeightPlan
+                || currentRequirements != initialPlan.Requirements
+                || !string.Equals(
+                    evaluated.DispatchResult.OriginRunwayIdentifier,
+                    initialPlan.OriginRunwayIdentifier,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    evaluated.DispatchResult.DestinationRunwayIdentifier,
+                    initialPlan.DestinationRunwayIdentifier,
+                    StringComparison.Ordinal))
+            {
+                return Blocked(
+                    PreparedDispatchStartAuthorityStatus.PlanStale,
+                    "Current authoritative fuel or runway evidence differs from the persisted plan. Prepare the plan again before start.");
+            }
+
+            StartAuthority current = await ReadAuthorityAsync(
+                    contractId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (current.Blocked is not null
+                || current.Contract is not { } currentContract
+                || current.Plan is not { } currentPlan
+                || currentContract.Version != initialContract.Version
+                || currentPlan != initialPlan)
+            {
+                return Blocked(
+                    PreparedDispatchStartAuthorityStatus.AuthorityChanged,
+                    "The accepted contract, Fleet reservation, or prepared plan changed during start validation. No flight was started.");
+            }
+
+            return new(
+                PreparedDispatchStartAuthorityStatus.Ready,
+                "The exact persisted plan remains feasible under current authoritative evidence.",
+                currentPlan,
+                evaluated.DispatchResult);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<StartAuthority> ReadAuthorityAsync(
+        Guid contractId,
+        CancellationToken cancellationToken)
+    {
+        PersistedJobContract? persisted = await _contracts
+            .ReadJobContractAsync(contractId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (persisted is null)
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.ContractUnavailable,
+                "The accepted contract is unavailable."));
+        }
+
+        persisted.Validate();
+        JobContract contract = persisted.Contract;
+        if (contract.ContractId != contractId)
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.ContractMismatch,
+                "The contract store returned a different contract identity."));
+        }
+
+        if (contract.Status != ContractStatus.Accepted)
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.ContractNotAccepted,
+                $"The contract is {contract.Status}, not Accepted."));
+        }
+
+        if (contract.PlanningTerms is not { } terms)
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.ContractTermsUnavailable,
+                "The accepted contract has no authoritative payload and route-distance terms."));
+        }
+
+        PreparedDispatchPlan? plan;
+        try
+        {
+            plan = await _plans
+                .ReadAsync(contractId, cancellationToken)
+                .ConfigureAwait(false);
+            plan?.Validate();
+        }
+        catch (Exception ex)
+            when (ex is InvalidDataException
+                or ArgumentException)
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.PlanInvalid,
+                "The persisted dispatch plan is invalid and cannot authorize start."));
+        }
+
+        if (plan is null)
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.PlanUnavailable,
+                "No prepared dispatch plan exists for the accepted contract."));
+        }
+
+        if (plan.ContractId != contractId
+            || plan.ContractVersion != persisted.Version
+            || !string.Equals(plan.OriginIcao, contract.OriginIcao, StringComparison.Ordinal)
+            || !string.Equals(plan.DestinationIcao, contract.DestinationIcao, StringComparison.Ordinal)
+            || Math.Abs(plan.Requirements.PayloadPounds - terms.PayloadPounds) > 1e-9
+            || Math.Abs(plan.Requirements.RequiredRangeNauticalMiles - terms.RouteDistanceNauticalMiles) > 1e-9
+            || Math.Abs(plan.RouteFuel.TotalRouteDistanceNauticalMiles - terms.RouteDistanceNauticalMiles) > 1e-9)
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.ContractMismatch,
+                "The prepared plan does not match the current accepted contract version and immutable terms."));
+        }
+
+        string expectedReservation = JobAcceptanceFleetBridge.GetReservationId(contractId);
+        if (!string.Equals(plan.ReservationId, expectedReservation, StringComparison.Ordinal))
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.ReservationMismatch,
+                "The prepared plan does not reference the accepted contract's Fleet reservation."));
+        }
+
+        AircraftReservationOwnership? ownership = await _reservations
+            .FindByReservationIdAsync(expectedReservation, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (ownership is null)
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.ReservationUnavailable,
+                "The accepted contract's Fleet reservation is unavailable."));
+        }
+
+        ownership.Validate();
+        if (!string.Equals(ownership.ReservationId, plan.ReservationId, StringComparison.Ordinal)
+            || !string.Equals(
+                ownership.CanonicalAircraftId,
+                plan.CanonicalAircraftId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return new(null, null, Blocked(
+                PreparedDispatchStartAuthorityStatus.ReservationMismatch,
+                "The prepared plan aircraft does not own the accepted contract's Fleet reservation."));
+        }
+
+        return new(persisted, plan, null);
+    }
+
+    private static PreparedDispatchStartAuthorityResult Blocked(
+        PreparedDispatchStartAuthorityStatus status,
+        string detail) =>
+        new(status, detail);
+
+    private sealed record StartAuthority(
+        PersistedJobContract? Contract,
+        PreparedDispatchPlan? Plan,
+        PreparedDispatchStartAuthorityResult? Blocked);
+}

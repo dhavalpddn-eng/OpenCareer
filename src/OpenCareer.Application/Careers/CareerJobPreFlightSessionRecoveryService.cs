@@ -5,7 +5,6 @@ using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Events;
 using OpenCareer.Domain.Flights;
-using OpenCareer.Domain.Planning;
 
 namespace OpenCareer.Application.Careers;
 
@@ -18,7 +17,8 @@ public enum CareerJobPreFlightSessionRecoveryState
     WaitingForAircraft = 4,
     WaitingForDispatch = 5,
     ContractStartBlocked = 6,
-    Recovered = 7
+    Recovered = 7,
+    WaitingForPreparedDispatch = 8
 }
 
 public sealed record CareerJobPreFlightSessionRecoveryResult(
@@ -45,7 +45,7 @@ public sealed class CareerJobPreFlightSessionRecoveryService
     private readonly PlayerCareerRuntimeState _career;
     private readonly IAircraftReservationLookup _reservations;
     private readonly IAircraftRegistrySource _aircraftRegistry;
-    private readonly OperationDispatchPlanningService _dispatchPlanning;
+    private readonly IPreparedDispatchStartAuthority _preparedDispatch;
     private readonly AcceptedJobFlightSessionBridge _flightStart;
     private readonly FlightSessionCoordinator _sessions;
     private readonly TimeProvider _timeProvider;
@@ -56,7 +56,7 @@ public sealed class CareerJobPreFlightSessionRecoveryService
         PlayerCareerRuntimeState career,
         IAircraftReservationLookup reservations,
         IAircraftRegistrySource aircraftRegistry,
-        OperationDispatchPlanningService dispatchPlanning,
+        IPreparedDispatchStartAuthority preparedDispatch,
         AcceptedJobFlightSessionBridge flightStart,
         FlightSessionCoordinator sessions,
         TimeProvider timeProvider)
@@ -73,9 +73,9 @@ public sealed class CareerJobPreFlightSessionRecoveryService
         _aircraftRegistry =
             aircraftRegistry
             ?? throw new ArgumentNullException(nameof(aircraftRegistry));
-        _dispatchPlanning =
-            dispatchPlanning
-            ?? throw new ArgumentNullException(nameof(dispatchPlanning));
+        _preparedDispatch =
+            preparedDispatch
+            ?? throw new ArgumentNullException(nameof(preparedDispatch));
         _flightStart =
             flightStart
             ?? throw new ArgumentNullException(nameof(flightStart));
@@ -237,32 +237,20 @@ public sealed class CareerJobPreFlightSessionRecoveryService
                     "The accepted job can no longer enter InProgress at the current career time.");
             }
 
-            var requirements =
-                new OperationDispatchRequirements(
-                    PayloadPounds:
-                        0,
-                    RequiredRangeNauticalMiles:
-                        contract.AircraftRequirements
-                            .MinimumRangeNauticalMiles);
-
-            DispatchFeasibilityResult dispatch =
-                await _dispatchPlanning
-                    .EvaluateAsync(
-                        aircraft.AircraftId,
-                        contract.OriginIcao,
-                        contract.DestinationIcao,
-                        requirements,
-                        reservationId,
+            PreparedDispatchStartAuthorityResult prepared =
+                await _preparedDispatch
+                    .RevalidateAsync(
+                        contract.ContractId,
                         cancellationToken)
                     .ConfigureAwait(false);
 
-            if (dispatch.Status
-                != DispatchFeasibilityStatus.Feasible)
+            if (!prepared.IsReady
+                || prepared.DispatchResult is not { } dispatch)
             {
                 return Result(
-                    CareerJobPreFlightSessionRecoveryState.WaitingForDispatch,
+                    CareerJobPreFlightSessionRecoveryState.WaitingForPreparedDispatch,
                     contract.ContractId,
-                    $"Accepted-job recovery is waiting for feasible authoritative preflight data: {dispatch.Status}.");
+                    $"Accepted-job recovery requires a current prepared dispatch plan: {prepared.Status}. {prepared.Detail}");
             }
 
             PilotQualificationState required =
