@@ -250,8 +250,8 @@ public sealed class InstalledAircraftInventorySource(
                 pressurized,
                 retractableGear,
                 passengerCapacity),
-            passengerCapacity is { } capacity
-                ? $"Passenger capacity {capacity} (cabin value; crew and total seats not inferred)"
+            passengerCapacity is { } displayCapacity
+                ? $"Passenger capacity {displayCapacity} (cabin value; crew and total seats not inferred)"
                 : "Passenger capacity unknown");
     }
 
