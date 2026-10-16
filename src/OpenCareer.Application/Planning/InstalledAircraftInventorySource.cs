@@ -30,7 +30,8 @@ public sealed record InstalledAircraftInventoryItem(
     string PressurizationText = "Pressurization unknown",
     string LandingGearText = "Landing gear configuration unknown",
     string CapabilityEvidenceText = "Capability evidence sources unavailable",
-    string PassengerCapacityText = "Passenger capacity unknown");
+    string PassengerCapacityText = "Passenger capacity unknown",
+    string TypicalCruiseText = "Typical cruise unknown");
 
 public sealed record InstalledAircraftInventorySnapshot(
     InstalledAircraftInventoryStatus Status,
@@ -181,6 +182,10 @@ public sealed class InstalledAircraftInventorySource(
             resolution,
             AircraftRegistryField.MaximumRangeNauticalMiles,
             facts?.MaximumRangeNauticalMiles);
+        double? typicalCruise = ProvenValue(
+            resolution,
+            AircraftRegistryField.TypicalCruiseKnots,
+            facts?.TypicalCruiseKnots);
         int? seats = ProvenValue(
             resolution,
             AircraftRegistryField.Seats,
@@ -249,10 +254,12 @@ public sealed class InstalledAircraftInventorySource(
                 ifrCapable,
                 pressurized,
                 retractableGear,
-                passengerCapacity),
+                passengerCapacity,
+                typicalCruise),
             passengerCapacity is { } displayCapacity
                 ? $"Passenger capacity {displayCapacity} (cabin value; crew and total seats not inferred)"
-                : "Passenger capacity unknown");
+                : "Passenger capacity unknown",
+            FormatOptionalNumber(typicalCruise, "Typical cruise", "kt"));
     }
 
     private static (string Status, string Reservation) FormatAvailability(
@@ -380,7 +387,8 @@ public sealed class InstalledAircraftInventorySource(
         bool? ifrCapable,
         bool? pressurized,
         bool? retractableGear,
-        int? passengerCapacity)
+        int? passengerCapacity,
+        double? typicalCruise)
     {
         if (resolution is null)
             return "Capability evidence sources unavailable";
@@ -389,6 +397,7 @@ public sealed class InstalledAircraftInventorySource(
         Add(AircraftRegistryField.MaximumPayloadPounds, "payload", maximumPayload is not null);
         Add(AircraftRegistryField.MaximumRangeNauticalMiles, "range", maximumRange is not null);
         Add(AircraftRegistryField.Seats, "seats", seats is not null);
+        Add(AircraftRegistryField.TypicalCruiseKnots, "typical cruise", typicalCruise is not null);
         Add(AircraftRegistryField.IfrCapable, "IFR", ifrCapable is not null);
         Add(AircraftRegistryField.Pressurized, "pressurization", pressurized is not null);
         Add(AircraftRegistryField.RetractableGear, "landing gear", retractableGear is not null);

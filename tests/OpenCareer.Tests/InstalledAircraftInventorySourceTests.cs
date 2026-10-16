@@ -55,6 +55,7 @@ public sealed class InstalledAircraftInventorySourceTests
                 passengerCapacity: 3,
                 maximumPayloadPounds: 950,
                 maximumRangeNauticalMiles: 640,
+                typicalCruiseKnots: 122.5,
                 seats: 4,
                 ifrCapable: true,
                 pressurized: false,
@@ -88,6 +89,8 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Maximum payload 950 lb", alpha.MaximumPayloadText);
         Assert.Equal("Maximum range 640 nm", alpha.MaximumRangeText);
         Assert.Equal("4 seat(s)", alpha.SeatsText);
+        Assert.Equal("Typical cruise 122.5 kt", alpha.TypicalCruiseText);
+        Assert.Contains("typical cruise — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Equal(
             "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
             alpha.PassengerCapacityText);
@@ -105,6 +108,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Powerplant class unknown", zulu.PowerplantClassText);
         Assert.Equal("Powerplant unknown", zulu.PowerplantText);
         Assert.Equal("Maximum payload unknown", zulu.MaximumPayloadText);
+        Assert.Equal("Typical cruise unknown", zulu.TypicalCruiseText);
         Assert.Equal("Passenger capacity unknown", zulu.PassengerCapacityText);
         Assert.Equal("IFR capability unknown", zulu.IfrCapabilityText);
     }
@@ -132,6 +136,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Maximum payload unknown", item.MaximumPayloadText);
         Assert.Equal("Maximum range unknown", item.MaximumRangeText);
         Assert.Equal("Seats unknown", item.SeatsText);
+        Assert.Equal("Typical cruise unknown", item.TypicalCruiseText);
         Assert.Equal("Passenger capacity unknown", item.PassengerCapacityText);
         Assert.Equal("IFR capability unknown", item.IfrCapabilityText);
         Assert.Equal("Pressurization unknown", item.PressurizationText);
@@ -199,6 +204,7 @@ public sealed class InstalledAircraftInventorySourceTests
                 passengerCapacity: 5,
                 maximumPayloadPounds: 1200,
                 maximumRangeNauticalMiles: 800,
+                typicalCruiseKnots: 150,
                 seats: 6,
                 includeCapabilityProvenance: false))),
             new StubAvailability());
@@ -209,6 +215,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Maximum payload unknown", item.MaximumPayloadText);
         Assert.Equal("Maximum range unknown", item.MaximumRangeText);
         Assert.Equal("Seats unknown", item.SeatsText);
+        Assert.Equal("Typical cruise unknown", item.TypicalCruiseText);
         Assert.Equal("Passenger capacity unknown", item.PassengerCapacityText);
         Assert.Equal("Capability evidence sources unavailable", item.CapabilityEvidenceText);
     }
@@ -268,7 +275,8 @@ public sealed class InstalledAircraftInventorySourceTests
         bool? ifrCapable = null,
         bool? pressurized = null,
         bool? retractableGear = null,
-        bool includeCapabilityProvenance = true)
+        bool includeCapabilityProvenance = true,
+        double? typicalCruiseKnots = null)
     {
         var provenance =
             new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>();
@@ -276,6 +284,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Add(AircraftRegistryField.MaximumPayloadPounds, maximumPayloadPounds is not null);
         Add(AircraftRegistryField.MaximumRangeNauticalMiles, maximumRangeNauticalMiles is not null);
         Add(AircraftRegistryField.Seats, seats is not null);
+        Add(AircraftRegistryField.TypicalCruiseKnots, typicalCruiseKnots is not null);
         Add(AircraftRegistryField.IfrCapable, ifrCapable is not null);
         Add(AircraftRegistryField.Pressurized, pressurized is not null);
         Add(AircraftRegistryField.RetractableGear, retractableGear is not null);
@@ -290,7 +299,7 @@ public sealed class InstalledAircraftInventorySourceTests
                 null,
                 maximumPayloadPounds,
                 maximumRangeNauticalMiles,
-                null,
+                typicalCruiseKnots,
                 seats,
                 powerplant?.EngineCount,
                 ifrCapable,

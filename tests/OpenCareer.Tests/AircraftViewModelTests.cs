@@ -27,6 +27,7 @@ public sealed class AircraftViewModelTests
                     MaximumPayloadText: "Maximum payload 950 lb",
                     MaximumRangeText: "Maximum range 640 nm",
                     SeatsText: "4 seat(s)",
+                    TypicalCruiseText: "Typical cruise 122.5 kt",
                     IfrCapabilityText: "IFR capable",
                     PressurizationText: "Not pressurized",
                     LandingGearText: "Fixed/non-retractable gear",
@@ -47,6 +48,7 @@ public sealed class AircraftViewModelTests
         Assert.Equal("AVAILABLE", Assert.Single(viewModel.Aircraft).FleetStatusText);
         Assert.Equal("Career access unknown", Assert.Single(viewModel.Aircraft).AccessText);
         Assert.Equal("Maximum payload 950 lb", Assert.Single(viewModel.Aircraft).MaximumPayloadText);
+        Assert.Equal("Typical cruise 122.5 kt", Assert.Single(viewModel.Aircraft).TypicalCruiseText);
         Assert.Equal("IFR capable", Assert.Single(viewModel.Aircraft).IfrCapabilityText);
         Assert.Equal(
             "Passenger capacity 3 (cabin value; crew and total seats not inferred)",

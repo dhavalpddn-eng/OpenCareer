@@ -723,7 +723,7 @@ Required working pattern:
 1. Verify the current remote branch head before the first write.
 2. Choose one bounded feature/fix with clear acceptance criteria. Target roughly 15–30 minutes of implementation scope when practical.
 3. Implement only that slice and its directly required tests.
-4. Create a Git commit as soon as the slice is coherent and reviewable. Do not wait to combine several unrelated subsystems into one commit.
+4. Create a Git commit as soon as the slice is coherent and reviewable. Do not wait to combine several unrelated subsystems into one commit. Push each coherent checkpoint to the working feature branch after rechecking remote head so recovery does not depend on the local workspace or chat. Record verification as pending until its exact commit has been tested; push follow-up fixes and handoff updates promptly.
 5. Run the relevant automated verification after the code commit. Fix failures in another bounded pass.
 6. Update ASTRA/project-state/master trackers when verified status changes. Tracking updates may be a separate focused docs commit.
 7. Start the next feature slice with a fresh remote-head check.

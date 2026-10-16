@@ -157,6 +157,9 @@
                                                Style="{StaticResource OpenCareerInputHelpStyle}"
                                                TextWrapping="Wrap" />
                                 </Grid>
+                                <TextBlock Text="{Binding TypicalCruiseText}"
+                                           Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding CapabilityEvidenceText}"
                                            Style="{StaticResource OpenCareerInputHelpStyle}"
                                            TextWrapping="Wrap" />
