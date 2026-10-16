@@ -610,7 +610,11 @@ public sealed class KjfkPlayableLoopCertificationTests
         Assert.Equal("{Binding CanStart}", (string?)start.Attribute("IsEnabled"));
         Assert.Contains("StartOfferAsync", Read("JobsPage.xaml.cs"));
         Assert.Contains((string)start.Attribute("Click")!, Read("JobsPage.xaml.cs"));
-        string mainWindowCode = Read("MainWindow.xaml.cs");
+        string mainWindowCode = File.ReadAllText(
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "UiButtons",
+                "MainWindow.xaml.cs"));
         Assert.Contains("Jobs.NavigationRequested += OnJobsNavigationRequested", mainWindowCode);
         Assert.Contains("Jobs.NavigationRequested -= OnJobsNavigationRequested", mainWindowCode);
         var current = System.Xml.Linq.XDocument.Parse(Read("CurrentFlightPage.xaml"));

@@ -487,11 +487,6 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 "Career job start failed for offer {OfferId}.",
                 offerId);
 
-            SetField(
-                ref _acceptanceStatus,
-                $"Job action failed: {ex.Message}",
-                nameof(AcceptanceStatus));
-
             await _refreshGate
                 .WaitAsync(cancellationToken)
                 .ConfigureAwait(true);
@@ -505,6 +500,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             {
                 _refreshGate.Release();
             }
+
+            SetField(
+                ref _acceptanceStatus,
+                $"Job action failed: {ex.Message}",
+                nameof(AcceptanceStatus));
         }
         finally
         {
