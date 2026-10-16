@@ -58,6 +58,12 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
             Assert.IsType<AircraftTypeIdentity>(
                 AircraftRegistryResolver.Resolve([observation]).TypeIdentity);
         Assert.Equal("icao-type:DA62", typeIdentity.CanonicalTypeId);
+        AircraftPowerplantClassification powerplant =
+            Assert.IsType<AircraftPowerplantClassification>(
+                AircraftRegistryResolver.Resolve([observation]).PowerplantClassification);
+        Assert.Equal(AircraftEngineType.Piston, powerplant.EngineType);
+        Assert.Equal(2, powerplant.EngineCount);
+        Assert.Equal(AircraftEngineMultiplicity.Multi, powerplant.Multiplicity);
         Assert.Null(observation.DispatchPerformance);
         Assert.DoesNotContain(_tempRoot, observation.ProviderRecordId, StringComparison.OrdinalIgnoreCase);
     }

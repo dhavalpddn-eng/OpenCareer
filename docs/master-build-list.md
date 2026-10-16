@@ -166,7 +166,7 @@ Airports, bases, fleet/company geography, routes, opportunities, events, markets
 ### MBL-08 — Installed-aircraft registry — IN PROGRESS
 **Estimated remaining effort: ~7–12 developer days**
 
-Implemented foundation: SimConnect catalog/current TITLE plus package discovery, canonical identity resolution, persistent installed observations, per-field provenance/confidence, configuration enrichment and one complete C172 reference profile. Registry resolutions expose a stable normalized `icao-type:` identity only when explicit ICAO type-designator metadata exists, so different title/livery records can share type identity without being merged. Current-aircraft identity and picker stability are live accepted.
+Implemented foundation: SimConnect catalog/current TITLE plus package discovery, canonical identity resolution, persistent installed observations, per-field provenance/confidence, configuration enrichment and one complete C172 reference profile. Registry resolutions expose a stable normalized `icao-type:` identity only when explicit ICAO type-designator metadata exists, so different title/livery records can share type identity without being merged. Explicit engine type/count evidence also derives a fail-closed None / Single / Multi powerplant classification without implying a pilot rating or mission capability. Current-aircraft identity and picker stability are live accepted.
 
 Remaining: broader family/class normalization beyond explicit ICAO type designators, broad capability coverage, aircraft location/experience, and authoritative owned/rented/employer/assigned access. Reference data never implies installation or ownership.
 

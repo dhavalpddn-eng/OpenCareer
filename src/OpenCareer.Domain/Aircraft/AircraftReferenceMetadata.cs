@@ -10,6 +10,71 @@ public enum AircraftEngineType
     None = 6
 }
 
+public enum AircraftEngineMultiplicity
+{
+    None = 0,
+    Single = 1,
+    Multi = 2
+}
+
+public sealed record AircraftPowerplantClassification(
+    AircraftEngineType EngineType,
+    int EngineCount,
+    AircraftEngineMultiplicity Multiplicity)
+{
+    public static AircraftPowerplantClassification? FromEvidence(
+        AircraftEngineType? engineType,
+        int? engineCount)
+    {
+        if (engineType is null || engineCount is null)
+            return null;
+
+        if (!Enum.IsDefined(engineType.Value) || engineCount < 0)
+            return null;
+
+        AircraftEngineMultiplicity? multiplicity =
+            (engineType.Value, engineCount.Value) switch
+            {
+                (AircraftEngineType.None, 0) => AircraftEngineMultiplicity.None,
+                (AircraftEngineType.None, _) => null,
+                (_, 0) => null,
+                (_, 1) => AircraftEngineMultiplicity.Single,
+                _ => AircraftEngineMultiplicity.Multi
+            };
+
+        if (multiplicity is null)
+            return null;
+
+        var classification = new AircraftPowerplantClassification(
+            engineType.Value,
+            engineCount.Value,
+            multiplicity.Value);
+        classification.Validate();
+        return classification;
+    }
+
+    public void Validate()
+    {
+        if (!Enum.IsDefined(EngineType)
+            || !Enum.IsDefined(Multiplicity)
+            || EngineCount < 0
+            || EngineType == AircraftEngineType.None
+                && (EngineCount != 0
+                    || Multiplicity != AircraftEngineMultiplicity.None)
+            || EngineType != AircraftEngineType.None
+                && (EngineCount == 0
+                    || Multiplicity == AircraftEngineMultiplicity.None)
+            || EngineCount == 1
+                && Multiplicity != AircraftEngineMultiplicity.Single
+            || EngineCount > 1
+                && Multiplicity != AircraftEngineMultiplicity.Multi)
+        {
+            throw new ArgumentException(
+                "Aircraft powerplant classification is inconsistent with its engine evidence.");
+        }
+    }
+}
+
 public sealed record AircraftReferenceMetadata(
     string? IcaoTypeDesignator = null,
     string? IcaoManufacturer = null,

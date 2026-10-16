@@ -272,6 +272,7 @@ Chapter status: **ACTIVE — FIRST C172/POINT-TO-POINT PATH IMPLEMENTED**
 - [x] Detect/index installed aircraft for current production discovery sources.
 - [x] Persist installed-aircraft registry observations.
 - [x] Derive stable cross-variation aircraft type identity from explicit normalized ICAO type-designator metadata without fuzzy-merging canonical aircraft records.
+- [x] Derive fail-closed None / Single / Multi powerplant classification only from explicit engine type/count evidence without implying qualifications or capabilities.
 - [ ] Expand broader aircraft family/class normalization beyond explicit ICAO type designators.
 - [ ] Expand authoritative capability profiles beyond the C172 reference and available configuration evidence.
 - [x] Record source/confidence per important capability.

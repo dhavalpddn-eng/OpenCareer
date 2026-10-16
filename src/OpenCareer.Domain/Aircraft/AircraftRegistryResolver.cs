@@ -113,6 +113,7 @@ public sealed record AircraftRegistryResolution(
     AircraftRunwayPerformanceProfile? RunwayPerformance,
     AircraftReferenceMetadata? ReferenceMetadata,
     AircraftTypeIdentity? TypeIdentity,
+    AircraftPowerplantClassification? PowerplantClassification,
     AircraftDispatchPerformanceProfile? DispatchPerformance,
     IReadOnlyList<AircraftRegistryField> UnresolvedCapabilityFields,
     IReadOnlyDictionary<AircraftRegistryField, AircraftRegistryFieldProvenance> Provenance)
@@ -286,6 +287,9 @@ public static class AircraftRegistryResolver
             ReferenceValue<AircraftRunwayPerformanceProfile>(AircraftRegistryField.RunwayPerformance),
             referenceMetadata,
             AircraftTypeIdentity.FromReferenceMetadata(referenceMetadata),
+            AircraftPowerplantClassification.FromEvidence(
+                referenceMetadata?.EngineType,
+                capabilities.EngineCount),
             ReferenceValue<AircraftDispatchPerformanceProfile>(AircraftRegistryField.DispatchPerformance),
             unresolved,
             provenance);

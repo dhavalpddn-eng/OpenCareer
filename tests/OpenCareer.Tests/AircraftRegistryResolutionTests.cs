@@ -185,6 +185,64 @@ public class AircraftRegistryResolutionTests
         Assert.Equal("icao-type:C172", results[0].TypeIdentity!.CanonicalTypeId);
     }
 
+    [Theory]
+    [InlineData(AircraftEngineType.Piston, 1, AircraftEngineMultiplicity.Single)]
+    [InlineData(AircraftEngineType.Piston, 2, AircraftEngineMultiplicity.Multi)]
+    [InlineData(AircraftEngineType.Jet, 4, AircraftEngineMultiplicity.Multi)]
+    [InlineData(AircraftEngineType.Electric, 1, AircraftEngineMultiplicity.Single)]
+    [InlineData(AircraftEngineType.None, 0, AircraftEngineMultiplicity.None)]
+    public void ExplicitEngineEvidenceProducesDeterministicPowerplantClass(
+        AircraftEngineType engineType,
+        int engineCount,
+        AircraftEngineMultiplicity expectedMultiplicity)
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "local-config",
+                record: "powerplant",
+                confidence: AircraftDataConfidence.Reference,
+                engineCount: engineCount)
+            with
+            {
+                ReferenceMetadata = new(EngineType: engineType)
+            }
+        ]);
+
+        AircraftPowerplantClassification classification =
+            Assert.IsType<AircraftPowerplantClassification>(
+                result.PowerplantClassification);
+        Assert.Equal(engineType, classification.EngineType);
+        Assert.Equal(engineCount, classification.EngineCount);
+        Assert.Equal(expectedMultiplicity, classification.Multiplicity);
+    }
+
+    [Theory]
+    [InlineData(null, 1)]
+    [InlineData(AircraftEngineType.Piston, null)]
+    [InlineData(AircraftEngineType.Piston, 0)]
+    [InlineData(AircraftEngineType.None, 1)]
+    public void MissingOrInconsistentEngineEvidenceLeavesPowerplantClassUnknown(
+        AircraftEngineType? engineType,
+        int? engineCount)
+    {
+        AircraftRegistryObservation observation = Observation(
+            provider: "local-config",
+            record: "unknown-powerplant",
+            confidence: AircraftDataConfidence.Reference,
+            engineCount: engineCount) with
+        {
+            ReferenceMetadata = engineType is null
+                ? null
+                : new(EngineType: engineType)
+        };
+
+        AircraftRegistryResolution result =
+            AircraftRegistryResolver.Resolve([observation]);
+
+        Assert.Null(result.PowerplantClassification);
+    }
+
     [Fact]
     public void CompleteResolutionCreatesExistingRegistryRecordShape()
     {
