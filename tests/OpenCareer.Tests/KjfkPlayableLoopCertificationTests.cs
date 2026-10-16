@@ -606,7 +606,7 @@ public sealed class KjfkPlayableLoopCertificationTests
             .Cast<System.Text.RegularExpressions.Match>());
         Assert.Matches(@"_synchronizingAircraftSelection = true;\s*try\s*\{\s*AircraftPicker.SelectedItem = viewModel.SelectedAircraftOption;\s*\}\s*finally\s*\{\s*_synchronizingAircraftSelection = false;", jobsCode);
         var start = Assert.Single(jobs.Descendants(), e => e.Name.LocalName == "Button"
-            && (string?)e.Attribute("Content") == "Accept & Start Flight");
+            && (string?)e.Attribute("Content") == "{Binding ActionButtonText}");
         Assert.Equal("{Binding CanStart}", (string?)start.Attribute("IsEnabled"));
         Assert.Contains("StartOfferAsync", Read("JobsPage.xaml.cs"));
         Assert.Contains((string)start.Attribute("Click")!, Read("JobsPage.xaml.cs"));
