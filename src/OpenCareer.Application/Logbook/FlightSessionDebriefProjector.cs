@@ -14,7 +14,8 @@ public sealed record FlightSessionDebriefContext(
     MissionOutcome MissionOutcome,
     FlightSettlementRecord Settlement,
     IReadOnlyList<FlightDebriefEvent>? Events = null,
-    bool PositionJumpObserved = false);
+    bool PositionJumpObserved = false,
+    CivilianQualificationTrainingMetadata? QualificationTraining = null);
 
 public static class FlightSessionDebriefProjector
 {
@@ -143,7 +144,9 @@ public static class FlightSessionDebriefProjector
                     context.Events
                     ?? Array.Empty<FlightDebriefEvent>(),
                 Settlement:
-                    context.Settlement);
+                    context.Settlement,
+                QualificationTraining:
+                    context.QualificationTraining);
 
         return FlightDebriefFactory.Create(draft);
     }

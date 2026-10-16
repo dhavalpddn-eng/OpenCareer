@@ -105,6 +105,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<CareerLogbookExperienceCoordinator>();
         services.AddSingleton<ManualFlightPostflightCoordinator>();
         services.AddSingleton<ManualFlightPostflightInputSource>();
+        services.AddSingleton<StudentTrainingOperationService>();
 
         services.AddSingleton<SqliteLogbookStore>();
         services.AddSingleton<ILogbookSource>(provider =>

@@ -68,7 +68,10 @@ public sealed class ManualFlightPostflightCoordinator
                     cancellationToken).ConfigureAwait(false)
                 : new(
                     LogbookAppendDisposition.AlreadyExists,
-                    ValidateRecoveredEntry(existing, session));
+                    ValidateRecoveredEntry(
+                        existing,
+                        session,
+                        request.DebriefContext.QualificationTraining));
 
             PlayerCareerProfileStoreRecord profile = await _experience
                 .ApplyCommittedAsync(
@@ -132,7 +135,9 @@ public sealed class ManualFlightPostflightCoordinator
     {
         if (context.EntryKind is not LogbookEntryKind.FreeFlight
             and not LogbookEntryKind.Training
-            || context.Settlement.Status != SettlementRecordStatus.NotApplicable)
+            || context.Settlement.Status != SettlementRecordStatus.NotApplicable
+            || context.EntryKind != LogbookEntryKind.Training
+                && context.QualificationTraining is not null)
         {
             throw new InvalidOperationException(
                 "Manual postflight logging requires free-flight or training evidence without settlement.");
@@ -141,14 +146,16 @@ public sealed class ManualFlightPostflightCoordinator
 
     private static LogbookEntry ValidateRecoveredEntry(
         LogbookEntry entry,
-        FlightSession session)
+        FlightSession session,
+        CivilianQualificationTrainingMetadata? qualificationTraining)
     {
         LogbookEntry.Commit(entry.EntryId, entry.Debrief, entry.CommittedAt, entry.CommitKind);
 
         if (entry.CommitKind != LogbookCommitKind.ManualPilotLog
             || entry.Debrief.SessionId != session.SessionId
             || entry.Debrief.DebriefId != session.SessionId
-            || entry.Debrief.ContractId is not null)
+            || entry.Debrief.ContractId is not null
+            || entry.Debrief.QualificationTraining != qualificationTraining)
         {
             throw new InvalidOperationException("Recovered manual Logbook entry does not match the completed FlightSession.");
         }
