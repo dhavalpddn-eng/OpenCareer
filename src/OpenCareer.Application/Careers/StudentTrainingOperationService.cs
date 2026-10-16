@@ -162,7 +162,7 @@ public sealed class StudentTrainingOperationService
                 && plannedCareerId == profile.Profile.CareerId)
             {
                 FlightSessionPlan currentPlan = current.Plan!;
-                string? displayName = null;
+                string? activeAircraftDisplayName = null;
                 string? expectedAircraftId =
                     currentPlan.ExpectedCanonicalAircraftId;
                 if (!string.IsNullOrWhiteSpace(expectedAircraftId))
@@ -176,7 +176,7 @@ public sealed class StudentTrainingOperationService
                     IsEligibleTrainingAircraft(
                         activeAircraft,
                         expectedAircraftId.Trim(),
-                        out displayName);
+                        out activeAircraftDisplayName);
                 }
 
                 if (current.Status is FlightSessionStatus.Interrupted
@@ -187,7 +187,7 @@ public sealed class StudentTrainingOperationService
                         "Student training ended without qualifying completion; clear the terminal session before retrying.",
                         operationId,
                         currentPlan.PlannedOrigin,
-                        displayName);
+                        activeAircraftDisplayName);
                 }
 
                 return new(
@@ -199,7 +199,7 @@ public sealed class StudentTrainingOperationService
                         : "Student training is active. Complete a takeoff, full-stop landing, parking and shutdown local circuit.",
                     operationId,
                     currentPlan.PlannedOrigin,
-                    displayName);
+                    activeAircraftDisplayName);
             }
 
             return new(
