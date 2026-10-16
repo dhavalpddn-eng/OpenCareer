@@ -351,7 +351,8 @@ public sealed class InstalledAircraftInventorySource(
             if (!displayed
                 || !resolution.Provenance.TryGetValue(
                     field,
-                    out AircraftRegistryFieldProvenance provenance))
+                    out AircraftRegistryFieldProvenance? provenance)
+                || provenance is null)
             {
                 return;
             }
