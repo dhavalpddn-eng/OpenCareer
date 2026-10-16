@@ -98,7 +98,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<ICareerQualificationRoadmapSource>(provider =>
             provider.GetRequiredService<CareerQualificationRoadmapSource>());
         services.AddSingleton<ICivilianTrainingCompletionEvidenceSource,
-            UnavailableCivilianTrainingCompletionEvidenceSource>();
+            LogbookCivilianTrainingCompletionEvidenceSource>();
         services.AddSingleton<CivilianQualificationAwardService>();
 
         services.AddSingleton<PlayerCareerExperienceCoordinator>();

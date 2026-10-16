@@ -318,8 +318,9 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Preserve monotonic qualification updates and prevent roadmap/UI reads from awarding qualifications.
 - [x] Extract roadmap identities, ordering and prerequisites into one deterministic catalog reusable by roadmap and award orchestration.
 - [x] Add a fail-closed evidence-to-award boundary that accepts only stable evidence identity, rechecks career/target/prerequisites and persists solely through the monotonic qualification coordinator.
-- [x] Keep the production civilian training evidence source explicitly unavailable rather than synthesizing completion.
-- [ ] Implement authoritative civilian training missions and connect their real completion-evidence source; no free-training entitlement is currently established.
+- [x] Resolve production civilian training completion evidence only from immutable committed Training Logbook entries carrying validated career, operation and catalog qualification identities, a successful outcome and no settlement.
+- [x] Preserve generic/historical Training entries without qualification metadata as valid history that cannot award a qualification.
+- [ ] Implement authoritative civilian training missions that create qualifying committed evidence; no production path creates it and no free-training entitlement is currently established.
 - [x] Home-airport selection foundation.
 - [x] Persist player location/home base.
 - [x] Build deterministic board refill foundation; authoritative market-demand integration remains open.
