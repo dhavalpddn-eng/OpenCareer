@@ -19,6 +19,8 @@ public sealed class AircraftViewModelTests
                     "ICAO type C172",
                     "Single piston engine",
                     "Capability profile available",
+                    "AVAILABLE",
+                    "No reservation recorded",
                     "Career access unknown")
             ]));
         var viewModel = new AircraftViewModel(source);
@@ -30,6 +32,7 @@ public sealed class AircraftViewModelTests
         Assert.False(viewModel.IsRefreshing);
         Assert.Equal(1, source.ReadCount);
         Assert.Equal("Cessna 172 Skyhawk", Assert.Single(viewModel.Aircraft).DisplayName);
+        Assert.Equal("AVAILABLE", Assert.Single(viewModel.Aircraft).FleetStatusText);
         Assert.Equal("Career access unknown", Assert.Single(viewModel.Aircraft).AccessText);
         Assert.Equal("Refresh Aircraft", viewModel.RefreshButtonText);
     }
@@ -40,7 +43,7 @@ public sealed class AircraftViewModelTests
         var source = new StubInventorySource(new(
             InstalledAircraftInventoryStatus.Ready,
             "ready",
-            [new("id", "name", "INSTALLED", "type", "engine", "capability", "access")]));
+            [new("id", "name", "INSTALLED", "type", "engine", "capability", "fleet", "reservation", "access")]));
         var viewModel = new AircraftViewModel(source);
         await viewModel.RefreshAsync();
 

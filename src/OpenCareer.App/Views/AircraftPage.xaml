@@ -34,7 +34,7 @@
                     <TextBlock Text="{Binding StatusText}"
                                Style="{StaticResource OpenCareerPaperBodyStyle}"
                                TextWrapping="Wrap" />
-                    <TextBlock Text="Installed means detected in MSFS. Ownership, rental, employer access, assignment, location and airworthiness remain separate authorities."
+                    <TextBlock Text="Installed means detected in MSFS. Fleet availability reflects only OpenCareer operational holds; ownership, rental, employer access, assignment, location and airworthiness remain separate authorities."
                                Style="{StaticResource OpenCareerInputHelpStyle}"
                                TextWrapping="Wrap" />
                 </StackPanel>
@@ -84,6 +84,22 @@
 
                                 <TextBlock Text="{Binding CapabilityText}"
                                            Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                <Grid ColumnSpacing="18">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="FLEET AVAILABILITY"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding FleetStatusText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding ReservationText}"
+                                               Style="{StaticResource OpenCareerInputHelpStyle}"
+                                               TextWrapping="Wrap" />
+                                </Grid>
                                 <TextBlock Text="{Binding AccessText}"
                                            Style="{StaticResource OpenCareerInputHelpStyle}"
                                            TextWrapping="Wrap" />

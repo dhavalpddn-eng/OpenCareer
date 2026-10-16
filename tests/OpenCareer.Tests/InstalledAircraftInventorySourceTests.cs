@@ -1,3 +1,4 @@
+using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 
@@ -11,7 +12,8 @@ public sealed class InstalledAircraftInventorySourceTests
         var registry = new StubRegistry();
         var source = new InstalledAircraftInventorySource(
             new StubDiscovery(InstalledAircraftDiscoverySnapshot.Unavailable),
-            registry);
+            registry,
+            new StubAvailability());
 
         InstalledAircraftInventorySnapshot result = await source.ReadAsync();
 
@@ -28,7 +30,8 @@ public sealed class InstalledAircraftInventorySourceTests
             new StubDiscovery(new(
                 InstalledAircraftDiscoveryAvailability.Available,
                 [])),
-            new StubRegistry());
+            new StubRegistry(),
+            new StubAvailability());
 
         InstalledAircraftInventorySnapshot result = await source.ReadAsync();
 
@@ -56,7 +59,8 @@ public sealed class InstalledAircraftInventorySourceTests
                     Observation(alphaId, "two"),
                     Observation(alphaId, "three")
                 ])),
-            registry);
+            registry,
+            new StubAvailability());
 
         InstalledAircraftInventorySnapshot result = await source.ReadAsync();
 
@@ -85,7 +89,8 @@ public sealed class InstalledAircraftInventorySourceTests
             new StubDiscovery(new(
                 InstalledAircraftDiscoveryAvailability.Available,
                 [Observation(id, "one")])),
-            new StubRegistry());
+            new StubRegistry(),
+            new StubAvailability());
 
         InstalledAircraftInventoryItem item = Assert.Single(
             (await source.ReadAsync()).Aircraft);
@@ -94,6 +99,50 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Registry metadata unavailable", item.CapabilityText);
         Assert.Equal("ICAO type unknown", item.TypeIdentityText);
         Assert.Equal("Powerplant unknown", item.PowerplantText);
+        Assert.Equal("Fleet status not tracked", item.FleetStatusText);
+        Assert.Equal("No operational availability record exists", item.ReservationText);
+    }
+
+    [Theory]
+    [InlineData(AircraftAvailabilityStatus.Available, null, "AVAILABLE", "No reservation recorded")]
+    [InlineData(AircraftAvailabilityStatus.Unavailable, "job:alpha", "RESERVED", "Authoritative Fleet reservation recorded")]
+    [InlineData(AircraftAvailabilityStatus.Unavailable, null, "UNAVAILABLE", "No reservation identity recorded")]
+    public async Task FleetAvailabilityIsProjectedWithoutInferringAccess(
+        AircraftAvailabilityStatus status,
+        string? reservationId,
+        string expectedStatus,
+        string expectedReservation)
+    {
+        const string id = "msfs-title:Fleet Aircraft";
+        var source = new InstalledAircraftInventorySource(
+            new StubDiscovery(new(
+                InstalledAircraftDiscoveryAvailability.Available,
+                [Observation(id, "one")])),
+            new StubRegistry(),
+            new StubAvailability(new(id, status, reservationId)));
+
+        InstalledAircraftInventoryItem item = Assert.Single(
+            (await source.ReadAsync()).Aircraft);
+
+        Assert.Equal(expectedStatus, item.FleetStatusText);
+        Assert.Equal(expectedReservation, item.ReservationText);
+        Assert.Contains("access unknown", item.AccessText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task MismatchedAvailabilityIdentityIsRejected()
+    {
+        const string id = "msfs-title:Expected";
+        var source = new InstalledAircraftInventorySource(
+            new StubDiscovery(new(
+                InstalledAircraftDiscoveryAvailability.Available,
+                [Observation(id, "one")])),
+            new StubRegistry(),
+            new StubAvailability(new(
+                "msfs-title:Different",
+                AircraftAvailabilityStatus.Available)));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => source.ReadAsync());
     }
 
     [Fact]
@@ -103,7 +152,8 @@ public sealed class InstalledAircraftInventorySourceTests
             new StubDiscovery(new(
                 InstalledAircraftDiscoveryAvailability.Available,
                 [Observation("msfs-title:Not Installed", "one") with { IsInstalled = false }])),
-            new StubRegistry());
+            new StubRegistry(),
+            new StubAvailability());
 
         await Assert.ThrowsAsync<InvalidDataException>(() => source.ReadAsync());
     }
@@ -175,5 +225,19 @@ public sealed class InstalledAircraftInventorySourceTests
             _resolutions.TryGetValue(aircraftId, out AircraftRegistryResolution? resolution);
             return Task.FromResult(resolution);
         }
+    }
+
+    private sealed class StubAvailability(AircraftAvailabilityState? current = null)
+        : IAircraftAvailabilityStore
+    {
+        public Task<AircraftAvailabilityState?> FindAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(current);
+
+        public Task SetAsync(
+            AircraftAvailabilityState state,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Inventory projection must not write fleet availability.");
     }
 }

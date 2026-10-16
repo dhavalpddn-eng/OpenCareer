@@ -1,3 +1,4 @@
+using OpenCareer.Application.Fleet;
 using OpenCareer.Domain.Aircraft;
 
 namespace OpenCareer.Application.Planning;
@@ -16,6 +17,8 @@ public sealed record InstalledAircraftInventoryItem(
     string TypeIdentityText,
     string PowerplantText,
     string CapabilityText,
+    string FleetStatusText,
+    string ReservationText,
     string AccessText);
 
 public sealed record InstalledAircraftInventorySnapshot(
@@ -36,13 +39,16 @@ public interface IInstalledAircraftInventorySource
 /// </summary>
 public sealed class InstalledAircraftInventorySource(
     IInstalledAircraftDiscoverySource discovery,
-    IAircraftRegistrySource registry)
+    IAircraftRegistrySource registry,
+    IAircraftAvailabilityStore availability)
     : IInstalledAircraftInventorySource
 {
     private readonly IInstalledAircraftDiscoverySource _discovery =
         discovery ?? throw new ArgumentNullException(nameof(discovery));
     private readonly IAircraftRegistrySource _registry =
         registry ?? throw new ArgumentNullException(nameof(registry));
+    private readonly IAircraftAvailabilityStore _availability =
+        availability ?? throw new ArgumentNullException(nameof(availability));
 
     public async Task<InstalledAircraftInventorySnapshot> ReadAsync(
         CancellationToken cancellationToken = default)
@@ -77,8 +83,11 @@ public sealed class InstalledAircraftInventorySource(
             AircraftRegistryResolution? resolution = await _registry
                 .FindAircraftAsync(aircraftId, cancellationToken)
                 .ConfigureAwait(false);
+            AircraftAvailabilityState? availability = await _availability
+                .FindAsync(aircraftId, cancellationToken)
+                .ConfigureAwait(false);
 
-            items.Add(CreateItem(aircraftId, resolution));
+            items.Add(CreateItem(aircraftId, resolution, availability));
         }
 
         InstalledAircraftInventoryItem[] ordered = items
@@ -109,7 +118,8 @@ public sealed class InstalledAircraftInventorySource(
 
     private static InstalledAircraftInventoryItem CreateItem(
         string aircraftId,
-        AircraftRegistryResolution? resolution)
+        AircraftRegistryResolution? resolution,
+        AircraftAvailabilityState? availability)
     {
         string displayName = resolution?.CapabilityValues.DisplayName?.Trim()
             ?? (AircraftCanonicalIdentity.TryGetMsfsTitle(aircraftId, out string title)
@@ -130,6 +140,10 @@ public sealed class InstalledAircraftInventorySource(
                 ? "Capability profile available"
                 : $"Capability data incomplete ({resolution.UnresolvedCapabilityFields.Count} field(s) unknown)";
 
+        (string fleetStatus, string reservation) = FormatAvailability(
+            aircraftId,
+            availability);
+
         return new(
             aircraftId,
             displayName,
@@ -137,7 +151,38 @@ public sealed class InstalledAircraftInventorySource(
             typeIdentity,
             powerplant,
             capabilities,
+            fleetStatus,
+            reservation,
             "Career access unknown — installation does not prove ownership, rental, or assignment");
+    }
+
+    private static (string Status, string Reservation) FormatAvailability(
+        string aircraftId,
+        AircraftAvailabilityState? availability)
+    {
+        if (availability is null)
+        {
+            return (
+                "Fleet status not tracked",
+                "No operational availability record exists");
+        }
+
+        AircraftAvailabilityState normalized = availability.Normalize();
+        if (!string.Equals(
+                normalized.CanonicalAircraftId,
+                aircraftId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                "Aircraft availability store returned state for a different canonical identity.");
+        }
+
+        if (normalized.IsAvailable)
+            return ("AVAILABLE", "No reservation recorded");
+
+        return normalized.IsReserved
+            ? ("RESERVED", "Authoritative Fleet reservation recorded")
+            : ("UNAVAILABLE", "No reservation identity recorded");
     }
 
     private static string FormatPowerplant(

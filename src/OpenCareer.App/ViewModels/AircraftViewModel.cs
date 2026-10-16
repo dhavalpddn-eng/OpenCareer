@@ -51,6 +51,8 @@ public sealed class AircraftViewModel : INotifyPropertyChanged
                         item.TypeIdentityText,
                         item.PowerplantText,
                         item.CapabilityText,
+                        item.FleetStatusText,
+                        item.ReservationText,
                         item.AccessText))
                     .ToArray(),
                 nameof(Aircraft));
@@ -86,4 +88,6 @@ public sealed record InstalledAircraftItemViewModel(
     string TypeIdentityText,
     string PowerplantText,
     string CapabilityText,
+    string FleetStatusText,
+    string ReservationText,
     string AccessText);
