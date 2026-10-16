@@ -7,6 +7,18 @@ using OpenCareer.Domain.Planning;
 
 namespace OpenCareer.App.ViewModels;
 
+public enum DispatchNavigationTarget
+{
+    Jobs = 0
+}
+
+public sealed class DispatchNavigationRequestedEventArgs(
+    DispatchNavigationTarget target)
+    : EventArgs
+{
+    public DispatchNavigationTarget Target { get; } = target;
+}
+
 public sealed record DispatchPlanningFormInput(
     string OriginIcao,
     string DestinationIcao,
@@ -94,6 +106,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    public event EventHandler<DispatchNavigationRequestedEventArgs>? NavigationRequested;
 
     public IReadOnlyList<DispatchAircraftOptionViewModel> AircraftOptions => _aircraftOptions;
     public string? SelectedAircraftId => _selectedAircraftId;
@@ -517,6 +530,14 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                     cancellationToken)
                 .ConfigureAwait(true);
             ApplyPreparationResult(result);
+
+            if (result.IsPrepared)
+            {
+                NavigationRequested?.Invoke(
+                    this,
+                    new DispatchNavigationRequestedEventArgs(
+                        DispatchNavigationTarget.Jobs));
+            }
         }
         finally
         {

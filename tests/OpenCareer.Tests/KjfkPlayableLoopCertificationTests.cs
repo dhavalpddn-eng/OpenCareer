@@ -617,6 +617,8 @@ public sealed class KjfkPlayableLoopCertificationTests
                 "MainWindow.xaml.cs"));
         Assert.Contains("Jobs.NavigationRequested += OnJobsNavigationRequested", mainWindowCode);
         Assert.Contains("Jobs.NavigationRequested -= OnJobsNavigationRequested", mainWindowCode);
+        Assert.Contains("Dispatch.NavigationRequested += OnDispatchNavigationRequested", mainWindowCode);
+        Assert.Contains("Dispatch.NavigationRequested -= OnDispatchNavigationRequested", mainWindowCode);
         var current = System.Xml.Linq.XDocument.Parse(Read("CurrentFlightPage.xaml"));
         foreach (var binding in new[] { ("CareerCompletionActionText", "CanCompleteCareerFlight", "CompleteCareerFlightAsync"),
             ("CareerAbandonActionText", "CanAbandonCurrentFlight", "AbandonCurrentFlightAsync") })

@@ -465,6 +465,9 @@ public sealed class DispatchViewModelTests
             planning,
             ReadyAcceptedContext(contractId),
             preparation);
+        var navigationTargets = new List<DispatchNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
         await InitializeReadyAsync(viewModel);
 
         Assert.True(viewModel.CanPrepare);
@@ -481,6 +484,9 @@ public sealed class DispatchViewModelTests
         Assert.Equal("PREPARED", viewModel.PreparationStatus);
         Assert.Contains("30.0 gal", viewModel.PreparationSummary, StringComparison.Ordinal);
         Assert.Contains("04L / 22R", viewModel.PreparationSummary, StringComparison.Ordinal);
+        Assert.Equal(
+            new[] { DispatchNavigationTarget.Jobs },
+            navigationTargets);
     }
 
     [Fact]
@@ -497,12 +503,42 @@ public sealed class DispatchViewModelTests
             new StubPlanning(),
             ReadyAcceptedContext(contractId),
             preparation);
+        var navigationTargets = new List<DispatchNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
         await InitializeReadyAsync(viewModel);
 
         await viewModel.PrepareAsync(ValidInput());
 
         Assert.Equal("ALREADY PREPARED", viewModel.PreparationStatus);
         Assert.Contains("already prepared", viewModel.PreparationDetail, StringComparison.Ordinal);
+        Assert.Equal(
+            new[] { DispatchNavigationTarget.Jobs },
+            navigationTargets);
+    }
+
+    [Fact]
+    public async Task UnsuccessfulPreparationStaysOnDispatch()
+    {
+        Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var preparation = new StubPreparation(
+            PrepareDispatchPlanStatus.PlanningInfeasible,
+            "Current evidence is infeasible.");
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            ReadyAcceptedContext(contractId),
+            preparation);
+        var navigationTargets = new List<DispatchNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
+        await InitializeReadyAsync(viewModel);
+
+        await viewModel.PrepareAsync(ValidInput());
+
+        Assert.Equal("PLANNING INFEASIBLE", viewModel.PreparationStatus);
+        Assert.Empty(navigationTargets);
     }
 
     [Fact]
