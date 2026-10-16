@@ -23,6 +23,18 @@ public sealed record CompositeDispatchPlanningResult(
     RouteFuelWeightPlan? FuelWeightPlan,
     DispatchFeasibilityResult? DispatchResult);
 
+public interface ICompositeDispatchPlanningService
+{
+    Task<CompositeDispatchPlanningResult> EvaluateAsync(
+        string aircraftId,
+        string originIcao,
+        string destinationIcao,
+        CruisePerformancePlanningRequest cruiseRequest,
+        RouteFuelPlanningRequest routeFuelRequest,
+        OperationDispatchRequirements requirements,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Composes route/cruise fuel planning with the existing physical dispatch
 /// evaluator. Fuel pounds and fuel type are owned by the Slice 17 plan; all
@@ -32,6 +44,7 @@ public sealed record CompositeDispatchPlanningResult(
 public sealed class CompositeDispatchPlanningService(
     RouteFuelWeightPlanningService fuelWeightPlanning,
     OperationDispatchPlanningService dispatchPlanning)
+    : ICompositeDispatchPlanningService
 {
     public Task<CompositeDispatchPlanningResult> EvaluateAsync(
         string aircraftId,

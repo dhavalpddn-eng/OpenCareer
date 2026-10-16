@@ -173,9 +173,9 @@ Remaining: broader family/class normalization beyond explicit ICAO type designat
 ### MBL-09 — Dispatch system — IN PROGRESS
 **Estimated remaining effort: ~7–14 developer days**
 
-Implemented foundation: persistent Fleet availability/reservations, contract-owned acquire/recovery/release, airport/runway sources with simulator/reference fallback, and fail-closed payload/range/weight/fuel/runway/weather/safety-margin evaluators. The supported civilian ferry/reposition path checks installation, access, qualifications and physical feasibility before start.
+Implemented foundation: persistent Fleet availability/reservations, contract-owned acquire/recovery/release, airport/runway sources with simulator/reference fallback, and fail-closed payload/range/weight/fuel/runway/weather/safety-margin evaluators. A dedicated Dispatch workspace now evaluates explicit pilot-supplied route, payload, cruise-profile, fuel/reserve and safety-margin inputs through the complete composite fuel-weight/physical-feasibility service and projects quantitative failures without preparing or starting an operation. The supported civilian ferry/reposition path checks installation, access, qualifications and physical feasibility before start.
 
-Remaining: production use of the complete composite fuel/weather planning path, broader aircraft/airport data, board-generation feasibility filtering, military assignment issuance/revocation and the dedicated Dispatch UI.
+Remaining: accepted-contract prepopulation and prepare-operation handoff, explicit authoritative weather-limit input/projection on the Dispatch workspace, broader aircraft/airport data, board-generation feasibility filtering, military assignment issuance/revocation, and local Dispatch visual/accessibility acceptance.
 
 ### MBL-17 — Maintenance
 **Estimated effort: ~8–14 developer days**

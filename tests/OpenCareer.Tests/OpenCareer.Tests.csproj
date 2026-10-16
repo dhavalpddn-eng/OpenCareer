@@ -27,6 +27,7 @@
     <Compile Include="../../src/OpenCareer.App/ViewModels/ShellViewModel.cs" Link="ViewModels/ShellViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/ManualFlightPostflightActionService.cs" Link="ViewModels/ManualFlightPostflightActionService.cs" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/JobsViewModel.cs" Link="ViewModels/JobsViewModel.cs" />
+    <Compile Include="../../src/OpenCareer.App/ViewModels/DispatchViewModel.cs" Link="ViewModels/DispatchViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/CareerViewModel.cs" Link="ViewModels/CareerViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/AircraftViewModel.cs" Link="ViewModels/AircraftViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/MilitaryGovernmentViewModel.cs" Link="ViewModels/MilitaryGovernmentViewModel.cs" />

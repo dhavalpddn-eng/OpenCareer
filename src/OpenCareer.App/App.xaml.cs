@@ -280,6 +280,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<DashboardViewModel>();
+        services.AddSingleton<DispatchViewModel>();
         services.AddSingleton<LogbookViewModel>();
         services.AddSingleton<JobsViewModel>();
         services.AddSingleton<CareerViewModel>();

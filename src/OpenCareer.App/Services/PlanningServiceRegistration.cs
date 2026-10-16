@@ -110,6 +110,8 @@ internal static class PlanningServiceRegistration
             new CompositeDispatchPlanningService(
                 provider.GetRequiredService<RouteFuelWeightPlanningService>(),
                 provider.GetRequiredService<OperationDispatchPlanningService>()));
+        services.AddSingleton<ICompositeDispatchPlanningService>(provider =>
+            provider.GetRequiredService<CompositeDispatchPlanningService>());
 
         return services;
     }
