@@ -562,6 +562,39 @@ public sealed class CareerJobStartInputSourceTests
         Assert.Equal(
             acceptedAt,
             request.DispatchContext.Time);
+        Assert.Equal(
+            180d,
+            request.DispatchRequirements.PlannedFuelPounds);
+        Assert.Equal(
+            1,
+            fixture.PreparedDispatch!.CallCount);
+    }
+
+    [Fact]
+    public async Task ExistingAcceptedContractCannotBypassMissingPreparedPlan()
+    {
+        TestFixture fixture =
+            CreateFixture(
+                contractTerms:
+                    [new FixedContractTermsSource()],
+                dispatchAuthorities:
+                    [new FixedDispatchAuthoritySource()],
+                acceptedAt:
+                    Now.AddMinutes(-5),
+                preparedResult:
+                    new(
+                        PreparedDispatchStartAuthorityStatus.PlanUnavailable,
+                        "No prepared dispatch plan exists."));
+
+        CareerJobStartInputSnapshot snapshot =
+            await fixture.Source.ReadAsync(
+                fixture.Offer.OfferId,
+                "fixture-aircraft");
+
+        Assert.Equal(
+            CareerJobStartInputState.PreparedDispatchUnavailable,
+            snapshot.State);
+        Assert.Null(snapshot.Request);
     }
 
     [Fact]
@@ -587,7 +620,8 @@ public sealed class CareerJobStartInputSourceTests
         IReadOnlyList<ICareerJobContractTermsSource> contractTerms,
         IReadOnlyList<ICareerJobDispatchAuthoritySource> dispatchAuthorities,
         DateTimeOffset? acceptedAt = null,
-        IAircraftRegistrySource? registry = null)
+        IAircraftRegistrySource? registry = null,
+        PreparedDispatchStartAuthorityResult? preparedResult = null)
     {
         JobMarketOfferDraft offer =
             Offer();
@@ -619,6 +653,13 @@ public sealed class CareerJobStartInputSourceTests
         registry ??=
             new FakeAircraftRegistrySource();
 
+        StubPreparedDispatchStartAuthority? preparedDispatch =
+            existing is null
+                ? null
+                : new(
+                    preparedResult
+                    ?? ReadyPreparedResult(existing));
+
         var source =
             new CareerJobStartInputSource(
                 new FakeBoardStore(
@@ -640,11 +681,13 @@ public sealed class CareerJobStartInputSourceTests
                 contractTerms,
                 dispatchAuthorities,
                 new FixedTimeProvider(
-                    Now));
+                    Now),
+                preparedDispatch);
 
         return new(
             source,
-            offer);
+            offer,
+            preparedDispatch);
     }
 
     private static JobMarketOfferDraft Offer() =>
@@ -729,9 +772,57 @@ public sealed class CareerJobStartInputSourceTests
                 1);
     }
 
+    private static PreparedDispatchStartAuthorityResult ReadyPreparedResult(
+        PersistedJobContract persisted)
+    {
+        JobContract contract = persisted.Contract;
+        JobContractPlanningTerms terms = contract.PlanningTerms
+            ?? throw new InvalidOperationException(
+                "The accepted fixture must retain planning terms.");
+        string reservationId = JobAcceptanceFleetBridge.GetReservationId(
+            contract.ContractId);
+        var routeFuel = new RouteFuelPlanningRequest(
+            terms.RouteDistanceNauticalMiles,
+            Math.Max(0, terms.RouteDistanceNauticalMiles - 20),
+            10,
+            8,
+            3,
+            2,
+            new(5, 30, 1));
+        var fuel = new RouteFuelWeightPlan(0, 6, 30, 180, 50, 300);
+        OperationDispatchRequirements requirements = fuel.ApplyTo(new(
+            terms.PayloadPounds,
+            terms.RouteDistanceNauticalMiles));
+        var plan = new PreparedDispatchPlan(
+            contract.ContractId,
+            persisted.Version,
+            "fixture-aircraft",
+            reservationId,
+            contract.OriginIcao,
+            contract.DestinationIcao,
+            new(0, 0, 6000, 0, 12000),
+            routeFuel,
+            requirements,
+            fuel,
+            "01/19",
+            "01/19",
+            Now.AddMinutes(-1));
+
+        return new(
+            PreparedDispatchStartAuthorityStatus.Ready,
+            "The prepared plan remains current.",
+            plan,
+            DispatchFeasibilityResult.Create(
+                DispatchFeasibilityStatus.Feasible,
+                "01/19",
+                "01/19",
+                []));
+    }
+
     private sealed record TestFixture(
         CareerJobStartInputSource Source,
-        JobMarketOfferDraft Offer);
+        JobMarketOfferDraft Offer,
+        StubPreparedDispatchStartAuthority? PreparedDispatch);
 
     private sealed class FixedInstalledSource(
         AircraftRegistryObservation observation)
@@ -788,6 +879,22 @@ public sealed class CareerJobStartInputSourceTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException(
                 "This fixture verifies the production readiness boundary only.");
+    }
+
+    private sealed class StubPreparedDispatchStartAuthority(
+        PreparedDispatchStartAuthorityResult result)
+        : IPreparedDispatchStartAuthority
+    {
+        public int CallCount { get; private set; }
+
+        public Task<PreparedDispatchStartAuthorityResult> RevalidateAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+            return Task.FromResult(result);
+        }
     }
 
     private sealed class FixedContractTermsSource

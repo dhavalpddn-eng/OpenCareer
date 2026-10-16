@@ -135,7 +135,8 @@ public enum CareerJobStartInputState
     PreflightInfeasible = 13,
     PreflightDataInsufficient = 14,
     DomainDispatchGateRejected = 15,
-    Ready = 16
+    Ready = 16,
+    PreparedDispatchUnavailable = 17
 }
 
 public sealed record CareerJobStartInputSnapshot(
@@ -156,6 +157,7 @@ public sealed class CareerJobStartInputSource
     private readonly IJobContractStore _contracts;
     private readonly IAircraftRegistrySource _aircraftRegistry;
     private readonly OperationDispatchPlanningService _dispatchPlanning;
+    private readonly IPreparedDispatchStartAuthority? _preparedDispatch;
     private readonly ICareerJobContractTermsSource[] _contractTermSources;
     private readonly ICareerJobDispatchAuthoritySource[] _dispatchAuthoritySources;
     private readonly TimeProvider _timeProvider;
@@ -168,7 +170,8 @@ public sealed class CareerJobStartInputSource
         OperationDispatchPlanningService dispatchPlanning,
         IEnumerable<ICareerJobContractTermsSource> contractTermSources,
         IEnumerable<ICareerJobDispatchAuthoritySource> dispatchAuthoritySources,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IPreparedDispatchStartAuthority? preparedDispatch = null)
     {
         _jobBoards =
             jobBoards
@@ -194,6 +197,7 @@ public sealed class CareerJobStartInputSource
         _timeProvider =
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
+        _preparedDispatch = preparedDispatch;
 
         if (_contractTermSources.Any(static source => source is null))
         {
@@ -452,9 +456,55 @@ public sealed class CareerJobStartInputSource
                 $"Aircraft access is unauthorized. Aircraft={aircraft.Capabilities.Access}; Authorized={dispatchAuthority.AuthorizedAccess}; ContractAuthorized={terms.AuthorizedAircraftAccess}; Allowed={terms.AircraftRequirements.AllowedAccess}.");
         }
 
-        if (dispatchAuthority.Requirements.PayloadPounds + 1e-9
+        OperationDispatchRequirements dispatchRequirements =
+            dispatchAuthority.Requirements;
+        DispatchFeasibilityResult? preparedPreflight = null;
+
+        if (existing?.Contract.Status == ContractStatus.Accepted)
+        {
+            if (_preparedDispatch is not { } preparedDispatch)
+            {
+                return Blocked(
+                    CareerJobStartInputState.PreparedDispatchUnavailable,
+                    offerId,
+                    "The accepted job requires prepared-dispatch revalidation before it can start.");
+            }
+
+            PreparedDispatchStartAuthorityResult prepared =
+                await preparedDispatch
+                    .RevalidateAsync(
+                        existing.Contract.ContractId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (!prepared.IsReady
+                || prepared.Plan is not { } plan
+                || prepared.DispatchResult is not { } dispatch)
+            {
+                return Blocked(
+                    CareerJobStartInputState.PreparedDispatchUnavailable,
+                    offerId,
+                    $"The accepted job requires a current prepared dispatch plan: {prepared.Status}. {prepared.Detail}");
+            }
+
+            if (!string.Equals(
+                    plan.CanonicalAircraftId,
+                    aircraft.AircraftId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return Blocked(
+                    CareerJobStartInputState.PreparedDispatchUnavailable,
+                    offerId,
+                    "The selected aircraft does not match the accepted job's prepared Fleet reservation.");
+            }
+
+            dispatchRequirements = plan.Requirements;
+            preparedPreflight = dispatch;
+        }
+
+        if (dispatchRequirements.PayloadPounds + 1e-9
                 < creationRequest.PayloadPounds
-            || dispatchAuthority.Requirements.RequiredRangeNauticalMiles + 1e-9
+            || dispatchRequirements.RequiredRangeNauticalMiles + 1e-9
                 < offer.DistanceNm)
         {
             return Blocked(
@@ -464,12 +514,13 @@ public sealed class CareerJobStartInputSource
         }
 
         DispatchFeasibilityResult preflight =
-            await _dispatchPlanning
+            preparedPreflight
+            ?? await _dispatchPlanning
                 .EvaluateAsync(
                     resolution,
                     offer.OriginIcao,
                     offer.DestinationIcao,
-                    dispatchAuthority.Requirements,
+                    dispatchRequirements,
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -526,8 +577,10 @@ public sealed class CareerJobStartInputSource
             new CareerJobPlayableStartRequest(
                 creationRequest,
                 context,
-                dispatchAuthority.Requirements),
-            "Authoritative contract terms, selected aircraft, dispatch authority, and physical preflight are ready.");
+                dispatchRequirements),
+            existing?.Contract.Status == ContractStatus.Accepted
+                ? "The accepted contract's exact prepared dispatch plan was revalidated and is ready to start."
+                : "Authoritative contract terms, selected aircraft, dispatch authority, and physical preflight are ready.");
     }
 
     private static string FormatPreflightIssues(
