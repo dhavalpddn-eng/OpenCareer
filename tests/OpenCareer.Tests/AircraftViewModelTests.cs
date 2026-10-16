@@ -17,6 +17,8 @@ public sealed class AircraftViewModelTests
                     "Cessna 172 Skyhawk",
                     "INSTALLED",
                     "ICAO type C172",
+                    "CESSNA 172 SKYHAWK",
+                    "single-engine piston",
                     "Single piston engine",
                     "Capability profile available",
                     "AVAILABLE",
@@ -39,6 +41,8 @@ public sealed class AircraftViewModelTests
         Assert.False(viewModel.IsRefreshing);
         Assert.Equal(1, source.ReadCount);
         Assert.Equal("Cessna 172 Skyhawk", Assert.Single(viewModel.Aircraft).DisplayName);
+        Assert.Equal("CESSNA 172 SKYHAWK", Assert.Single(viewModel.Aircraft).FamilyIdentityText);
+        Assert.Equal("single-engine piston", Assert.Single(viewModel.Aircraft).PowerplantClassText);
         Assert.Equal("AVAILABLE", Assert.Single(viewModel.Aircraft).FleetStatusText);
         Assert.Equal("Career access unknown", Assert.Single(viewModel.Aircraft).AccessText);
         Assert.Equal("Maximum payload 950 lb", Assert.Single(viewModel.Aircraft).MaximumPayloadText);
@@ -55,7 +59,7 @@ public sealed class AircraftViewModelTests
         var source = new StubInventorySource(new(
             InstalledAircraftInventoryStatus.Ready,
             "ready",
-            [new("id", "name", "INSTALLED", "type", "engine", "capability", "fleet", "reservation", "access")]));
+            [new("id", "name", "INSTALLED", "type", "family", "class", "engine", "capability", "fleet", "reservation", "access")]));
         var viewModel = new AircraftViewModel(source);
         await viewModel.RefreshAsync();
 

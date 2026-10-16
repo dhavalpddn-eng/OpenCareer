@@ -75,6 +75,144 @@ public sealed record AircraftPowerplantClassification(
     }
 }
 
+/// <summary>
+/// Stable family identity derived only from explicit ICAO manufacturer and
+/// model metadata. It never merges installed records or implies capability.
+/// </summary>
+public sealed record AircraftFamilyIdentity(
+    string CanonicalFamilyId,
+    string IcaoManufacturer,
+    string IcaoModel)
+{
+    public const string CanonicalFamilyPrefix = "icao-family:";
+
+    public static AircraftFamilyIdentity? FromReferenceMetadata(
+        AircraftReferenceMetadata? metadata)
+    {
+        if (metadata is null)
+            return null;
+
+        metadata.Validate();
+        if (string.IsNullOrWhiteSpace(metadata.IcaoManufacturer)
+            || string.IsNullOrWhiteSpace(metadata.IcaoModel))
+        {
+            return null;
+        }
+
+        string manufacturer = Normalize(metadata.IcaoManufacturer);
+        string model = Normalize(metadata.IcaoModel);
+        var identity = new AircraftFamilyIdentity(
+            $"{CanonicalFamilyPrefix}{Uri.EscapeDataString(manufacturer)}/{Uri.EscapeDataString(model)}",
+            manufacturer,
+            model);
+        identity.Validate();
+        return identity;
+    }
+
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(CanonicalFamilyId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(IcaoManufacturer);
+        ArgumentException.ThrowIfNullOrWhiteSpace(IcaoModel);
+
+        string manufacturer = Normalize(IcaoManufacturer);
+        string model = Normalize(IcaoModel);
+        string expected =
+            $"{CanonicalFamilyPrefix}{Uri.EscapeDataString(manufacturer)}/{Uri.EscapeDataString(model)}";
+        if (!string.Equals(IcaoManufacturer, manufacturer, StringComparison.Ordinal)
+            || !string.Equals(IcaoModel, model, StringComparison.Ordinal)
+            || !string.Equals(CanonicalFamilyId, expected, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "Aircraft family identity must use normalized explicit ICAO manufacturer and model metadata.");
+        }
+    }
+
+    private static string Normalize(string value) =>
+        string.Join(
+            ' ',
+            value.Split(
+                (char[]?)null,
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToUpperInvariant();
+}
+
+/// <summary>
+/// Stable broad powerplant class derived only from validated engine type and
+/// multiplicity evidence. This is not a pilot rating or mission capability.
+/// </summary>
+public sealed record AircraftPowerplantClassIdentity(
+    string CanonicalClassId,
+    AircraftEngineType EngineType,
+    AircraftEngineMultiplicity Multiplicity)
+{
+    public const string CanonicalClassPrefix = "powerplant-class:";
+
+    public static AircraftPowerplantClassIdentity? FromClassification(
+        AircraftPowerplantClassification? classification)
+    {
+        if (classification is null)
+            return null;
+
+        classification.Validate();
+        AircraftPowerplantClassIdentity identity =
+            FromClassificationCore(classification);
+        identity.Validate();
+        return identity;
+    }
+
+    public void Validate()
+    {
+        if (!Enum.IsDefined(EngineType) || !Enum.IsDefined(Multiplicity))
+            throw new ArgumentException("Aircraft powerplant class contains an unknown value.");
+
+        var classification = new AircraftPowerplantClassification(
+            EngineType,
+            Multiplicity switch
+            {
+                AircraftEngineMultiplicity.None => 0,
+                AircraftEngineMultiplicity.Single => 1,
+                AircraftEngineMultiplicity.Multi => 2,
+                _ => throw new ArgumentOutOfRangeException(nameof(Multiplicity))
+            },
+            Multiplicity);
+        classification.Validate();
+        AircraftPowerplantClassIdentity expected =
+            FromClassificationCore(classification);
+        if (!string.Equals(CanonicalClassId, expected.CanonicalClassId, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "Aircraft powerplant class identity must use normalized engine evidence.");
+        }
+    }
+
+    private static AircraftPowerplantClassIdentity FromClassificationCore(
+        AircraftPowerplantClassification classification)
+    {
+        string engine = classification.EngineType switch
+        {
+            AircraftEngineType.Piston => "piston",
+            AircraftEngineType.TurbopropOrTurboshaft => "turboprop-or-turboshaft",
+            AircraftEngineType.Jet => "jet",
+            AircraftEngineType.Electric => "electric",
+            AircraftEngineType.Rocket => "rocket",
+            AircraftEngineType.None => "none",
+            _ => throw new ArgumentOutOfRangeException(nameof(classification))
+        };
+        string multiplicity = classification.Multiplicity switch
+        {
+            AircraftEngineMultiplicity.None => "none",
+            AircraftEngineMultiplicity.Single => "single",
+            AircraftEngineMultiplicity.Multi => "multi",
+            _ => throw new ArgumentOutOfRangeException(nameof(classification))
+        };
+        return new(
+            $"{CanonicalClassPrefix}{engine}:{multiplicity}",
+            classification.EngineType,
+            classification.Multiplicity);
+    }
+}
+
 public sealed record AircraftReferenceMetadata(
     string? IcaoTypeDesignator = null,
     string? IcaoManufacturer = null,

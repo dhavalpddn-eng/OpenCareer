@@ -50,6 +50,8 @@ public sealed class InstalledAircraftInventorySourceTests
                 "Alpha Aircraft",
                 new("icao-type:C172", "C172"),
                 new(AircraftEngineType.Piston, 1, AircraftEngineMultiplicity.Single),
+                new("icao-family:CESSNA/172%20SKYHAWK", "CESSNA", "172 SKYHAWK"),
+                new("powerplant-class:piston:single", AircraftEngineType.Piston, AircraftEngineMultiplicity.Single),
                 maximumPayloadPounds: 950,
                 maximumRangeNauticalMiles: 640,
                 seats: 4,
@@ -79,6 +81,8 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Alpha Aircraft", alpha.DisplayName);
         Assert.Equal("INSTALLED", alpha.InstallationText);
         Assert.Equal("ICAO type C172", alpha.TypeIdentityText);
+        Assert.Equal("CESSNA 172 SKYHAWK", alpha.FamilyIdentityText);
+        Assert.Equal("single-engine piston", alpha.PowerplantClassText);
         Assert.Equal("Single piston engine", alpha.PowerplantText);
         Assert.Equal("Maximum payload 950 lb", alpha.MaximumPayloadText);
         Assert.Equal("Maximum range 640 nm", alpha.MaximumRangeText);
@@ -92,6 +96,8 @@ public sealed class InstalledAircraftInventorySourceTests
 
         InstalledAircraftInventoryItem zulu = result.Aircraft[1];
         Assert.Equal("ICAO type unknown", zulu.TypeIdentityText);
+        Assert.Equal("ICAO family unknown", zulu.FamilyIdentityText);
+        Assert.Equal("Powerplant class unknown", zulu.PowerplantClassText);
         Assert.Equal("Powerplant unknown", zulu.PowerplantText);
         Assert.Equal("Maximum payload unknown", zulu.MaximumPayloadText);
         Assert.Equal("IFR capability unknown", zulu.IfrCapabilityText);
@@ -114,6 +120,8 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Exact Installed Title", item.DisplayName);
         Assert.Equal("Registry metadata unavailable", item.CapabilityText);
         Assert.Equal("ICAO type unknown", item.TypeIdentityText);
+        Assert.Equal("ICAO family unknown", item.FamilyIdentityText);
+        Assert.Equal("Powerplant class unknown", item.PowerplantClassText);
         Assert.Equal("Powerplant unknown", item.PowerplantText);
         Assert.Equal("Maximum payload unknown", item.MaximumPayloadText);
         Assert.Equal("Maximum range unknown", item.MaximumRangeText);
@@ -242,6 +250,8 @@ public sealed class InstalledAircraftInventorySourceTests
         string displayName,
         AircraftTypeIdentity? type,
         AircraftPowerplantClassification? powerplant,
+        AircraftFamilyIdentity? family = null,
+        AircraftPowerplantClassIdentity? powerplantClass = null,
         double? maximumPayloadPounds = null,
         double? maximumRangeNauticalMiles = null,
         int? seats = null,
@@ -260,7 +270,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Add(AircraftRegistryField.Pressurized, pressurized is not null);
         Add(AircraftRegistryField.RetractableGear, retractableGear is not null);
 
-        return new(
+        var resolution = new AircraftRegistryResolution(
             aircraftId,
             AircraftInstallationStatus.Installed,
             new(
@@ -285,6 +295,11 @@ public sealed class InstalledAircraftInventorySourceTests
                 AircraftRegistryField.Access
             ],
             provenance);
+        return resolution with
+        {
+            FamilyIdentity = family,
+            PowerplantClassIdentity = powerplantClass
+        };
 
         void Add(AircraftRegistryField field, bool hasValue)
         {

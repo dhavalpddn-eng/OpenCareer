@@ -116,7 +116,9 @@ public sealed record AircraftRegistryResolution(
     AircraftPowerplantClassification? PowerplantClassification,
     AircraftDispatchPerformanceProfile? DispatchPerformance,
     IReadOnlyList<AircraftRegistryField> UnresolvedCapabilityFields,
-    IReadOnlyDictionary<AircraftRegistryField, AircraftRegistryFieldProvenance> Provenance)
+    IReadOnlyDictionary<AircraftRegistryField, AircraftRegistryFieldProvenance> Provenance,
+    AircraftFamilyIdentity? FamilyIdentity = null,
+    AircraftPowerplantClassIdentity? PowerplantClassIdentity = null)
 {
     public bool HasCompleteCapabilityProfile => UnresolvedCapabilityFields.Count == 0;
 
@@ -278,6 +280,11 @@ public static class AircraftRegistryResolver
             ReferenceValue<AircraftReferenceMetadata>(
                 AircraftRegistryField.ReferenceMetadata);
 
+        AircraftPowerplantClassification? powerplantClassification =
+            AircraftPowerplantClassification.FromEvidence(
+                referenceMetadata?.EngineType,
+                capabilities.EngineCount);
+
         return new(
             canonicalId,
             items.Any(static item => item.IsInstalled)
@@ -287,12 +294,12 @@ public static class AircraftRegistryResolver
             ReferenceValue<AircraftRunwayPerformanceProfile>(AircraftRegistryField.RunwayPerformance),
             referenceMetadata,
             AircraftTypeIdentity.FromReferenceMetadata(referenceMetadata),
-            AircraftPowerplantClassification.FromEvidence(
-                referenceMetadata?.EngineType,
-                capabilities.EngineCount),
+            powerplantClassification,
             ReferenceValue<AircraftDispatchPerformanceProfile>(AircraftRegistryField.DispatchPerformance),
             unresolved,
-            provenance);
+            provenance,
+            AircraftFamilyIdentity.FromReferenceMetadata(referenceMetadata),
+            AircraftPowerplantClassIdentity.FromClassification(powerplantClassification));
 
         void Add(AircraftRegistryField field, FieldCandidate? candidate)
         {

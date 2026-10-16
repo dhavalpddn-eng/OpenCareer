@@ -16,6 +16,8 @@ public sealed record InstalledAircraftInventoryItem(
     string DisplayName,
     string InstallationText,
     string TypeIdentityText,
+    string FamilyIdentityText,
+    string PowerplantClassText,
     string PowerplantText,
     string CapabilityText,
     string FleetStatusText,
@@ -148,6 +150,14 @@ public sealed class InstalledAircraftInventorySource(
             ? $"ICAO type {type.IcaoTypeDesignator}"
             : "ICAO type unknown";
 
+        string familyIdentity = resolution?.FamilyIdentity is { } family
+            ? FormatFamilyIdentity(family)
+            : "ICAO family unknown";
+
+        string powerplantClass = resolution?.PowerplantClassIdentity is { } classIdentity
+            ? FormatPowerplantClass(classIdentity)
+            : "Powerplant class unknown";
+
         string powerplant = resolution?.PowerplantClassification is { } classification
             ? FormatPowerplant(classification)
             : "Powerplant unknown";
@@ -192,6 +202,8 @@ public sealed class InstalledAircraftInventorySource(
             displayName,
             "INSTALLED",
             typeIdentity,
+            familyIdentity,
+            powerplantClass,
             powerplant,
             capabilities,
             fleetStatus,
@@ -285,6 +297,37 @@ public sealed class InstalledAircraftInventorySource(
             AircraftEngineMultiplicity.Multi => $"{classification.EngineCount}-engine {engineType}",
             _ => throw new ArgumentOutOfRangeException(nameof(classification))
         };
+    }
+
+    private static string FormatFamilyIdentity(AircraftFamilyIdentity identity)
+    {
+        identity.Validate();
+        return $"{identity.IcaoManufacturer} {identity.IcaoModel}";
+    }
+
+    private static string FormatPowerplantClass(
+        AircraftPowerplantClassIdentity identity)
+    {
+        identity.Validate();
+
+        string engineType = identity.EngineType switch
+        {
+            AircraftEngineType.Piston => "piston",
+            AircraftEngineType.TurbopropOrTurboshaft => "turboprop/turboshaft",
+            AircraftEngineType.Jet => "jet",
+            AircraftEngineType.Electric => "electric",
+            AircraftEngineType.Rocket => "rocket",
+            AircraftEngineType.None => "unpowered",
+            _ => throw new ArgumentOutOfRangeException(nameof(identity))
+        };
+        string multiplicity = identity.Multiplicity switch
+        {
+            AircraftEngineMultiplicity.None => "none",
+            AircraftEngineMultiplicity.Single => "single-engine",
+            AircraftEngineMultiplicity.Multi => "multi-engine",
+            _ => throw new ArgumentOutOfRangeException(nameof(identity))
+        };
+        return $"{multiplicity} {engineType}";
     }
 
     private static string FormatOptionalNumber(

@@ -133,6 +133,11 @@ public class AircraftRegistryResolutionTests
             Assert.IsType<AircraftTypeIdentity>(result.TypeIdentity);
         Assert.Equal("icao-type:DA62", identity.CanonicalTypeId);
         Assert.Equal("DA62", identity.IcaoTypeDesignator);
+        AircraftFamilyIdentity family =
+            Assert.IsType<AircraftFamilyIdentity>(result.FamilyIdentity);
+        Assert.Equal("icao-family:DIAMOND/DA%2062", family.CanonicalFamilyId);
+        Assert.Equal("DIAMOND", family.IcaoManufacturer);
+        Assert.Equal("DA 62", family.IcaoModel);
     }
 
     [Fact]
@@ -151,6 +156,7 @@ public class AircraftRegistryResolutionTests
         ]);
 
         Assert.Null(result.TypeIdentity);
+        Assert.Null(result.FamilyIdentity);
     }
 
     [Fact]
@@ -185,6 +191,56 @@ public class AircraftRegistryResolutionTests
         Assert.Equal("icao-type:C172", results[0].TypeIdentity!.CanonicalTypeId);
     }
 
+    [Fact]
+    public void ExplicitManufacturerAndModelProduceStableFamilyWithoutMergingRecords()
+    {
+        IReadOnlyList<AircraftRegistryResolution> results =
+            AircraftRegistryResolver.ResolveAll(
+            [
+                Observation("cfg", "one", AircraftDataConfidence.Reference) with
+                {
+                    CanonicalAircraftId = "msfs-title:Family One",
+                    ReferenceMetadata = new(
+                        IcaoManufacturer: "  Diamond   Aircraft ",
+                        IcaoModel: " da 62 ")
+                },
+                Observation("cfg", "two", AircraftDataConfidence.Reference) with
+                {
+                    CanonicalAircraftId = "msfs-title:Family Two",
+                    ReferenceMetadata = new(
+                        IcaoManufacturer: "DIAMOND AIRCRAFT",
+                        IcaoModel: "DA 62")
+                }
+            ]);
+
+        Assert.Equal(2, results.Count);
+        Assert.NotEqual(results[0].CanonicalAircraftId, results[1].CanonicalAircraftId);
+        Assert.Equal(results[0].FamilyIdentity, results[1].FamilyIdentity);
+        Assert.Equal(
+            "icao-family:DIAMOND%20AIRCRAFT/DA%2062",
+            results[0].FamilyIdentity!.CanonicalFamilyId);
+    }
+
+    [Theory]
+    [InlineData(null, "DA 62")]
+    [InlineData("Diamond", null)]
+    public void IncompleteFamilyMetadataDoesNotFabricateFamilyIdentity(
+        string? manufacturer,
+        string? model)
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation("cfg", "family", AircraftDataConfidence.Reference) with
+            {
+                ReferenceMetadata = new(
+                    IcaoManufacturer: manufacturer,
+                    IcaoModel: model)
+            }
+        ]);
+
+        Assert.Null(result.FamilyIdentity);
+    }
+
     [Theory]
     [InlineData(AircraftEngineType.Piston, 1, AircraftEngineMultiplicity.Single)]
     [InlineData(AircraftEngineType.Piston, 2, AircraftEngineMultiplicity.Multi)]
@@ -215,6 +271,13 @@ public class AircraftRegistryResolutionTests
         Assert.Equal(engineType, classification.EngineType);
         Assert.Equal(engineCount, classification.EngineCount);
         Assert.Equal(expectedMultiplicity, classification.Multiplicity);
+        AircraftPowerplantClassIdentity classIdentity =
+            Assert.IsType<AircraftPowerplantClassIdentity>(
+                result.PowerplantClassIdentity);
+        Assert.StartsWith(
+            AircraftPowerplantClassIdentity.CanonicalClassPrefix,
+            classIdentity.CanonicalClassId,
+            StringComparison.Ordinal);
     }
 
     [Theory]
@@ -241,6 +304,7 @@ public class AircraftRegistryResolutionTests
             AircraftRegistryResolver.Resolve([observation]);
 
         Assert.Null(result.PowerplantClassification);
+        Assert.Null(result.PowerplantClassIdentity);
     }
 
     [Fact]

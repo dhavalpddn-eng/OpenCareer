@@ -82,6 +82,27 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <Grid ColumnSpacing="18">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="ICAO FAMILY"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding FamilyIdentityText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="POWERPLANT CLASS"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding PowerplantClassText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Grid>
+
                                 <TextBlock Text="{Binding CapabilityText}"
                                            Style="{StaticResource OpenCareerPaperBodyStyle}" />
                                 <Grid ColumnSpacing="18" RowSpacing="10">
