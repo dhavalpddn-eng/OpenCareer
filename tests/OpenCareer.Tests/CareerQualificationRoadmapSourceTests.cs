@@ -42,7 +42,7 @@ public sealed class CareerQualificationRoadmapSourceTests
         Assert.All(
             roadmap.Items.Skip(1),
             static item => Assert.Equal(CareerQualificationRoadmapStatus.Locked, item.Status));
-        Assert.Contains("only a future authoritative", roadmap.TrainingPolicyDetail, StringComparison.Ordinal);
+        Assert.Contains("authoritative qualification-specific", roadmap.TrainingPolicyDetail, StringComparison.Ordinal);
         Assert.Equal(0, store.SaveCount);
     }
 
