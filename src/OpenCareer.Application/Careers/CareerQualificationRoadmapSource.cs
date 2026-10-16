@@ -108,7 +108,8 @@ public sealed class CareerQualificationRoadmapSource
                     {
                         if (!_catalog.TryGet(
                                 prerequisite,
-                                out CivilianQualificationDefinition? required))
+                                out CivilianQualificationDefinition? required)
+                            || required is null)
                         {
                             throw new InvalidOperationException(
                                 $"Qualification prerequisite '{prerequisite.Value}' is not in the shared catalog.");

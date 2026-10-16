@@ -174,7 +174,8 @@ public sealed class CivilianQualificationAwardService
 
         if (!_catalog.TryGet(
                 evidence.TargetQualification,
-                out CivilianQualificationDefinition? definition))
+                out CivilianQualificationDefinition? definition)
+            || definition is null)
         {
             return Blocked(
                 evidence.TargetQualification,
