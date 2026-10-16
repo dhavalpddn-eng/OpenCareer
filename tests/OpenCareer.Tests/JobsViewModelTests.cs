@@ -231,6 +231,10 @@ public sealed class JobsViewModelTests
         await viewModel.SelectAircraftAsync(
             Assert.Single(viewModel.AircraftOptions).AircraftId);
 
+        var navigationTargets = new List<JobsNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
+
         JobOfferItemViewModel projected = Assert.Single(viewModel.Offers);
         Assert.Equal("Accept for Dispatch", projected.ActionButtonText);
 
@@ -238,7 +242,40 @@ public sealed class JobsViewModelTests
 
         Assert.Equal(1, action.AcceptCount);
         Assert.Equal(0, action.StartCount);
-        Assert.Contains("Open Dispatch", viewModel.AcceptanceStatus, StringComparison.Ordinal);
+        Assert.Contains("Dispatch is loading", viewModel.AcceptanceStatus, StringComparison.Ordinal);
+        Assert.Equal(
+            new[] { JobsNavigationTarget.Dispatch },
+            navigationTargets);
+    }
+
+    [Fact]
+    public async Task FailedAcceptanceDoesNotRequestDispatchNavigation()
+    {
+        JobMarketOfferDraft offer = Offer("KRME", "KSYR", locked: false);
+        var action = new FakeStartAction
+        {
+            ActionKind = CareerJobActionKind.AcceptForDispatch,
+            FailAcceptance = true
+        };
+        var viewModel = new JobsViewModel(
+            new FakeBoardStore(Board("KRME", offer)),
+            CareerRuntime("KRME"),
+            new FixedTimeProvider(Now),
+            new CareerJobAircraftSelectionSource(new FakeDiscovery()),
+            action,
+            logger: null);
+        var navigationTargets = new List<JobsNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
+
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync(
+            Assert.Single(viewModel.AircraftOptions).AircraftId);
+        await viewModel.StartOfferAsync(Assert.Single(viewModel.Offers).OfferId);
+
+        Assert.Equal(1, action.AcceptCount);
+        Assert.Empty(navigationTargets);
+        Assert.Contains("Job action failed", viewModel.AcceptanceStatus, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -768,6 +805,7 @@ public sealed class JobsViewModelTests
         public string? LastAircraftId { get; private set; }
         public CareerJobActionKind ActionKind { get; init; } =
             CareerJobActionKind.StartPreparedFlight;
+        public bool FailAcceptance { get; init; }
 
         public Func<Task>? BeforeRead { get; init; }
 
@@ -797,6 +835,10 @@ public sealed class JobsViewModelTests
             AcceptCount++;
             LastOfferId = offerId;
             LastAircraftId = aircraftId;
+
+            if (FailAcceptance)
+                throw new IOException("Synthetic acceptance failure.");
+
             return Task.FromResult<JobAcceptanceFleetResult>(null!);
         }
 

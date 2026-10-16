@@ -61,6 +61,7 @@ public sealed partial class MainWindow : Window
         ContentFrame.Navigate(typeof(DashboardPage), Dashboard);
 
         Dashboard.NavigationRequested += OnDashboardNavigationRequested;
+        Jobs.NavigationRequested += OnJobsNavigationRequested;
         Tutorial.PropertyChanged += OnTutorialPropertyChanged;
         Tutorial.NavigationRequested += OnTutorialNavigationRequested;
         Activated += OnWindowActivated;
@@ -90,6 +91,7 @@ public sealed partial class MainWindow : Window
         _lifetimeCts.Cancel();
         _statusTimer.Tick -= OnStatusTimerTick;
         Dashboard.NavigationRequested -= OnDashboardNavigationRequested;
+        Jobs.NavigationRequested -= OnJobsNavigationRequested;
         Tutorial.PropertyChanged -= OnTutorialPropertyChanged;
         Tutorial.NavigationRequested -= OnTutorialNavigationRequested;
         Activated -= OnWindowActivated;
@@ -233,6 +235,31 @@ public sealed partial class MainWindow : Window
 
         if (tag is null)
             return;
+
+        NavigationViewItem? item = NavView.MenuItems
+            .OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate =>
+                string.Equals(
+                    candidate.Tag?.ToString(),
+                    tag,
+                    StringComparison.Ordinal));
+
+        if (item is not null)
+            NavView.SelectedItem = item;
+    }
+
+    private void OnJobsNavigationRequested(
+        object? sender,
+        JobsNavigationRequestedEventArgs e)
+    {
+        string tag = e.Target switch
+        {
+            JobsNavigationTarget.Dispatch => "dispatch",
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(e),
+                e.Target,
+                "Unknown Jobs navigation target.")
+        };
 
         NavigationViewItem? item = NavView.MenuItems
             .OfType<NavigationViewItem>()

@@ -7,6 +7,18 @@ using OpenCareer.Domain.Careers;
 
 namespace OpenCareer.App.ViewModels;
 
+public enum JobsNavigationTarget
+{
+    Dispatch = 0
+}
+
+public sealed class JobsNavigationRequestedEventArgs(
+    JobsNavigationTarget target)
+    : EventArgs
+{
+    public JobsNavigationTarget Target { get; } = target;
+}
+
 public sealed class JobsViewModel : INotifyPropertyChanged
 {
     private readonly IJobBoardStateStore _jobBoards;
@@ -96,6 +108,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    public event EventHandler<JobsNavigationRequestedEventArgs>? NavigationRequested;
 
     public IReadOnlyList<JobOfferItemViewModel> Offers => _offers;
     public IReadOnlyList<CareerJobAircraftOption> AircraftOptions => _aircraftOptions;
@@ -431,8 +444,13 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
                 SetField(
                     ref _acceptanceStatus,
-                    "Job accepted and aircraft reserved. Open Dispatch, prepare the exact plan, then return to Jobs for authoritative start/recovery.",
+                    "Job accepted and aircraft reserved. Dispatch is loading the exact planning context; prepare the plan there, then return to Jobs for authoritative start/recovery.",
                     nameof(AcceptanceStatus));
+
+                NavigationRequested?.Invoke(
+                    this,
+                    new JobsNavigationRequestedEventArgs(
+                        JobsNavigationTarget.Dispatch));
                 return;
             }
 
