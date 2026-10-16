@@ -475,7 +475,8 @@ public sealed class SqliteJobContractStore : IJobContractStore
             right.WorldEventId,
             StringComparison.Ordinal)
         && left.GovernmentAuthorizationRequired
-            == right.GovernmentAuthorizationRequired;
+            == right.GovernmentAuthorizationRequired
+        && left.PlanningTerms == right.PlanningTerms;
 
     private static bool AllowedTransition(
         ContractStatus from,

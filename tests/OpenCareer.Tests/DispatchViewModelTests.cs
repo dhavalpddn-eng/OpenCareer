@@ -170,7 +170,9 @@ public sealed class DispatchViewModelTests
             "KJFK",
             "KBOS",
             "aircraft-b",
-            "contract:fixture:aircraft-v1"));
+            "contract:fixture:aircraft-v1",
+            RouteDistanceNauticalMiles: 187,
+            PayloadPounds: 245));
         var viewModel = new DispatchViewModel(
             Inventory(
                 Item("aircraft-a", "Alpha"),
@@ -184,6 +186,8 @@ public sealed class DispatchViewModelTests
         Assert.Equal("aircraft-b", viewModel.SelectedAircraftId);
         Assert.Equal("KJFK", viewModel.AcceptedOriginIcao);
         Assert.Equal("KBOS", viewModel.AcceptedDestinationIcao);
+        Assert.Equal("187", viewModel.AcceptedRouteDistanceText);
+        Assert.Equal("245", viewModel.AcceptedPayloadPoundsText);
         Assert.Equal("contract:fixture:aircraft-v1", planning.ReservationId);
 
         viewModel.SetSelectedAircraft("aircraft-a");

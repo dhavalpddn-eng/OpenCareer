@@ -318,6 +318,12 @@ public sealed class DevelopmentFlightTests
         JobContract development =
             JobContractFactory.Create(request);
 
+        JobContractPlanningTerms planning =
+            Assert.IsType<JobContractPlanningTerms>(
+                development.PlanningTerms);
+        Assert.Equal(offer.DistanceNm, planning.RouteDistanceNauticalMiles);
+        Assert.Equal(terms.PayloadPounds, planning.PayloadPounds);
+
         Assert.Equal(
             0m,
             development.Compensation.PilotCompensation);

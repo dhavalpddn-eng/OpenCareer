@@ -31,6 +31,8 @@ public sealed partial class DispatchPage : Page
             AircraftPicker.SelectedValue = viewModel.SelectedAircraftId;
             OriginIcaoBox.Text = viewModel.AcceptedOriginIcao ?? string.Empty;
             DestinationIcaoBox.Text = viewModel.AcceptedDestinationIcao ?? string.Empty;
+            PayloadPoundsBox.Text = viewModel.AcceptedPayloadPoundsText ?? string.Empty;
+            TotalRouteDistanceBox.Text = viewModel.AcceptedRouteDistanceText ?? string.Empty;
         }
         catch (OperationCanceledException)
             when (_navigationCts.IsCancellationRequested)

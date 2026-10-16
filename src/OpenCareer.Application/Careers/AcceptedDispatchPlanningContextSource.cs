@@ -20,7 +20,9 @@ public sealed record AcceptedDispatchPlanningContext(
     string? OriginIcao = null,
     string? DestinationIcao = null,
     string? CanonicalAircraftId = null,
-    string? ReservationId = null);
+    string? ReservationId = null,
+    double? RouteDistanceNauticalMiles = null,
+    double? PayloadPounds = null);
 
 public interface IAcceptedDispatchPlanningContextSource
 {
@@ -30,8 +32,8 @@ public interface IAcceptedDispatchPlanningContextSource
 
 /// <summary>
 /// Resolves the one persisted Accepted contract and its exact Fleet reservation.
-/// The contract does not persist payload, distance or fuel-planning inputs, so
-/// this source deliberately projects none of those values.
+/// New contracts may persist immutable payload and route distance. Legacy
+/// contracts and all fuel/performance inputs remain explicitly absent.
 /// </summary>
 public sealed class AcceptedDispatchPlanningContextSource(
     IJobContractRuntimeSource contracts,
@@ -90,7 +92,11 @@ public sealed class AcceptedDispatchPlanningContextSource(
                 contract.Kind,
                 contract.OriginIcao,
                 contract.DestinationIcao,
-                ReservationId: reservationId);
+                ReservationId: reservationId,
+                RouteDistanceNauticalMiles:
+                    contract.PlanningTerms?.RouteDistanceNauticalMiles,
+                PayloadPounds:
+                    contract.PlanningTerms?.PayloadPounds);
         }
 
         ownership.Validate();
@@ -105,12 +111,16 @@ public sealed class AcceptedDispatchPlanningContextSource(
 
         return new(
             AcceptedDispatchPlanningContextStatus.Ready,
-            "Accepted job route and reserved aircraft loaded. Payload, distance, cruise, fuel and reserve inputs remain explicit because the contract does not persist those planning values.",
+            contract.PlanningTerms is null
+                ? "Accepted legacy job route and reserved aircraft loaded. Payload and distance were not persisted; all planning values remain explicit."
+                : "Accepted job route, payload, distance and reserved aircraft loaded. Cruise, fuel, reserve and safety-margin inputs remain explicit.",
             contract.ContractId,
             contract.Kind,
             contract.OriginIcao,
             contract.DestinationIcao,
             ownership.CanonicalAircraftId,
-            reservationId);
+            reservationId,
+            contract.PlanningTerms?.RouteDistanceNauticalMiles,
+            contract.PlanningTerms?.PayloadPounds);
     }
 }

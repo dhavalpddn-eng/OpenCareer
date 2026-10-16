@@ -69,6 +69,36 @@ public sealed class SqliteJobContractStoreTests : IAsyncLifetime
         Assert.NotNull(loaded);
         Assert.Equal(0, loaded.Version);
         Assert.Equal(expected, loaded.Contract);
+        Assert.Null(loaded.Contract.PlanningTerms);
+    }
+
+    [Fact]
+    public async Task ImmutablePlanningTermsRoundTripAndCannotBeRewritten()
+    {
+        JobContract offered = CreateContract() with
+        {
+            PlanningTerms = new(
+                RouteDistanceNauticalMiles: 73.5,
+                PayloadPounds: 425)
+        };
+        offered.Validate();
+        SqliteJobContractStore store = CreateStore();
+        await store.CreateJobContractAsync(offered);
+
+        PersistedJobContract restarted = Assert.IsType<PersistedJobContract>(
+            await CreateStore().ReadJobContractAsync(offered.ContractId));
+        Assert.Equal(offered.PlanningTerms, restarted.Contract.PlanningTerms);
+
+        JobContract tampered = offered with
+        {
+            Status = ContractStatus.Accepted,
+            AcceptedAt = OfferedAt.AddMinutes(10),
+            PlanningTerms = offered.PlanningTerms! with { PayloadPounds = 426 }
+        };
+        tampered.Validate();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => store.UpdateJobContractAsync(tampered, expectedVersion: 0));
     }
 
     [Fact]

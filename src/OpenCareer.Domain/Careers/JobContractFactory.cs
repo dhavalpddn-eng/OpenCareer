@@ -262,7 +262,11 @@ public static class JobContractFactory
                 WorldEventId:
                     request.WorldEventId,
                 GovernmentAuthorizationRequired:
-                    request.GovernmentAuthorizationRequired);
+                    request.GovernmentAuthorizationRequired,
+                PlanningTerms:
+                    new JobContractPlanningTerms(
+                        offer.DistanceNm,
+                        request.PayloadPounds));
 
         contract.Validate();
         return contract;

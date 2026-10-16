@@ -47,6 +47,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         "Accepted-job dispatch context has not been loaded.";
     private string? _acceptedOriginIcao;
     private string? _acceptedDestinationIcao;
+    private string? _acceptedPayloadPoundsText;
+    private string? _acceptedRouteDistanceText;
     private string? _acceptedAircraftId;
     private string? _acceptedReservationId;
     private string _resultStatus = "NOT EVALUATED";
@@ -79,6 +81,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     public string AcceptedContextText => _acceptedContextText;
     public string? AcceptedOriginIcao => _acceptedOriginIcao;
     public string? AcceptedDestinationIcao => _acceptedDestinationIcao;
+    public string? AcceptedPayloadPoundsText => _acceptedPayloadPoundsText;
+    public string? AcceptedRouteDistanceText => _acceptedRouteDistanceText;
     public string ResultStatus => _resultStatus;
     public string ResultDetail => _resultDetail;
     public string FuelSummary => _fuelSummary;
@@ -253,6 +257,14 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             ref _acceptedDestinationIcao,
             context.DestinationIcao,
             nameof(AcceptedDestinationIcao));
+        SetField(
+            ref _acceptedPayloadPoundsText,
+            FormatOptionalInput(context.PayloadPounds),
+            nameof(AcceptedPayloadPoundsText));
+        SetField(
+            ref _acceptedRouteDistanceText,
+            FormatOptionalInput(context.RouteDistanceNauticalMiles),
+            nameof(AcceptedRouteDistanceText));
 
         _acceptedAircraftId =
             context.Status == AcceptedDispatchPlanningContextStatus.Ready
@@ -419,6 +431,9 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         string.IsNullOrWhiteSpace(value)
             ? null
             : ParseDouble(value, label);
+
+    private static string? FormatOptionalInput(double? value) =>
+        value?.ToString("0.###", CultureInfo.CurrentCulture);
 
     private static string FormatFuel(CompositeDispatchPlanningResult result)
     {

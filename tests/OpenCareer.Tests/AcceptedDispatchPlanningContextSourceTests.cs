@@ -94,7 +94,9 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
         Assert.Equal(ContractKind.Ferry, result.Kind);
         Assert.Equal("aircraft-a", result.CanonicalAircraftId);
         Assert.Equal(reservationId, result.ReservationId);
-        Assert.Contains("Payload, distance", result.Detail, StringComparison.Ordinal);
+        Assert.Equal(187, result.RouteDistanceNauticalMiles);
+        Assert.Equal(245, result.PayloadPounds);
+        Assert.Contains("payload, distance", result.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -137,7 +139,10 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
                 : null,
             StartedAt: status == ContractStatus.InProgress
                 ? now.AddMinutes(-10)
-                : null);
+                : null,
+            PlanningTerms: new(
+                RouteDistanceNauticalMiles: 187,
+                PayloadPounds: 245));
         contract.Validate();
         return new(contract, 0);
     }
