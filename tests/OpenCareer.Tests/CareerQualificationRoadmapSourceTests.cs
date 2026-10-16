@@ -104,6 +104,34 @@ public sealed class CareerQualificationRoadmapSourceTests
         Assert.Equal(0, store.SaveCount);
     }
 
+    [Fact]
+    public async Task RoadmapPreservesExactSharedCatalogDefinitions()
+    {
+        var store = new FakeStore(Record(PilotQualificationState.Entry));
+        var catalog = CivilianQualificationCatalog.Default;
+        var source = new CareerQualificationRoadmapSource(
+            new PlayerCareerRuntimeState(store),
+            catalog);
+
+        CareerQualificationRoadmap roadmap =
+            Assert.IsType<CareerQualificationRoadmap>(await source.ReadAsync());
+
+        Assert.Equal(
+            catalog.Definitions.Select(static definition =>
+                (definition.Sequence,
+                 definition.Identity,
+                 definition.Title,
+                 definition.Description,
+                 Prerequisites: string.Join("|", definition.Prerequisites.Select(static prerequisite => prerequisite.Value)))),
+            roadmap.Items.Select(static item =>
+                (item.Sequence,
+                 item.Identity,
+                 item.Title,
+                 item.Description,
+                 Prerequisites: string.Join("|", item.Prerequisites.Select(static prerequisite => prerequisite.Identity.Value)))));
+        Assert.Equal(0, store.SaveCount);
+    }
+
     private static CareerQualificationRoadmapSource Source(
         FakeStore store) =>
         new(new PlayerCareerRuntimeState(store));

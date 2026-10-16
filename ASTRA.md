@@ -43,14 +43,14 @@ Windows app stays authoritative. See `docs/efb-integration.md`.
 The first C172/KJFK full-stop playable loop is live accepted at `f2acb367`; this is not universal aircraft/mission acceptance. Touch-and-go/go-around evidence, active-session aircraft-mismatch enforcement, simulation-rate/night/actual-instrument accounting, 1/3/6-hour replay and mid-terminal automatic restart resumption are implemented and CI-covered, but the newer simulator-sensitive paths are not broadly live accepted. Keep broader aircraft calibration and paid non-development job validation open.
 
 ## Civilian qualification roadmap
-The initial MBL-13 roadmap is implemented as one read-only application authority: Student -> Private -> Commercial -> Airline Transport licenses and the existing airplane single-engine land, multi-engine land and instrument ratings. Career projects persisted Earned / Available / Locked state, next eligible qualifications and unmet prerequisites. Availability means prerequisites are met, not that training is complete. No UI action awards qualifications, no free-training entitlement is claimed, and the existing monotonic qualification coordinator remains the only current mutation boundary. Authoritative training missions/completion evidence and award orchestration remain open.
+The initial MBL-13 roadmap and award boundary share one deterministic catalog: Student -> Private -> Commercial -> Airline Transport licenses and the existing airplane single-engine land, multi-engine land and instrument ratings. Career projects persisted Earned / Available / Locked state, next eligible qualifications and unmet prerequisites. The award service accepts only a stable evidence identity, retrieves immutable completion evidence through an authority interface, validates career/target/prerequisites, derives the next state internally and delegates persistence to the monotonic qualification coordinator. Production evidence is explicitly unavailable, Career remains read-only, and no free-training entitlement is claimed. Authoritative civilian training missions and their completion-evidence source remain open.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition job through dispatch, settlement, Logbook, location and restart replay.
 2. Live-validate the implemented aircraft-mismatch, touch-and-go/go-around, simulation-rate, night and actual-instrument paths on representative sessions; do not rebuild them.
 3. Expand registry/capability/job breadth; Dashboard already projects authoritative eligible offers and must not add ranking/pay until those inputs exist.
 4. Extend checklist bindings only if a supported active-profile assignment authority becomes available; otherwise continue specialized-mission work through its prerequisites without parsing undocumented MSFS files or rebuilding completed foundations.
-5. Build authoritative civilian training/completion evidence before connecting any qualification award action to the MBL-13 roadmap.
+5. Build authoritative civilian training missions and connect their real completion-evidence source; do not add UI-controlled qualification grants.
 
 **Do not:** merge PR/main without explicit approval; expand finance/dealers before playable flight core; let AI/cloud become gameplay authority.
 

@@ -316,7 +316,10 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Define one deterministic initial civilian qualification roadmap for Student, Private, Commercial and Airline Transport licenses plus existing airplane ratings.
 - [x] Project persisted qualifications as Earned / Available / Locked with explicit prerequisites through a read-only application source and Career UI.
 - [x] Preserve monotonic qualification updates and prevent roadmap/UI reads from awarding qualifications.
-- [ ] Implement authoritative training missions/completion evidence and qualification award orchestration; no free-training entitlement is currently established.
+- [x] Extract roadmap identities, ordering and prerequisites into one deterministic catalog reusable by roadmap and award orchestration.
+- [x] Add a fail-closed evidence-to-award boundary that accepts only stable evidence identity, rechecks career/target/prerequisites and persists solely through the monotonic qualification coordinator.
+- [x] Keep the production civilian training evidence source explicitly unavailable rather than synthesizing completion.
+- [ ] Implement authoritative civilian training missions and connect their real completion-evidence source; no free-training entitlement is currently established.
 - [x] Home-airport selection foundation.
 - [x] Persist player location/home base.
 - [x] Build deterministic board refill foundation; authoritative market-demand integration remains open.
