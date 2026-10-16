@@ -37,6 +37,58 @@ public sealed record AircraftReferenceMetadata(
     }
 }
 
+/// <summary>
+/// Stable cross-variation aircraft type identity derived only from an explicit
+/// ICAO type designator. It does not merge canonical installed-aircraft records
+/// or infer a type from display names.
+/// </summary>
+public sealed record AircraftTypeIdentity(
+    string CanonicalTypeId,
+    string IcaoTypeDesignator)
+{
+    public const string CanonicalTypePrefix = "icao-type:";
+
+    public static AircraftTypeIdentity? FromReferenceMetadata(
+        AircraftReferenceMetadata? metadata)
+    {
+        if (metadata is null)
+            return null;
+
+        metadata.Validate();
+
+        if (string.IsNullOrWhiteSpace(metadata.IcaoTypeDesignator))
+            return null;
+
+        string designator = metadata.IcaoTypeDesignator
+            .Trim()
+            .ToUpperInvariant();
+        var identity = new AircraftTypeIdentity(
+            CanonicalTypePrefix + designator,
+            designator);
+
+        identity.Validate();
+        return identity;
+    }
+
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(CanonicalTypeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(IcaoTypeDesignator);
+
+        string designator = IcaoTypeDesignator.Trim().ToUpperInvariant();
+        if (!string.Equals(IcaoTypeDesignator, designator, StringComparison.Ordinal)
+            || !string.Equals(
+                CanonicalTypeId,
+                CanonicalTypePrefix + designator,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "Aircraft type identity must use its normalized ICAO type designator.");
+        }
+
+    }
+}
+
 public static class AircraftCanonicalIdentity
 {
     public const string MsfsTitlePrefix = "msfs-title:";

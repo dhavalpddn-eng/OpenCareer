@@ -112,6 +112,80 @@ public class AircraftRegistryResolutionTests
     }
 
     [Fact]
+    public void ExplicitIcaoDesignatorProducesStableNormalizedTypeIdentity()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "local-config",
+                record: "da62",
+                confidence: AircraftDataConfidence.Reference)
+            with
+            {
+                ReferenceMetadata = new(
+                    IcaoTypeDesignator: " da62 ",
+                    IcaoManufacturer: " DIAMOND ",
+                    IcaoModel: " DA 62 ")
+            }
+        ]);
+
+        AircraftTypeIdentity identity =
+            Assert.IsType<AircraftTypeIdentity>(result.TypeIdentity);
+        Assert.Equal("icao-type:DA62", identity.CanonicalTypeId);
+        Assert.Equal("DA62", identity.IcaoTypeDesignator);
+    }
+
+    [Fact]
+    public void ModelWithoutIcaoDesignatorDoesNotFabricateTypeIdentity()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "local-config",
+                record: "model-only",
+                confidence: AircraftDataConfidence.Reference)
+            with
+            {
+                ReferenceMetadata = new(IcaoModel: "Similar Looking Model")
+            }
+        ]);
+
+        Assert.Null(result.TypeIdentity);
+    }
+
+    [Fact]
+    public void VariationsCanShareTypeIdentityWithoutMergingAircraftRecords()
+    {
+        IReadOnlyList<AircraftRegistryResolution> results =
+            AircraftRegistryResolver.ResolveAll(
+            [
+                Observation("cfg", "classic", AircraftDataConfidence.Reference)
+                    with
+                    {
+                        CanonicalAircraftId = "msfs-title:C172 Classic",
+                        ReferenceMetadata = new(
+                            IcaoTypeDesignator: "C172",
+                            IcaoManufacturer: "Cessna",
+                            IcaoModel: "172 Skyhawk")
+                    },
+                Observation("cfg", "glass", AircraftDataConfidence.Reference)
+                    with
+                    {
+                        CanonicalAircraftId = "msfs-title:C172 Glass Cockpit",
+                        ReferenceMetadata = new(
+                            IcaoTypeDesignator: "c172",
+                            IcaoManufacturer: "CESSNA AIRCRAFT",
+                            IcaoModel: "172S")
+                    }
+            ]);
+
+        Assert.Equal(2, results.Count);
+        Assert.NotEqual(results[0].CanonicalAircraftId, results[1].CanonicalAircraftId);
+        Assert.Equal(results[0].TypeIdentity, results[1].TypeIdentity);
+        Assert.Equal("icao-type:C172", results[0].TypeIdentity!.CanonicalTypeId);
+    }
+
+    [Fact]
     public void CompleteResolutionCreatesExistingRegistryRecordShape()
     {
         AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(

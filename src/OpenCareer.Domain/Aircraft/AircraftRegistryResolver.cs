@@ -112,6 +112,7 @@ public sealed record AircraftRegistryResolution(
     ResolvedAircraftCapabilities CapabilityValues,
     AircraftRunwayPerformanceProfile? RunwayPerformance,
     AircraftReferenceMetadata? ReferenceMetadata,
+    AircraftTypeIdentity? TypeIdentity,
     AircraftDispatchPerformanceProfile? DispatchPerformance,
     IReadOnlyList<AircraftRegistryField> UnresolvedCapabilityFields,
     IReadOnlyDictionary<AircraftRegistryField, AircraftRegistryFieldProvenance> Provenance)
@@ -272,6 +273,10 @@ public static class AircraftRegistryResolver
             StructValue<bool>(AircraftRegistryField.Pressurized),
             StructValue<bool>(AircraftRegistryField.RetractableGear));
 
+        AircraftReferenceMetadata? referenceMetadata =
+            ReferenceValue<AircraftReferenceMetadata>(
+                AircraftRegistryField.ReferenceMetadata);
+
         return new(
             canonicalId,
             items.Any(static item => item.IsInstalled)
@@ -279,7 +284,8 @@ public static class AircraftRegistryResolver
                 : AircraftInstallationStatus.KnownOnly,
             capabilities,
             ReferenceValue<AircraftRunwayPerformanceProfile>(AircraftRegistryField.RunwayPerformance),
-            ReferenceValue<AircraftReferenceMetadata>(AircraftRegistryField.ReferenceMetadata),
+            referenceMetadata,
+            AircraftTypeIdentity.FromReferenceMetadata(referenceMetadata),
             ReferenceValue<AircraftDispatchPerformanceProfile>(AircraftRegistryField.DispatchPerformance),
             unresolved,
             provenance);
