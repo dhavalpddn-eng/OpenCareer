@@ -4,6 +4,7 @@ using OpenCareer.Application.Economy;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Economy;
@@ -254,7 +255,8 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
             new CareerFlightFinalizationCoordinator(
                 release,
                 flightPersistence,
-                sessions);
+                sessions,
+                new EmptyPreparedPlanStore());
 
         var workflow =
             new CareerFlightTerminalWorkflowCoordinator(
@@ -872,6 +874,28 @@ public sealed class CareerFlightTerminalWorkflowCoordinatorTests
             ClearCount++;
             Checkpoint =
                 null;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class EmptyPreparedPlanStore
+        : IPreparedDispatchPlanStore
+    {
+        public Task<PreparedDispatchPlan?> ReadAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<PreparedDispatchPlan?>(null);
+
+        public Task<PreparedDispatchPlanSaveResult> SaveAsync(
+            PreparedDispatchPlan plan,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task ClearAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.CompletedTask;
         }
     }

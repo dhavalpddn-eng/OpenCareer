@@ -674,7 +674,8 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Persist immutable accepted offer distance/payload in the `JobContract` JSON, project it to Dispatch after restart, and keep legacy missing terms explicit.
 - [x] Replace free-form Dispatch cruise/fuel indexes with selected-aircraft registry profile choices that require complete TAS, fuel-consumption and matching fuel-density evidence; require explicit selection and clear it on aircraft change.
 - [x] Derive and display the shared weight/ISA/altitude envelope for each selectable cruise profile, exclude disjoint profiles, and reject out-of-envelope conditions before dispatch evaluation.
-- [ ] Persist or derive authoritative cruise/fuel/reserve/safety-margin planning inputs, refine accepted-operation navigation/status, and clear/archive prepared-plan records at the appropriate terminal lifecycle boundary.
+- [x] Clear prepared-plan records idempotently at authoritative successful-finalization and abandonment boundaries, retaining retry safety across partial cleanup failures.
+- [ ] Persist or derive authoritative cruise/fuel/reserve/safety-margin planning inputs and refine accepted-operation navigation/status.
 - [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.
 - [ ] Implement Map / World screen against real world state.
 - [x] Implement read-only Aircraft screen against installed discovery, registry enrichment and authoritative Fleet availability/reservation state, with explicit unknown capability/access state and no ownership inference.

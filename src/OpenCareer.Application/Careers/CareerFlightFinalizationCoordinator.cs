@@ -1,5 +1,6 @@
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Logbook;
 
@@ -20,12 +21,14 @@ public sealed class CareerFlightFinalizationCoordinator
     private readonly CareerFlightReservationReleaseCoordinator _reservationRelease;
     private readonly FlightSessionPersistenceService _flightPersistence;
     private readonly FlightSessionCoordinator _flightSessions;
+    private readonly IPreparedDispatchPlanStore _preparedPlans;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public CareerFlightFinalizationCoordinator(
         CareerFlightReservationReleaseCoordinator reservationRelease,
         FlightSessionPersistenceService flightPersistence,
-        FlightSessionCoordinator flightSessions)
+        FlightSessionCoordinator flightSessions,
+        IPreparedDispatchPlanStore preparedPlans)
     {
         _reservationRelease =
             reservationRelease
@@ -36,6 +39,9 @@ public sealed class CareerFlightFinalizationCoordinator
         _flightSessions =
             flightSessions
             ?? throw new ArgumentNullException(nameof(flightSessions));
+        _preparedPlans =
+            preparedPlans
+            ?? throw new ArgumentNullException(nameof(preparedPlans));
     }
 
     public async Task<CareerFlightFinalizationResult> FinalizeAsync(
@@ -83,6 +89,12 @@ public sealed class CareerFlightFinalizationCoordinator
 
             if (current is null)
             {
+                await _preparedPlans
+                    .ClearAsync(
+                        contractId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
                 return new(
                     CareerFlightFinalizationStatus.AlreadyFinalized,
                     release);
@@ -95,6 +107,12 @@ public sealed class CareerFlightFinalizationCoordinator
 
             await _flightPersistence
                 .ClearTerminalAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            await _preparedPlans
+                .ClearAsync(
+                    contractId,
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             return new(

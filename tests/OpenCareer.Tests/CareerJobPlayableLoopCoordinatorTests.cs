@@ -503,7 +503,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                     fleet,
                     fleet),
                 flightPersistence,
-                sessions);
+                sessions,
+                new EmptyPreparedPlanStore());
 
         var terminal =
             new CareerFlightTerminalWorkflowCoordinator(
@@ -1339,6 +1340,28 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                 ClearCount++;
             }
 
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class EmptyPreparedPlanStore
+        : IPreparedDispatchPlanStore
+    {
+        public Task<PreparedDispatchPlan?> ReadAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<PreparedDispatchPlan?>(null);
+
+        public Task<PreparedDispatchPlanSaveResult> SaveAsync(
+            PreparedDispatchPlan plan,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task ClearAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.CompletedTask;
         }
     }

@@ -3,6 +3,7 @@ using OpenCareer.Application.Careers;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Logbook;
+using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Logbook;
@@ -48,6 +49,8 @@ public sealed class CareerFlightFinalizationCoordinatorTests
         Assert.Equal(
             1,
             context.Fleet.ReleaseCount);
+        Assert.False(context.PreparedPlans.HasPlan);
+        Assert.Equal(1, context.PreparedPlans.ClearCount);
     }
 
     [Fact]
@@ -78,6 +81,8 @@ public sealed class CareerFlightFinalizationCoordinatorTests
         Assert.Equal(
             0,
             context.Store.ClearCount);
+        Assert.True(context.PreparedPlans.HasPlan);
+        Assert.Equal(0, context.PreparedPlans.ClearCount);
     }
 
     [Fact]
@@ -132,6 +137,43 @@ public sealed class CareerFlightFinalizationCoordinatorTests
         Assert.Equal(
             1,
             context.Fleet.ReleaseCount);
+        Assert.False(context.PreparedPlans.HasPlan);
+        Assert.Equal(1, context.PreparedPlans.ClearCount);
+    }
+
+    [Fact]
+    public async Task PreparedPlanClearFailureRecoversAfterTerminalCheckpointCleared()
+    {
+        LogbookEntry entry = CareerEntry();
+        TestContext context = CreateContext(entry);
+        context.PreparedPlans.FailNextClear = true;
+
+        await Assert.ThrowsAsync<IOException>(
+            () => context.Finalizer.FinalizeAsync(
+                new LogbookAppendResult(
+                    LogbookAppendDisposition.Appended,
+                    entry),
+                AppliedProfile(entry)));
+
+        Assert.Null(context.Store.Checkpoint);
+        Assert.Null(context.Sessions.Current);
+        Assert.True(context.PreparedPlans.HasPlan);
+        Assert.Equal(1, context.Fleet.ReleaseCount);
+
+        CareerFlightFinalizationResult retry =
+            await context.Finalizer.FinalizeAsync(
+                new LogbookAppendResult(
+                    LogbookAppendDisposition.AlreadyExists,
+                    entry),
+                AppliedProfile(entry));
+
+        Assert.Equal(
+            CareerFlightFinalizationStatus.AlreadyFinalized,
+            retry.Status);
+        Assert.False(context.PreparedPlans.HasPlan);
+        Assert.Equal(2, context.PreparedPlans.ClearCount);
+        Assert.Equal(1, context.Store.ClearCount);
+        Assert.Equal(1, context.Fleet.ReleaseCount);
     }
 
     [Fact]
@@ -218,7 +260,8 @@ public sealed class CareerFlightFinalizationCoordinatorTests
                     fleet,
                     fleet),
                 persistence,
-                sessions);
+                sessions,
+                new MemoryPreparedPlanStore());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => finalizer.FinalizeAsync(
@@ -274,19 +317,24 @@ public sealed class CareerFlightFinalizationCoordinatorTests
                 sessions,
                 store);
 
+        var preparedPlans =
+            new MemoryPreparedPlanStore();
+
         var finalizer =
             new CareerFlightFinalizationCoordinator(
                 new CareerFlightReservationReleaseCoordinator(
                     fleet,
                     fleet),
                 persistence,
-                sessions);
+                sessions,
+                preparedPlans);
 
         return new(
             finalizer,
             fleet,
             store,
-            sessions);
+            sessions,
+            preparedPlans);
     }
 
     private static PlayerCareerProfileStoreRecord AppliedProfile(
@@ -569,7 +617,8 @@ public sealed class CareerFlightFinalizationCoordinatorTests
         CareerFlightFinalizationCoordinator Finalizer,
         FakeFleet Fleet,
         MemoryStore Store,
-        FlightSessionCoordinator Sessions);
+        FlightSessionCoordinator Sessions,
+        MemoryPreparedPlanStore PreparedPlans);
 
     private sealed class FakeFleet(
         AircraftReservationOwnership? ownership)
@@ -670,6 +719,43 @@ public sealed class CareerFlightFinalizationCoordinatorTests
 
             Checkpoint =
                 null;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class MemoryPreparedPlanStore
+        : IPreparedDispatchPlanStore
+    {
+        public bool HasPlan { get; private set; } = true;
+
+        public int ClearCount { get; private set; }
+
+        public bool FailNextClear { get; set; }
+
+        public Task<PreparedDispatchPlan?> ReadAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<PreparedDispatchPlanSaveResult> SaveAsync(
+            PreparedDispatchPlan plan,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task ClearAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ClearCount++;
+
+            if (FailNextClear)
+            {
+                FailNextClear = false;
+                throw new IOException("Synthetic prepared-plan clear failure.");
+            }
+
+            HasPlan = false;
             return Task.CompletedTask;
         }
     }

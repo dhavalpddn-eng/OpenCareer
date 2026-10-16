@@ -701,11 +701,12 @@ public sealed class KjfkPlayableLoopCertificationTests
             var dispatch = new OperationDispatchPlanningService(_registry, airports, aircraftAvailability: Fleet);
             var acceptance = new JobOfferAcceptanceService(ContractStore, lifecycle, boards, Contracts);
             var fleetBridge = new JobAcceptanceFleetBridge(acceptance, ContractStore, new AircraftReservationCoordinator(_registry, Fleet));
+            var preparedPlans = new SqlitePreparedDispatchPlanStore(options);
             var terminal = new CareerFlightTerminalWorkflowCoordinator(
                 new SettlementPendingContractCoordinator(new EconomySettlementService(ContractStore, Ledger)),
                 new SettledJobLogbookCoordinator(Sessions, new LogbookCommitCoordinator(Logbook)), Logbook,
                 new CareerLogbookExperienceCoordinator(new PlayerCareerExperienceCoordinator(Profiles, _career, ContractStore)),
-                location, new CareerFlightFinalizationCoordinator(new CareerFlightReservationReleaseCoordinator(Fleet, Fleet), Persistence, Sessions));
+                location, new CareerFlightFinalizationCoordinator(new CareerFlightReservationReleaseCoordinator(Fleet, Fleet), Persistence, Sessions, preparedPlans));
             var terminalRecovery = new SqliteCareerJobTerminalRecoveryStore(options);
             Loop = new(new AcceptedJobDispatchBridge(fleetBridge, dispatch),
                 new AcceptedJobFlightSessionBridge(new AcceptedJobStartBridge(lifecycle), ContractStore, Persistence, Sessions),
@@ -722,7 +723,7 @@ public sealed class KjfkPlayableLoopCertificationTests
                 [new StandardPointToPointMissionCompletionSource(airports, StandardPointToPointMissionPolicy.Default)],
                 [new PersistedFlightSettlementCostsSource([new EmployerCoveredOperatingCostQuoteSource()])]);
             Completion = new(CompletionInputs, Loop);
-            Abandon = new(Sessions, Persistence, ContractStore, lifecycle, Contracts, Fleet, Fleet, clock,
+            Abandon = new(Sessions, Persistence, ContractStore, lifecycle, Contracts, Fleet, Fleet, preparedPlans, clock,
                 NullLogger<CareerFlightAbandonCoordinator>.Instance);
             Shell = new(connection, telemetry, new TestSettings(), Sessions, Persistence,
                 new CareerJobPlayableLoopReadinessSource(Sessions, Contracts, Evidence), Completion, Abandon,

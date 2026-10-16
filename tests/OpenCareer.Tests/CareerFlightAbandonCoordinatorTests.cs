@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
@@ -77,9 +78,12 @@ public sealed class CareerFlightAbandonCoordinatorTests
                 "session-cancelled",
                 "contract-cancelled",
                 "reservation-released",
+                "prepared-plan-cleared",
                 "checkpoint-cleared"
             },
             fixture.Trace);
+        Assert.False(fixture.PreparedPlans.HasPlan);
+        Assert.Equal(1, fixture.PreparedPlans.ClearCount);
     }
 
     [Fact]
@@ -98,6 +102,8 @@ public sealed class CareerFlightAbandonCoordinatorTests
             fixture.Fleet.ReleaseCount;
         int clears =
             fixture.Checkpoints.ClearCount;
+        int planClears =
+            fixture.PreparedPlans.ClearCount;
 
         CareerFlightAbandonResult replay =
             await fixture.Action.AbandonAsync(
@@ -110,6 +116,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
         Assert.Equal(contractUpdates, fixture.Contracts.UpdateCount);
         Assert.Equal(releases, fixture.Fleet.ReleaseCount);
         Assert.Equal(clears, fixture.Checkpoints.ClearCount);
+        Assert.Equal(planClears, fixture.PreparedPlans.ClearCount);
     }
 
     [Fact]
@@ -181,6 +188,8 @@ public sealed class CareerFlightAbandonCoordinatorTests
             ContractStatus.Cancelled,
             fixture.Contracts.Current.Contract.Status);
         Assert.Equal(1, fixture.Fleet.ReleaseCount);
+        Assert.False(fixture.PreparedPlans.HasPlan);
+        Assert.Equal(1, fixture.PreparedPlans.ClearCount);
 
         CareerFlightAbandonResult retry =
             await fixture.Action.AbandonAsync(
@@ -191,6 +200,38 @@ public sealed class CareerFlightAbandonCoordinatorTests
         Assert.True(retry.ContractWasAlreadyCancelled);
         Assert.True(retry.ReservationWasAlreadyReleased);
         Assert.Equal(1, fixture.Fleet.ReleaseCount);
+        Assert.Equal(2, fixture.PreparedPlans.ClearCount);
+        Assert.Null(fixture.Sessions.Current);
+        Assert.Null(fixture.Checkpoints.Checkpoint);
+    }
+
+    [Fact]
+    public async Task PreparedPlanClearFailureRetainsTerminalCheckpointForRetry()
+    {
+        Fixture fixture = await Fixture.CreateAsync();
+        fixture.PreparedPlans.FailNextClear = true;
+
+        await Assert.ThrowsAsync<IOException>(
+            () => fixture.Action.AbandonAsync(
+                fixture.SessionId,
+                fixture.ContractId));
+
+        Assert.NotNull(fixture.Sessions.Current);
+        Assert.NotNull(fixture.Checkpoints.Checkpoint);
+        Assert.True(fixture.PreparedPlans.HasPlan);
+        Assert.Equal(1, fixture.Fleet.ReleaseCount);
+
+        CareerFlightAbandonResult retry =
+            await fixture.Action.AbandonAsync(
+                fixture.SessionId,
+                fixture.ContractId);
+
+        Assert.Equal(CareerFlightAbandonStatus.Abandoned, retry.Status);
+        Assert.True(retry.SessionWasAlreadyCancelled);
+        Assert.True(retry.ContractWasAlreadyCancelled);
+        Assert.True(retry.ReservationWasAlreadyReleased);
+        Assert.False(fixture.PreparedPlans.HasPlan);
+        Assert.Equal(2, fixture.PreparedPlans.ClearCount);
         Assert.Null(fixture.Sessions.Current);
         Assert.Null(fixture.Checkpoints.Checkpoint);
     }
@@ -221,6 +262,8 @@ public sealed class CareerFlightAbandonCoordinatorTests
         Assert.Equal(0, fixture.Contracts.UpdateCount);
         Assert.Equal(0, fixture.Fleet.ReleaseCount);
         Assert.Equal(0, fixture.Checkpoints.ClearCount);
+        Assert.True(fixture.PreparedPlans.HasPlan);
+        Assert.Equal(0, fixture.PreparedPlans.ClearCount);
         Assert.Equal(
             FlightSessionStatus.Active,
             fixture.Sessions.Current!.Status);
@@ -308,6 +351,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
             {
                 "contract-cancelled",
                 "reservation-released",
+                "prepared-plan-cleared",
                 "checkpoint-cleared"
             },
             fixture.Trace);
@@ -521,6 +565,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
             FakeContractStore contracts,
             JobContractRuntimeState contractRuntime,
             FakeFleet fleet,
+            FakePreparedPlanStore preparedPlans,
             CareerFlightAbandonCoordinator action)
         {
             SessionId = sessionId;
@@ -534,6 +579,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
             Contracts = contracts;
             ContractRuntime = contractRuntime;
             Fleet = fleet;
+            PreparedPlans = preparedPlans;
             Action = action;
         }
 
@@ -548,6 +594,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
         public FakeContractStore Contracts { get; }
         public JobContractRuntimeState ContractRuntime { get; }
         public FakeFleet Fleet { get; }
+        public FakePreparedPlanStore PreparedPlans { get; }
         public CareerFlightAbandonCoordinator Action { get; }
 
         public static async Task<Fixture> CreateAsync(
@@ -617,6 +664,9 @@ public sealed class CareerFlightAbandonCoordinatorTests
                 "msfs-title:Cessna 208B Grand Caravan",
                 unrelatedReservationId);
 
+            var preparedPlans =
+                new FakePreparedPlanStore(trace);
+
             var action =
                 new CareerFlightAbandonCoordinator(
                     sessions,
@@ -627,6 +677,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
                     contractRuntime,
                     fleet,
                     fleet,
+                    preparedPlans,
                     new FixedTimeProvider(
                         Epoch.AddMinutes(30)),
                     NullLogger<CareerFlightAbandonCoordinator>.Instance);
@@ -643,6 +694,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
                 contracts,
                 contractRuntime,
                 fleet,
+                preparedPlans,
                 action);
         }
 
@@ -702,6 +754,45 @@ public sealed class CareerFlightAbandonCoordinatorTests
 
             Sessions.CommitPersisted(terminal);
             Checkpoints.Checkpoint = terminal;
+        }
+    }
+
+    private sealed class FakePreparedPlanStore(
+        List<string> trace)
+        : IPreparedDispatchPlanStore
+    {
+        public bool HasPlan { get; private set; } = true;
+
+        public int ClearCount { get; private set; }
+
+        public bool FailNextClear { get; set; }
+
+        public Task<PreparedDispatchPlan?> ReadAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<PreparedDispatchPlanSaveResult> SaveAsync(
+            PreparedDispatchPlan plan,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task ClearAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ClearCount++;
+
+            if (FailNextClear)
+            {
+                FailNextClear = false;
+                throw new IOException("Synthetic prepared-plan clear failure.");
+            }
+
+            HasPlan = false;
+            trace.Add("prepared-plan-cleared");
+            return Task.CompletedTask;
         }
     }
 

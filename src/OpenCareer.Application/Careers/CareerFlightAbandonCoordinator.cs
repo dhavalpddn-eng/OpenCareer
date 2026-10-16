@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Careers;
 using OpenCareer.Domain.Flights;
 
@@ -55,6 +56,7 @@ public sealed class CareerFlightAbandonCoordinator
     private readonly JobContractRuntimeState _contractRuntime;
     private readonly IAircraftReservationLookup _reservationLookup;
     private readonly IAircraftReservationStore _reservationStore;
+    private readonly IPreparedDispatchPlanStore _preparedPlans;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<CareerFlightAbandonCoordinator> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -67,6 +69,7 @@ public sealed class CareerFlightAbandonCoordinator
         JobContractRuntimeState contractRuntime,
         IAircraftReservationLookup reservationLookup,
         IAircraftReservationStore reservationStore,
+        IPreparedDispatchPlanStore preparedPlans,
         TimeProvider timeProvider,
         ILogger<CareerFlightAbandonCoordinator> logger)
     {
@@ -91,6 +94,9 @@ public sealed class CareerFlightAbandonCoordinator
         _reservationStore =
             reservationStore
             ?? throw new ArgumentNullException(nameof(reservationStore));
+        _preparedPlans =
+            preparedPlans
+            ?? throw new ArgumentNullException(nameof(preparedPlans));
         _timeProvider =
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -399,6 +405,12 @@ public sealed class CareerFlightAbandonCoordinator
                 interruptedDiscard
                     ? FlightSessionStatus.Interrupted
                     : FlightSessionStatus.Cancelled);
+
+            await _preparedPlans
+                .ClearAsync(
+                    expectedContractId,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             await _flightPersistence
                 .ClearTerminalAsync(
