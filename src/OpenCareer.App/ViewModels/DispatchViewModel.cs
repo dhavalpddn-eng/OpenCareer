@@ -226,6 +226,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                     profile.ProfileIndex,
                     profile.FuelTypeIndex,
                     profile.DisplayName,
+                    profile.Envelope,
                     profile.EvidenceDetail))
                 .ToArray(),
             nameof(CruiseProfileOptions));
@@ -459,12 +460,31 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             input.TotalRouteDistanceNauticalMiles,
             "Total route distance");
 
+        double plannedCruiseWeight = ParseDouble(
+            input.PlannedCruiseWeightPounds,
+            "Planned cruise weight");
+        double isaDeviation = ParseDouble(
+            input.IsaDeviationCelsius,
+            "ISA deviation");
+        double pressureAltitude = ParseDouble(
+            input.PressureAltitudeFeet,
+            "Pressure altitude");
+
+        if (!selectedProfile.Envelope.Contains(
+                plannedCruiseWeight,
+                isaDeviation,
+                pressureAltitude))
+        {
+            throw new ArgumentException(
+                "Cruise weight, ISA deviation and pressure altitude must be inside the selected profile's displayed common envelope.");
+        }
+
         var cruise = new CruisePerformancePlanningRequest(
             selectedProfile.ProfileIndex,
             selectedProfile.FuelTypeIndex,
-            ParseDouble(input.PlannedCruiseWeightPounds, "Planned cruise weight"),
-            ParseDouble(input.IsaDeviationCelsius, "ISA deviation"),
-            ParseDouble(input.PressureAltitudeFeet, "Pressure altitude"));
+            plannedCruiseWeight,
+            isaDeviation,
+            pressureAltitude);
 
         var routeFuel = new RouteFuelPlanningRequest(
             totalDistance,
@@ -651,6 +671,7 @@ public sealed record DispatchCruiseProfileOptionViewModel(
     int ProfileIndex,
     int FuelTypeIndex,
     string DisplayName,
+    DispatchCruiseProfileEnvelope Envelope,
     string EvidenceDetail);
 
 public sealed record DispatchIssueViewModel(

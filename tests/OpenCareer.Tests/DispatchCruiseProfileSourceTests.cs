@@ -12,7 +12,12 @@ public sealed class DispatchCruiseProfileSourceTests
             AircraftInstallationStatus.Installed,
             DispatchProfile(
                 [
-                    Profile(2, "Economy", 1, Grid(205), Grid(38)),
+                    Profile(
+                        2,
+                        "Economy",
+                        1,
+                        Grid([4000, 7000], 205),
+                        Grid([5000, 8000], 38)),
                     Profile(0, null, 0, Grid(190), Grid(32)),
                     Profile(1, "Missing fuel table", 0, Grid(195), null),
                     Profile(3, "Missing density", 3, Grid(210), Grid(42))
@@ -29,6 +34,9 @@ public sealed class DispatchCruiseProfileSourceTests
         Assert.Equal("Profile 0 · fuel type 0", result.Profiles[0].DisplayName);
         Assert.Equal("Economy · fuel type 1", result.Profiles[1].DisplayName);
         Assert.Contains("Verified", result.Profiles[0].EvidenceDetail, StringComparison.Ordinal);
+        Assert.Equal(5000, result.Profiles[1].Envelope.MinimumWeightPounds);
+        Assert.Equal(7000, result.Profiles[1].Envelope.MaximumWeightPounds);
+        Assert.Contains("common envelope", result.Profiles[1].EvidenceDetail, StringComparison.Ordinal);
         Assert.Contains("2 incomplete", result.Detail, StringComparison.Ordinal);
     }
 
@@ -54,6 +62,30 @@ public sealed class DispatchCruiseProfileSourceTests
             AircraftInstallationStatus.Installed,
             DispatchProfile(
                 [Profile(0, "Partial", 0, Grid(190), null)],
+                [new(0, 6)]));
+        var source = new DispatchCruiseProfileSource(
+            new StubRegistry(resolution));
+
+        DispatchCruiseProfileCatalog result = await source.ReadAsync(AircraftId);
+
+        Assert.Equal(
+            DispatchCruiseProfileCatalogStatus.NoUsableCruiseProfiles,
+            result.Status);
+        Assert.Empty(result.Profiles);
+    }
+
+    [Fact]
+    public async Task ProfilesWithoutACommonTableEnvelopeCannotBecomeSelectable()
+    {
+        AircraftRegistryResolution resolution = Resolution(
+            AircraftInstallationStatus.Installed,
+            DispatchProfile(
+                [Profile(
+                    0,
+                    "Disjoint",
+                    0,
+                    Grid([4000], 190),
+                    Grid([5000], 32))],
                 [new(0, 6)]));
         var source = new DispatchCruiseProfileSource(
             new StubRegistry(resolution));
@@ -140,11 +172,16 @@ public sealed class DispatchCruiseProfileSourceTests
         new(index, name, fuelType, null, tas, fuel);
 
     private static AircraftPerformanceGrid3D Grid(double value) =>
+        Grid([5000], value);
+
+    private static AircraftPerformanceGrid3D Grid(
+        IReadOnlyList<double> weights,
+        double value) =>
         new(
-            [5000],
+            weights,
             [0],
             [10000],
-            [value],
+            weights.Select(_ => value),
             AircraftPerformanceTemperatureAxisKind.IsaDeviationCelsius);
 
     private sealed class StubRegistry(AircraftRegistryResolution? resolution)

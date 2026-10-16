@@ -52,7 +52,7 @@ public sealed class DispatchViewModelTests
         var profiles = new StubProfiles(new(
             DispatchCruiseProfileCatalogStatus.Ready,
             "Authoritative profile available.",
-            [new(0, 0, "Economy · fuel type 0", "Registry evidence")]));
+            [new(0, 0, "Economy · fuel type 0", Envelope(), "Registry evidence")]));
         var viewModel = new DispatchViewModel(
             Inventory(
                 Item("aircraft-a", "Alpha"),
@@ -132,6 +132,25 @@ public sealed class DispatchViewModelTests
         Assert.Equal(0, planning.CallCount);
         Assert.Equal("INVALID INPUT", viewModel.ResultStatus);
         Assert.Contains("four letters", viewModel.ResultDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConditionsOutsideDisplayedEnvelopeDoNotCallPlanner()
+    {
+        var planning = new StubPlanning();
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            planning,
+            NoAcceptedContext());
+        await InitializeReadyAsync(viewModel);
+
+        await viewModel.EvaluateAsync(
+            ValidInput() with { PlannedCruiseWeightPounds = "9000" });
+
+        Assert.Equal(0, planning.CallCount);
+        Assert.Equal("INVALID INPUT", viewModel.ResultStatus);
+        Assert.Contains("displayed common envelope", viewModel.ResultDetail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -408,7 +427,21 @@ public sealed class DispatchViewModelTests
         new StubProfiles(new(
             DispatchCruiseProfileCatalogStatus.Ready,
             "1 authoritative profile available.",
-            [new(0, 0, "Economy · fuel type 0", "Profile 0 · Verified evidence")]));
+            [new(
+                0,
+                0,
+                "Economy · fuel type 0",
+                Envelope(),
+                "Profile 0 · Verified evidence")]));
+
+    private static DispatchCruiseProfileEnvelope Envelope() =>
+        new(
+            MinimumWeightPounds: 4000,
+            MaximumWeightPounds: 8000,
+            MinimumIsaDeviationCelsius: -20,
+            MaximumIsaDeviationCelsius: 20,
+            MinimumPressureAltitudeFeet: 0,
+            MaximumPressureAltitudeFeet: 30000);
 
     private static InstalledAircraftInventoryItem Item(
         string id,
