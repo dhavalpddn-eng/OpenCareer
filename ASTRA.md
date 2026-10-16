@@ -52,7 +52,7 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 
 - Code checkpoint: `61a13f03f19e97ff71988db19a2ac64651e35b29` on `feature/playable-loop-integration`.
 - MBL-08: Aircraft now displays typical cruise speed only with field provenance, including provider/confidence; absent or unproven speed remains unknown. This read-only value does not replace Dispatch performance profiles.
-- Focused inventory and ViewModel tests cover known speed, missing metadata and missing provenance. Automated verification is pending at checkpoint creation; inspect exact-commit CI before claiming a pass. Local test setup encountered an MSBuild process restriction; single-process retry is in progress.
+- Focused inventory and ViewModel tests cover known speed, missing metadata and missing provenance. Verification at code commit `61a13f0`: all 13 focused inventory/ViewModel tests passed locally with single-process MSBuild; exact-commit Linux CI passed. Windows CI is still pending and local visual acceptance has not run.
 - Push each coherent checkpoint and its verification/handoff updates promptly. Shell Git writes lack credentials in this session; the connected GitHub service successfully saved the code checkpoint.
 
 ## Next
