@@ -686,6 +686,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Project registry-proven payload/range, seats, IFR capability, pressurization and landing-gear facts individually on Aircraft; preserve each missing value as explicit unknown.
 - [x] Require per-field registry provenance before Aircraft displays a capability fact, show provider/confidence evidence, and fail unproven values closed to unknown.
 - [x] Project explicit MSFS cabin passenger capacity separately from crew-inclusive total seats; do not use it as passenger-job authority without the remaining seat/access requirements.
+- [x] Resolve cabin passenger capacity through a dedicated registry field with its own provider/confidence provenance; shared reference metadata alone is not capacity authority.
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.
