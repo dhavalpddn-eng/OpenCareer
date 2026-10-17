@@ -22,7 +22,8 @@ public enum AircraftRegistryField
     RunwayPerformance,
     ReferenceMetadata,
     DispatchPerformance,
-    PassengerCapacity
+    PassengerCapacity,
+    ObjectClass
 }
 
 public sealed record AircraftRegistryObservation(
@@ -45,7 +46,8 @@ public sealed record AircraftRegistryObservation(
     AircraftRunwayPerformanceProfile? RunwayPerformance = null,
     AircraftReferenceMetadata? ReferenceMetadata = null,
     AircraftDispatchPerformanceProfile? DispatchPerformance = null,
-    int? PassengerCapacity = null)
+    int? PassengerCapacity = null,
+    AircraftObjectClass? ObjectClass = null)
 {
     public void Validate()
     {
@@ -55,6 +57,9 @@ public sealed record AircraftRegistryObservation(
 
         if (!Enum.IsDefined(Confidence))
             throw new ArgumentOutOfRangeException(nameof(Confidence));
+
+        if (ObjectClass is { } objectClass && !Enum.IsDefined(objectClass))
+            throw new ArgumentOutOfRangeException(nameof(ObjectClass));
 
         if (DisplayName is not null && string.IsNullOrWhiteSpace(DisplayName))
             throw new ArgumentException("Display name must be non-empty when supplied.", nameof(DisplayName));
@@ -124,7 +129,8 @@ public sealed record AircraftRegistryResolution(
     IReadOnlyList<AircraftRegistryField> UnresolvedCapabilityFields,
     IReadOnlyDictionary<AircraftRegistryField, AircraftRegistryFieldProvenance> Provenance,
     AircraftFamilyIdentity? FamilyIdentity = null,
-    AircraftPowerplantClassIdentity? PowerplantClassIdentity = null)
+    AircraftPowerplantClassIdentity? PowerplantClassIdentity = null,
+    AircraftObjectClass? ObjectClass = null)
 {
     public bool HasCompleteCapabilityProfile => UnresolvedCapabilityFields.Count == 0;
 
@@ -257,6 +263,9 @@ public static class AircraftRegistryResolver
         Add(
             AircraftRegistryField.PassengerCapacity,
             Select(items, static item => item.PassengerCapacity));
+        Add(
+            AircraftRegistryField.ObjectClass,
+            Select(items, static item => item.ObjectClass));
 
         AircraftRegistryField[] unresolved = RequiredCapabilityFields
             .Where(field => !selected.ContainsKey(field))
@@ -309,7 +318,8 @@ public static class AircraftRegistryResolver
             unresolved,
             provenance,
             AircraftFamilyIdentity.FromReferenceMetadata(referenceMetadata),
-            AircraftPowerplantClassIdentity.FromClassification(powerplantClassification));
+            AircraftPowerplantClassIdentity.FromClassification(powerplantClassification),
+            StructValue<AircraftObjectClass>(AircraftRegistryField.ObjectClass));
 
         void Add(AircraftRegistryField field, FieldCandidate? candidate)
         {

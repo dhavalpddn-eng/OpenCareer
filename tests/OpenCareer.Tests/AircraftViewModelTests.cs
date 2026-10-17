@@ -32,7 +32,8 @@ public sealed class AircraftViewModelTests
                     PressurizationText: "Not pressurized",
                     LandingGearText: "Fixed/non-retractable gear",
                     CapabilityEvidenceText: "Evidence: payload — cfg (Verified)",
-                    PassengerCapacityText: "Passenger capacity 3 (cabin value; crew and total seats not inferred)")
+                    PassengerCapacityText: "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
+                    ObjectClassText: "Aircraft class Airplane")
             ]));
         var viewModel = new AircraftViewModel(source);
 
@@ -50,6 +51,7 @@ public sealed class AircraftViewModelTests
         Assert.Equal("Maximum payload 950 lb", Assert.Single(viewModel.Aircraft).MaximumPayloadText);
         Assert.Equal("Typical cruise 122.5 kt", Assert.Single(viewModel.Aircraft).TypicalCruiseText);
         Assert.Equal("IFR capable", Assert.Single(viewModel.Aircraft).IfrCapabilityText);
+        Assert.Equal("Aircraft class Airplane", Assert.Single(viewModel.Aircraft).ObjectClassText);
         Assert.Equal(
             "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
             Assert.Single(viewModel.Aircraft).PassengerCapacityText);

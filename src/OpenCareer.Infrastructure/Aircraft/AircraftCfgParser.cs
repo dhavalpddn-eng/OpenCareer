@@ -16,6 +16,7 @@ internal sealed record AircraftCfgDocument(
     string? IcaoTypeDesignator,
     string? IcaoManufacturer,
     string? IcaoModel,
+    AircraftObjectClass? ObjectClass,
     AircraftEngineType? EngineType,
     int? EngineCount,
     IReadOnlyList<AircraftCfgVariation> Variations);
@@ -65,6 +66,8 @@ internal static class AircraftCfgParser
         string? typeDesignator = ReadOptionalText(general, "icao_type_designator");
         string? manufacturer = ReadOptionalText(general, "icao_manufacturer");
         string? model = ReadOptionalText(general, "icao_model");
+        AircraftObjectClass? objectClass =
+            ParseObjectClass(ReadOptionalText(general, "object_class"));
         AircraftEngineType? engineType = ParseEngineType(ReadRawText(general, "icao_engine_type"));
         int? engineCount = ParseNonNegativeInt(ReadOptionalText(general, "icao_engine_count"));
 
@@ -80,6 +83,7 @@ internal static class AircraftCfgParser
             typeDesignator,
             manufacturer,
             model,
+            objectClass,
             engineType,
             engineCount,
             variations);
@@ -251,6 +255,26 @@ internal static class AircraftCfgParser
             "Electric" => AircraftEngineType.Electric,
             "Rocket" => AircraftEngineType.Rocket,
             "None" => AircraftEngineType.None,
+            _ => null
+        };
+    }
+
+    private static AircraftObjectClass? ParseObjectClass(string? value)
+    {
+        if (value is null)
+            return null;
+
+        return value.Trim().ToUpperInvariant() switch
+        {
+            "AIRPLANE" => AircraftObjectClass.Airplane,
+            "HELICOPTER" => AircraftObjectClass.Helicopter,
+            "GLIDER" => AircraftObjectClass.Glider,
+            "BALLOON" => AircraftObjectClass.Balloon,
+            "AIRSHIP" => AircraftObjectClass.Airship,
+            "GYROPLANE" => AircraftObjectClass.Gyroplane,
+            "ORNITHOPTER" => AircraftObjectClass.Ornithopter,
+            "TILTROTOR" => AircraftObjectClass.TiltRotor,
+            "MISC" => AircraftObjectClass.Miscellaneous,
             _ => null
         };
     }

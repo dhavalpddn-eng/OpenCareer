@@ -103,6 +103,10 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <TextBlock Text="{Binding ObjectClassText}"
+                                           Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                           TextWrapping="Wrap" />
+
                                 <TextBlock Text="{Binding CapabilityText}"
                                            Style="{StaticResource OpenCareerPaperBodyStyle}" />
                                 <Grid ColumnSpacing="18" RowSpacing="10">

@@ -95,7 +95,8 @@ public sealed class MsfsAircraftCfgObservationSource(
             RetractableGear: flightModel?.RetractableGear,
             ReferenceMetadata: hasMetadata ? metadata : null,
             DispatchPerformance: dispatchPerformance,
-            PassengerCapacity: variation.PassengerCapacity);
+            PassengerCapacity: variation.PassengerCapacity,
+            ObjectClass: document.ObjectClass);
 
         return Task.FromResult<IReadOnlyList<AircraftRegistryObservation>>([observation]);
     }

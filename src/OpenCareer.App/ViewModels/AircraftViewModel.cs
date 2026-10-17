@@ -64,7 +64,8 @@ public sealed class AircraftViewModel : INotifyPropertyChanged
                         item.ReservationText,
                         item.AccessText,
                         item.PassengerCapacityText,
-                        item.TypicalCruiseText))
+                        item.TypicalCruiseText,
+                        item.ObjectClassText))
                     .ToArray(),
                 nameof(Aircraft));
             SetField(ref _statusText, snapshot.Detail, nameof(StatusText));
@@ -112,4 +113,5 @@ public sealed record InstalledAircraftItemViewModel(
     string ReservationText,
     string AccessText,
     string PassengerCapacityText,
-    string TypicalCruiseText);
+    string TypicalCruiseText,
+    string ObjectClassText);

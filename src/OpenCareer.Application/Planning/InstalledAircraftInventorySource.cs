@@ -31,7 +31,8 @@ public sealed record InstalledAircraftInventoryItem(
     string LandingGearText = "Landing gear configuration unknown",
     string CapabilityEvidenceText = "Capability evidence sources unavailable",
     string PassengerCapacityText = "Passenger capacity unknown",
-    string TypicalCruiseText = "Typical cruise unknown");
+    string TypicalCruiseText = "Typical cruise unknown",
+    string ObjectClassText = "Aircraft class unknown");
 
 public sealed record InstalledAircraftInventorySnapshot(
     InstalledAircraftInventoryStatus Status,
@@ -206,6 +207,10 @@ public sealed class InstalledAircraftInventorySource(
             resolution,
             AircraftRegistryField.PassengerCapacity,
             facts?.PassengerCapacity);
+        AircraftObjectClass? objectClass = ProvenValue(
+            resolution,
+            AircraftRegistryField.ObjectClass,
+            resolution?.ObjectClass);
 
         return new(
             aircraftId,
@@ -254,11 +259,13 @@ public sealed class InstalledAircraftInventorySource(
                 pressurized,
                 retractableGear,
                 passengerCapacity,
-                typicalCruise),
+                typicalCruise,
+                objectClass),
             passengerCapacity is { } displayCapacity
                 ? $"Passenger capacity {displayCapacity} (cabin value; crew and total seats not inferred)"
                 : "Passenger capacity unknown",
-            FormatOptionalNumber(typicalCruise, "Typical cruise", "kt"));
+            FormatOptionalNumber(typicalCruise, "Typical cruise", "kt"),
+            FormatObjectClass(objectClass));
     }
 
     private static (string Status, string Reservation) FormatAvailability(
@@ -346,6 +353,22 @@ public sealed class InstalledAircraftInventorySource(
         return $"{multiplicity} {engineType}";
     }
 
+    private static string FormatObjectClass(AircraftObjectClass? objectClass) =>
+        objectClass switch
+        {
+            AircraftObjectClass.Airplane => "Aircraft class Airplane",
+            AircraftObjectClass.Helicopter => "Aircraft class Helicopter",
+            AircraftObjectClass.Glider => "Aircraft class Glider",
+            AircraftObjectClass.Balloon => "Aircraft class Balloon",
+            AircraftObjectClass.Airship => "Aircraft class Airship",
+            AircraftObjectClass.Gyroplane => "Aircraft class Gyroplane",
+            AircraftObjectClass.Ornithopter => "Aircraft class Ornithopter",
+            AircraftObjectClass.TiltRotor => "Aircraft class TiltRotor",
+            AircraftObjectClass.Miscellaneous => "Aircraft class Misc",
+            null => "Aircraft class unknown",
+            _ => throw new ArgumentOutOfRangeException(nameof(objectClass))
+        };
+
     private static string FormatOptionalNumber(
         double? value,
         string label,
@@ -387,7 +410,8 @@ public sealed class InstalledAircraftInventorySource(
         bool? pressurized,
         bool? retractableGear,
         int? passengerCapacity,
-        double? typicalCruise)
+        double? typicalCruise,
+        AircraftObjectClass? objectClass)
     {
         if (resolution is null)
             return "Capability evidence sources unavailable";
@@ -401,6 +425,7 @@ public sealed class InstalledAircraftInventorySource(
         Add(AircraftRegistryField.Pressurized, "pressurization", pressurized is not null);
         Add(AircraftRegistryField.RetractableGear, "landing gear", retractableGear is not null);
         Add(AircraftRegistryField.PassengerCapacity, "passenger capacity", passengerCapacity is not null);
+        Add(AircraftRegistryField.ObjectClass, "aircraft class", objectClass is not null);
 
         return evidence.Count == 0
             ? "Capability evidence sources unavailable"

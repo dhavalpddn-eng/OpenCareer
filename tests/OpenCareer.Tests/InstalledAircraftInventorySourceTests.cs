@@ -59,7 +59,8 @@ public sealed class InstalledAircraftInventorySourceTests
                 seats: 4,
                 ifrCapable: true,
                 pressurized: false,
-                retractableGear: false)),
+                retractableGear: false,
+                objectClass: AircraftObjectClass.Airplane)),
             (zuluId, Resolution(zuluId, "Zulu Aircraft", null, null)));
         var source = new InstalledAircraftInventorySource(
             new StubDiscovery(new(
@@ -90,6 +91,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Maximum range 640 nm", alpha.MaximumRangeText);
         Assert.Equal("4 seat(s)", alpha.SeatsText);
         Assert.Equal("Typical cruise 122.5 kt", alpha.TypicalCruiseText);
+        Assert.Equal("Aircraft class Airplane", alpha.ObjectClassText);
         Assert.Contains("typical cruise — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Equal(
             "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
@@ -100,6 +102,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Contains("payload — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Contains("IFR — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Contains("passenger capacity — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
+        Assert.Contains("aircraft class — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Contains("access unknown", alpha.AccessText, StringComparison.OrdinalIgnoreCase);
 
         InstalledAircraftInventoryItem zulu = result.Aircraft[1];
@@ -110,6 +113,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Maximum payload unknown", zulu.MaximumPayloadText);
         Assert.Equal("Typical cruise unknown", zulu.TypicalCruiseText);
         Assert.Equal("Passenger capacity unknown", zulu.PassengerCapacityText);
+        Assert.Equal("Aircraft class unknown", zulu.ObjectClassText);
         Assert.Equal("IFR capability unknown", zulu.IfrCapabilityText);
     }
 
@@ -138,6 +142,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Seats unknown", item.SeatsText);
         Assert.Equal("Typical cruise unknown", item.TypicalCruiseText);
         Assert.Equal("Passenger capacity unknown", item.PassengerCapacityText);
+        Assert.Equal("Aircraft class unknown", item.ObjectClassText);
         Assert.Equal("IFR capability unknown", item.IfrCapabilityText);
         Assert.Equal("Pressurization unknown", item.PressurizationText);
         Assert.Equal("Landing gear configuration unknown", item.LandingGearText);
@@ -206,6 +211,7 @@ public sealed class InstalledAircraftInventorySourceTests
                 maximumRangeNauticalMiles: 800,
                 typicalCruiseKnots: 150,
                 seats: 6,
+                objectClass: AircraftObjectClass.Helicopter,
                 includeCapabilityProvenance: false))),
             new StubAvailability());
 
@@ -217,6 +223,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Seats unknown", item.SeatsText);
         Assert.Equal("Typical cruise unknown", item.TypicalCruiseText);
         Assert.Equal("Passenger capacity unknown", item.PassengerCapacityText);
+        Assert.Equal("Aircraft class unknown", item.ObjectClassText);
         Assert.Equal("Capability evidence sources unavailable", item.CapabilityEvidenceText);
     }
 
@@ -276,7 +283,8 @@ public sealed class InstalledAircraftInventorySourceTests
         bool? pressurized = null,
         bool? retractableGear = null,
         bool includeCapabilityProvenance = true,
-        double? typicalCruiseKnots = null)
+        double? typicalCruiseKnots = null,
+        AircraftObjectClass? objectClass = null)
     {
         var provenance =
             new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>();
@@ -289,6 +297,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Add(AircraftRegistryField.Pressurized, pressurized is not null);
         Add(AircraftRegistryField.RetractableGear, retractableGear is not null);
         Add(AircraftRegistryField.PassengerCapacity, passengerCapacity is not null);
+        Add(AircraftRegistryField.ObjectClass, objectClass is not null);
 
         var resolution = new AircraftRegistryResolution(
             aircraftId,
@@ -321,7 +330,8 @@ public sealed class InstalledAircraftInventorySourceTests
         return resolution with
         {
             FamilyIdentity = family,
-            PowerplantClassIdentity = powerplantClass
+            PowerplantClassIdentity = powerplantClass,
+            ObjectClass = objectClass
         };
 
         void Add(AircraftRegistryField field, bool hasValue)

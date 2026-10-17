@@ -174,6 +174,30 @@ public class AircraftRegistryResolutionTests
     }
 
     [Fact]
+    public void ObjectClassResolvesIndependentlyWithoutCreatingMissionCapabilities()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                "cfg",
+                "helicopter",
+                AircraftDataConfidence.Reference) with
+            {
+                ObjectClass = AircraftObjectClass.Helicopter
+            }
+        ]);
+
+        Assert.Equal(AircraftObjectClass.Helicopter, result.ObjectClass);
+        Assert.Null(result.CapabilityValues.Capabilities);
+        Assert.Equal(
+            "cfg",
+            result.Provenance[AircraftRegistryField.ObjectClass].ProviderId);
+        Assert.Contains(
+            AircraftRegistryField.Capabilities,
+            result.UnresolvedCapabilityFields);
+    }
+
+    [Fact]
     public void ExplicitIcaoDesignatorProducesStableNormalizedTypeIdentity()
     {
         AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(

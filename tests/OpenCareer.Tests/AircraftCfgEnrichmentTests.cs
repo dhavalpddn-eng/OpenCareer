@@ -22,6 +22,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
             minor = 0
 
             [GENERAL]
+            object_class = "Airplane"
             icao_type_designator = "DA62"
             icao_manufacturer = "DIAMOND"
             icao_model = "DA 62"
@@ -47,6 +48,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
         Assert.Equal(2, observation.EngineCount);
         Assert.Null(observation.Seats);
         Assert.Equal(5, observation.PassengerCapacity);
+        Assert.Equal(AircraftObjectClass.Airplane, observation.ObjectClass);
 
         AircraftReferenceMetadata metadata = Assert.IsType<AircraftReferenceMetadata>(
             observation.ReferenceMetadata);
@@ -116,6 +118,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
             "bad-metadata",
             """
             [GENERAL]
+            object_class = "Unknown Future Class"
             icao_type_designator = "TEST"
             icao_engine_type = "Warp"
             icao_engine_count = not-a-number
@@ -136,9 +139,52 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
         Assert.Null(observation.EngineCount);
         Assert.Null(observation.Seats);
         Assert.Null(observation.PassengerCapacity);
+        Assert.Null(observation.ObjectClass);
         Assert.Null(observation.ReferenceMetadata!.EngineType);
         Assert.Null(observation.ReferenceMetadata.PassengerCapacity);
         Assert.Equal("TEST", observation.ReferenceMetadata.IcaoTypeDesignator);
+    }
+
+    [Theory]
+    [InlineData("Airplane", AircraftObjectClass.Airplane)]
+    [InlineData("Helicopter", AircraftObjectClass.Helicopter)]
+    [InlineData("Glider", AircraftObjectClass.Glider)]
+    [InlineData("Balloon", AircraftObjectClass.Balloon)]
+    [InlineData("Airship", AircraftObjectClass.Airship)]
+    [InlineData("Gyroplane", AircraftObjectClass.Gyroplane)]
+    [InlineData("Ornithopter", AircraftObjectClass.Ornithopter)]
+    [InlineData("TiltRotor", AircraftObjectClass.TiltRotor)]
+    [InlineData("Misc", AircraftObjectClass.Miscellaneous)]
+    public async Task OfficialObjectClassMapsToDedicatedRegistryField(
+        string configuredClass,
+        AircraftObjectClass expected)
+    {
+        string root = CreatePackageRoot("Official2024");
+        WriteAircraftCfg(
+            root,
+            "object-class-fixture",
+            $"""
+            [GENERAL]
+            object_class = "{configuredClass}"
+
+            [FLTSIM.0]
+            title = "Object Class Fixture"
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle(
+                    "Object Class Fixture")));
+
+        Assert.Equal(expected, observation.ObjectClass);
+
+        AircraftRegistryResolution resolution =
+            AircraftRegistryResolver.Resolve([observation]);
+        Assert.Equal(expected, resolution.ObjectClass);
+        Assert.Equal(
+            MsfsAircraftCfgObservationSource.ProviderId,
+            resolution.Provenance[AircraftRegistryField.ObjectClass].ProviderId);
     }
 
     [Fact]
