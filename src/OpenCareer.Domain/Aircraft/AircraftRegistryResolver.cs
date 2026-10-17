@@ -21,7 +21,8 @@ public enum AircraftRegistryField
     RetractableGear,
     RunwayPerformance,
     ReferenceMetadata,
-    DispatchPerformance
+    DispatchPerformance,
+    PassengerCapacity
 }
 
 public sealed record AircraftRegistryObservation(
@@ -43,7 +44,8 @@ public sealed record AircraftRegistryObservation(
     bool? RetractableGear = null,
     AircraftRunwayPerformanceProfile? RunwayPerformance = null,
     AircraftReferenceMetadata? ReferenceMetadata = null,
-    AircraftDispatchPerformanceProfile? DispatchPerformance = null)
+    AircraftDispatchPerformanceProfile? DispatchPerformance = null,
+    int? PassengerCapacity = null)
 {
     public void Validate()
     {
@@ -73,6 +75,9 @@ public sealed record AircraftRegistryObservation(
 
         if (EngineCount is < 0)
             throw new ArgumentOutOfRangeException(nameof(EngineCount));
+
+        if (PassengerCapacity is < 0)
+            throw new ArgumentOutOfRangeException(nameof(PassengerCapacity));
 
         RunwayPerformance?.Validate();
         ReferenceMetadata?.Validate();
@@ -104,7 +109,8 @@ public sealed record ResolvedAircraftCapabilities(
     int? EngineCount,
     bool? IfrCapable,
     bool? Pressurized,
-    bool? RetractableGear);
+    bool? RetractableGear,
+    int? PassengerCapacity = null);
 
 public sealed record AircraftRegistryResolution(
     string CanonicalAircraftId,
@@ -248,6 +254,9 @@ public static class AircraftRegistryResolver
                 items,
                 static item => item.DispatchPerformance,
                 static item => item.DispatchPerformance!.Confidence));
+        Add(
+            AircraftRegistryField.PassengerCapacity,
+            Select(items, static item => item.PassengerCapacity));
 
         AircraftRegistryField[] unresolved = RequiredCapabilityFields
             .Where(field => !selected.ContainsKey(field))
@@ -274,7 +283,8 @@ public static class AircraftRegistryResolver
             StructValue<int>(AircraftRegistryField.EngineCount),
             StructValue<bool>(AircraftRegistryField.IfrCapable),
             StructValue<bool>(AircraftRegistryField.Pressurized),
-            StructValue<bool>(AircraftRegistryField.RetractableGear));
+            StructValue<bool>(AircraftRegistryField.RetractableGear),
+            StructValue<int>(AircraftRegistryField.PassengerCapacity));
 
         AircraftReferenceMetadata? referenceMetadata =
             ReferenceValue<AircraftReferenceMetadata>(

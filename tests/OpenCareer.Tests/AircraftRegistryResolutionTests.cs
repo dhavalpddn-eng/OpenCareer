@@ -112,6 +112,68 @@ public class AircraftRegistryResolutionTests
     }
 
     [Fact]
+    public void PassengerCapacityResolvesIndependentlyWithoutInventingTotalSeats()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "installed",
+                record: "local",
+                confidence: AircraftDataConfidence.Verified,
+                installed: true,
+                displayName: "Passenger Fixture") with
+            {
+                PassengerCapacity = 7,
+                ReferenceMetadata = new(IcaoTypeDesignator: "TEST")
+            }
+        ]);
+
+        Assert.Equal(7, result.CapabilityValues.PassengerCapacity);
+        Assert.Null(result.CapabilityValues.Seats);
+        Assert.Equal(
+            "installed",
+            result.Provenance[AircraftRegistryField.PassengerCapacity].ProviderId);
+        Assert.Contains(AircraftRegistryField.Seats, result.UnresolvedCapabilityFields);
+        Assert.DoesNotContain(
+            AircraftRegistryField.PassengerCapacity,
+            result.UnresolvedCapabilityFields);
+    }
+
+    [Fact]
+    public void MissingPassengerCapacityDoesNotBlockExistingCompleteProfile()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            CompleteObservation(
+                "reference",
+                "complete",
+                AircraftDataConfidence.Reference)
+        ]);
+
+        Assert.Null(result.CapabilityValues.PassengerCapacity);
+        Assert.True(result.HasCompleteCapabilityProfile);
+        Assert.NotNull(result.TryCreateRegistryRecord());
+        Assert.DoesNotContain(
+            AircraftRegistryField.PassengerCapacity,
+            result.UnresolvedCapabilityFields);
+    }
+
+    [Fact]
+    public void NegativePassengerCapacityIsRejected()
+    {
+        AircraftRegistryObservation observation = Observation(
+            "reference",
+            "invalid-capacity",
+            AircraftDataConfidence.Reference) with
+        {
+            PassengerCapacity = -1
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AircraftRegistryResolver.Resolve([observation]));
+    }
+
+    [Fact]
     public void ExplicitIcaoDesignatorProducesStableNormalizedTypeIdentity()
     {
         AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(

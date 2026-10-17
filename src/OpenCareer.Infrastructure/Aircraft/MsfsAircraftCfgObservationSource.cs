@@ -93,7 +93,8 @@ public sealed class MsfsAircraftCfgObservationSource(
             EngineCount: document.EngineCount,
             Pressurized: pressurized,
             ReferenceMetadata: hasMetadata ? metadata : null,
-            DispatchPerformance: dispatchPerformance);
+            DispatchPerformance: dispatchPerformance,
+            PassengerCapacity: variation.PassengerCapacity);
 
         return Task.FromResult<IReadOnlyList<AircraftRegistryObservation>>([observation]);
     }

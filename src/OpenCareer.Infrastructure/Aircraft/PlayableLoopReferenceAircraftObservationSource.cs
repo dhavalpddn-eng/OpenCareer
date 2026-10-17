@@ -58,7 +58,8 @@ public sealed class PlayableLoopReferenceAircraftObservationSource
                     IcaoManufacturer: "Cessna",
                     IcaoModel: "172 Skyhawk",
                     EngineType: AircraftEngineType.Piston,
-                    PassengerCapacity: 4));
+                    PassengerCapacity: 4),
+            PassengerCapacity: 4);
 
     public Task<IReadOnlyList<AircraftRegistryObservation>> FindAircraftObservationsAsync(
         string canonicalAircraftId,

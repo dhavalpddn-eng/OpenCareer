@@ -288,7 +288,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Add(AircraftRegistryField.IfrCapable, ifrCapable is not null);
         Add(AircraftRegistryField.Pressurized, pressurized is not null);
         Add(AircraftRegistryField.RetractableGear, retractableGear is not null);
-        Add(AircraftRegistryField.ReferenceMetadata, passengerCapacity is not null);
+        Add(AircraftRegistryField.PassengerCapacity, passengerCapacity is not null);
 
         var resolution = new AircraftRegistryResolution(
             aircraftId,
@@ -304,7 +304,8 @@ public sealed class InstalledAircraftInventorySourceTests
                 powerplant?.EngineCount,
                 ifrCapable,
                 pressurized,
-                retractableGear),
+                retractableGear,
+                passengerCapacity),
             null,
             passengerCapacity is null
                 ? null

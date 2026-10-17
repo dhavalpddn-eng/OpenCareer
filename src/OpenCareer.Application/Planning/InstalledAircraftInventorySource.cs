@@ -202,11 +202,10 @@ public sealed class InstalledAircraftInventorySource(
             resolution,
             AircraftRegistryField.RetractableGear,
             facts?.RetractableGear);
-        int? passengerCapacity = resolution is not null
-            && resolution.ReferenceMetadata?.PassengerCapacity is { } capacity
-            && resolution.Provenance.ContainsKey(AircraftRegistryField.ReferenceMetadata)
-                ? capacity
-                : null;
+        int? passengerCapacity = ProvenValue(
+            resolution,
+            AircraftRegistryField.PassengerCapacity,
+            facts?.PassengerCapacity);
 
         return new(
             aircraftId,
@@ -401,7 +400,7 @@ public sealed class InstalledAircraftInventorySource(
         Add(AircraftRegistryField.IfrCapable, "IFR", ifrCapable is not null);
         Add(AircraftRegistryField.Pressurized, "pressurization", pressurized is not null);
         Add(AircraftRegistryField.RetractableGear, "landing gear", retractableGear is not null);
-        Add(AircraftRegistryField.ReferenceMetadata, "passenger capacity", passengerCapacity is not null);
+        Add(AircraftRegistryField.PassengerCapacity, "passenger capacity", passengerCapacity is not null);
 
         return evidence.Count == 0
             ? "Capability evidence sources unavailable"

@@ -46,6 +46,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
         Assert.Equal(1283.5, observation.MaximumRangeNauticalMiles);
         Assert.Equal(2, observation.EngineCount);
         Assert.Null(observation.Seats);
+        Assert.Equal(5, observation.PassengerCapacity);
 
         AircraftReferenceMetadata metadata = Assert.IsType<AircraftReferenceMetadata>(
             observation.ReferenceMetadata);
@@ -98,6 +99,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
                 AircraftCanonicalIdentity.FromMsfsTitle("A320neo Cargo")));
 
         Assert.Equal(3100, cargo.MaximumRangeNauticalMiles);
+        Assert.Equal(2, cargo.PassengerCapacity);
         Assert.Equal(2, cargo.ReferenceMetadata!.PassengerCapacity);
 
         Assert.Empty(
@@ -133,6 +135,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
         Assert.Null(observation.MaximumRangeNauticalMiles);
         Assert.Null(observation.EngineCount);
         Assert.Null(observation.Seats);
+        Assert.Null(observation.PassengerCapacity);
         Assert.Null(observation.ReferenceMetadata!.EngineType);
         Assert.Null(observation.ReferenceMetadata.PassengerCapacity);
         Assert.Equal("TEST", observation.ReferenceMetadata.IcaoTypeDesignator);
@@ -536,10 +539,11 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
         Assert.Equal(2, result.CapabilityValues.EngineCount);
         Assert.Null(result.CapabilityValues.Seats);
         Assert.Contains(AircraftRegistryField.Seats, result.UnresolvedCapabilityFields);
+        Assert.Equal(8, result.CapabilityValues.PassengerCapacity);
         Assert.Equal(8, result.ReferenceMetadata!.PassengerCapacity);
         Assert.Equal(
             MsfsAircraftCfgObservationSource.ProviderId,
-            result.Provenance[AircraftRegistryField.ReferenceMetadata].ProviderId);
+            result.Provenance[AircraftRegistryField.PassengerCapacity].ProviderId);
     }
 
     [Fact]
