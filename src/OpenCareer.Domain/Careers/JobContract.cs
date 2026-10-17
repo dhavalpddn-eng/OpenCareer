@@ -74,6 +74,27 @@ public sealed record ContractCompensation(
     bool EmployerCoversMaintenance,
     bool EmployerCoversAirportFees);
 
+public sealed record JobContractPlanningTerms(
+    double RouteDistanceNauticalMiles,
+    double PayloadPounds)
+{
+    public void Validate()
+    {
+        if (!double.IsFinite(RouteDistanceNauticalMiles)
+            || RouteDistanceNauticalMiles < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(RouteDistanceNauticalMiles));
+        }
+
+        if (!double.IsFinite(PayloadPounds)
+            || PayloadPounds < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(PayloadPounds));
+        }
+    }
+}
+
 public sealed record JobContract(
     Guid ContractId,
     Guid? EmployerId,
@@ -94,7 +115,8 @@ public sealed record JobContract(
     bool GovernmentAuthorizationRequired = false,
     DateTimeOffset? AcceptedAt = null,
     DateTimeOffset? StartedAt = null,
-    DateTimeOffset? CompletedAt = null)
+    DateTimeOffset? CompletedAt = null,
+    JobContractPlanningTerms? PlanningTerms = null)
 {
     public JobContract Accept(ContractDispatchContext context)
     {
@@ -125,7 +147,9 @@ public sealed record JobContract(
         ? this with { Status = ContractStatus.Failed }
         : throw InvalidTransition("fail");
 
-    public JobContract Cancel() => Status is ContractStatus.Offered or ContractStatus.Accepted
+    public JobContract Cancel() => Status is ContractStatus.Offered
+        or ContractStatus.Accepted
+        or ContractStatus.InProgress
         ? this with { Status = ContractStatus.Cancelled }
         : throw InvalidTransition("cancel");
 
@@ -143,6 +167,7 @@ public sealed record JobContract(
         ArgumentNullException.ThrowIfNull(Compensation);
         ArgumentNullException.ThrowIfNull(AircraftRequirements);
         AircraftRequirements.Validate();
+        PlanningTerms?.Validate();
         if ((AcceptedAt is { } accepted && accepted < OfferedAt)
             || (StartedAt is { } started && (AcceptedAt is not { } a || started < a))
             || (CompletedAt is { } completed && (StartedAt is not { } s || completed < s))

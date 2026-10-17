@@ -69,6 +69,77 @@ public sealed class SqliteLogbookStoreTests : IAsyncLifetime
         Assert.Equal(3, loaded.Debrief.Legs[0].RouteTrack.Count);
         Assert.Equal(-205, loaded.Debrief.Landings[0].VerticalSpeedFeetPerMinute);
         Assert.Equal("Crosswind on final", loaded.Debrief.Events[0].Text);
+        Assert.Null(loaded.Debrief.QualificationTraining);
+    }
+
+    [Fact]
+    public async Task QualificationTrainingMetadataSurvivesSqliteRestart()
+    {
+        Guid careerId = Guid.Parse("53000000-0000-0000-0000-000000000001");
+        var metadata = new CivilianQualificationTrainingMetadata(
+            careerId,
+            "student-operation-001",
+            "license.student",
+            "Committed civilian training operation.");
+        LogbookEntry expected = ManualEntry(
+            Guid.Parse("51000000-0000-0000-0000-000000000002"),
+            Guid.Parse("52000000-0000-0000-0000-000000000002"),
+            "Cessna 172",
+            "KAAA",
+            "KBBB",
+            "Training",
+            entryKind: LogbookEntryKind.Training,
+            missionOutcome: MissionOutcome.Succeeded,
+            qualificationTraining: metadata);
+
+        await CreateStore().TryAppendAsync(expected, "training:round-trip");
+
+        LogbookEntry? loaded = await CreateStore().GetAsync(expected.EntryId);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(metadata, loaded.Debrief.QualificationTraining);
+    }
+
+    [Fact]
+    public async Task IdempotencyLookupRoundTripsStoredEntry()
+    {
+        SqliteLogbookStore first =
+            CreateStore();
+
+        LogbookEntry expected =
+            ManualEntry(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Cessna 172",
+                "KAAA",
+                "KBBB",
+                "Boxes");
+
+        const string idempotencyKey =
+            "manual:idempotency-lookup";
+
+        await first.TryAppendAsync(
+            expected,
+            idempotencyKey);
+
+        SqliteLogbookStore reopened =
+            CreateStore();
+
+        LogbookEntry? recovered =
+            await reopened.FindByIdempotencyKeyAsync(
+                idempotencyKey);
+
+        Assert.NotNull(recovered);
+        Assert.Equal(
+            expected.EntryId,
+            recovered.EntryId);
+        Assert.Equal(
+            expected.Debrief.DebriefId,
+            recovered.Debrief.DebriefId);
+
+        Assert.Null(
+            await reopened.FindByIdempotencyKeyAsync(
+                "manual:missing"));
     }
 
     [Fact]
@@ -242,7 +313,10 @@ public sealed class SqliteLogbookStoreTests : IAsyncLifetime
         string destination,
         string cargo,
         FlightSafetyOutcome safetyOutcome = FlightSafetyOutcome.CompletedNormally,
-        DateTimeOffset? endedAt = null)
+        DateTimeOffset? endedAt = null,
+        LogbookEntryKind entryKind = LogbookEntryKind.FreeFlight,
+        MissionOutcome missionOutcome = MissionOutcome.NotApplicable,
+        CivilianQualificationTrainingMetadata? qualificationTraining = null)
     {
         DateTimeOffset end = endedAt ?? Start.AddMinutes(90);
         DateTimeOffset start = end.AddMinutes(-90);
@@ -294,7 +368,7 @@ public sealed class SqliteLogbookStoreTests : IAsyncLifetime
                 debriefId,
                 Guid.NewGuid(),
                 null,
-                LogbookEntryKind.FreeFlight,
+                entryKind,
                 start,
                 end,
                 new(origin, destination, origin, destination, null, 150),
@@ -315,7 +389,7 @@ public sealed class SqliteLogbookStoreTests : IAsyncLifetime
                 new(1, 120, cargo, "Delivered", EvidenceQuality.Observed),
                 new(false, false, false, false, false),
                 safetyOutcome,
-                MissionOutcome.NotApplicable,
+                missionOutcome,
                 [landing],
                 [
                     new(
@@ -326,7 +400,8 @@ public sealed class SqliteLogbookStoreTests : IAsyncLifetime
                         "Crosswind on final",
                         EvidenceQuality.Observed)
                 ],
-                FlightSettlementRecord.NotApplicable));
+                FlightSettlementRecord.NotApplicable,
+                qualificationTraining));
 
         return LogbookEntry.Commit(
             entryId,

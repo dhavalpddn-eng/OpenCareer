@@ -6,7 +6,8 @@ public sealed record FlightSessionPlan(
     string? PlannedAlternate = null,
     string? PlannedRoute = null,
     string? SourceProvider = null,
-    string? SourceReference = null)
+    string? SourceReference = null,
+    string? ExpectedCanonicalAircraftId = null)
 {
     public void Validate()
     {
@@ -16,6 +17,18 @@ public sealed record FlightSessionPlan(
         ValidateText(PlannedRoute, 8_000, nameof(PlannedRoute));
         ValidateText(SourceProvider, 100, nameof(SourceProvider));
         ValidateText(SourceReference, 500, nameof(SourceReference));
+        ValidateText(
+            ExpectedCanonicalAircraftId,
+            500,
+            nameof(ExpectedCanonicalAircraftId));
+
+        if (ExpectedCanonicalAircraftId is not null
+            && string.IsNullOrWhiteSpace(ExpectedCanonicalAircraftId))
+        {
+            throw new ArgumentException(
+                "Expected canonical aircraft ID must be non-empty when supplied.",
+                nameof(ExpectedCanonicalAircraftId));
+        }
     }
 
     private static void ValidateText(
@@ -25,6 +38,158 @@ public sealed record FlightSessionPlan(
     {
         if (value is { Length: > 0 } && value.Length > maximumLength)
             throw new ArgumentOutOfRangeException(parameterName);
+    }
+}
+
+public enum FlightLegStatus
+{
+    Active = 0,
+    Completed = 1
+}
+
+public sealed record FlightLeg(
+    Guid LegId,
+    int Sequence,
+    DateTimeOffset StartedAt,
+    FlightSessionPlan? Plan = null,
+    FlightLegStatus Status = FlightLegStatus.Active,
+    DateTimeOffset? CompletedAt = null,
+    FlightTimeLedger? TimeLedger = null,
+    FlightSessionStatistics? Statistics = null,
+    FlightContinuityAnchor? StatisticsContinuityAnchor = null,
+    IReadOnlyList<int>? LandingEpisodeNumbers = null)
+{
+    public FlightTimeLedger EffectiveTimeLedger =>
+        TimeLedger ?? FlightTimeLedger.Empty;
+
+    public FlightSessionStatistics EffectiveStatistics =>
+        Statistics ?? FlightSessionStatistics.Empty;
+
+    public IReadOnlyList<int> EffectiveLandingEpisodeNumbers =>
+        LandingEpisodeNumbers ?? Array.Empty<int>();
+
+    public static FlightLeg First(
+        Guid sessionId,
+        DateTimeOffset startedAt,
+        FlightSessionPlan? plan) =>
+        new(
+            sessionId,
+            Sequence: 1,
+            startedAt,
+            plan,
+            TimeLedger: FlightTimeLedger.Empty,
+            Statistics: FlightSessionStatistics.Empty,
+            LandingEpisodeNumbers: Array.Empty<int>());
+
+    public void Validate()
+    {
+        if (LegId == Guid.Empty)
+            throw new ArgumentException("Flight leg ID cannot be empty.", nameof(LegId));
+
+        if (Sequence <= 0)
+            throw new ArgumentOutOfRangeException(nameof(Sequence));
+
+        if (!Enum.IsDefined(Status))
+            throw new ArgumentOutOfRangeException(nameof(Status));
+
+        if (Status == FlightLegStatus.Active && CompletedAt is not null)
+        {
+            throw new InvalidOperationException(
+                "An active flight leg cannot have a completion timestamp.");
+        }
+
+        if (Status == FlightLegStatus.Completed
+            && (CompletedAt is not { } completedAt
+                || completedAt < StartedAt))
+        {
+            throw new InvalidOperationException(
+                "A completed flight leg requires a valid completion timestamp.");
+        }
+
+        Plan?.Validate();
+
+        if (EffectiveLandingEpisodeNumbers.Any(number => number <= 0)
+            || EffectiveLandingEpisodeNumbers.Distinct().Count()
+                != EffectiveLandingEpisodeNumbers.Count)
+        {
+            throw new InvalidOperationException(
+                "Flight-leg landing episode references must be positive and unique.");
+        }
+    }
+
+    public FlightLeg Complete(DateTimeOffset completedAt)
+    {
+        if (Status == FlightLegStatus.Completed)
+            return this;
+
+        if (completedAt < StartedAt)
+            throw new ArgumentOutOfRangeException(nameof(completedAt));
+
+        return this with
+        {
+            Status = FlightLegStatus.Completed,
+            CompletedAt = completedAt
+        };
+    }
+
+    public FlightLeg AddTime(FlightTimeInterval interval)
+    {
+        if (Status != FlightLegStatus.Active)
+        {
+            throw new InvalidOperationException(
+                "Completed flight-leg time is immutable.");
+        }
+
+        return this with
+        {
+            TimeLedger = EffectiveTimeLedger.Add(interval)
+        };
+    }
+
+    public FlightLeg Observe(
+        FlightSessionObservation observation,
+        FlightContinuityAnchor? nextAnchor)
+    {
+        if (Status != FlightLegStatus.Active)
+        {
+            throw new InvalidOperationException(
+                "Completed flight-leg statistics are immutable.");
+        }
+
+        return this with
+        {
+            Statistics =
+                EffectiveStatistics.Observe(
+                    observation,
+                    StatisticsContinuityAnchor),
+            StatisticsContinuityAnchor =
+                nextAnchor
+                ?? StatisticsContinuityAnchor
+        };
+    }
+
+    public FlightLeg ReferenceLandingEpisode(int episodeNumber)
+    {
+        if (Status != FlightLegStatus.Active)
+        {
+            throw new InvalidOperationException(
+                "Completed flight-leg landing references are immutable.");
+        }
+
+        if (episodeNumber <= 0)
+            throw new ArgumentOutOfRangeException(nameof(episodeNumber));
+
+        if (EffectiveLandingEpisodeNumbers.Contains(episodeNumber))
+            return this;
+
+        return this with
+        {
+            LandingEpisodeNumbers =
+            [
+                .. EffectiveLandingEpisodeNumbers,
+                episodeNumber
+            ]
+        };
     }
 }
 
@@ -280,7 +445,12 @@ public sealed record FlightSessionLandingEpisode(
     DateTimeOffset TouchdownAt,
     FlightSessionLandingKind Kind,
     int BounceCount,
-    DateTimeOffset? CompletedAt = null)
+    DateTimeOffset? CompletedAt = null,
+    double? VerticalSpeedFeetPerMinute = null,
+    double? NormalAccelerationG = null,
+    double? IndicatedAirspeedKnots = null,
+    double? PitchDegrees = null,
+    double? BankDegrees = null)
 {
     public void Validate()
     {
@@ -295,5 +465,20 @@ public sealed record FlightSessionLandingEpisode(
         {
             throw new ArgumentOutOfRangeException(nameof(CompletedAt));
         }
+        ValidateFinite(VerticalSpeedFeetPerMinute, nameof(VerticalSpeedFeetPerMinute));
+        ValidateFinite(NormalAccelerationG, nameof(NormalAccelerationG));
+        ValidateFinite(IndicatedAirspeedKnots, nameof(IndicatedAirspeedKnots));
+        ValidateFinite(PitchDegrees, nameof(PitchDegrees));
+        ValidateFinite(BankDegrees, nameof(BankDegrees));
+
+        if (IndicatedAirspeedKnots is { } indicatedAirspeedKnots
+            && indicatedAirspeedKnots < 0)
+            throw new ArgumentOutOfRangeException(nameof(IndicatedAirspeedKnots));
+    }
+
+    private static void ValidateFinite(double? value, string parameterName)
+    {
+        if (value is { } actual && !double.IsFinite(actual))
+            throw new ArgumentOutOfRangeException(parameterName);
     }
 }

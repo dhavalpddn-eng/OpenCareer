@@ -15,6 +15,7 @@ public sealed partial class MainWindow : Window
 {
     private readonly DispatcherQueueTimer _statusTimer;
     private readonly FlightSessionRuntime _flightRuntime;
+    private readonly FirstJobTutorialAutoTrigger _firstJobTutorial;
     private readonly ILogger<MainWindow> _logger;
     private readonly CancellationTokenSource _lifetimeCts = new();
     private bool _tutorialInitialized;
@@ -22,20 +23,34 @@ public sealed partial class MainWindow : Window
     public MainWindow(
         ShellViewModel viewModel,
         DashboardViewModel dashboard,
+        DispatchViewModel dispatch,
         LogbookViewModel logbook,
+        JobsViewModel jobs,
+        CareerViewModel career,
+        AircraftViewModel aircraft,
+        MilitaryGovernmentViewModel militaryGovernment,
         TutorialViewModel tutorial,
         SettingsViewModel settings,
         FlightSessionRuntime flightRuntime,
+        FirstJobTutorialAutoTrigger firstJobTutorial,
         ILogger<MainWindow> logger)
     {
         ViewModel = viewModel;
         Dashboard = dashboard;
+        Dispatch = dispatch;
         Logbook = logbook;
+        Jobs = jobs;
+        Career = career;
+        Aircraft = aircraft;
+        MilitaryGovernment = militaryGovernment;
         Tutorial = tutorial;
         Settings = settings;
         _flightRuntime =
             flightRuntime
             ?? throw new ArgumentNullException(nameof(flightRuntime));
+        _firstJobTutorial =
+            firstJobTutorial
+            ?? throw new ArgumentNullException(nameof(firstJobTutorial));
         _logger =
             logger
             ?? throw new ArgumentNullException(nameof(logger));
@@ -46,6 +61,8 @@ public sealed partial class MainWindow : Window
         ContentFrame.Navigate(typeof(DashboardPage), Dashboard);
 
         Dashboard.NavigationRequested += OnDashboardNavigationRequested;
+        Dispatch.NavigationRequested += OnDispatchNavigationRequested;
+        Jobs.NavigationRequested += OnJobsNavigationRequested;
         Tutorial.PropertyChanged += OnTutorialPropertyChanged;
         Tutorial.NavigationRequested += OnTutorialNavigationRequested;
         Activated += OnWindowActivated;
@@ -60,7 +77,12 @@ public sealed partial class MainWindow : Window
 
     public ShellViewModel ViewModel { get; }
     public DashboardViewModel Dashboard { get; }
+    public DispatchViewModel Dispatch { get; }
     public LogbookViewModel Logbook { get; }
+    public JobsViewModel Jobs { get; }
+    public CareerViewModel Career { get; }
+    public AircraftViewModel Aircraft { get; }
+    public MilitaryGovernmentViewModel MilitaryGovernment { get; }
     public TutorialViewModel Tutorial { get; }
     public SettingsViewModel Settings { get; }
 
@@ -70,6 +92,8 @@ public sealed partial class MainWindow : Window
         _lifetimeCts.Cancel();
         _statusTimer.Tick -= OnStatusTimerTick;
         Dashboard.NavigationRequested -= OnDashboardNavigationRequested;
+        Dispatch.NavigationRequested -= OnDispatchNavigationRequested;
+        Jobs.NavigationRequested -= OnJobsNavigationRequested;
         Tutorial.PropertyChanged -= OnTutorialPropertyChanged;
         Tutorial.NavigationRequested -= OnTutorialNavigationRequested;
         Activated -= OnWindowActivated;
@@ -84,6 +108,8 @@ public sealed partial class MainWindow : Window
 
         if (Settings.AutomaticallyOfferTutorials)
             await Tutorial.InitializeAsync();
+
+        await _firstJobTutorial.TryStartAsync();
 
         UpdateTutorialLayer();
     }
@@ -106,6 +132,18 @@ public sealed partial class MainWindow : Window
             {
                 ViewModel.RefreshConnectionStatus();
                 Tutorial.RefreshLiveEvidence();
+
+                await ViewModel
+                    .RefreshCareerCompletionActionAsync(
+                        _lifetimeCts.Token);
+
+                await ViewModel
+                    .RefreshCareerAbandonActionAsync(
+                        _lifetimeCts.Token);
+
+                await ViewModel
+                    .RefreshManualPostflightAsync(
+                        _lifetimeCts.Token);
             }
         }
         catch (OperationCanceledException)
@@ -139,11 +177,32 @@ public sealed partial class MainWindow : Window
             case "dashboard":
                 Navigate(typeof(DashboardPage), Dashboard);
                 break;
+            case "dispatch":
+                Navigate(typeof(DispatchPage), Dispatch);
+                break;
+            case "jobs":
+                Navigate(typeof(JobsPage), Jobs);
+                break;
             case "current-flight":
-                Navigate(typeof(CurrentFlightPage), ViewModel);
+                Navigate(
+                    typeof(CurrentFlightPage),
+                    new CurrentFlightPageContext(
+                        ViewModel,
+                        Jobs));
+                break;
+            case "aircraft":
+                Navigate(typeof(AircraftPage), Aircraft);
+                break;
+            case "military":
+                Navigate(
+                    typeof(MilitaryGovernmentPage),
+                    MilitaryGovernment);
                 break;
             case "logbook":
                 Navigate(typeof(LogbookPage), Logbook);
+                break;
+            case "career":
+                Navigate(typeof(CareerPage), Career);
                 break;
             case "settings":
                 Navigate(
@@ -178,6 +237,57 @@ public sealed partial class MainWindow : Window
 
         if (tag is null)
             return;
+
+        NavigationViewItem? item = NavView.MenuItems
+            .OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate =>
+                string.Equals(
+                    candidate.Tag?.ToString(),
+                    tag,
+                    StringComparison.Ordinal));
+
+        if (item is not null)
+            NavView.SelectedItem = item;
+    }
+
+    private void OnJobsNavigationRequested(
+        object? sender,
+        JobsNavigationRequestedEventArgs e)
+    {
+        string tag = e.Target switch
+        {
+            JobsNavigationTarget.Dispatch => "dispatch",
+            JobsNavigationTarget.CurrentFlight => "current-flight",
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(e),
+                e.Target,
+                "Unknown Jobs navigation target.")
+        };
+
+        NavigationViewItem? item = NavView.MenuItems
+            .OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate =>
+                string.Equals(
+                    candidate.Tag?.ToString(),
+                    tag,
+                    StringComparison.Ordinal));
+
+        if (item is not null)
+            NavView.SelectedItem = item;
+    }
+
+    private void OnDispatchNavigationRequested(
+        object? sender,
+        DispatchNavigationRequestedEventArgs e)
+    {
+        string tag = e.Target switch
+        {
+            DispatchNavigationTarget.Jobs => "jobs",
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(e),
+                e.Target,
+                "Unknown Dispatch navigation target.")
+        };
 
         NavigationViewItem? item = NavView.MenuItems
             .OfType<NavigationViewItem>()

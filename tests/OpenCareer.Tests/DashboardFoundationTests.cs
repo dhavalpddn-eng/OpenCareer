@@ -5,7 +5,7 @@ namespace OpenCareer.Tests;
 public sealed class DashboardFoundationTests
 {
     [Fact]
-    public void TopOpportunitiesShowsFourHighestAvailableJobs()
+    public void RankedOpportunitiesShowFourHighestAvailableJobs()
     {
         DashboardOpportunity[] opportunities =
         [
@@ -42,6 +42,60 @@ public sealed class DashboardFoundationTests
 
         Assert.Single(selected);
         Assert.Equal("better-fit", selected[0].Id);
+    }
+
+    [Fact]
+    public void UnknownRankingPreservesAuthoritativeSourceOrderAndTakesFour()
+    {
+        DashboardOpportunity[] opportunities =
+            Enumerable.Range(1, 5)
+                .Select(index => new DashboardOpportunity(
+                    $"offer-{index}",
+                    $"Offer {index}",
+                    "KAAA",
+                    "KBBB",
+                    "Ferry",
+                    Tier: null,
+                    IsAvailable: true,
+                    FitScore: null))
+                .ToArray();
+
+        IReadOnlyList<DashboardOpportunity> selected =
+            DashboardOpportunitySelector.SelectTopAvailable(opportunities);
+
+        Assert.Equal(
+            ["offer-1", "offer-2", "offer-3", "offer-4"],
+            selected.Select(static item => item.Id));
+    }
+
+    [Fact]
+    public void UnknownTierAndFitUseHonestDashboardCopy()
+    {
+        string viewModel = File.ReadAllText(
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "UiContracts",
+                "DashboardViewModel.cs"));
+        string page = File.ReadAllText(
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "UiButtons",
+                "DashboardPage.xaml"));
+
+        Assert.Contains("\"TIER —\"", viewModel, StringComparison.Ordinal);
+        Assert.Contains("\"Fit —\"", viewModel, StringComparison.Ordinal);
+        Assert.DoesNotContain("0)% fit", viewModel, StringComparison.Ordinal);
+        Assert.Contains("Startable local jobs", page, StringComparison.Ordinal);
+        Assert.Contains("ELIGIBLE OPPORTUNITIES", page, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "TOP OPPORTUNITIES",
+            page,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("condensed live world view", page, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Visibility=\"{Binding HasSocialFeed",
+            page,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -206,6 +260,10 @@ public sealed class DashboardFoundationTests
         Assert.NotNull(selected);
         Assert.Equal("top-jobs", selected.Id);
         Assert.Equal(DashboardActionTarget.Jobs, selected.Target);
+        Assert.Equal("Review eligible local jobs", selected.Title);
+        Assert.Contains("source order", selected.Detail, StringComparison.Ordinal);
+        Assert.Contains("ranking are unavailable", selected.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("strongest", selected.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     private static DashboardSnapshot EmptySnapshot() =>

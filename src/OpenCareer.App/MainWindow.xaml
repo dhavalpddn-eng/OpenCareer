@@ -15,6 +15,7 @@
             IsSettingsVisible="False"
             IsPaneToggleButtonVisible="True"
             SelectionChanged="NavView_SelectionChanged"
+            HorizontalContentAlignment="Stretch"
             Background="{StaticResource OpenCareerShellBackgroundBrush}"
             Foreground="{StaticResource OpenCareerShellTextBrush}">
 
@@ -69,7 +70,9 @@
                 <NavigationViewItem Content="Settings" Tag="settings" />
             </NavigationView.MenuItems>
 
-            <Frame x:Name="ContentFrame" />
+            <Frame x:Name="ContentFrame"
+                   HorizontalAlignment="Stretch"
+                   HorizontalContentAlignment="Stretch" />
         </NavigationView>
 
         <Grid x:Name="TutorialLayer"
@@ -200,8 +203,7 @@
                             <Button x:Name="TutorialNextButton"
                                     Grid.Column="3"
                                     Content="{x:Bind Tutorial.NextButtonText, Mode=OneWay}"
-                                    Background="{StaticResource AppNavyBrush}"
-                                    Foreground="White"
+                                    Style="{StaticResource OpenCareerPrimaryButtonStyle}"
                                     Click="NextTutorial_Click" />
                         </Grid>
                     </Border>

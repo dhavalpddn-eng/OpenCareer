@@ -1,0 +1,69 @@
+using System.Collections.Immutable;
+
+namespace OpenCareer.Domain.Careers;
+
+public sealed record PlayerCareerProfile(
+    Guid CareerId,
+    DateTimeOffset CreatedAt,
+    CareerLocation Location)
+{
+    public PilotQualificationState Qualifications { get; init; } =
+        PilotQualificationState.Entry;
+
+    public PilotExperienceTotals Experience { get; init; } =
+        PilotExperienceTotals.Empty;
+
+    public ImmutableHashSet<Guid> AppliedExperienceDebriefIds { get; init; } =
+        ImmutableHashSet<Guid>.Empty;
+
+    public static PlayerCareerProfile Start(
+        Guid careerId,
+        string homeAirportIcao,
+        DateTimeOffset createdAt)
+    {
+        if (careerId == Guid.Empty)
+            throw new ArgumentException("Career id is required.", nameof(careerId));
+
+        if (createdAt == default)
+            throw new ArgumentOutOfRangeException(nameof(createdAt));
+
+        var profile = new PlayerCareerProfile(
+            careerId,
+            createdAt,
+            CareerLocation.Start(homeAirportIcao, createdAt));
+
+        profile.Validate();
+        return profile;
+    }
+
+    public void Validate()
+    {
+        if (CareerId == Guid.Empty)
+            throw new ArgumentException("Career id is required.", nameof(CareerId));
+
+        if (CreatedAt == default)
+            throw new ArgumentOutOfRangeException(nameof(CreatedAt));
+
+        ArgumentNullException.ThrowIfNull(Location);
+        Location.Validate();
+
+        if (Location.UpdatedAt < CreatedAt)
+        {
+            throw new InvalidOperationException(
+                "Career location cannot predate career creation.");
+        }
+
+        ArgumentNullException.ThrowIfNull(Qualifications);
+        Qualifications.Validate();
+
+        ArgumentNullException.ThrowIfNull(Experience);
+        Experience.Validate();
+
+        ArgumentNullException.ThrowIfNull(AppliedExperienceDebriefIds);
+        if (AppliedExperienceDebriefIds.Contains(Guid.Empty))
+        {
+            throw new InvalidOperationException(
+                "Applied experience debrief ids cannot contain an empty id.");
+        }
+    }
+}

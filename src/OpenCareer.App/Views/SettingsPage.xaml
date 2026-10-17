@@ -64,7 +64,7 @@
                                 <StackPanel Spacing="3">
                                     <TextBlock Text="SHOW CHECKLIST EVERY FLIGHT"
                                                Style="{StaticResource OpenCareerInputLabelStyle}" />
-                                    <TextBlock Text="Saved now; the live checklist will consume this when MBL-04 is implemented."
+                                    <TextBlock Text="Show the phase-aware live checklist on Current Flight while a FlightSession exists."
                                                Style="{StaticResource OpenCareerInputHelpStyle}" />
                                 </StackPanel>
                                 <ToggleSwitch x:Name="ChecklistToggle"

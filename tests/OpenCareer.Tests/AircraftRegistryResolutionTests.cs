@@ -1,0 +1,779 @@
+using OpenCareer.Application.Planning;
+using OpenCareer.Domain.Aircraft;
+using OpenCareer.Infrastructure.Aircraft;
+
+namespace OpenCareer.Tests;
+
+public class AircraftRegistryResolutionTests
+{
+    [Fact]
+    public void HigherConfidenceWinsPerFieldWithoutUnioningCapabilities()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "reference",
+                record: "a",
+                confidence: AircraftDataConfidence.Reference,
+                displayName: "Reference Name",
+                capabilities: AircraftCapability.Cargo | AircraftCapability.ShortField,
+                payload: 1200),
+            Observation(
+                provider: "verified",
+                record: "b",
+                confidence: AircraftDataConfidence.Verified,
+                displayName: "Verified Name",
+                capabilities: AircraftCapability.Cargo,
+                payload: 1000)
+        ]);
+
+        Assert.Equal("Verified Name", result.CapabilityValues.DisplayName);
+        Assert.Equal(AircraftCapability.Cargo, result.CapabilityValues.Capabilities);
+        Assert.Equal(1000, result.CapabilityValues.MaximumPayloadPounds);
+        Assert.Equal(
+            "verified",
+            result.Provenance[AircraftRegistryField.Capabilities].ProviderId);
+    }
+
+    [Fact]
+    public void FieldsResolveIndependentlyAcrossProviders()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "installed",
+                record: "local",
+                confidence: AircraftDataConfidence.Verified,
+                installed: true,
+                displayName: "Installed Aircraft",
+                engineCount: 2),
+            Observation(
+                provider: "reference",
+                record: "perf",
+                confidence: AircraftDataConfidence.Reference,
+                range: 850,
+                cruise: 165,
+                payload: 1800)
+        ]);
+
+        Assert.Equal("Installed Aircraft", result.CapabilityValues.DisplayName);
+        Assert.Equal(2, result.CapabilityValues.EngineCount);
+        Assert.Equal(850, result.CapabilityValues.MaximumRangeNauticalMiles);
+        Assert.Equal("installed", result.Provenance[AircraftRegistryField.EngineCount].ProviderId);
+        Assert.Equal("reference", result.Provenance[AircraftRegistryField.MaximumRangeNauticalMiles].ProviderId);
+    }
+
+    [Fact]
+    public void AnyInstalledObservationMarksAircraftInstalled()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation("catalog", "known", AircraftDataConfidence.Reference),
+            Observation("installed", "local", AircraftDataConfidence.Inferred, installed: true)
+        ]);
+
+        Assert.Equal(AircraftInstallationStatus.Installed, result.InstallationStatus);
+    }
+
+    [Fact]
+    public void ReferenceOnlyAircraftRemainsKnownOnly()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation("catalog", "known", AircraftDataConfidence.Reference)
+        ]);
+
+        Assert.Equal(AircraftInstallationStatus.KnownOnly, result.InstallationStatus);
+    }
+
+    [Fact]
+    public void MissingFieldsRemainExplicitAndDoNotBecomeZerosOrFalse()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "partial",
+                record: "one",
+                confidence: AircraftDataConfidence.Reference,
+                displayName: "Partial Aircraft",
+                engineCount: 1)
+        ]);
+
+        Assert.False(result.HasCompleteCapabilityProfile);
+        Assert.Null(result.CapabilityValues.MaximumPayloadPounds);
+        Assert.Null(result.CapabilityValues.IfrCapable);
+        Assert.Contains(
+            AircraftRegistryField.MaximumPayloadPounds,
+            result.UnresolvedCapabilityFields);
+        Assert.Contains(
+            AircraftRegistryField.IfrCapable,
+            result.UnresolvedCapabilityFields);
+        Assert.Null(result.TryCreateRegistryRecord());
+    }
+
+    [Fact]
+    public void PassengerCapacityResolvesIndependentlyWithoutInventingTotalSeats()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "installed",
+                record: "local",
+                confidence: AircraftDataConfidence.Verified,
+                installed: true,
+                displayName: "Passenger Fixture") with
+            {
+                PassengerCapacity = 7,
+                ReferenceMetadata = new(IcaoTypeDesignator: "TEST")
+            }
+        ]);
+
+        Assert.Equal(7, result.CapabilityValues.PassengerCapacity);
+        Assert.Null(result.CapabilityValues.Seats);
+        Assert.Equal(
+            "installed",
+            result.Provenance[AircraftRegistryField.PassengerCapacity].ProviderId);
+        Assert.Contains(AircraftRegistryField.Seats, result.UnresolvedCapabilityFields);
+        Assert.DoesNotContain(
+            AircraftRegistryField.PassengerCapacity,
+            result.UnresolvedCapabilityFields);
+    }
+
+    [Fact]
+    public void MissingPassengerCapacityDoesNotBlockExistingCompleteProfile()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            CompleteObservation(
+                "reference",
+                "complete",
+                AircraftDataConfidence.Reference)
+        ]);
+
+        Assert.Null(result.CapabilityValues.PassengerCapacity);
+        Assert.True(result.HasCompleteCapabilityProfile);
+        Assert.NotNull(result.TryCreateRegistryRecord());
+        Assert.DoesNotContain(
+            AircraftRegistryField.PassengerCapacity,
+            result.UnresolvedCapabilityFields);
+    }
+
+    [Fact]
+    public void NegativePassengerCapacityIsRejected()
+    {
+        AircraftRegistryObservation observation = Observation(
+            "reference",
+            "invalid-capacity",
+            AircraftDataConfidence.Reference) with
+        {
+            PassengerCapacity = -1
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AircraftRegistryResolver.Resolve([observation]));
+    }
+
+    [Fact]
+    public void ObjectClassResolvesIndependentlyWithoutCreatingMissionCapabilities()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                "cfg",
+                "helicopter",
+                AircraftDataConfidence.Reference) with
+            {
+                ObjectClass = AircraftObjectClass.Helicopter
+            }
+        ]);
+
+        Assert.Equal(AircraftObjectClass.Helicopter, result.ObjectClass);
+        Assert.Null(result.CapabilityValues.Capabilities);
+        Assert.Equal(
+            "cfg",
+            result.Provenance[AircraftRegistryField.ObjectClass].ProviderId);
+        Assert.Contains(
+            AircraftRegistryField.Capabilities,
+            result.UnresolvedCapabilityFields);
+    }
+
+    [Fact]
+    public void CertifiedCeilingResolvesWithIndependentProvenanceAndIsNotRequired()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            CompleteObservation(
+                "reference",
+                "ceiling",
+                AircraftDataConfidence.Reference) with
+            {
+                CertifiedCeilingFeet = 18_000
+            }
+        ]);
+
+        Assert.Equal(18_000, result.CapabilityValues.CertifiedCeilingFeet);
+        Assert.Equal(
+            "reference",
+            result.Provenance[AircraftRegistryField.CertifiedCeilingFeet].ProviderId);
+        Assert.True(result.HasCompleteCapabilityProfile);
+        Assert.DoesNotContain(
+            AircraftRegistryField.CertifiedCeilingFeet,
+            result.UnresolvedCapabilityFields);
+    }
+
+    [Fact]
+    public void NonPositiveCertifiedCeilingIsRejected()
+    {
+        AircraftRegistryObservation observation = Observation(
+            "reference",
+            "invalid-ceiling",
+            AircraftDataConfidence.Reference) with
+        {
+            CertifiedCeilingFeet = 0
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AircraftRegistryResolver.Resolve([observation]));
+    }
+
+    [Fact]
+    public void ExplicitIcaoDesignatorProducesStableNormalizedTypeIdentity()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "local-config",
+                record: "da62",
+                confidence: AircraftDataConfidence.Reference)
+            with
+            {
+                ReferenceMetadata = new(
+                    IcaoTypeDesignator: " da62 ",
+                    IcaoManufacturer: " DIAMOND ",
+                    IcaoModel: " DA 62 ")
+            }
+        ]);
+
+        AircraftTypeIdentity identity =
+            Assert.IsType<AircraftTypeIdentity>(result.TypeIdentity);
+        Assert.Equal("icao-type:DA62", identity.CanonicalTypeId);
+        Assert.Equal("DA62", identity.IcaoTypeDesignator);
+        AircraftFamilyIdentity family =
+            Assert.IsType<AircraftFamilyIdentity>(result.FamilyIdentity);
+        Assert.Equal("icao-family:DIAMOND/DA%2062", family.CanonicalFamilyId);
+        Assert.Equal("DIAMOND", family.IcaoManufacturer);
+        Assert.Equal("DA 62", family.IcaoModel);
+    }
+
+    [Fact]
+    public void ModelWithoutIcaoDesignatorDoesNotFabricateTypeIdentity()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "local-config",
+                record: "model-only",
+                confidence: AircraftDataConfidence.Reference)
+            with
+            {
+                ReferenceMetadata = new(IcaoModel: "Similar Looking Model")
+            }
+        ]);
+
+        Assert.Null(result.TypeIdentity);
+        Assert.Null(result.FamilyIdentity);
+    }
+
+    [Fact]
+    public void VariationsCanShareTypeIdentityWithoutMergingAircraftRecords()
+    {
+        IReadOnlyList<AircraftRegistryResolution> results =
+            AircraftRegistryResolver.ResolveAll(
+            [
+                Observation("cfg", "classic", AircraftDataConfidence.Reference)
+                    with
+                    {
+                        CanonicalAircraftId = "msfs-title:C172 Classic",
+                        ReferenceMetadata = new(
+                            IcaoTypeDesignator: "C172",
+                            IcaoManufacturer: "Cessna",
+                            IcaoModel: "172 Skyhawk")
+                    },
+                Observation("cfg", "glass", AircraftDataConfidence.Reference)
+                    with
+                    {
+                        CanonicalAircraftId = "msfs-title:C172 Glass Cockpit",
+                        ReferenceMetadata = new(
+                            IcaoTypeDesignator: "c172",
+                            IcaoManufacturer: "CESSNA AIRCRAFT",
+                            IcaoModel: "172S")
+                    }
+            ]);
+
+        Assert.Equal(2, results.Count);
+        Assert.NotEqual(results[0].CanonicalAircraftId, results[1].CanonicalAircraftId);
+        Assert.Equal(results[0].TypeIdentity, results[1].TypeIdentity);
+        Assert.Equal("icao-type:C172", results[0].TypeIdentity!.CanonicalTypeId);
+    }
+
+    [Fact]
+    public void ExplicitManufacturerAndModelProduceStableFamilyWithoutMergingRecords()
+    {
+        IReadOnlyList<AircraftRegistryResolution> results =
+            AircraftRegistryResolver.ResolveAll(
+            [
+                Observation("cfg", "one", AircraftDataConfidence.Reference) with
+                {
+                    CanonicalAircraftId = "msfs-title:Family One",
+                    ReferenceMetadata = new(
+                        IcaoManufacturer: "  Diamond   Aircraft ",
+                        IcaoModel: " da 62 ")
+                },
+                Observation("cfg", "two", AircraftDataConfidence.Reference) with
+                {
+                    CanonicalAircraftId = "msfs-title:Family Two",
+                    ReferenceMetadata = new(
+                        IcaoManufacturer: "DIAMOND AIRCRAFT",
+                        IcaoModel: "DA 62")
+                }
+            ]);
+
+        Assert.Equal(2, results.Count);
+        Assert.NotEqual(results[0].CanonicalAircraftId, results[1].CanonicalAircraftId);
+        Assert.Equal(results[0].FamilyIdentity, results[1].FamilyIdentity);
+        Assert.Equal(
+            "icao-family:DIAMOND%20AIRCRAFT/DA%2062",
+            results[0].FamilyIdentity!.CanonicalFamilyId);
+    }
+
+    [Theory]
+    [InlineData(null, "DA 62")]
+    [InlineData("Diamond", null)]
+    public void IncompleteFamilyMetadataDoesNotFabricateFamilyIdentity(
+        string? manufacturer,
+        string? model)
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation("cfg", "family", AircraftDataConfidence.Reference) with
+            {
+                ReferenceMetadata = new(
+                    IcaoManufacturer: manufacturer,
+                    IcaoModel: model)
+            }
+        ]);
+
+        Assert.Null(result.FamilyIdentity);
+    }
+
+    [Theory]
+    [InlineData(AircraftEngineType.Piston, 1, AircraftEngineMultiplicity.Single)]
+    [InlineData(AircraftEngineType.Piston, 2, AircraftEngineMultiplicity.Multi)]
+    [InlineData(AircraftEngineType.Jet, 4, AircraftEngineMultiplicity.Multi)]
+    [InlineData(AircraftEngineType.Electric, 1, AircraftEngineMultiplicity.Single)]
+    [InlineData(AircraftEngineType.None, 0, AircraftEngineMultiplicity.None)]
+    public void ExplicitEngineEvidenceProducesDeterministicPowerplantClass(
+        AircraftEngineType engineType,
+        int engineCount,
+        AircraftEngineMultiplicity expectedMultiplicity)
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            Observation(
+                provider: "local-config",
+                record: "powerplant",
+                confidence: AircraftDataConfidence.Reference,
+                engineCount: engineCount)
+            with
+            {
+                ReferenceMetadata = new(EngineType: engineType)
+            }
+        ]);
+
+        AircraftPowerplantClassification classification =
+            Assert.IsType<AircraftPowerplantClassification>(
+                result.PowerplantClassification);
+        Assert.Equal(engineType, classification.EngineType);
+        Assert.Equal(engineCount, classification.EngineCount);
+        Assert.Equal(expectedMultiplicity, classification.Multiplicity);
+        AircraftPowerplantClassIdentity classIdentity =
+            Assert.IsType<AircraftPowerplantClassIdentity>(
+                result.PowerplantClassIdentity);
+        Assert.StartsWith(
+            AircraftPowerplantClassIdentity.CanonicalClassPrefix,
+            classIdentity.CanonicalClassId,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null, 1)]
+    [InlineData(AircraftEngineType.Piston, null)]
+    [InlineData(AircraftEngineType.Piston, 0)]
+    [InlineData(AircraftEngineType.None, 1)]
+    public void MissingOrInconsistentEngineEvidenceLeavesPowerplantClassUnknown(
+        AircraftEngineType? engineType,
+        int? engineCount)
+    {
+        AircraftRegistryObservation observation = Observation(
+            provider: "local-config",
+            record: "unknown-powerplant",
+            confidence: AircraftDataConfidence.Reference,
+            engineCount: engineCount) with
+        {
+            ReferenceMetadata = engineType is null
+                ? null
+                : new(EngineType: engineType)
+        };
+
+        AircraftRegistryResolution result =
+            AircraftRegistryResolver.Resolve([observation]);
+
+        Assert.Null(result.PowerplantClassification);
+        Assert.Null(result.PowerplantClassIdentity);
+    }
+
+    [Fact]
+    public void CompleteResolutionCreatesExistingRegistryRecordShape()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            CompleteObservation(
+                "installed",
+                "local",
+                AircraftDataConfidence.Verified,
+                installed: true)
+        ]);
+
+        AircraftRegistryRecord record = Assert.IsType<AircraftRegistryRecord>(
+            result.TryCreateRegistryRecord());
+
+        Assert.True(record.IsInstalled);
+        Assert.Equal("fixture-aircraft", record.AircraftId);
+        Assert.Equal(2000, record.Capabilities.MaximumPayloadPounds);
+        Assert.NotNull(record.RunwayPerformance);
+    }
+
+    [Fact]
+    public void EqualConfidenceTieBreakIsStableAcrossInputOrder()
+    {
+        AircraftRegistryObservation a = CompleteObservation(
+            "alpha",
+            "two",
+            AircraftDataConfidence.Reference,
+            displayName: "Alpha");
+        AircraftRegistryObservation b = CompleteObservation(
+            "bravo",
+            "one",
+            AircraftDataConfidence.Reference,
+            displayName: "Bravo");
+
+        AircraftRegistryResolution first = AircraftRegistryResolver.Resolve([b, a]);
+        AircraftRegistryResolution second = AircraftRegistryResolver.Resolve([a, b]);
+
+        Assert.Equal("Alpha", first.CapabilityValues.DisplayName);
+        Assert.Equal(first.CapabilityValues, second.CapabilityValues);
+        Assert.Equal(
+            first.Provenance[AircraftRegistryField.DisplayName],
+            second.Provenance[AircraftRegistryField.DisplayName]);
+    }
+
+    [Fact]
+    public void InstalledEvidenceBreaksEqualConfidenceTieDeterministically()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            CompleteObservation(
+                "reference",
+                "one",
+                AircraftDataConfidence.Reference,
+                displayName: "Reference",
+                installed: false),
+            CompleteObservation(
+                "local",
+                "two",
+                AircraftDataConfidence.Reference,
+                displayName: "Installed",
+                installed: true)
+        ]);
+
+        Assert.Equal("Installed", result.CapabilityValues.DisplayName);
+        Assert.True(result.Provenance[AircraftRegistryField.DisplayName].InstalledEvidence);
+    }
+
+    [Fact]
+    public void RunwayPerformanceUsesItsOwnConfidence()
+    {
+        var inferred = new AircraftRunwayPerformanceProfile(
+            3000,
+            2800,
+            75,
+            RunwaySurfaceSupport.Asphalt,
+            AircraftDataConfidence.Inferred,
+            "local-inference");
+
+        var verified = inferred with
+        {
+            MinimumTakeoffRunwayFeet = 3200,
+            Confidence = AircraftDataConfidence.Verified,
+            Source = "verified-reference"
+        };
+
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            CompleteObservation(
+                "provider-a",
+                "one",
+                AircraftDataConfidence.Verified,
+                runwayPerformance: inferred),
+            CompleteObservation(
+                "provider-b",
+                "two",
+                AircraftDataConfidence.Reference,
+                runwayPerformance: verified)
+        ]);
+
+        Assert.Equal(3200, result.RunwayPerformance!.MinimumTakeoffRunwayFeet);
+        Assert.Equal(
+            AircraftDataConfidence.Verified,
+            result.Provenance[AircraftRegistryField.RunwayPerformance].Confidence);
+        Assert.Equal(
+            "provider-b",
+            result.Provenance[AircraftRegistryField.RunwayPerformance].ProviderId);
+    }
+
+    [Fact]
+    public void DuplicateProviderRecordIdentityIsRejected()
+    {
+        AircraftRegistryObservation a = Observation(
+            "same-provider",
+            "same-record",
+            AircraftDataConfidence.Reference);
+
+        Assert.Throws<ArgumentException>(
+            () => AircraftRegistryResolver.Resolve([a, a with { DisplayName = "Conflict" }]));
+    }
+
+    [Fact]
+    public void ResolverDoesNotFuzzyMergeDifferentCanonicalAircraft()
+    {
+        IReadOnlyList<AircraftRegistryResolution> results = AircraftRegistryResolver.ResolveAll(
+        [
+            CompleteObservation("provider", "a", AircraftDataConfidence.Reference)
+                with { CanonicalAircraftId = "aircraft-a" },
+            CompleteObservation("provider", "b", AircraftDataConfidence.Reference)
+                with { CanonicalAircraftId = "aircraft-b" }
+        ]);
+
+        Assert.Equal(2, results.Count);
+        Assert.Equal("aircraft-a", results[0].CanonicalAircraftId);
+        Assert.Equal("aircraft-b", results[1].CanonicalAircraftId);
+    }
+
+    [Fact]
+    public async Task CatalogMergesProviderObservationsAndPreservesUnknowns()
+    {
+        var catalog = new AircraftRegistryCatalogService(
+        [
+            new StubObservationSource(
+            [
+                Observation(
+                    "installed",
+                    "local",
+                    AircraftDataConfidence.Verified,
+                    installed: true,
+                    displayName: "Installed Aircraft")
+            ]),
+            new StubObservationSource(
+            [
+                Observation(
+                    "reference",
+                    "perf",
+                    AircraftDataConfidence.Reference,
+                    payload: 1200,
+                    range: 700)
+            ])
+        ]);
+
+        AircraftRegistryResolution result = Assert.IsType<AircraftRegistryResolution>(
+            await catalog.FindAircraftAsync("fixture-aircraft"));
+
+        Assert.Equal(AircraftInstallationStatus.Installed, result.InstallationStatus);
+        Assert.Equal(1200, result.CapabilityValues.MaximumPayloadPounds);
+        Assert.Contains(AircraftRegistryField.Access, result.UnresolvedCapabilityFields);
+        Assert.Null(result.TryCreateRegistryRecord());
+    }
+
+    [Fact]
+    public async Task CatalogRejectsProviderReturningDifferentCanonicalIdentity()
+    {
+        var catalog = new AircraftRegistryCatalogService(
+        [
+            new StubObservationSource(
+            [
+                CompleteObservation(
+                    "provider",
+                    "one",
+                    AircraftDataConfidence.Reference)
+                    with { CanonicalAircraftId = "different-aircraft" }
+            ])
+        ]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => catalog.FindAircraftAsync("fixture-aircraft"));
+    }
+
+    [Fact]
+    public async Task C172ReferenceCompletesInstalledEvidenceWithoutClaimingInstallation()
+    {
+        var reference =
+            new PlayableLoopReferenceAircraftObservationSource();
+
+        IReadOnlyList<AircraftRegistryObservation> referenceOnly =
+            await reference.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId);
+
+        AircraftRegistryObservation seeded =
+            Assert.Single(referenceOnly);
+
+        Assert.False(seeded.IsInstalled);
+
+        var referenceCatalog =
+            new AircraftRegistryCatalogService([reference]);
+
+        AircraftRegistryResolution knownOnly =
+            Assert.IsType<AircraftRegistryResolution>(
+                await referenceCatalog.FindAircraftAsync(
+                    AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId));
+
+        Assert.Equal(
+            AircraftInstallationStatus.KnownOnly,
+            knownOnly.InstallationStatus);
+
+        var catalog =
+            new AircraftRegistryCatalogService(
+            [
+                new StubObservationSource(
+                [
+                    new AircraftRegistryObservation(
+                        AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId,
+                        "msfs-live",
+                        "C172SP Classic Passengers",
+                        AircraftDataConfidence.Verified,
+                        IsInstalled: true,
+                        DisplayName: "C172SP Classic Passengers")
+                ]),
+                reference
+            ]);
+
+        AircraftRegistryResolution resolved =
+            Assert.IsType<AircraftRegistryResolution>(
+                await catalog.FindAircraftAsync(
+                    AircraftCanonicalIdentity.Cessna172SkyhawkAircraftId));
+
+        AircraftRegistryRecord record =
+            Assert.IsType<AircraftRegistryRecord>(
+                resolved.TryCreateRegistryRecord());
+
+        Assert.Equal(
+            AircraftInstallationStatus.Installed,
+            resolved.InstallationStatus);
+        Assert.True(record.IsInstalled);
+        Assert.Equal(870, record.Capabilities.MaximumPayloadPounds);
+        Assert.Equal(640, record.Capabilities.MaximumRangeNauticalMiles);
+        Assert.Equal(4, record.Capabilities.Seats);
+        Assert.Equal(1, record.Capabilities.EngineCount);
+        Assert.NotNull(record.RunwayPerformance);
+        Assert.Equal(
+            PlayableLoopReferenceAircraftObservationSource.ProviderId,
+            resolved.Provenance[AircraftRegistryField.MaximumRangeNauticalMiles]
+                .ProviderId);
+    }
+
+    [Fact]
+    public async Task C172ReferenceDoesNotSeedOtherAircraft()
+    {
+        var source =
+            new PlayableLoopReferenceAircraftObservationSource();
+
+        Assert.Empty(
+            await source.FindAircraftObservationsAsync(
+                "msfs-title:Unknown Aircraft"));
+    }
+
+    private static AircraftRegistryObservation Observation(
+        string provider,
+        string record,
+        AircraftDataConfidence confidence,
+        bool installed = false,
+        string? displayName = null,
+        AircraftCapability? capabilities = null,
+        AircraftAccess? access = null,
+        double? payload = null,
+        double? range = null,
+        double? cruise = null,
+        int? seats = null,
+        int? engineCount = null,
+        bool? ifr = null,
+        bool? pressurized = null,
+        bool? retractable = null,
+        AircraftRunwayPerformanceProfile? runwayPerformance = null) =>
+        new(
+            "fixture-aircraft",
+            provider,
+            record,
+            confidence,
+            installed,
+            displayName,
+            capabilities,
+            access,
+            payload,
+            range,
+            cruise,
+            seats,
+            engineCount,
+            ifr,
+            pressurized,
+            retractable,
+            runwayPerformance);
+
+    private static AircraftRegistryObservation CompleteObservation(
+        string provider,
+        string record,
+        AircraftDataConfidence confidence,
+        bool installed = false,
+        string displayName = "Fixture Aircraft",
+        AircraftRunwayPerformanceProfile? runwayPerformance = null) =>
+        Observation(
+            provider,
+            record,
+            confidence,
+            installed,
+            displayName,
+            AircraftCapability.Cargo,
+            AircraftAccess.Civilian,
+            payload: 2000,
+            range: 800,
+            cruise: 150,
+            seats: 6,
+            engineCount: 1,
+            ifr: true,
+            pressurized: false,
+            retractable: false,
+            runwayPerformance: runwayPerformance ?? new(
+                1800,
+                1600,
+                50,
+                RunwaySurfaceSupport.Asphalt | RunwaySurfaceSupport.Concrete,
+                AircraftDataConfidence.Reference,
+                "test"));
+
+    private sealed class StubObservationSource(
+        IReadOnlyList<AircraftRegistryObservation> observations)
+        : IAircraftRegistryObservationSource
+    {
+        public Task<IReadOnlyList<AircraftRegistryObservation>> FindAircraftObservationsAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(observations);
+    }
+}

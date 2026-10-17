@@ -14,7 +14,8 @@ public sealed record FlightSessionDebriefContext(
     MissionOutcome MissionOutcome,
     FlightSettlementRecord Settlement,
     IReadOnlyList<FlightDebriefEvent>? Events = null,
-    bool PositionJumpObserved = false);
+    bool PositionJumpObserved = false,
+    CivilianQualificationTrainingMetadata? QualificationTraining = null);
 
 public static class FlightSessionDebriefProjector
 {
@@ -42,6 +43,11 @@ public static class FlightSessionDebriefProjector
         FlightSessionStatistics statistics =
             session.EffectiveStatistics;
 
+        FlightLeg[] runtimeLegs =
+            session.EffectiveLegs
+                .OrderBy(leg => leg.Sequence)
+                .ToArray();
+
         FlightRouteDebrief route =
             new(
                 session.Plan?.PlannedOrigin,
@@ -50,19 +56,6 @@ public static class FlightSessionDebriefProjector
                 context.ActualArrival,
                 context.DiversionLocation,
                 statistics.DistanceNauticalMiles);
-
-        FlightTrackPoint[] track =
-            statistics.RouteTrack
-                .Where(point =>
-                    point.Timestamp >= session.CreatedAt
-                    && point.Timestamp <= endedAt)
-                .Select(point =>
-                    new FlightTrackPoint(
-                        point.Timestamp,
-                        point.LatitudeDegrees,
-                        point.LongitudeDegrees,
-                        point.AltitudeMslFeet))
-                .ToArray();
 
         FlightSessionLandingEpisode[] sessionLandings =
             session.EffectiveLandingEpisodes
@@ -74,21 +67,16 @@ public static class FlightSessionDebriefProjector
                 .Select(MapLanding)
                 .ToArray();
 
-        int[] landingEpisodes =
-            sessionLandings
-                .Select(item => item.EpisodeNumber)
+        FlightLegDebrief[] legs =
+            runtimeLegs
+                .Select((runtimeLeg, index) =>
+                    ProjectLeg(
+                        runtimeLeg,
+                        index,
+                        runtimeLegs.Length,
+                        endedAt,
+                        context))
                 .ToArray();
-
-        var leg =
-            new FlightLegDebrief(
-                session.SessionId,
-                Sequence: 1,
-                session.CreatedAt,
-                endedAt,
-                route,
-                session.TimeLedger,
-                track,
-                landingEpisodes);
 
         var fuel =
             new FlightFuelDebrief(
@@ -139,7 +127,7 @@ public static class FlightSessionDebriefProjector
                 Tracking:
                     session.Tracking,
                 Legs:
-                    [leg],
+                    legs,
                 Fuel:
                     fuel,
                 Payload:
@@ -156,9 +144,66 @@ public static class FlightSessionDebriefProjector
                     context.Events
                     ?? Array.Empty<FlightDebriefEvent>(),
                 Settlement:
-                    context.Settlement);
+                    context.Settlement,
+                QualificationTraining:
+                    context.QualificationTraining);
 
         return FlightDebriefFactory.Create(draft);
+    }
+
+    private static FlightLegDebrief ProjectLeg(
+        FlightLeg runtimeLeg,
+        int index,
+        int legCount,
+        DateTimeOffset sessionEndedAt,
+        FlightSessionDebriefContext context)
+    {
+        runtimeLeg.Validate();
+
+        DateTimeOffset legEndedAt =
+            runtimeLeg.CompletedAt
+            ?? sessionEndedAt;
+
+        FlightSessionStatistics statistics =
+            runtimeLeg.EffectiveStatistics;
+
+        var route =
+            new FlightRouteDebrief(
+                runtimeLeg.Plan?.PlannedOrigin,
+                runtimeLeg.Plan?.PlannedDestination,
+                index == 0
+                    ? context.ActualDeparture
+                    : null,
+                index == legCount - 1
+                    ? context.ActualArrival
+                    : null,
+                index == legCount - 1
+                    ? context.DiversionLocation
+                    : null,
+                statistics.DistanceNauticalMiles);
+
+        FlightTrackPoint[] track =
+            statistics.RouteTrack
+                .Where(point =>
+                    point.Timestamp >= runtimeLeg.StartedAt
+                    && point.Timestamp <= legEndedAt)
+                .Select(point =>
+                    new FlightTrackPoint(
+                        point.Timestamp,
+                        point.LatitudeDegrees,
+                        point.LongitudeDegrees,
+                        point.AltitudeMslFeet))
+                .ToArray();
+
+        return new FlightLegDebrief(
+            runtimeLeg.LegId,
+            runtimeLeg.Sequence,
+            runtimeLeg.StartedAt,
+            legEndedAt,
+            route,
+            runtimeLeg.EffectiveTimeLedger,
+            track,
+            runtimeLeg.EffectiveLandingEpisodeNumbers.ToArray());
     }
 
     private static LandingDebrief MapLanding(
@@ -184,11 +229,16 @@ public static class FlightSessionDebriefProjector
             episode.TouchdownAt,
             operationType,
             episode.BounceCount,
-            VerticalSpeedFeetPerMinute: null,
-            TouchdownG: null,
-            IndicatedAirspeedKnots: null,
-            PitchDegrees: null,
-            BankDegrees: null,
+            VerticalSpeedFeetPerMinute:
+                episode.VerticalSpeedFeetPerMinute,
+            TouchdownG:
+                episode.NormalAccelerationG,
+            IndicatedAirspeedKnots:
+                episode.IndicatedAirspeedKnots,
+            PitchDegrees:
+                episode.PitchDegrees,
+            BankDegrees:
+                episode.BankDegrees,
             HardLanding: null,
             EvidenceQuality:
                 EvidenceQuality.DerivedHighConfidence);
