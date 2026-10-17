@@ -198,6 +198,45 @@ public class AircraftRegistryResolutionTests
     }
 
     [Fact]
+    public void CertifiedCeilingResolvesWithIndependentProvenanceAndIsNotRequired()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            CompleteObservation(
+                "reference",
+                "ceiling",
+                AircraftDataConfidence.Reference) with
+            {
+                CertifiedCeilingFeet = 18_000
+            }
+        ]);
+
+        Assert.Equal(18_000, result.CapabilityValues.CertifiedCeilingFeet);
+        Assert.Equal(
+            "reference",
+            result.Provenance[AircraftRegistryField.CertifiedCeilingFeet].ProviderId);
+        Assert.True(result.HasCompleteCapabilityProfile);
+        Assert.DoesNotContain(
+            AircraftRegistryField.CertifiedCeilingFeet,
+            result.UnresolvedCapabilityFields);
+    }
+
+    [Fact]
+    public void NonPositiveCertifiedCeilingIsRejected()
+    {
+        AircraftRegistryObservation observation = Observation(
+            "reference",
+            "invalid-ceiling",
+            AircraftDataConfidence.Reference) with
+        {
+            CertifiedCeilingFeet = 0
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AircraftRegistryResolver.Resolve([observation]));
+    }
+
+    [Fact]
     public void ExplicitIcaoDesignatorProducesStableNormalizedTypeIdentity()
     {
         AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(

@@ -33,7 +33,8 @@ public sealed class AircraftViewModelTests
                     LandingGearText: "Fixed/non-retractable gear",
                     CapabilityEvidenceText: "Evidence: payload — cfg (Verified)",
                     PassengerCapacityText: "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
-                    ObjectClassText: "Aircraft class Airplane")
+                    ObjectClassText: "Aircraft class Airplane",
+                    CertifiedCeilingText: "Certified ceiling 14000 ft")
             ]));
         var viewModel = new AircraftViewModel(source);
 
@@ -52,6 +53,7 @@ public sealed class AircraftViewModelTests
         Assert.Equal("Typical cruise 122.5 kt", Assert.Single(viewModel.Aircraft).TypicalCruiseText);
         Assert.Equal("IFR capable", Assert.Single(viewModel.Aircraft).IfrCapabilityText);
         Assert.Equal("Aircraft class Airplane", Assert.Single(viewModel.Aircraft).ObjectClassText);
+        Assert.Equal("Certified ceiling 14000 ft", Assert.Single(viewModel.Aircraft).CertifiedCeilingText);
         Assert.Equal(
             "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
             Assert.Single(viewModel.Aircraft).PassengerCapacityText);

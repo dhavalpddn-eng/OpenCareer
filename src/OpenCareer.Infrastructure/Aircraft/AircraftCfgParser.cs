@@ -7,6 +7,7 @@ internal sealed record AircraftCfgVariation(
     string SectionName,
     string Title,
     double? MaximumRangeNauticalMiles,
+    double? CertifiedCeilingFeet,
     int? PassengerCapacity,
     bool? IsUserSelectable,
     bool? IsAirTraffic,
@@ -101,6 +102,7 @@ internal static class AircraftCfgParser
             sectionName,
             title,
             ParseNonNegativeDouble(ReadOptionalText(values, "ui_max_range")),
+            ParsePositiveDouble(ReadOptionalText(values, "ui_certified_ceiling")),
             ParseNonNegativeInt(ReadOptionalText(values, "capacity")),
             ParseOptionalBool(ReadOptionalText(values, "isUserSelectable")),
             ParseOptionalBool(ReadOptionalText(values, "isAirTraffic")),
@@ -213,6 +215,12 @@ internal static class AircraftCfgParser
         }
 
         return parsed;
+    }
+
+    private static double? ParsePositiveDouble(string? value)
+    {
+        double? parsed = ParseNonNegativeDouble(value);
+        return parsed > 0 ? parsed : null;
     }
 
     private static bool? ParseOptionalBool(string? value)

@@ -89,6 +89,7 @@ public sealed class MsfsAircraftCfgObservationSource(
             Access: access,
             MaximumPayloadPounds: maximumPayload,
             MaximumRangeNauticalMiles: variation.MaximumRangeNauticalMiles,
+            CertifiedCeilingFeet: variation.CertifiedCeilingFeet,
             TypicalCruiseKnots: flightModel?.TypicalCruiseKnots,
             EngineCount: document.EngineCount,
             Pressurized: pressurized,

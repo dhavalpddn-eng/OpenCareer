@@ -32,7 +32,8 @@ public sealed record InstalledAircraftInventoryItem(
     string CapabilityEvidenceText = "Capability evidence sources unavailable",
     string PassengerCapacityText = "Passenger capacity unknown",
     string TypicalCruiseText = "Typical cruise unknown",
-    string ObjectClassText = "Aircraft class unknown");
+    string ObjectClassText = "Aircraft class unknown",
+    string CertifiedCeilingText = "Certified ceiling unknown");
 
 public sealed record InstalledAircraftInventorySnapshot(
     InstalledAircraftInventoryStatus Status,
@@ -211,6 +212,10 @@ public sealed class InstalledAircraftInventorySource(
             resolution,
             AircraftRegistryField.ObjectClass,
             resolution?.ObjectClass);
+        double? certifiedCeiling = ProvenValue(
+            resolution,
+            AircraftRegistryField.CertifiedCeilingFeet,
+            facts?.CertifiedCeilingFeet);
 
         return new(
             aircraftId,
@@ -260,12 +265,14 @@ public sealed class InstalledAircraftInventorySource(
                 retractableGear,
                 passengerCapacity,
                 typicalCruise,
-                objectClass),
+                objectClass,
+                certifiedCeiling),
             passengerCapacity is { } displayCapacity
                 ? $"Passenger capacity {displayCapacity} (cabin value; crew and total seats not inferred)"
                 : "Passenger capacity unknown",
             FormatOptionalNumber(typicalCruise, "Typical cruise", "kt"),
-            FormatObjectClass(objectClass));
+            FormatObjectClass(objectClass),
+            FormatOptionalNumber(certifiedCeiling, "Certified ceiling", "ft"));
     }
 
     private static (string Status, string Reservation) FormatAvailability(
@@ -411,7 +418,8 @@ public sealed class InstalledAircraftInventorySource(
         bool? retractableGear,
         int? passengerCapacity,
         double? typicalCruise,
-        AircraftObjectClass? objectClass)
+        AircraftObjectClass? objectClass,
+        double? certifiedCeiling)
     {
         if (resolution is null)
             return "Capability evidence sources unavailable";
@@ -426,6 +434,7 @@ public sealed class InstalledAircraftInventorySource(
         Add(AircraftRegistryField.RetractableGear, "landing gear", retractableGear is not null);
         Add(AircraftRegistryField.PassengerCapacity, "passenger capacity", passengerCapacity is not null);
         Add(AircraftRegistryField.ObjectClass, "aircraft class", objectClass is not null);
+        Add(AircraftRegistryField.CertifiedCeilingFeet, "certified ceiling", certifiedCeiling is not null);
 
         return evidence.Count == 0
             ? "Capability evidence sources unavailable"

@@ -164,6 +164,9 @@
                                 <TextBlock Text="{Binding TypicalCruiseText}"
                                            Style="{StaticResource OpenCareerPaperDataValueStyle}"
                                            TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding CertifiedCeilingText}"
+                                           Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding CapabilityEvidenceText}"
                                            Style="{StaticResource OpenCareerInputHelpStyle}"
                                            TextWrapping="Wrap" />

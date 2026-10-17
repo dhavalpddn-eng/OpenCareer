@@ -23,7 +23,8 @@ public enum AircraftRegistryField
     ReferenceMetadata,
     DispatchPerformance,
     PassengerCapacity,
-    ObjectClass
+    ObjectClass,
+    CertifiedCeilingFeet
 }
 
 public sealed record AircraftRegistryObservation(
@@ -47,7 +48,8 @@ public sealed record AircraftRegistryObservation(
     AircraftReferenceMetadata? ReferenceMetadata = null,
     AircraftDispatchPerformanceProfile? DispatchPerformance = null,
     int? PassengerCapacity = null,
-    AircraftObjectClass? ObjectClass = null)
+    AircraftObjectClass? ObjectClass = null,
+    double? CertifiedCeilingFeet = null)
 {
     public void Validate()
     {
@@ -74,6 +76,11 @@ public sealed record AircraftRegistryObservation(
         ValidateOptionalNonNegative(MaximumPayloadPounds, nameof(MaximumPayloadPounds));
         ValidateOptionalNonNegative(MaximumRangeNauticalMiles, nameof(MaximumRangeNauticalMiles));
         ValidateOptionalNonNegative(TypicalCruiseKnots, nameof(TypicalCruiseKnots));
+        if (CertifiedCeilingFeet is { } certifiedCeiling
+            && (!double.IsFinite(certifiedCeiling) || certifiedCeiling <= 0))
+        {
+            throw new ArgumentOutOfRangeException(nameof(CertifiedCeilingFeet));
+        }
 
         if (Seats is < 0)
             throw new ArgumentOutOfRangeException(nameof(Seats));
@@ -115,7 +122,8 @@ public sealed record ResolvedAircraftCapabilities(
     bool? IfrCapable,
     bool? Pressurized,
     bool? RetractableGear,
-    int? PassengerCapacity = null);
+    int? PassengerCapacity = null,
+    double? CertifiedCeilingFeet = null);
 
 public sealed record AircraftRegistryResolution(
     string CanonicalAircraftId,
@@ -266,6 +274,9 @@ public static class AircraftRegistryResolver
         Add(
             AircraftRegistryField.ObjectClass,
             Select(items, static item => item.ObjectClass));
+        Add(
+            AircraftRegistryField.CertifiedCeilingFeet,
+            Select(items, static item => item.CertifiedCeilingFeet));
 
         AircraftRegistryField[] unresolved = RequiredCapabilityFields
             .Where(field => !selected.ContainsKey(field))
@@ -293,7 +304,8 @@ public static class AircraftRegistryResolver
             StructValue<bool>(AircraftRegistryField.IfrCapable),
             StructValue<bool>(AircraftRegistryField.Pressurized),
             StructValue<bool>(AircraftRegistryField.RetractableGear),
-            StructValue<int>(AircraftRegistryField.PassengerCapacity));
+            StructValue<int>(AircraftRegistryField.PassengerCapacity),
+            StructValue<double>(AircraftRegistryField.CertifiedCeilingFeet));
 
         AircraftReferenceMetadata? referenceMetadata =
             ReferenceValue<AircraftReferenceMetadata>(

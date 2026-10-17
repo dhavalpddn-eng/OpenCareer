@@ -32,6 +32,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
             [FLTSIM.0]
             title = "DA62 Asobo"
             ui_max_range = 1283.5
+            ui_certified_ceiling = 20000
             capacity = 5 ; cabin/passenger capacity, not crew
             """);
 
@@ -45,6 +46,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
         Assert.Equal(AircraftDataConfidence.Reference, observation.Confidence);
         Assert.False(observation.IsInstalled);
         Assert.Equal(1283.5, observation.MaximumRangeNauticalMiles);
+        Assert.Equal(20000, observation.CertifiedCeilingFeet);
         Assert.Equal(2, observation.EngineCount);
         Assert.Null(observation.Seats);
         Assert.Equal(5, observation.PassengerCapacity);
@@ -126,6 +128,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
             [FLTSIM.0]
             title = "Test Aircraft"
             ui_max_range = -1
+            ui_certified_ceiling = 0
             capacity = invalid
             """);
 
@@ -136,6 +139,7 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
                 AircraftCanonicalIdentity.FromMsfsTitle("Test Aircraft")));
 
         Assert.Null(observation.MaximumRangeNauticalMiles);
+        Assert.Null(observation.CertifiedCeilingFeet);
         Assert.Null(observation.EngineCount);
         Assert.Null(observation.Seats);
         Assert.Null(observation.PassengerCapacity);
