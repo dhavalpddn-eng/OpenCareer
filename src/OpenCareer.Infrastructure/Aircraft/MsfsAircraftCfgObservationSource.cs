@@ -92,6 +92,7 @@ public sealed class MsfsAircraftCfgObservationSource(
             TypicalCruiseKnots: flightModel?.TypicalCruiseKnots,
             EngineCount: document.EngineCount,
             Pressurized: pressurized,
+            RetractableGear: flightModel?.RetractableGear,
             ReferenceMetadata: hasMetadata ? metadata : null,
             DispatchPerformance: dispatchPerformance,
             PassengerCapacity: variation.PassengerCapacity);

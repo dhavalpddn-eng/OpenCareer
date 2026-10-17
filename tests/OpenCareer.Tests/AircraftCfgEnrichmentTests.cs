@@ -262,6 +262,109 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
     }
 
     [Fact]
+    public async Task PositiveWheelExtensionAndRetractionTimesProveRetractableGear()
+    {
+        string root = CreatePackageRoot("Official2024");
+
+        WriteAircraftCfg(
+            root,
+            "retractable-gear-fixture",
+            """
+            [FLTSIM.0]
+            title = "Retractable Gear Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "retractable-gear-fixture",
+            "flight_model.cfg",
+            """
+            [CONTACT_POINTS]
+            point.0 = Name: nose #Properties: 1, -13, 0, -0.65, 750, 0, 0.523, 90, 0.296, 2.5, 0.794, 6, 5, 0, 165, 165, 1, 1, 0, -2.2
+            point.1 = Name: scrape #Properties: 2, 1, 0, -1, 100, 0, 0, 0, 0, 0, 0, malformed, values
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle(
+                    "Retractable Gear Fixture")));
+
+        Assert.True(observation.RetractableGear);
+
+        AircraftRegistryResolution resolution =
+            AircraftRegistryResolver.Resolve([observation]);
+        Assert.True(resolution.CapabilityValues.RetractableGear);
+        Assert.Equal(
+            MsfsAircraftCfgObservationSource.ProviderId,
+            resolution.Provenance[AircraftRegistryField.RetractableGear].ProviderId);
+    }
+
+    [Fact]
+    public async Task ZeroWheelExtensionAndRetractionTimesRemainUnknown()
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "fixed-gear-fixture",
+            """
+            [FLTSIM.0]
+            title = "Fixed Gear Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "fixed-gear-fixture",
+            "flight_model.cfg",
+            """
+            [CONTACT_POINTS]
+            point.0 = Name: nose #Properties: 1, -13, 0, -0.65, 750, 0, 0.523, 90, 0.296, 2.5, 0.794, 0, 0, 0
+            point.1 = Name: left #Properties: 1, 2, -4, -1, 750, 1, 0.6, 0, 0.3, 2.5, 0.8, 0, 0, 2
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle(
+                    "Fixed Gear Fixture")));
+
+        Assert.Null(observation.RetractableGear);
+    }
+
+    [Fact]
+    public async Task InconsistentWheelTimingFailsClosedToUnknownGearConfiguration()
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "invalid-gear-fixture",
+            """
+            [FLTSIM.0]
+            title = "Invalid Gear Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "invalid-gear-fixture",
+            "flight_model.cfg",
+            """
+            [CONTACT_POINTS]
+            point.0 = Name: nose #Properties: 1, -13, 0, -0.65, 750, 0, 0.523, 90, 0.296, 2.5, 0.794, 5, 0, 0
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle(
+                    "Invalid Gear Fixture")));
+
+        Assert.Null(observation.RetractableGear);
+        Assert.Null(observation.DispatchPerformance);
+    }
+
+    [Fact]
     public async Task MissingTakeoffAndLandingWeightsUseDocumentedGrossWeightFallback()
     {
         string root = CreatePackageRoot("Official2024");
