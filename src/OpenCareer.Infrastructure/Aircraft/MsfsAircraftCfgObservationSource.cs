@@ -73,6 +73,9 @@ public sealed class MsfsAircraftCfgObservationSource(
         double? maximumPayload =
             ResolveMaximumPayload(flightModel);
 
+        bool? pressurized =
+            TryReadPressurizationCapability(match.AircraftCfgPath);
+
         AircraftAccess? access =
             AircraftCfgParser.InferAccess(variation);
 
@@ -88,6 +91,7 @@ public sealed class MsfsAircraftCfgObservationSource(
             MaximumRangeNauticalMiles: variation.MaximumRangeNauticalMiles,
             TypicalCruiseKnots: flightModel?.TypicalCruiseKnots,
             EngineCount: document.EngineCount,
+            Pressurized: pressurized,
             ReferenceMetadata: hasMetadata ? metadata : null,
             DispatchPerformance: dispatchPerformance);
 
@@ -295,6 +299,34 @@ public sealed class MsfsAircraftCfgObservationSource(
                 MsfsFlightPerformanceCfgParser.Parse(File.ReadAllText(path));
 
             return facts.HasAny ? facts : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static bool? TryReadPressurizationCapability(
+        string aircraftCfgPath)
+    {
+        string? directory = Path.GetDirectoryName(aircraftCfgPath);
+        if (string.IsNullOrWhiteSpace(directory))
+            return null;
+
+        string? path = FindUniqueSibling(directory, "systems.cfg");
+        if (path is null)
+            return null;
+
+        try
+        {
+            MsfsPressurizationFacts facts =
+                MsfsSystemsCfgParser.Parse(File.ReadAllText(path));
+
+            return facts.ProvesPressurized ? true : null;
         }
         catch (IOException)
         {

@@ -602,6 +602,87 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
     }
 
     [Fact]
+    public async Task DocumentedSystemsCfgPressureProvesPressurizationWithProvenance()
+    {
+        string root = CreatePackageRoot("Official2024");
+
+        WriteAircraftCfg(
+            root,
+            "pressurized-fixture",
+            """
+            [FLTSIM.0]
+            title = "Pressurized Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "pressurized-fixture",
+            "systems.cfg",
+            """
+            [PRESSURIZATION]
+            design_cabin_pressure = 10.9
+            max_pressure_differential = 8.6 ; psi
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle(
+                    "Pressurized Fixture")));
+
+        Assert.True(observation.Pressurized);
+
+        AircraftRegistryResolution resolution =
+            AircraftRegistryResolver.Resolve([observation]);
+        Assert.True(resolution.CapabilityValues.Pressurized);
+        Assert.Equal(
+            MsfsAircraftCfgObservationSource.ProviderId,
+            resolution.Provenance[AircraftRegistryField.Pressurized].ProviderId);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("design_cabin_pressure = 0")]
+    [InlineData("max_pressure_differential = -1")]
+    [InlineData("design_cabin_pressure = invalid")]
+    public async Task MissingOrInvalidPressureEvidenceRemainsUnknown(
+        string parameter)
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "unknown-pressure",
+            """
+            [FLTSIM.0]
+            title = "Unknown Pressure Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "unknown-pressure",
+            "systems.cfg",
+            $"""
+            [PRESSURIZATION]
+            {parameter}
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle(
+                    "Unknown Pressure Fixture")));
+
+        Assert.Null(observation.Pressurized);
+        AircraftRegistryResolution resolution =
+            AircraftRegistryResolver.Resolve([observation]);
+        Assert.Null(resolution.CapabilityValues.Pressurized);
+        Assert.DoesNotContain(
+            AircraftRegistryField.Pressurized,
+            resolution.Provenance.Keys);
+    }
+
+    [Fact]
     public async Task MilitaryParkingMetadataDoesNotGetCivilianAccess()
     {
         string root = CreatePackageRoot("Community2024");
