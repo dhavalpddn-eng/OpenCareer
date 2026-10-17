@@ -274,6 +274,7 @@ Chapter status: **ACTIVE — FIRST C172/POINT-TO-POINT PATH IMPLEMENTED**
 - [x] Derive stable cross-variation aircraft type identity from explicit normalized ICAO type-designator metadata without fuzzy-merging canonical aircraft records.
 - [x] Derive fail-closed None / Single / Multi powerplant classification only from explicit engine type/count evidence without implying qualifications or capabilities.
 - [x] Add stable family identity only from explicit normalized ICAO manufacturer/model metadata and stable broad powerplant-class identity only from proven engine type/count evidence; do not merge canonical records or infer capability/access.
+- [x] Derive positive pressurization capability only from one unambiguous local `systems.cfg` carrying valid positive official `[PRESSURIZATION]` values; absence or invalid evidence remains unknown rather than false.
 - [ ] Expand authoritative capability profiles beyond the C172 reference and available configuration evidence.
 - [x] Record source/confidence per important capability.
 - [ ] Complete owned/rented/employer/assigned access and location authority; current civilian/military access metadata is partial.
