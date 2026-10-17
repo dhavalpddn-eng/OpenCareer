@@ -687,6 +687,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Require per-field registry provenance before Aircraft displays a capability fact, show provider/confidence evidence, and fail unproven values closed to unknown.
 - [x] Project explicit MSFS cabin passenger capacity separately from crew-inclusive total seats; do not use it as passenger-job authority without the remaining seat/access requirements.
 - [x] Resolve cabin passenger capacity through a dedicated registry field with its own provider/confidence provenance; shared reference metadata alone is not capacity authority.
+- [x] Derive positive retractable-wheel-gear capability from valid paired official `flight_model.cfg` contact-point times; preserve zero, absent, inconsistent and malformed timing as unknown rather than fixed-gear proof.
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.
