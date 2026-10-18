@@ -142,6 +142,24 @@ public sealed record AircraftRegistryResolution(
 {
     public bool HasCompleteCapabilityProfile => UnresolvedCapabilityFields.Count == 0;
 
+    public bool TryGetProvenCertifiedCeilingFeet(out double certifiedCeilingFeet)
+    {
+        certifiedCeilingFeet = 0;
+        if (CapabilityValues.CertifiedCeilingFeet is not { } value
+            || !double.IsFinite(value)
+            || value <= 0
+            || !Provenance.TryGetValue(
+                AircraftRegistryField.CertifiedCeilingFeet,
+                out AircraftRegistryFieldProvenance? provenance)
+            || provenance.Field != AircraftRegistryField.CertifiedCeilingFeet)
+        {
+            return false;
+        }
+
+        certifiedCeilingFeet = value;
+        return true;
+    }
+
     public AircraftRegistryRecord? TryCreateRegistryRecord()
     {
         if (!HasCompleteCapabilityProfile)

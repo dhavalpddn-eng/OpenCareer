@@ -249,6 +249,53 @@ public sealed class CruisePerformancePlanningTests
     }
 
     [Fact]
+    public async Task ProvenCertifiedCeilingRejectsOtherwiseInterpolableAltitude()
+    {
+        CruisePerformancePlanningService service = Service(
+            Resolution(
+                12000,
+                Profile(
+                    index: 0,
+                    fuelTypeIndex: 0,
+                    tas: Grid([5000], [0], [10000, 20000], [200, 190]),
+                    fuel: Grid([5000], [0], [10000, 20000], [30, 35]))));
+
+        CruisePerformancePlanningResult result = await service.PlanAsync(
+            "fixture-aircraft",
+            Request(pressureAltitude: 15000));
+
+        Assert.Equal(CruisePerformancePlanningStatus.InsufficientData, result.Status);
+        Assert.Equal(
+            CruisePerformancePlanningReason.CertifiedCeilingExceeded,
+            result.Reason);
+        Assert.Null(result.Plan);
+    }
+
+    [Fact]
+    public async Task UnprovenCertifiedCeilingCannotConstrainPlanning()
+    {
+        AircraftRegistryResolution resolution = Resolution(
+            Profile(
+                index: 0,
+                fuelTypeIndex: 0,
+                tas: Grid([5000], [0], [10000, 20000], [200, 190]),
+                fuel: Grid([5000], [0], [10000, 20000], [30, 35]))) with
+        {
+            CapabilityValues = new(
+                null, null, null, null, null, null, null, null, null, null, null,
+                CertifiedCeilingFeet: 12000)
+        };
+        CruisePerformancePlanningService service = Service(resolution);
+
+        CruisePerformancePlanningResult result = await service.PlanAsync(
+            "fixture-aircraft",
+            Request(pressureAltitude: 15000));
+
+        Assert.Equal(CruisePerformancePlanningStatus.Planned, result.Status);
+        Assert.Null(result.Reason);
+    }
+
+    [Fact]
     public async Task MissingAircraftIsInsufficientData()
     {
         var service = new CruisePerformancePlanningService(
@@ -402,6 +449,11 @@ public sealed class CruisePerformancePlanningTests
 
     private static AircraftRegistryResolution Resolution(
         params AircraftCruisePerformanceProfile[] profiles) =>
+        Resolution(null, profiles);
+
+    private static AircraftRegistryResolution Resolution(
+        double? certifiedCeilingFeet,
+        params AircraftCruisePerformanceProfile[] profiles) =>
         AircraftRegistryResolver.Resolve(
         [
             new AircraftRegistryObservation(
@@ -412,6 +464,7 @@ public sealed class CruisePerformancePlanningTests
                 IsInstalled: true,
                 MaximumPayloadPounds: 3000,
                 MaximumRangeNauticalMiles: 1200,
+                CertifiedCeilingFeet: certifiedCeilingFeet,
                 DispatchPerformance: new(
                     OperatingEmptyWeightPounds: null,
                     MaximumTakeoffWeightPounds: null,

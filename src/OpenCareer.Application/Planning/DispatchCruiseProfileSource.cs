@@ -135,6 +135,10 @@ public sealed class DispatchCruiseProfileSource(
         }
 
         dispatch.Validate();
+        double? certifiedCeilingFeet =
+            aircraft.TryGetProvenCertifiedCeilingFeet(out double provenCeiling)
+                ? provenCeiling
+                : null;
         AircraftCruisePerformanceProfile[] supplied = dispatch
             .ConditionedPerformance
             .CruiseProfiles
@@ -144,7 +148,10 @@ public sealed class DispatchCruiseProfileSource(
         var usable = new List<DispatchCruiseProfileOption>();
         foreach (AircraftCruisePerformanceProfile profile in supplied)
         {
-            DispatchCruiseProfileOption? option = TryCreateOption(profile, dispatch);
+            DispatchCruiseProfileOption? option = TryCreateOption(
+                profile,
+                dispatch,
+                certifiedCeilingFeet);
             if (option is not null)
                 usable.Add(option);
         }
@@ -164,6 +171,11 @@ public sealed class DispatchCruiseProfileSource(
             : dispatch.Source.Trim();
         string detail =
             $"{usable.Count} selectable cruise profile(s) from {source}."
+            + (certifiedCeilingFeet is { } ceiling
+                ? string.Create(
+                    CultureInfo.InvariantCulture,
+                    $" Proven certified ceiling limits pressure altitude to {ceiling:0.#} ft.")
+                : string.Empty)
             + (incomplete == 0
                 ? string.Empty
                 : $" {incomplete} incomplete profile(s) were excluded.");
@@ -176,7 +188,8 @@ public sealed class DispatchCruiseProfileSource(
 
     private static DispatchCruiseProfileOption? TryCreateOption(
         AircraftCruisePerformanceProfile profile,
-        AircraftDispatchPerformanceProfile dispatch)
+        AircraftDispatchPerformanceProfile dispatch,
+        double? certifiedCeilingFeet)
     {
         profile.Validate();
         if (profile.TrueAirspeedKnots is not { } trueAirspeed
@@ -200,8 +213,10 @@ public sealed class DispatchCruiseProfileSource(
                 trueAirspeed.PressureAltitudesFeet[0],
                 fuelConsumption.PressureAltitudesFeet[0]),
             Math.Min(
-                trueAirspeed.PressureAltitudesFeet[^1],
-                fuelConsumption.PressureAltitudesFeet[^1]));
+                Math.Min(
+                    trueAirspeed.PressureAltitudesFeet[^1],
+                    fuelConsumption.PressureAltitudesFeet[^1]),
+                certifiedCeilingFeet ?? double.PositiveInfinity));
 
         try
         {
@@ -215,15 +230,22 @@ public sealed class DispatchCruiseProfileSource(
         string name = string.IsNullOrWhiteSpace(profile.ProfileName)
             ? $"Profile {profile.Index}"
             : profile.ProfileName.Trim();
+        string evidenceDetail = string.Create(
+            CultureInfo.InvariantCulture,
+            $"Profile {profile.Index} · {dispatch.Confidence} evidence · {density:0.###} lb/gal · common envelope: {envelope.MinimumWeightPounds:0.#}–{envelope.MaximumWeightPounds:0.#} lb, ISA {envelope.MinimumIsaDeviationCelsius:0.#}–{envelope.MaximumIsaDeviationCelsius:0.#} °C, {envelope.MinimumPressureAltitudeFeet:0.#}–{envelope.MaximumPressureAltitudeFeet:0.#} ft");
+        if (certifiedCeilingFeet is { } ceiling)
+        {
+            evidenceDetail += string.Create(
+                CultureInfo.InvariantCulture,
+                $" · capped by proven certified ceiling {ceiling:0.#} ft");
+        }
 
         return new(
             profile.Index,
             profile.FuelTypeIndex,
             $"{name} · fuel type {profile.FuelTypeIndex}",
             envelope,
-            string.Create(
-                CultureInfo.InvariantCulture,
-                $"Profile {profile.Index} · {dispatch.Confidence} evidence · {density:0.###} lb/gal · common envelope: {envelope.MinimumWeightPounds:0.#}–{envelope.MaximumWeightPounds:0.#} lb, ISA {envelope.MinimumIsaDeviationCelsius:0.#}–{envelope.MaximumIsaDeviationCelsius:0.#} °C, {envelope.MinimumPressureAltitudeFeet:0.#}–{envelope.MaximumPressureAltitudeFeet:0.#} ft"));
+            evidenceDetail);
     }
 
     private static DispatchCruiseProfileCatalog Empty(

@@ -19,7 +19,8 @@ public enum CruisePerformancePlanningReason
     FuelConsumptionTableUnavailable,
     TrueAirspeedOutsideEnvelope,
     FuelConsumptionOutsideEnvelope,
-    TrueAirspeedValueInvalid
+    TrueAirspeedValueInvalid,
+    CertifiedCeilingExceeded
 }
 
 public sealed record CruisePerformancePlanningRequest(
@@ -205,6 +206,13 @@ public static class CruisePerformancePlanner
         {
             return CruisePerformancePlanningResult.InsufficientData(
                 CruisePerformancePlanningReason.FuelConsumptionTableUnavailable);
+        }
+
+        if (aircraft.TryGetProvenCertifiedCeilingFeet(out double certifiedCeilingFeet)
+            && request.PressureAltitudeFeet > certifiedCeilingFeet)
+        {
+            return CruisePerformancePlanningResult.InsufficientData(
+                CruisePerformancePlanningReason.CertifiedCeilingExceeded);
         }
 
         double? trueAirspeed = profile.TrueAirspeedKnots.Interpolate(

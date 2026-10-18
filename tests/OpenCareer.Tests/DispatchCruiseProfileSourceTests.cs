@@ -41,6 +41,81 @@ public sealed class DispatchCruiseProfileSourceTests
     }
 
     [Fact]
+    public async Task ProvenCertifiedCeilingCapsSelectableAltitudeEnvelope()
+    {
+        AircraftRegistryResolution resolution = Resolution(
+            AircraftInstallationStatus.Installed,
+            DispatchProfile(
+                [Profile(
+                    0,
+                    "Economy",
+                    0,
+                    GridAtAltitudes([10000, 20000], 190),
+                    GridAtAltitudes([10000, 20000], 32))],
+                [new(0, 6)]),
+            certifiedCeilingFeet: 18000);
+        var source = new DispatchCruiseProfileSource(new StubRegistry(resolution));
+
+        DispatchCruiseProfileCatalog result = await source.ReadAsync(AircraftId);
+
+        DispatchCruiseProfileOption profile = Assert.Single(result.Profiles);
+        Assert.Equal(18000, profile.Envelope.MaximumPressureAltitudeFeet);
+        Assert.Contains("certified ceiling", profile.EvidenceDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("18000 ft", result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UnprovenCertifiedCeilingDoesNotChangeProfileEnvelope()
+    {
+        AircraftRegistryResolution resolution = Resolution(
+            AircraftInstallationStatus.Installed,
+            DispatchProfile(
+                [Profile(
+                    0,
+                    "Economy",
+                    0,
+                    GridAtAltitudes([10000, 20000], 190),
+                    GridAtAltitudes([10000, 20000], 32))],
+                [new(0, 6)])) with
+        {
+            CapabilityValues = new(
+                null, null, null, null, null, null, null, null, null, null, null,
+                CertifiedCeilingFeet: 18000)
+        };
+        var source = new DispatchCruiseProfileSource(new StubRegistry(resolution));
+
+        DispatchCruiseProfileCatalog result = await source.ReadAsync(AircraftId);
+
+        DispatchCruiseProfileOption profile = Assert.Single(result.Profiles);
+        Assert.Equal(20000, profile.Envelope.MaximumPressureAltitudeFeet);
+        Assert.DoesNotContain("certified ceiling", result.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CertifiedCeilingBelowProfileMinimumExcludesProfile()
+    {
+        AircraftRegistryResolution resolution = Resolution(
+            AircraftInstallationStatus.Installed,
+            DispatchProfile(
+                [Profile(
+                    0,
+                    "High altitude only",
+                    0,
+                    GridAtAltitudes([20000, 30000], 190),
+                    GridAtAltitudes([20000, 30000], 32))],
+                [new(0, 6)]),
+            certifiedCeilingFeet: 18000);
+        var source = new DispatchCruiseProfileSource(new StubRegistry(resolution));
+
+        DispatchCruiseProfileCatalog result = await source.ReadAsync(AircraftId);
+
+        Assert.Equal(
+            DispatchCruiseProfileCatalogStatus.NoUsableCruiseProfiles,
+            result.Status);
+        Assert.Empty(result.Profiles);
+    }
+
+    [Fact]
     public async Task MissingDispatchPerformanceIsExplicitlyUnavailable()
     {
         var source = new DispatchCruiseProfileSource(
@@ -136,18 +211,31 @@ public sealed class DispatchCruiseProfileSourceTests
 
     private static AircraftRegistryResolution Resolution(
         AircraftInstallationStatus installation,
-        AircraftDispatchPerformanceProfile? dispatch) =>
+        AircraftDispatchPerformanceProfile? dispatch,
+        double? certifiedCeilingFeet = null) =>
         new(
             AircraftId,
             installation,
-            new(null, null, null, null, null, null, null, null, null, null, null),
+            new(
+                null, null, null, null, null, null, null, null, null, null, null,
+                CertifiedCeilingFeet: certifiedCeilingFeet),
             null,
             null,
             null,
             null,
             dispatch,
             [],
-            new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>());
+            certifiedCeilingFeet is null
+                ? new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>()
+                : new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>
+                {
+                    [AircraftRegistryField.CertifiedCeilingFeet] = new(
+                        AircraftRegistryField.CertifiedCeilingFeet,
+                        "test-source",
+                        "fixture",
+                        AircraftDataConfidence.Verified,
+                        InstalledEvidence: true)
+                });
 
     private static AircraftDispatchPerformanceProfile DispatchProfile(
         IReadOnlyList<AircraftCruisePerformanceProfile> profiles,
@@ -182,6 +270,16 @@ public sealed class DispatchCruiseProfileSourceTests
             [0],
             [10000],
             weights.Select(_ => value),
+            AircraftPerformanceTemperatureAxisKind.IsaDeviationCelsius);
+
+    private static AircraftPerformanceGrid3D GridAtAltitudes(
+        IReadOnlyList<double> altitudes,
+        double value) =>
+        new(
+            [5000],
+            [0],
+            altitudes,
+            altitudes.Select(_ => value),
             AircraftPerformanceTemperatureAxisKind.IsaDeviationCelsius);
 
     private sealed class StubRegistry(AircraftRegistryResolution? resolution)
