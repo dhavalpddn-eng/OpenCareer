@@ -284,7 +284,10 @@ public sealed class CareerJobMarketFeasibilitySourceTests
                 MaximumPayloadPounds: maximumPayloadPounds,
                 MaximumRangeNauticalMiles: maximumRangeNauticalMiles,
                 TypicalCruiseKnots: null,
-                Seats: null,
+                Seats:
+                    passengerCapacity is { } capacity
+                        ? capacity + 1
+                        : null,
                 EngineCount: null,
                 IfrCapable: null,
                 Pressurized: null,
