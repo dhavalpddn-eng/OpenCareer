@@ -29,6 +29,57 @@ public sealed class CareerJobMarketFeasibilitySourceTests
         JobMarketDestination feasible = Assert.Single(result.Destinations);
         Assert.Equal("KAAA", feasible.Icao);
         Assert.Equal(["aircraft-a"], registry.Requests);
+        Assert.Contains(ContractKind.Ferry, result.EligibleDestinationIcaosByKind.Keys);
+        Assert.Contains(ContractKind.Reposition, result.EligibleDestinationIcaosByKind.Keys);
+        Assert.DoesNotContain(ContractKind.Passenger, result.EligibleDestinationIcaosByKind.Keys);
+    }
+
+    [Fact]
+    public async Task PassengerKindRequiresProvenCapabilityPayloadAndCabinCapacity()
+    {
+        var source = Source(
+            AvailableDiscovery(Observation("passenger-aircraft")),
+            new StubRegistry(("passenger-aircraft", Resolution(
+                "passenger-aircraft",
+                AircraftInstallationStatus.Installed,
+                AircraftAccess.Civilian,
+                maximumRangeNauticalMiles: 500,
+                capabilities: AircraftCapability.Passenger,
+                maximumPayloadPounds: 1_000,
+                passengerCapacity: 3))));
+
+        CareerJobMarketFeasibilitySnapshot result = await source.FilterAsync(
+            "KORG",
+            [Destination("KAAA", 75)]);
+
+        Assert.Equal(CareerJobMarketFeasibilityStatus.Ready, result.Status);
+        IReadOnlySet<string> eligible =
+            result.EligibleDestinationIcaosByKind[ContractKind.Passenger];
+        Assert.Contains("KAAA", eligible);
+    }
+
+    [Fact]
+    public async Task UnprovenPassengerCapacityCannotAuthorizePassengerGeneration()
+    {
+        var source = Source(
+            AvailableDiscovery(Observation("passenger-aircraft")),
+            new StubRegistry(("passenger-aircraft", Resolution(
+                "passenger-aircraft",
+                AircraftInstallationStatus.Installed,
+                AircraftAccess.Civilian,
+                maximumRangeNauticalMiles: 500,
+                capabilities: AircraftCapability.Passenger,
+                maximumPayloadPounds: 1_000,
+                passengerCapacity: 3,
+                includePassengerCapacityProvenance: false))));
+
+        CareerJobMarketFeasibilitySnapshot result = await source.FilterAsync(
+            "KORG",
+            [Destination("KAAA", 75)]);
+
+        Assert.DoesNotContain(
+            ContractKind.Passenger,
+            result.EligibleDestinationIcaosByKind.Keys);
     }
 
     [Fact]
@@ -218,22 +269,28 @@ public sealed class CareerJobMarketFeasibilitySourceTests
         AircraftInstallationStatus installation,
         AircraftAccess access,
         double? maximumRangeNauticalMiles,
-        bool includeRunwayProvenance = true) =>
+        bool includeRunwayProvenance = true,
+        AircraftCapability? capabilities = null,
+        double? maximumPayloadPounds = 0,
+        int? passengerCapacity = null,
+        bool includePassengerCapacityProvenance = true) =>
         new(
             aircraftId,
             installation,
             new(
                 aircraftId,
                 null,
-                access,
-                MaximumPayloadPounds: 0,
+                Capabilities: capabilities,
+                Access: access,
+                MaximumPayloadPounds: maximumPayloadPounds,
                 MaximumRangeNauticalMiles: maximumRangeNauticalMiles,
                 TypicalCruiseKnots: null,
                 Seats: null,
                 EngineCount: null,
                 IfrCapable: null,
                 Pressurized: null,
-                RetractableGear: null),
+                RetractableGear: null,
+                PassengerCapacity: passengerCapacity),
             new(
                 MinimumTakeoffRunwayFeet: 1800,
                 MinimumLandingRunwayFeet: 1600,
@@ -256,17 +313,43 @@ public sealed class CareerJobMarketFeasibilitySourceTests
                 AircraftRegistryField.Pressurized,
                 AircraftRegistryField.RetractableGear
             ],
-            includeRunwayProvenance
-                ? new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>
-                {
-                    [AircraftRegistryField.RunwayPerformance] = new(
-                        AircraftRegistryField.RunwayPerformance,
-                        "test-registry",
-                        aircraftId,
-                        AircraftDataConfidence.Verified,
-                        InstalledEvidence: true)
-                }
-                : new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>());
+            Provenance(
+                aircraftId,
+                includeRunwayProvenance,
+                passengerCapacity is not null
+                    && includePassengerCapacityProvenance));
+
+    private static IReadOnlyDictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>
+        Provenance(
+            string aircraftId,
+            bool includeRunway,
+            bool includePassengerCapacity)
+    {
+        var result =
+            new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>();
+
+        if (includeRunway)
+        {
+            result[AircraftRegistryField.RunwayPerformance] = new(
+                AircraftRegistryField.RunwayPerformance,
+                "test-registry",
+                aircraftId,
+                AircraftDataConfidence.Verified,
+                InstalledEvidence: true);
+        }
+
+        if (includePassengerCapacity)
+        {
+            result[AircraftRegistryField.PassengerCapacity] = new(
+                AircraftRegistryField.PassengerCapacity,
+                "test-registry",
+                aircraftId,
+                AircraftDataConfidence.Verified,
+                InstalledEvidence: true);
+        }
+
+        return result;
+    }
 
     private static AirportRecord Airport(
         string icao,

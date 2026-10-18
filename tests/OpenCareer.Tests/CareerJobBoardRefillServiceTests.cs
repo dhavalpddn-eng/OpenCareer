@@ -225,6 +225,44 @@ public sealed class CareerJobBoardRefillServiceTests
     }
 
     [Fact]
+    public async Task PassengerQualifiedMarketGeneratesPassengerOfferWithImmutableTerms()
+    {
+        var store = new FakeBoardStore();
+        var feasibility = new FakeMarketFeasibilitySource(
+            supportedKinds:
+                new HashSet<ContractKind> { ContractKind.Passenger });
+        var service = Service(
+            store,
+            Airports(),
+            new FixedTimeProvider(Epoch),
+            feasibility);
+
+        JobBoardState board = await service.RefillAsync(Profile("KRME"));
+
+        Assert.NotEmpty(board.Offers);
+        Assert.All(
+            board.Offers,
+            offer =>
+            {
+                Assert.Equal(ContractKind.Passenger, offer.Kind);
+
+                JobMarketContractTermsEnvelope terms =
+                    Assert.IsType<JobMarketContractTermsEnvelope>(
+                        offer.ContractTerms);
+
+                Assert.Equal(
+                    PersistedPassengerJobContractTermsSource.AuthorityId,
+                    terms.AuthorityId);
+                Assert.Equal(
+                    JobMarketPolicy.Default.StandardPassengerCount,
+                    terms.AircraftRequirements.MinimumPassengerCapacity);
+                Assert.Equal(
+                    JobMarketPolicy.Default.StandardPassengerPayloadPounds,
+                    terms.PayloadPounds);
+            });
+    }
+
+    [Fact]
     public async Task NoFeasibleAircraftDestinationPersistsValidEmptyBoard()
     {
         var store = new FakeBoardStore();
@@ -420,7 +458,8 @@ public sealed class CareerJobBoardRefillServiceTests
     }
 
     private sealed class FakeMarketFeasibilitySource(
-        Func<JobMarketDestination, bool>? predicate = null)
+        Func<JobMarketDestination, bool>? predicate = null,
+        IReadOnlySet<ContractKind>? supportedKinds = null)
         : ICareerJobMarketFeasibilitySource
     {
         public int LastCandidateCount { get; private set; }
@@ -437,13 +476,27 @@ public sealed class CareerJobBoardRefillServiceTests
             JobMarketDestination[] feasible = destinations
                 .Where(predicate ?? (_ => true))
                 .ToArray();
+            IReadOnlySet<ContractKind> kinds =
+                supportedKinds
+                ?? new HashSet<ContractKind>
+                {
+                    ContractKind.Ferry,
+                    ContractKind.Reposition
+                };
+
+            IReadOnlySet<string> eligibleIcaos = feasible
+                .Select(static item => item.NormalizedIcao)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             return Task.FromResult(new CareerJobMarketFeasibilitySnapshot(
                 feasible.Length == 0
                     ? CareerJobMarketFeasibilityStatus.NoFeasibleDestinations
                     : CareerJobMarketFeasibilityStatus.Ready,
                 feasible,
-                "Fixture feasibility."));
+                "Fixture feasibility.",
+                kinds.ToDictionary(
+                    static kind => kind,
+                    _ => eligibleIcaos)));
         }
     }
 

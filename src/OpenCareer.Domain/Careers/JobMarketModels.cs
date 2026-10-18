@@ -87,7 +87,9 @@ public sealed record JobMarketGenerationRequest(
     int CareerLevel = 1,
     JobMarketPolicy? Policy = null,
     AirportMarketCapacity? Capacity = null,
-    IReadOnlySet<ContractKind>? AllowedContractKinds = null)
+    IReadOnlySet<ContractKind>? AllowedContractKinds = null,
+    IReadOnlyDictionary<ContractKind, IReadOnlySet<string>>?
+        EligibleDestinationIcaosByKind = null)
 {
     public JobMarketPolicy EffectivePolicy =>
         Policy ?? JobMarketPolicy.Default;
@@ -115,6 +117,24 @@ public sealed record JobMarketGenerationRequest(
         {
             throw new ArgumentOutOfRangeException(
                 nameof(AllowedContractKinds));
+        }
+
+        if (EligibleDestinationIcaosByKind is not null)
+        {
+            foreach ((ContractKind kind, IReadOnlySet<string> destinations)
+                in EligibleDestinationIcaosByKind)
+            {
+                if (!Enum.IsDefined(kind))
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(EligibleDestinationIcaosByKind));
+                }
+
+                ArgumentNullException.ThrowIfNull(destinations);
+
+                foreach (string destinationIcao in destinations)
+                    _ = JobMarketIcao.Normalize(destinationIcao);
+            }
         }
 
         if (CareerLevel < 1

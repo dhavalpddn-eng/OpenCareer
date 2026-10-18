@@ -313,18 +313,24 @@ public static class JobMarketGenerator
 
         if (SupportsLocalOperation(kind))
         {
-            choices.Add(
-                new(
-                    new DestinationChoice(
-                        originIcao,
-                        0,
-                        null,
-                        0,
-                        0,
-                        DemandAttractiveness:
-                            1,
-                        policy.LocalOperationWeight),
-                    policy.LocalOperationWeight));
+            if (IsDestinationEligible(
+                request,
+                kind,
+                originIcao))
+            {
+                choices.Add(
+                    new(
+                        new DestinationChoice(
+                            originIcao,
+                            0,
+                            null,
+                            0,
+                            0,
+                            DemandAttractiveness:
+                                1,
+                            policy.LocalOperationWeight),
+                        policy.LocalOperationWeight));
+            }
         }
 
         foreach (JobMarketDestination destination
@@ -335,7 +341,11 @@ public static class JobMarketGenerator
 
             if (icao == originIcao
                 || destination.DistanceNm
-                    > policy.MaximumGeneratedDistanceNm)
+                    > policy.MaximumGeneratedDistanceNm
+                || !IsDestinationEligible(
+                    request,
+                    kind,
+                    icao))
             {
                 continue;
             }
@@ -400,6 +410,24 @@ public static class JobMarketGenerator
         return choices.Count == 0
             ? null
             : ChooseWeighted(choices, random).Value;
+    }
+
+    private static bool IsDestinationEligible(
+        JobMarketGenerationRequest request,
+        ContractKind kind,
+        string destinationIcao)
+    {
+        if (request.EligibleDestinationIcaosByKind is null)
+            return true;
+
+        return request.EligibleDestinationIcaosByKind.TryGetValue(
+                kind,
+                out IReadOnlySet<string>? eligible)
+            && eligible.Any(
+                value => string.Equals(
+                    value,
+                    destinationIcao,
+                    StringComparison.OrdinalIgnoreCase));
     }
 
     private static JobMarketContractTermsEnvelope? CreateContractTermsEnvelope(

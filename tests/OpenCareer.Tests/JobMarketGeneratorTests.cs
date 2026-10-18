@@ -380,6 +380,48 @@ public sealed class JobMarketGeneratorTests
     }
 
     [Fact]
+    public void KindSpecificEligibilityCannotGeneratePassengerToAnotherDestination()
+    {
+        JobMarketPolicy policy = JobMarketPolicy.Default with
+        {
+            MinimumOffers = 2,
+            MaximumOffers = 2,
+            ShowLockedPreviews = false
+        };
+
+        var request = new JobMarketGenerationRequest(
+            GenerationSeed: 123456789,
+            Time: Epoch,
+            Origin: InitialAirportProfiles.GriffissInternational,
+            Destinations: Destinations,
+            Access: JobMarketAccess.CivilianEmployment,
+            Policy: policy,
+            AllowedContractKinds:
+                new HashSet<ContractKind> { ContractKind.Passenger },
+            EligibleDestinationIcaosByKind:
+                new Dictionary<ContractKind, IReadOnlySet<string>>
+                {
+                    [ContractKind.Passenger] =
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            "KSYR"
+                        }
+                });
+
+        JobMarketOfferDraft[] offers =
+            JobMarketGenerator.Generate(request).ToArray();
+
+        Assert.NotEmpty(offers);
+        Assert.All(
+            offers,
+            static offer =>
+            {
+                Assert.Equal(ContractKind.Passenger, offer.Kind);
+                Assert.Equal("KSYR", offer.DestinationIcao);
+            });
+    }
+
+    [Fact]
     public void UnsupportedCivilianKindsDoNotReceiveContractEnvelope()
     {
         JobMarketOfferDraft[] offers =

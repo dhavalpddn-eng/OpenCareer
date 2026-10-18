@@ -35,7 +35,8 @@ public sealed class CareerJobBoardRefillService
         new HashSet<ContractKind>
         {
             ContractKind.Ferry,
-            ContractKind.Reposition
+            ContractKind.Reposition,
+            ContractKind.Passenger
         };
 
     private static readonly JobMarketPolicy PlayableLoopPolicy =
@@ -183,7 +184,14 @@ public sealed class CareerJobBoardRefillService
                         AirportMarketCapacity.ForScale(
                             AirportMarketScale.Regional),
                     AllowedContractKinds:
-                        SupportedKinds);
+                        SupportedKinds
+                            .Where(
+                                feasibility
+                                    .EligibleDestinationIcaosByKind
+                                    .ContainsKey)
+                            .ToHashSet(),
+                    EligibleDestinationIcaosByKind:
+                        feasibility.EligibleDestinationIcaosByKind);
 
             JobBoardState board =
                 await _generation

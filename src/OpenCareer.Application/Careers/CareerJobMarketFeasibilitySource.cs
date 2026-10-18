@@ -18,7 +18,9 @@ public enum CareerJobMarketFeasibilityStatus
 public sealed record CareerJobMarketFeasibilitySnapshot(
     CareerJobMarketFeasibilityStatus Status,
     IReadOnlyList<JobMarketDestination> Destinations,
-    string Detail)
+    string Detail,
+    IReadOnlyDictionary<ContractKind, IReadOnlySet<string>>
+        EligibleDestinationIcaosByKind)
 {
     public bool IsReady => Status == CareerJobMarketFeasibilityStatus.Ready;
 }
@@ -128,6 +130,7 @@ public sealed class CareerJobMarketFeasibilitySource(
         EnsureAirportIdentity(normalizedOrigin, origin);
 
         var feasible = new List<JobMarketDestination>();
+        var eligibleByKind = new Dictionary<ContractKind, HashSet<string>>();
         foreach (JobMarketDestination destination in destinations)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -142,14 +145,38 @@ public sealed class CareerJobMarketFeasibilitySource(
             destinationAirport.Validate();
             EnsureAirportIdentity(destination.NormalizedIcao, destinationAirport);
 
-            if (aircraft.Any(item => IsFeasible(
-                    item,
-                    origin,
-                    destinationAirport,
-                    destination)))
+            bool destinationIsFeasible = false;
+
+            foreach (ContractKind kind in SupportedKinds)
             {
-                feasible.Add(destination);
+                AircraftMissionRequirements requirements =
+                    Requirements(
+                        kind,
+                        destination);
+
+                if (!aircraft.Any(item => IsFeasible(
+                        item,
+                        origin,
+                        destinationAirport,
+                        requirements)))
+                {
+                    continue;
+                }
+
+                if (!eligibleByKind.TryGetValue(
+                    kind,
+                    out HashSet<string>? eligible))
+                {
+                    eligible = new(StringComparer.OrdinalIgnoreCase);
+                    eligibleByKind.Add(kind, eligible);
+                }
+
+                eligible.Add(destination.NormalizedIcao);
+                destinationIsFeasible = true;
             }
+
+            if (destinationIsFeasible)
+                feasible.Add(destination);
         }
 
         if (feasible.Count == 0)
@@ -162,16 +189,22 @@ public sealed class CareerJobMarketFeasibilitySource(
         return new(
             CareerJobMarketFeasibilityStatus.Ready,
             feasible.ToArray(),
-            $"{feasible.Count} of {destinations.Count} market destination(s) have at least one capability- and runway-qualified installed aircraft.");
+            $"{feasible.Count} of {destinations.Count} market destination(s) have at least one capability- and runway-qualified installed aircraft.",
+            eligibleByKind.ToDictionary(
+                static pair => pair.Key,
+                static pair => (IReadOnlySet<string>)pair.Value));
     }
 
     private static bool IsFeasible(
         MarketAircraftEvidence aircraft,
         AirportRecord origin,
         AirportRecord destinationAirport,
-        JobMarketDestination destination)
+        AircraftMissionRequirements requirements)
     {
-        if (!aircraft.Record.Capabilities.Satisfies(Requirements(destination))
+        if (!aircraft.Record.Capabilities.Satisfies(requirements)
+            || requirements.MinimumPassengerCapacity > 0
+                && !aircraft.Resolution.Provenance.ContainsKey(
+                    AircraftRegistryField.PassengerCapacity)
             || aircraft.Resolution.RunwayPerformance is null
             || !aircraft.Resolution.Provenance.TryGetValue(
                 AircraftRegistryField.RunwayPerformance,
@@ -190,12 +223,30 @@ public sealed class CareerJobMarketFeasibilitySource(
         return runway.Status == DispatchFeasibilityStatus.Feasible;
     }
 
+    private static readonly ContractKind[] SupportedKinds =
+    [
+        ContractKind.Ferry,
+        ContractKind.Reposition,
+        ContractKind.Passenger
+    ];
+
     private static AircraftMissionRequirements Requirements(
+        ContractKind kind,
         JobMarketDestination destination) =>
-        new(
-            AllowedAccess: AircraftAccess.Civilian,
-            MinimumRangeNauticalMiles: destination.DistanceNm,
-            MinimumSeats: 0);
+        kind == ContractKind.Passenger
+            ? new(
+                RequiredCapabilities: AircraftCapability.Passenger,
+                AllowedAccess: AircraftAccess.Civilian,
+                MinimumPayloadPounds:
+                    JobMarketPolicy.Default.StandardPassengerPayloadPounds,
+                MinimumRangeNauticalMiles: destination.DistanceNm,
+                MinimumSeats: 1,
+                MinimumPassengerCapacity:
+                    JobMarketPolicy.Default.StandardPassengerCount)
+            : new(
+                AllowedAccess: AircraftAccess.Civilian,
+                MinimumRangeNauticalMiles: destination.DistanceNm,
+                MinimumSeats: 0);
 
     private static string NormalizeIcao(string value)
     {
@@ -231,7 +282,11 @@ public sealed class CareerJobMarketFeasibilitySource(
     private static CareerJobMarketFeasibilitySnapshot Blocked(
         CareerJobMarketFeasibilityStatus status,
         string detail) =>
-        new(status, Array.Empty<JobMarketDestination>(), detail);
+        new(
+            status,
+            Array.Empty<JobMarketDestination>(),
+            detail,
+            new Dictionary<ContractKind, IReadOnlySet<string>>());
 
     private sealed record MarketAircraftEvidence(
         AircraftRegistryResolution Resolution,
