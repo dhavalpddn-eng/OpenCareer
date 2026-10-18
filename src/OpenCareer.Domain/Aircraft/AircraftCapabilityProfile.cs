@@ -111,5 +111,13 @@ public sealed record AircraftMissionRequirements(
             || AllowedAccess == AircraftAccess.None
             || (AllowedAccess & ~AircraftAccess.Any) != 0)
             throw new ArgumentException("Invalid mission requirements.");
+
+        if (MinimumPassengerCapacity > 0
+            && (RequiredCapabilities & AircraftCapability.Passenger)
+                != AircraftCapability.Passenger)
+        {
+            throw new ArgumentException(
+                "A passenger-capacity requirement must also require passenger capability.");
+        }
     }
 }
