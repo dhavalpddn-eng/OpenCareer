@@ -1,3 +1,4 @@
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Planning;
 
 namespace OpenCareer.Application.Planning;
@@ -10,7 +11,8 @@ public enum CompositeDispatchPlanningStatus
 
 public enum CompositeDispatchPlanningReason
 {
-    FuelWeightPlanUnavailable = 0
+    FuelWeightPlanUnavailable = 0,
+    CruiseWeightBelowZeroFuel
 }
 
 public sealed record CompositeDispatchPlanningResult(
@@ -52,6 +54,7 @@ public interface ICompositeDispatchPlanningService
 /// existing dispatch pipeline.
 /// </summary>
 public sealed class CompositeDispatchPlanningService(
+    IAircraftRegistrySource aircraftRegistry,
     RouteFuelWeightPlanningService fuelWeightPlanning,
     OperationDispatchPlanningService dispatchPlanning)
     : ICompositeDispatchPlanningService
@@ -128,6 +131,32 @@ public sealed class CompositeDispatchPlanningService(
             throw new ArgumentException(
                 "Composite dispatch owns PlannedFuelTypeIndex through the Slice 17 fuel-weight plan.",
                 nameof(requirements));
+        }
+
+        cruiseRequest.Validate();
+
+        AircraftRegistryResolution? aircraft = await aircraftRegistry
+            .FindAircraftAsync(aircraftId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (aircraft?.DispatchPerformance?.OperatingEmptyWeightPounds
+                is { } operatingEmptyWeight)
+        {
+            double zeroFuelWeight =
+                operatingEmptyWeight + requirements.PayloadPounds;
+
+            if (cruiseRequest.PlannedCruiseWeightPounds < zeroFuelWeight)
+            {
+                return new(
+                    CompositeDispatchPlanningStatus.InsufficientData,
+                    CompositeDispatchPlanningReason.CruiseWeightBelowZeroFuel,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+            }
         }
 
         RouteFuelWeightPlanningResult fuelResult = await fuelWeightPlanning

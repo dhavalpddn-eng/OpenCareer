@@ -124,6 +124,7 @@ public sealed class CompositeDispatchPlanningTests
                     AircraftAvailabilityStatus.Unavailable,
                     "dispatch:alpha")));
         var service = new CompositeDispatchPlanningService(
+            registry,
             fuelWeight,
             dispatch);
 
@@ -176,6 +177,42 @@ public sealed class CompositeDispatchPlanningTests
         Assert.Equal(
             RouteFuelWeightPlanningReason.FuelDensityDataUnavailable,
             result.FuelWeightReason);
+        Assert.Null(result.DispatchResult);
+        Assert.Equal(0, airportSource.LookupCount);
+    }
+
+    [Fact]
+    public async Task CruiseWeightBelowZeroFuelWeightFailsBeforeFuelPlanning()
+    {
+        AircraftRegistryResolution resolution = Resolution(
+            fuelCapacityGallons: 100,
+            fuelDensityPoundsPerGallon: 6.0);
+
+        var airportSource = new CountingAirportDataSource(
+        [
+            Airport("KAAA", 5000),
+            Airport("KBBB", 5000)
+        ]);
+
+        CompositeDispatchPlanningResult result = await Service(
+            resolution,
+            airportSource)
+            .EvaluateAsync(
+                "fixture-aircraft",
+                "KAAA",
+                "KBBB",
+                CruiseRequest(plannedCruiseWeight: 5400),
+                RouteRequest(cruiseDistance: 100),
+                Requirements());
+
+        Assert.Equal(
+            CompositeDispatchPlanningStatus.InsufficientData,
+            result.Status);
+        Assert.Equal(
+            CompositeDispatchPlanningReason.CruiseWeightBelowZeroFuel,
+            result.Reason);
+        Assert.Null(result.RouteFuelEstimate);
+        Assert.Null(result.FuelWeightPlan);
         Assert.Null(result.DispatchResult);
         Assert.Equal(0, airportSource.LookupCount);
     }
@@ -305,15 +342,19 @@ public sealed class CompositeDispatchPlanningTests
             registry,
             airportSource);
 
-        return new CompositeDispatchPlanningService(fuelWeight, dispatch);
+        return new CompositeDispatchPlanningService(
+            registry,
+            fuelWeight,
+            dispatch);
     }
 
     private static CruisePerformancePlanningRequest CruiseRequest(
-        int fuelTypeIndex = 0) =>
+        int fuelTypeIndex = 0,
+        double plannedCruiseWeight = 6000) =>
         new(
             ProfileIndex: 0,
             FuelTypeIndex: fuelTypeIndex,
-            PlannedCruiseWeightPounds: 6000,
+            PlannedCruiseWeightPounds: plannedCruiseWeight,
             IsaDeviationCelsius: 0,
             PressureAltitudeFeet: 12000);
 

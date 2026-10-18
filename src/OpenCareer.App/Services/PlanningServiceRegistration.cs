@@ -112,6 +112,7 @@ internal static class PlanningServiceRegistration
 
         services.AddSingleton<CompositeDispatchPlanningService>(provider =>
             new CompositeDispatchPlanningService(
+                provider.GetRequiredService<IAircraftRegistrySource>(),
                 provider.GetRequiredService<RouteFuelWeightPlanningService>(),
                 provider.GetRequiredService<OperationDispatchPlanningService>()));
         services.AddSingleton<ICompositeDispatchPlanningService>(provider =>
