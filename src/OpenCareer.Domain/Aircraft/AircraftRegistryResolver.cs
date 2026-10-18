@@ -177,7 +177,8 @@ public sealed record AircraftRegistryResolution(
             CapabilityValues.EngineCount!.Value,
             CapabilityValues.IfrCapable!.Value,
             CapabilityValues.Pressurized!.Value,
-            CapabilityValues.RetractableGear!.Value);
+            CapabilityValues.RetractableGear!.Value,
+            CapabilityValues.PassengerCapacity);
 
         var record = new AircraftRegistryRecord(
             profile,

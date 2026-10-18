@@ -159,6 +159,31 @@ public class AircraftRegistryResolutionTests
     }
 
     [Fact]
+    public void ProvenPassengerCapacityFlowsIntoCompleteCapabilityRecord()
+    {
+        AircraftRegistryResolution result = AircraftRegistryResolver.Resolve(
+        [
+            CompleteObservation(
+                "reference",
+                "complete-passenger",
+                AircraftDataConfidence.Reference) with
+            {
+                Capabilities = AircraftCapability.Passenger,
+                PassengerCapacity = 5
+            }
+        ]);
+
+        AircraftRegistryRecord record = Assert.IsType<AircraftRegistryRecord>(
+            result.TryCreateRegistryRecord());
+
+        Assert.Equal(5, record.Capabilities.PassengerCapacity);
+        Assert.True(record.Capabilities.Satisfies(
+            new AircraftMissionRequirements(
+                RequiredCapabilities: AircraftCapability.Passenger,
+                MinimumPassengerCapacity: 5)));
+    }
+
+    [Fact]
     public void NegativePassengerCapacityIsRejected()
     {
         AircraftRegistryObservation observation = Observation(

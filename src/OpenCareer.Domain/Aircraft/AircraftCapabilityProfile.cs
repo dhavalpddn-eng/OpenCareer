@@ -52,7 +52,8 @@ public sealed record AircraftCapabilityProfile(
     int EngineCount,
     bool IfrCapable,
     bool Pressurized,
-    bool RetractableGear)
+    bool RetractableGear,
+    int? PassengerCapacity = null)
 {
     public bool Has(AircraftCapability capability) =>
         (Capabilities & capability) == capability;
@@ -63,7 +64,8 @@ public sealed record AircraftCapabilityProfile(
         if (!double.IsFinite(MaximumPayloadPounds) || MaximumPayloadPounds < 0
             || !double.IsFinite(MaximumRangeNauticalMiles) || MaximumRangeNauticalMiles < 0
             || !double.IsFinite(TypicalCruiseKnots) || TypicalCruiseKnots < 0
-            || Seats < 0 || EngineCount < 0 || Access == AircraftAccess.None
+            || Seats < 0 || EngineCount < 0 || PassengerCapacity is < 0
+            || Access == AircraftAccess.None
             || (Access & ~AircraftAccess.Any) != 0)
             throw new ArgumentException("Invalid aircraft capability profile.");
     }
@@ -78,6 +80,10 @@ public sealed record AircraftCapabilityProfile(
             && MaximumRangeNauticalMiles >= requirements.MinimumRangeNauticalMiles
             && TypicalCruiseKnots >= requirements.MinimumCruiseKnots
             && Seats >= requirements.MinimumSeats
+            && (requirements.MinimumPassengerCapacity == 0
+                || PassengerCapacity is { } passengerCapacity
+                    && passengerCapacity
+                        >= requirements.MinimumPassengerCapacity)
             && (!requirements.RequiresIfr || IfrCapable)
             && (!requirements.RequiresPressurization || Pressurized)
             && Has(requirements.RequiredCapabilities)
@@ -93,14 +99,16 @@ public sealed record AircraftMissionRequirements(
     double MinimumCruiseKnots = 0,
     int MinimumSeats = 1,
     bool RequiresIfr = false,
-    bool RequiresPressurization = false)
+    bool RequiresPressurization = false,
+    int MinimumPassengerCapacity = 0)
 {
     public void Validate()
     {
         if (!double.IsFinite(MinimumPayloadPounds) || MinimumPayloadPounds < 0
             || !double.IsFinite(MinimumRangeNauticalMiles) || MinimumRangeNauticalMiles < 0
             || !double.IsFinite(MinimumCruiseKnots) || MinimumCruiseKnots < 0
-            || MinimumSeats < 0 || AllowedAccess == AircraftAccess.None
+            || MinimumSeats < 0 || MinimumPassengerCapacity < 0
+            || AllowedAccess == AircraftAccess.None
             || (AllowedAccess & ~AircraftAccess.Any) != 0)
             throw new ArgumentException("Invalid mission requirements.");
     }

@@ -41,7 +41,8 @@ public static class CareerJobAircraftCapabilityProjection
             values.EngineCount ?? 0,
             values.IfrCapable ?? false,
             values.Pressurized ?? false,
-            values.RetractableGear ?? false);
+            values.RetractableGear ?? false,
+            values.PassengerCapacity);
 
         var record = new AircraftRegistryRecord(
             profile,
