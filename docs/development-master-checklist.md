@@ -389,9 +389,9 @@ Chapter status: **ACTIVE FOUNDATION**
 - [ ] Persist authoritative world/economy state in production SQLite.
 - [ ] Connect world state to live job generation.
 - [ ] Connect fuel/service/MRO/labor pressure to operating costs.
-- [ ] Implement named commodity catalog.
-- [ ] Implement immutable accepted cargo manifests.
-- [ ] Implement airport/region commodity snapshots.
+- [x] Implement named commodity catalog.
+- [x] Implement immutable accepted cargo manifests.
+- [x] Implement airport/region commodity snapshots.
 - [ ] Generate cargo jobs from supply/demand/event state.
 - [ ] Implement cargo condition/outcome evidence only where supported.
 - [ ] Settle cargo freight/penalties atomically.
