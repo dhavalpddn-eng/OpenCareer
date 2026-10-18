@@ -284,15 +284,21 @@ public static class OperationDispatchPhysicalEvaluator
 
         if (takeoffTable is not null)
         {
-            takeoffLength = ResolveConditionedDistance(
-                takeoffTable,
-                requirements.TakeoffPerformanceConditions,
-                DispatchEndpoint.Origin,
-                origin.Icao,
-                DispatchFeasibilityReason.AircraftTakeoffPerformanceConditionsMissing,
-                DispatchFeasibilityReason.AircraftTakeoffPerformanceOutsideEnvelope,
-                DispatchFeasibilityReason.AircraftTakeoffPerformanceValueInvalid,
-                issues);
+            takeoffLength = HasSafeTakeoffPerformanceWeight(
+                    dispatchPerformance!,
+                    requirements,
+                    origin.Icao,
+                    issues)
+                ? ResolveConditionedDistance(
+                    takeoffTable,
+                    requirements.TakeoffPerformanceConditions,
+                    DispatchEndpoint.Origin,
+                    origin.Icao,
+                    DispatchFeasibilityReason.AircraftTakeoffPerformanceConditionsMissing,
+                    DispatchFeasibilityReason.AircraftTakeoffPerformanceOutsideEnvelope,
+                    DispatchFeasibilityReason.AircraftTakeoffPerformanceValueInvalid,
+                    issues)
+                : null;
         }
 
         if (landingTable is not null)
@@ -330,6 +336,37 @@ public static class OperationDispatchPhysicalEvaluator
             issues,
             suppressTakeoffUnknown,
             suppressLandingUnknown);
+    }
+
+    private static bool HasSafeTakeoffPerformanceWeight(
+        AircraftDispatchPerformanceProfile performance,
+        OperationDispatchRequirements requirements,
+        string originIcao,
+        ICollection<DispatchFeasibilityIssue> issues)
+    {
+        if (requirements.TakeoffPerformanceConditions is not { } conditions
+            || requirements.PlannedFuelPounds is not { } plannedFuel
+            || performance.OperatingEmptyWeightPounds is not { } emptyWeight)
+        {
+            return true;
+        }
+
+        double plannedTakeoffWeight =
+            emptyWeight + requirements.PayloadPounds + plannedFuel;
+        if (!double.IsFinite(plannedTakeoffWeight))
+            throw new ArgumentOutOfRangeException(nameof(requirements));
+
+        if (conditions.WeightPounds >= plannedTakeoffWeight)
+            return true;
+
+        issues.Add(new(
+            DispatchFeasibilityReason.AircraftTakeoffPerformanceWeightBelowPlanned,
+            DispatchEndpoint.Origin,
+            originIcao,
+            AircraftField: AircraftRegistryField.DispatchPerformance,
+            RequiredPounds: plannedTakeoffWeight,
+            AvailablePounds: conditions.WeightPounds));
+        return false;
     }
 
     private static double? ResolveConditionedDistance(

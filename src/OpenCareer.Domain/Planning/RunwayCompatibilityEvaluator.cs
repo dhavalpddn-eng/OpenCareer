@@ -65,7 +65,8 @@ public enum DispatchFeasibilityReason
     AircraftTakeoffPerformanceValueInvalid,
     AircraftLandingPerformanceValueInvalid,
     ZeroFuelWeightExceedsMaximum,
-    LandingWeightExceedsMaximum
+    LandingWeightExceedsMaximum,
+    AircraftTakeoffPerformanceWeightBelowPlanned
 }
 
 public sealed record DispatchFeasibilityIssue(

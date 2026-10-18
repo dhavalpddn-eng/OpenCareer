@@ -135,6 +135,50 @@ public sealed class OperationDispatchConditionedPerformanceTests
     }
 
     [Fact]
+    public async Task TakeoffPerformanceWeightBelowPlannedWeightFailsClosed()
+    {
+        AircraftConditionedPerformanceProfile conditioned = Conditioned(
+            takeoffTotal: SinglePointGrid(
+                weight: 6500,
+                temperature: 20,
+                pressureAltitude: 1000,
+                value: 1800));
+
+        var service = Service(
+            Resolution(
+                runwayPerformance: RunwayProfile(
+                    takeoff: 1200,
+                    landing: 1200),
+                conditioned: conditioned,
+                operatingEmptyWeight: 5000,
+                maximumTakeoffWeight: 9000,
+                maximumFuelWeight: 2000),
+            Airport("KAAA", Runway("18", lengthFeet: 5000)),
+            Airport("KBBB", Runway("36", lengthFeet: 5000)));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB",
+            Requirements(
+                plannedFuel: 1000,
+                takeoff: Conditions(6500, 20, 1000)));
+
+        Assert.Equal(DispatchFeasibilityStatus.InsufficientData, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(
+            result.Issues,
+            static issue => issue.Reason
+                == DispatchFeasibilityReason.AircraftTakeoffPerformanceWeightBelowPlanned);
+
+        Assert.Equal(7000, issue.RequiredPounds);
+        Assert.Equal(6500, issue.AvailablePounds);
+        Assert.Equal(DispatchEndpoint.Origin, issue.Endpoint);
+        Assert.DoesNotContain(
+            result.Issues,
+            static issue => issue.Reason == DispatchFeasibilityReason.RunwayTooShort);
+    }
+
+    [Fact]
     public async Task MissingTakeoffConditionsFailClosedWhenTotalDistanceTableExists()
     {
         var service = Service(
@@ -394,11 +438,13 @@ public sealed class OperationDispatchConditionedPerformanceTests
 
     private static OperationDispatchRequirements Requirements(
         double runwayMarginPercent = 0,
+        double? plannedFuel = null,
         DispatchRunwayPerformanceConditions? takeoff = null,
         DispatchRunwayPerformanceConditions? landing = null) =>
         new(
             PayloadPounds: 1000,
             RequiredRangeNauticalMiles: 500,
+            PlannedFuelPounds: plannedFuel,
             RunwayLengthSafetyMarginPercent: runwayMarginPercent,
             TakeoffPerformanceConditions: takeoff,
             LandingPerformanceConditions: landing);
@@ -435,7 +481,10 @@ public sealed class OperationDispatchConditionedPerformanceTests
 
     private static AircraftRegistryResolution Resolution(
         AircraftRunwayPerformanceProfile? runwayPerformance,
-        AircraftConditionedPerformanceProfile? conditioned) =>
+        AircraftConditionedPerformanceProfile? conditioned,
+        double? operatingEmptyWeight = null,
+        double? maximumTakeoffWeight = null,
+        double? maximumFuelWeight = null) =>
         AircraftRegistryResolver.Resolve(
         [
             new AircraftRegistryObservation(
@@ -450,9 +499,9 @@ public sealed class OperationDispatchConditionedPerformanceTests
                 DispatchPerformance: conditioned is null
                     ? null
                     : new(
-                        OperatingEmptyWeightPounds: null,
-                        MaximumTakeoffWeightPounds: null,
-                        MaximumFuelWeightPounds: null,
+                        OperatingEmptyWeightPounds: operatingEmptyWeight,
+                        MaximumTakeoffWeightPounds: maximumTakeoffWeight,
+                        MaximumFuelWeightPounds: maximumFuelWeight,
                         PayloadRangeEnvelope: null,
                         Confidence: AircraftDataConfidence.Verified,
                         Source: "test",
