@@ -286,6 +286,7 @@ Chapter status: **ACTIVE — FIRST C172/POINT-TO-POINT PATH IMPLEMENTED**
 - [x] Validate takeoff runway feasibility.
 - [x] Reject conditioned takeoff performance evaluated below the authoritative operating-empty-plus-payload-plus-planned-fuel weight; never fall back to a shorter static runway requirement.
 - [x] Validate landing runway feasibility.
+- [x] Reject conditioned landing performance evaluated below operating empty plus payload, the minimum possible zero-fuel landing weight; never fall back to a shorter static runway requirement.
 - [x] Apply configurable safety margins in planning; current Ferry/Reposition terms do not request every optional margin.
 - [x] Include weather/environment inputs where requested and authoritative data exists.
 - [x] Reject unknown-critical-performance cases with explicit reason.
