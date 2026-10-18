@@ -95,6 +95,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Typical cruise 122.5 kt", alpha.TypicalCruiseText);
         Assert.Equal("Certified ceiling 14000 ft", alpha.CertifiedCeilingText);
         Assert.Equal("Operating empty weight 1680 lb", alpha.OperatingEmptyWeightText);
+        Assert.Equal("Configured empty weight 1650 lb", alpha.ConfiguredEmptyWeightText);
         Assert.Equal("Maximum takeoff weight 2550 lb", alpha.MaximumTakeoffWeightText);
         Assert.Equal("Maximum landing weight 2450 lb", alpha.MaximumLandingWeightText);
         Assert.Equal("Maximum zero-fuel weight 2200 lb", alpha.MaximumZeroFuelWeightText);
@@ -127,6 +128,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Aircraft class unknown", zulu.ObjectClassText);
         Assert.Equal("Certified ceiling unknown", zulu.CertifiedCeilingText);
         Assert.Equal("Operating empty weight unknown", zulu.OperatingEmptyWeightText);
+        Assert.Equal("Configured empty weight unknown", zulu.ConfiguredEmptyWeightText);
         Assert.Equal("Maximum takeoff weight unknown", zulu.MaximumTakeoffWeightText);
         Assert.Equal("Maximum landing weight unknown", zulu.MaximumLandingWeightText);
         Assert.Equal("Maximum zero-fuel weight unknown", zulu.MaximumZeroFuelWeightText);
@@ -163,6 +165,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Aircraft class unknown", item.ObjectClassText);
         Assert.Equal("Certified ceiling unknown", item.CertifiedCeilingText);
         Assert.Equal("Operating empty weight unknown", item.OperatingEmptyWeightText);
+        Assert.Equal("Configured empty weight unknown", item.ConfiguredEmptyWeightText);
         Assert.Equal("Maximum takeoff weight unknown", item.MaximumTakeoffWeightText);
         Assert.Equal("Maximum landing weight unknown", item.MaximumLandingWeightText);
         Assert.Equal("Maximum zero-fuel weight unknown", item.MaximumZeroFuelWeightText);
@@ -253,6 +256,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Aircraft class unknown", item.ObjectClassText);
         Assert.Equal("Certified ceiling unknown", item.CertifiedCeilingText);
         Assert.Equal("Operating empty weight unknown", item.OperatingEmptyWeightText);
+        Assert.Equal("Configured empty weight unknown", item.ConfiguredEmptyWeightText);
         Assert.Equal("Maximum takeoff weight unknown", item.MaximumTakeoffWeightText);
         Assert.Equal("Maximum landing weight unknown", item.MaximumLandingWeightText);
         Assert.Equal("Maximum zero-fuel weight unknown", item.MaximumZeroFuelWeightText);
@@ -397,6 +401,7 @@ public sealed class InstalledAircraftInventorySourceTests
             PayloadRangeEnvelope: null,
             Confidence: AircraftDataConfidence.Verified,
             Source: "test flight_model.cfg",
+            ConfiguredEmptyWeightPounds: 1650,
             MaximumLandingWeightPounds: 2450,
             MaximumZeroFuelWeightPounds: 2200,
             FuelCapacityGallons: 53);

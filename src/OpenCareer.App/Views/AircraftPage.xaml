@@ -195,6 +195,9 @@
                                                    TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Grid>
+                                <TextBlock Text="{Binding ConfiguredEmptyWeightText}"
+                                           Style="{StaticResource OpenCareerInputHelpStyle}"
+                                           TextWrapping="Wrap" />
                                 <Grid ColumnSpacing="18">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
