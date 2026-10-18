@@ -284,6 +284,7 @@ Chapter status: **ACTIVE — FIRST C172/POINT-TO-POINT PATH IMPLEMENTED**
 - [x] Reject a proven maximum zero-fuel-weight overload and an explicit landing-performance weight above a proven maximum landing weight; never invent missing landing-weight input.
 - [x] Validate fuel/endurance/range in planning services; wire the complete composite planner into all production job paths.
 - [x] Validate takeoff runway feasibility.
+- [x] Reject conditioned takeoff performance evaluated below the authoritative operating-empty-plus-payload-plus-planned-fuel weight; never fall back to a shorter static runway requirement.
 - [x] Validate landing runway feasibility.
 - [x] Apply configurable safety margins in planning; current Ferry/Reposition terms do not request every optional margin.
 - [x] Include weather/environment inputs where requested and authoritative data exists.
