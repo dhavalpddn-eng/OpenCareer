@@ -80,6 +80,7 @@ public sealed record ContractCompensation(
 public sealed record JobContractPlanningTerms(
     double RouteDistanceNauticalMiles,
     double PayloadPounds,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     ImmutableArray<AcceptedCargoLot> CargoLots = default)
 {
     [JsonIgnore]
