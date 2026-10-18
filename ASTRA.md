@@ -72,6 +72,8 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `9cc9fc8d4ee9886f77062d32a483411a321e271e` on `feature/playable-loop-integration`.
 - MBL-08/09: positive official MSFS 2024 `ui_certified_ceiling` resolves through its own registry field/provenance, appears read-only on Aircraft, caps selectable Dispatch cruise-profile envelopes, and is rechecked by the authoritative cruise planner. Missing, zero, invalid and unproven values remain unknown and do not create a Dispatch limit.
 - Source, resolver, inventory, ViewModel, profile-envelope and planner coverage includes valid, zero/invalid, unproven, exceeded-ceiling and non-required behavior. Exact-head Linux build #1014 and Windows `winui-build` #947 passed at `f541dad7b4cd20d718906e3dd953512939c858e3`.
+- MBL-08: Aircraft now projects operating empty weight, maximum takeoff weight, maximum fuel weight and fuel capacity only from registry-resolved dispatch-performance evidence with field provenance. Missing values remain individually unknown, and an unproven dispatch profile cannot populate the read-only card.
+- Inventory and ViewModel coverage includes proven, absent and unproven weight/fuel evidence. Exact-head Linux build #1016 and Windows `winui-build` #949 passed at `cbac04637f8dbbfffc742b9703d3f8bbca2b6516`.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition job through dispatch, settlement, Logbook, location and restart replay.
