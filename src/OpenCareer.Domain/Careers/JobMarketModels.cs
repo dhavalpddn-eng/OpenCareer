@@ -199,6 +199,7 @@ public sealed record JobMarketContractTermsEnvelope(
     bool GovernmentAuthorizationRequired = false,
     PilotQualificationState? RequiredPilotQualifications = null,
     AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     ImmutableArray<AcceptedCargoLot> CargoLots = default)
 {
     [JsonIgnore]
