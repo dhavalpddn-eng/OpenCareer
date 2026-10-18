@@ -106,6 +106,66 @@ public sealed class CareerJobStartInputSourceTests
     }
 
     [Fact]
+    public async Task PersistedPassengerAuthoritiesProduceManifestBoundStartRequest()
+    {
+        JobMarketOfferDraft offer = PassengerOffer();
+        JobBoardState board = new(
+            "KRME",
+            Now.AddMinutes(-30),
+            ImmutableArray.Create(offer),
+            ImmutableHashSet<Guid>.Empty);
+
+        PlayerCareerProfile profile = PlayerCareerProfile.Start(
+            Guid.Parse("a7000000-0000-0000-0000-000000000030"),
+            "KRME",
+            Now.AddDays(-30));
+
+        var registry = new FakeAircraftRegistrySource();
+        var source = new CareerJobStartInputSource(
+            new FakeBoardStore(board),
+            new PlayerCareerRuntimeState(
+                new FakeProfileStore(
+                    new PlayerCareerProfileStoreRecord(
+                        Revision: 1,
+                        profile,
+                        SavedAt: Now.AddDays(-1)))),
+            new FakeContractStore(existing: null),
+            registry,
+            new OperationDispatchPlanningService(
+                registry,
+                new FakeAirportSource()),
+            [new PersistedPassengerJobContractTermsSource()],
+            [new StandardCivilianPassengerDispatchAuthoritySource()],
+            new FixedTimeProvider(Now));
+
+        CareerJobStartInputSnapshot snapshot = await source.ReadAsync(
+            offer.OfferId,
+            "fixture-aircraft");
+
+        Assert.True(snapshot.IsReady, snapshot.Detail);
+
+        CareerJobPlayableStartRequest request =
+            Assert.IsType<CareerJobPlayableStartRequest>(snapshot.Request);
+
+        Assert.Equal(ContractKind.Passenger, request.Contract.Offer.Kind);
+        Assert.Equal(540, request.Contract.PayloadPounds);
+        Assert.Equal(540, request.DispatchRequirements.PayloadPounds);
+        Assert.Equal(
+            3,
+            request.Contract.AircraftRequirements.MinimumPassengerCapacity);
+
+        JobContract accepted = JobContractFactory
+            .Create(request.Contract)
+            .Accept(request.DispatchContext);
+
+        AcceptedPassengerManifest manifest =
+            AcceptedPassengerManifest.Create(accepted);
+
+        Assert.Equal(3, manifest.PassengerCount);
+        Assert.Equal(540, manifest.PassengerAndBaggageWeightPounds);
+    }
+
+    [Fact]
     public async Task DevelopmentOfferWithSelectedInstalledAircraftProducesNormalReadyRequest()
     {
         JobMarketOfferDraft offer =
@@ -717,6 +777,45 @@ public sealed class CareerJobStartInputSourceTests
             MarketSelectionWeight:
                 1);
 
+    private static JobMarketOfferDraft PassengerOffer()
+    {
+        var offer = new JobMarketOfferDraft(
+            Guid.Parse("a7000000-0000-0000-0000-000000000031"),
+            ServiceTrack.CivilianEmployment,
+            ContractKind.Passenger,
+            JobScenarioKind.Standard,
+            "KRME",
+            "KSYR",
+            DistanceNm: 100,
+            EstimatedFlightHours: 1,
+            OfferedAt: Now.AddHours(-1),
+            ExpiresAt: Now.AddHours(2),
+            IsLockedPreview: false,
+            RouteStrength: 0.5,
+            RelationshipStrength: 0.5,
+            MarketSelectionWeight: 1);
+
+        return offer with
+        {
+            ContractTerms = new(
+                PersistedPassengerJobContractTermsSource.AuthorityId,
+                new AircraftMissionRequirements(
+                    RequiredCapabilities: AircraftCapability.Passenger,
+                    AllowedAccess: AircraftAccess.Civilian,
+                    MinimumPayloadPounds: 540,
+                    MinimumRangeNauticalMiles: offer.DistanceNm,
+                    MinimumSeats: 1,
+                    MinimumPassengerCapacity: 3),
+                EstimatedFlightHours: offer.EstimatedFlightHours!.Value,
+                PayloadPounds: 540,
+                DemandAttractiveness: 1,
+                Urgency: 0,
+                Difficulty: 0,
+                RequiredPilotQualifications: PilotQualificationState.Entry,
+                AuthorizedAircraftAccess: AircraftAccess.Civilian)
+        };
+    }
+
     private static PersistedJobContract AcceptedContract(
         JobMarketOfferDraft offer,
         DateTimeOffset acceptedAt)
@@ -1129,6 +1228,8 @@ public sealed class CareerJobStartInputSourceTests
                             record.Capabilities.TypicalCruiseKnots,
                         Seats:
                             record.Capabilities.Seats,
+                        PassengerCapacity:
+                            record.Capabilities.PassengerCapacity,
                         EngineCount:
                             record.Capabilities.EngineCount,
                         IfrCapable:
@@ -1151,7 +1252,7 @@ public sealed class CareerJobStartInputSourceTests
                 new AircraftCapabilityProfile(
                     "fixture-aircraft",
                     "Fixture Aircraft",
-                    AircraftCapability.None,
+                    AircraftCapability.Passenger,
                     AircraftAccess.Civilian,
                     MaximumPayloadPounds:
                         1_000,
@@ -1168,7 +1269,9 @@ public sealed class CareerJobStartInputSourceTests
                     Pressurized:
                         false,
                     RetractableGear:
-                        false);
+                        false,
+                    PassengerCapacity:
+                        3);
 
             return new(
                 profile,

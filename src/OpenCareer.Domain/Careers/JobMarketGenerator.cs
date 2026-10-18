@@ -177,7 +177,8 @@ public static class JobMarketGenerator
                         track.Value,
                         kind.Value,
                         JobScenarioKind.Standard,
-                        destination)));
+                        destination,
+                        policy)));
 
             added++;
         }
@@ -405,15 +406,75 @@ public static class JobMarketGenerator
         ServiceTrack track,
         ContractKind kind,
         JobScenarioKind scenario,
-        DestinationChoice destination)
+        DestinationChoice destination,
+        JobMarketPolicy policy)
     {
         if (track != ServiceTrack.CivilianEmployment
-            || kind is not (
-                ContractKind.Ferry
-                or ContractKind.Reposition)
             || scenario != JobScenarioKind.Standard
             || destination.EstimatedFlightHours is not { } hours
             || hours <= 0)
+        {
+            return null;
+        }
+
+        if (kind == ContractKind.Passenger)
+        {
+            var passengerRequirements =
+                new AircraftMissionRequirements(
+                    RequiredCapabilities:
+                        AircraftCapability.Passenger,
+                    AllowedAccess:
+                        AircraftAccess.Civilian,
+                    MinimumPayloadPounds:
+                        policy.StandardPassengerPayloadPounds,
+                    MinimumRangeNauticalMiles:
+                        destination.DistanceNm,
+                    MinimumSeats:
+                        1,
+                    MinimumPassengerCapacity:
+                        policy.StandardPassengerCount);
+
+            return new(
+                AuthorityId:
+                    "job-market:standard-civilian-passenger-v1",
+                passengerRequirements,
+                EstimatedFlightHours:
+                    hours,
+                PayloadPounds:
+                    policy.StandardPassengerPayloadPounds,
+                DemandAttractiveness:
+                    destination.DemandAttractiveness,
+                Urgency:
+                    0,
+                Difficulty:
+                    0,
+                EstimatedPlayerOperatingCosts:
+                    0m,
+                EmployerId:
+                    null,
+                MustStartBy:
+                    null,
+                MustCompleteBy:
+                    null,
+                ReputationReward:
+                    1.0,
+                ReputationPenalty:
+                    2.0,
+                MarketId:
+                    null,
+                WorldEventId:
+                    null,
+                GovernmentAuthorizationRequired:
+                    false,
+                RequiredPilotQualifications:
+                    PilotQualificationState.Entry,
+                AuthorizedAircraftAccess:
+                    AircraftAccess.Civilian);
+        }
+
+        if (kind is not (
+            ContractKind.Ferry
+            or ContractKind.Reposition))
         {
             return null;
         }

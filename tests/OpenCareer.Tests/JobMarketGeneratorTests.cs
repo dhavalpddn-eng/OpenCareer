@@ -334,7 +334,53 @@ public sealed class JobMarketGeneratorTests
     }
 
     [Fact]
-    public void NonPointToPointOffersDoNotReceiveCivilianEnvelope()
+    public void CivilianPassengerOffersCarryDeterministicManifestTerms()
+    {
+        JobMarketPolicy policy = JobMarketPolicy.Default with
+        {
+            MinimumOffers = 1,
+            MaximumOffers = 1,
+            ShowLockedPreviews = false,
+            StandardPassengerCount = 3,
+            StandardPassengerPayloadPounds = 540
+        };
+
+        var request = new JobMarketGenerationRequest(
+            GenerationSeed: 123456789,
+            Time: Epoch,
+            Origin: InitialAirportProfiles.GriffissInternational,
+            Destinations: Destinations,
+            Access: JobMarketAccess.CivilianEmployment,
+            Policy: policy,
+            AllowedContractKinds:
+                new HashSet<ContractKind> { ContractKind.Passenger });
+
+        JobMarketOfferDraft offer =
+            Assert.Single(JobMarketGenerator.Generate(request));
+
+        Assert.Equal(ContractKind.Passenger, offer.Kind);
+
+        JobMarketContractTermsEnvelope terms =
+            Assert.IsType<JobMarketContractTermsEnvelope>(offer.ContractTerms);
+
+        terms.ValidateForOffer(offer);
+        Assert.Equal(
+            "job-market:standard-civilian-passenger-v1",
+            terms.AuthorityId);
+        Assert.Equal(540, terms.PayloadPounds);
+        Assert.Equal(540, terms.AircraftRequirements.MinimumPayloadPounds);
+        Assert.Equal(
+            AircraftCapability.Passenger,
+            terms.AircraftRequirements.RequiredCapabilities);
+        Assert.Equal(
+            3,
+            terms.AircraftRequirements.MinimumPassengerCapacity);
+        Assert.Equal(PilotQualificationState.Entry, terms.RequiredPilotQualifications);
+        Assert.Equal(AircraftAccess.Civilian, terms.AuthorizedAircraftAccess);
+    }
+
+    [Fact]
+    public void UnsupportedCivilianKindsDoNotReceiveContractEnvelope()
     {
         JobMarketOfferDraft[] offers =
             Enumerable.Range(0, 100)
@@ -348,7 +394,8 @@ public sealed class JobMarketGeneratorTests
                     offer =>
                         offer.Kind is not (
                             ContractKind.Ferry
-                                or ContractKind.Reposition))
+                                or ContractKind.Reposition
+                                or ContractKind.Passenger))
                 .ToArray();
 
         Assert.NotEmpty(

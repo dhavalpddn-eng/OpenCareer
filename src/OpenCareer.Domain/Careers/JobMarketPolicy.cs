@@ -69,7 +69,9 @@ public sealed record JobMarketPolicy(
     int EarlyCareerLevelCeiling = 10,
     double EarlyCareerPreferredMinHours = 2,
     double EarlyCareerPreferredMaxHours = 4,
-    double EarlyCareerOutOfBandWeight = 0.30)
+    double EarlyCareerOutOfBandWeight = 0.30,
+    int StandardPassengerCount = 3,
+    double StandardPassengerPayloadPounds = 540)
 {
     public static JobMarketPolicy Default { get; } =
         new(
@@ -206,6 +208,16 @@ public sealed record JobMarketPolicy(
         RequireUnit(
             EarlyCareerOutOfBandWeight,
             nameof(EarlyCareerOutOfBandWeight));
+
+        if (StandardPassengerCount < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(StandardPassengerCount));
+        }
+
+        RequirePositiveFinite(
+            StandardPassengerPayloadPounds,
+            nameof(StandardPassengerPayloadPounds));
 
         double civilianShare =
             CivilianEmploymentShare
