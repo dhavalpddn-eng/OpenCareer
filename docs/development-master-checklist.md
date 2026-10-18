@@ -281,6 +281,7 @@ Chapter status: **ACTIVE — FIRST C172/POINT-TO-POINT PATH IMPLEMENTED**
 - [x] Read/use simulator scenery/facility runway data where available without making failures reconnect SimConnect.
 - [x] Build airport/runway candidate model.
 - [x] Validate payload/weight.
+- [x] Reject a proven maximum zero-fuel-weight overload and an explicit landing-performance weight above a proven maximum landing weight; never invent missing landing-weight input.
 - [x] Validate fuel/endurance/range in planning services; wire the complete composite planner into all production job paths.
 - [x] Validate takeoff runway feasibility.
 - [x] Validate landing runway feasibility.
@@ -690,7 +691,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Derive positive retractable-wheel-gear capability from valid paired official `flight_model.cfg` contact-point times; preserve zero, absent, inconsistent and malformed timing as unknown rather than fixed-gear proof.
 - [x] Resolve official MSFS `object_class` through dedicated field provenance and project it read-only on Aircraft without synthesizing mission capability, qualification or access.
 - [x] Resolve positive official `ui_certified_ceiling` through dedicated provenance, project it read-only on Aircraft, cap selectable Dispatch cruise envelopes, and reject above-ceiling authoritative cruise plans; missing or unproven evidence adds no limit.
-- [x] Project operating empty weight, maximum takeoff weight, maximum fuel weight and fuel capacity on Aircraft only from registry-resolved dispatch-performance evidence with provenance; preserve missing and unproven values as unknown.
+- [x] Project operating empty weight, maximum takeoff weight, maximum landing weight, maximum zero-fuel weight, maximum fuel weight and fuel capacity on Aircraft only from registry-resolved dispatch-performance evidence with provenance; preserve missing and unproven values as unknown.
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.
