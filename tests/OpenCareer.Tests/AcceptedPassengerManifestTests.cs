@@ -23,6 +23,23 @@ public sealed class AcceptedPassengerManifestTests
     }
 
     [Fact]
+    public void InProgressContractRetainsAcceptedManifestAuthority()
+    {
+        JobContract contract = AcceptedContract() with
+        {
+            Status = ContractStatus.InProgress,
+            StartedAt = OfferedAt.AddMinutes(20)
+        };
+
+        AcceptedPassengerManifest manifest =
+            AcceptedPassengerManifest.Create(contract);
+
+        Assert.Equal(contract.ContractId, manifest.ContractId);
+        Assert.Equal(contract.AcceptedAt, manifest.AcceptedAt);
+        manifest.ValidateForContract(contract);
+    }
+
+    [Fact]
     public void OfferedOrNonPassengerContractCannotCreateManifest()
     {
         Assert.Throws<InvalidOperationException>(

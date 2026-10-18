@@ -192,6 +192,62 @@ public sealed class StandardPointToPointMissionCompletionSourceTests
     }
 
     [Fact]
+    public async Task PassengerArrivalProjectsAcceptedManifestCount()
+    {
+        Guid contractId = Guid.Parse(
+            "a3000000-0000-0000-0000-000000000030");
+
+        var source = new StandardPointToPointMissionCompletionSource(
+            new StubAirportSource(Destination()),
+            StandardPointToPointMissionPolicy.Default);
+
+        JobContract contract = InProgressContract(
+            contractId,
+            ContractKind.Passenger) with
+        {
+            AircraftRequirements = new(
+                RequiredCapabilities: AircraftCapability.Passenger,
+                AllowedAccess: AircraftAccess.Civilian,
+                MinimumPayloadPounds: 720,
+                MinimumRangeNauticalMiles: 150,
+                MinimumSeats: 1,
+                MinimumPassengerCapacity: 4),
+            PlanningTerms = new(
+                RouteDistanceNauticalMiles: 150,
+                PayloadPounds: 720)
+        };
+
+        CareerJobMissionCompletionEvidence evidence =
+            Assert.IsType<CareerJobMissionCompletionEvidence>(
+                await source.ReadAsync(
+                    contract,
+                    ShutdownSession(
+                        contractId,
+                        43.111,
+                        -76.106)));
+
+        Assert.True(evidence.MissionConditionsVerified);
+        Assert.Equal(MissionOutcome.Succeeded, evidence.MissionOutcome);
+        Assert.Equal(4, evidence.Payload.PassengerCount);
+        Assert.Null(evidence.Payload.CargoMassPounds);
+    }
+
+    [Fact]
+    public async Task PassengerContractWithoutManifestTermsFailsClosed()
+    {
+        Guid contractId = Guid.Parse(
+            "a3000000-0000-0000-0000-000000000031");
+
+        var source = new StandardPointToPointMissionCompletionSource(
+            new StubAirportSource(Destination()),
+            StandardPointToPointMissionPolicy.Default);
+
+        Assert.Null(await source.ReadAsync(
+            InProgressContract(contractId, ContractKind.Passenger),
+            ShutdownSession(contractId, 43.111, -76.106)));
+    }
+
+    [Fact]
     public async Task MissingAirportCoordinatesFailsClosed()
     {
         Guid contractId =

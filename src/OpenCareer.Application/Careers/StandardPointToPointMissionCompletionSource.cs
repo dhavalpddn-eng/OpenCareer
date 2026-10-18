@@ -55,13 +55,23 @@ public sealed class StandardPointToPointMissionCompletionSource
 
         if (contract.Kind
             is not ContractKind.Ferry
-                and not ContractKind.Reposition)
+                and not ContractKind.Reposition
+                and not ContractKind.Passenger)
         {
             return null;
         }
 
         if (contract.Status
             != ContractStatus.InProgress)
+        {
+            return null;
+        }
+
+        AcceptedPassengerManifest? passengerManifest = null;
+        if (contract.Kind == ContractKind.Passenger
+            && !AcceptedPassengerManifest.TryCreate(
+                contract,
+                out passengerManifest))
         {
             return null;
         }
@@ -100,7 +110,8 @@ public sealed class StandardPointToPointMissionCompletionSource
             return CreateUnverified(
                 contract,
                 flightSession,
-                anchor.Timestamp);
+                anchor.Timestamp,
+                passengerManifest);
         }
 
         AirportRecord? destination =
@@ -131,7 +142,8 @@ public sealed class StandardPointToPointMissionCompletionSource
             return CreateUnverified(
                 contract,
                 flightSession,
-                anchor.Timestamp);
+                anchor.Timestamp,
+                passengerManifest);
         }
 
         string actualArrival =
@@ -152,7 +164,8 @@ public sealed class StandardPointToPointMissionCompletionSource
             DiversionLocation:
                 null,
             Payload:
-                NoMissionPayload(
+                CreatePayload(
+                    passengerManifest,
                     "Arrived at contracted destination"),
             SafetyOutcome:
                 FlightSafetyOutcome.CompletedNormally,
@@ -163,7 +176,8 @@ public sealed class StandardPointToPointMissionCompletionSource
     private static CareerJobMissionCompletionEvidence CreateUnverified(
         JobContract contract,
         FlightSession flightSession,
-        DateTimeOffset observedAt) =>
+        DateTimeOffset observedAt,
+        AcceptedPassengerManifest? passengerManifest) =>
         new(
             contract.ContractId,
             flightSession.SessionId,
@@ -177,18 +191,20 @@ public sealed class StandardPointToPointMissionCompletionSource
             DiversionLocation:
                 null,
             Payload:
-                NoMissionPayload(
+                CreatePayload(
+                    passengerManifest,
                     "Contracted destination not verified"),
             SafetyOutcome:
                 FlightSafetyOutcome.CompletedNormally,
             MissionOutcome:
                 MissionOutcome.Failed);
 
-    private static PayloadDebrief NoMissionPayload(
+    private static PayloadDebrief CreatePayload(
+        AcceptedPassengerManifest? passengerManifest,
         string outcome) =>
         new(
             PassengerCount:
-                null,
+                passengerManifest?.PassengerCount,
             CargoMassPounds:
                 null,
             CargoDescription:

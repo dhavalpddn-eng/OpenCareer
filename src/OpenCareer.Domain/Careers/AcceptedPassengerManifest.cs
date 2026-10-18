@@ -16,11 +16,13 @@ public sealed record AcceptedPassengerManifest(
         ArgumentNullException.ThrowIfNull(contract);
         contract.Validate();
 
-        if (contract.Status != ContractStatus.Accepted
+        if (contract.Status is not (
+                ContractStatus.Accepted
+                or ContractStatus.InProgress)
             || contract.AcceptedAt is not { } acceptedAt)
         {
             throw new InvalidOperationException(
-                "Passenger manifest can only be accepted for an accepted job contract.");
+                "Passenger manifest requires an accepted or in-progress job contract.");
         }
 
         if (contract.Kind != ContractKind.Passenger)
@@ -78,7 +80,9 @@ public sealed record AcceptedPassengerManifest(
         Validate();
         contract.Validate();
 
-        if (contract.Status != ContractStatus.Accepted
+        if (contract.Status is not (
+                ContractStatus.Accepted
+                or ContractStatus.InProgress)
             || contract.AcceptedAt is not { } acceptedAt
             || contract.Kind != ContractKind.Passenger
             || contract.PlanningTerms is not { } planningTerms
@@ -94,6 +98,24 @@ public sealed record AcceptedPassengerManifest(
         {
             throw new InvalidOperationException(
                 "Passenger manifest does not match the accepted contract authority.");
+        }
+    }
+
+    public static bool TryCreate(
+        JobContract contract,
+        out AcceptedPassengerManifest? manifest)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        try
+        {
+            manifest = Create(contract);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            manifest = null;
+            return false;
         }
     }
 
