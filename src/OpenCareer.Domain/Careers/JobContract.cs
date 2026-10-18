@@ -1,4 +1,7 @@
+using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using OpenCareer.Domain.Aircraft;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Events;
 
 namespace OpenCareer.Domain.Careers;
@@ -76,8 +79,15 @@ public sealed record ContractCompensation(
 
 public sealed record JobContractPlanningTerms(
     double RouteDistanceNauticalMiles,
-    double PayloadPounds)
+    double PayloadPounds,
+    ImmutableArray<AcceptedCargoLot> CargoLots = default)
 {
+    [JsonIgnore]
+    public ImmutableArray<AcceptedCargoLot> EffectiveCargoLots =>
+        CargoLots.IsDefault
+            ? ImmutableArray<AcceptedCargoLot>.Empty
+            : CargoLots;
+
     public void Validate()
     {
         if (!double.IsFinite(RouteDistanceNauticalMiles)
@@ -91,6 +101,12 @@ public sealed record JobContractPlanningTerms(
             || PayloadPounds < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(PayloadPounds));
+        }
+
+        foreach (AcceptedCargoLot lot in EffectiveCargoLots)
+        {
+            ArgumentNullException.ThrowIfNull(lot);
+            lot.Validate();
         }
     }
 }
@@ -168,6 +184,7 @@ public sealed record JobContract(
         ArgumentNullException.ThrowIfNull(AircraftRequirements);
         AircraftRequirements.Validate();
         PlanningTerms?.Validate();
+        ValidateCargoPlanningTerms();
         if ((AcceptedAt is { } accepted && accepted < OfferedAt)
             || (StartedAt is { } started && (AcceptedAt is not { } a || started < a))
             || (CompletedAt is { } completed && (StartedAt is not { } s || completed < s))
@@ -183,6 +200,49 @@ public sealed record JobContract(
             || (MustStartBy is { } start && start < OfferedAt)
             || (MustCompleteBy is { } end && (end < OfferedAt || (MustStartBy is { } begin && end < begin))))
             throw new ArgumentException("Invalid contract.");
+    }
+
+    private void ValidateCargoPlanningTerms()
+    {
+        if (PlanningTerms is not { } planningTerms
+            || planningTerms.EffectiveCargoLots.IsEmpty)
+        {
+            return;
+        }
+
+        if (Kind is not (
+                ContractKind.Cargo
+                or ContractKind.ExpressCargo
+                or ContractKind.AogPartsDelivery))
+        {
+            throw new ArgumentException(
+                "Named cargo lots require a cargo contract kind.",
+                nameof(PlanningTerms));
+        }
+
+        var lotIds = new HashSet<Guid>();
+        foreach (AcceptedCargoLot lot in planningTerms.EffectiveCargoLots)
+        {
+            if (!lotIds.Add(lot.LotId)
+                || !string.Equals(lot.OriginIcao, OriginIcao, StringComparison.Ordinal)
+                || !string.Equals(lot.DestinationIcao, DestinationIcao, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Cargo lot identities must be unique and routes must match the contract.",
+                    nameof(PlanningTerms));
+            }
+        }
+
+        double cargoMass =
+            planningTerms.EffectiveCargoLots.Sum(static lot => lot.MassPounds);
+
+        if (!double.IsFinite(cargoMass)
+            || Math.Abs(cargoMass - planningTerms.PayloadPounds) > 1e-9)
+        {
+            throw new ArgumentException(
+                "Cargo lot mass must exactly match the immutable contract payload.",
+                nameof(PlanningTerms));
+        }
     }
 
     private void ValidateDispatch(ContractDispatchContext context)

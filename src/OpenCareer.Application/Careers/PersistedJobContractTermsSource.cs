@@ -71,5 +71,6 @@ public sealed class PersistedJobContractTermsSource
             envelope.WorldEventId,
             envelope.GovernmentAuthorizationRequired,
             envelope.RequiredPilotQualifications,
-            envelope.AuthorizedAircraftAccess);
+            envelope.AuthorizedAircraftAccess,
+            envelope.CargoLots);
 }

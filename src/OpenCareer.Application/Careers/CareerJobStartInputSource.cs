@@ -1,6 +1,8 @@
+using System.Collections.Immutable;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Events;
 using OpenCareer.Domain.Planning;
 
@@ -24,7 +26,8 @@ public sealed record CareerJobContractTermsEvidence(
     string? WorldEventId = null,
     bool GovernmentAuthorizationRequired = false,
     PilotQualificationState? RequiredPilotQualifications = null,
-    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None)
+    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None,
+    ImmutableArray<AcceptedCargoLot> CargoLots = default)
 {
     public void ValidateIdentity(
         JobMarketOfferDraft offer)
@@ -373,7 +376,8 @@ public sealed class CareerJobStartInputSource
                 terms.ReputationPenalty,
                 terms.MarketId,
                 terms.WorldEventId,
-                terms.GovernmentAuthorizationRequired);
+                terms.GovernmentAuthorizationRequired,
+                terms.CargoLots);
 
         creationRequest.Validate();
 

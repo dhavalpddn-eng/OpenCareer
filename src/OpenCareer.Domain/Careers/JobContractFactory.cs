@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Economy;
 
@@ -20,7 +21,8 @@ public sealed record JobContractCreationRequest(
     double ReputationPenalty = 2.0,
     string? MarketId = null,
     string? WorldEventId = null,
-    bool GovernmentAuthorizationRequired = false)
+    bool GovernmentAuthorizationRequired = false,
+    ImmutableArray<AcceptedCargoLot> CargoLots = default)
 {
     public void Validate()
     {
@@ -91,6 +93,26 @@ public sealed record JobContractCreationRequest(
             throw new ArgumentException(
                 "Completion deadline is invalid.",
                 nameof(MustCompleteBy));
+        }
+
+        ImmutableArray<AcceptedCargoLot> requestedCargoLots =
+            CargoLots.IsDefault
+                ? ImmutableArray<AcceptedCargoLot>.Empty
+                : CargoLots;
+
+        ImmutableArray<AcceptedCargoLot> offeredCargoLots =
+            Offer.ContractTerms?.EffectiveCargoLots
+            ?? ImmutableArray<AcceptedCargoLot>.Empty;
+
+        if (!requestedCargoLots.IsEmpty
+            || !offeredCargoLots.IsEmpty)
+        {
+            if (!requestedCargoLots.SequenceEqual(offeredCargoLots))
+            {
+                throw new ArgumentException(
+                    "Accepted cargo lots must exactly match the persisted offer terms.",
+                    nameof(CargoLots));
+            }
         }
     }
 
@@ -266,7 +288,10 @@ public static class JobContractFactory
                 PlanningTerms:
                     new JobContractPlanningTerms(
                         offer.DistanceNm,
-                        request.PayloadPounds));
+                        request.PayloadPounds,
+                        request.CargoLots.IsDefault
+                            ? ImmutableArray<AcceptedCargoLot>.Empty
+                            : request.CargoLots));
 
         contract.Validate();
         return contract;

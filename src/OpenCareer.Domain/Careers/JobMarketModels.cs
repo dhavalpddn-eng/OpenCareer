@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Economy;
 
@@ -196,8 +198,15 @@ public sealed record JobMarketContractTermsEnvelope(
     string? WorldEventId = null,
     bool GovernmentAuthorizationRequired = false,
     PilotQualificationState? RequiredPilotQualifications = null,
-    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None)
+    AircraftAccess AuthorizedAircraftAccess = AircraftAccess.None,
+    ImmutableArray<AcceptedCargoLot> CargoLots = default)
 {
+    [JsonIgnore]
+    public ImmutableArray<AcceptedCargoLot> EffectiveCargoLots =>
+        CargoLots.IsDefault
+            ? ImmutableArray<AcceptedCargoLot>.Empty
+            : CargoLots;
+
     public void ValidateForOffer(
         JobMarketOfferDraft offer)
     {
@@ -287,6 +296,51 @@ public sealed record JobMarketContractTermsEnvelope(
         {
             throw new ArgumentException(
                 "World-event identity must be non-empty when supplied.");
+        }
+
+        ValidateCargoLots(offer);
+    }
+
+    private void ValidateCargoLots(JobMarketOfferDraft offer)
+    {
+        if (EffectiveCargoLots.IsEmpty)
+            return;
+
+        if (offer.Kind is not (
+                ContractKind.Cargo
+                or ContractKind.ExpressCargo
+                or ContractKind.AogPartsDelivery))
+        {
+            throw new ArgumentException(
+                "Named cargo lots require a cargo offer.",
+                nameof(CargoLots));
+        }
+
+        var lotIds = new HashSet<Guid>();
+        foreach (AcceptedCargoLot lot in EffectiveCargoLots)
+        {
+            ArgumentNullException.ThrowIfNull(lot);
+            lot.Validate();
+
+            if (!lotIds.Add(lot.LotId)
+                || !string.Equals(lot.OriginIcao, offer.OriginIcao, StringComparison.Ordinal)
+                || !string.Equals(lot.DestinationIcao, offer.DestinationIcao, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Cargo lot identities must be unique and routes must match the offer.",
+                    nameof(CargoLots));
+            }
+        }
+
+        double cargoMass =
+            EffectiveCargoLots.Sum(static lot => lot.MassPounds);
+
+        if (!double.IsFinite(cargoMass)
+            || Math.Abs(cargoMass - PayloadPounds) > 1e-9)
+        {
+            throw new ArgumentException(
+                "Cargo lot mass must exactly match the offer payload.",
+                nameof(CargoLots));
         }
     }
 }

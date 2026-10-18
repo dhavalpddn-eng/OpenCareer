@@ -176,6 +176,23 @@ public sealed record AcceptedCargoManifest(
         Lots.Sum(lot => lot.DeclaredValue);
 
     public static AcceptedCargoManifest Create(
+        JobContract contract)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+        contract.Validate();
+
+        if (contract.PlanningTerms is not { } planningTerms)
+        {
+            throw new InvalidOperationException(
+                "Cargo manifest requires immutable contract planning terms.");
+        }
+
+        return Create(
+            contract,
+            planningTerms.EffectiveCargoLots);
+    }
+
+    public static AcceptedCargoManifest Create(
         JobContract contract,
         IEnumerable<AcceptedCargoLot> lots)
     {
@@ -184,11 +201,13 @@ public sealed record AcceptedCargoManifest(
 
         contract.Validate();
 
-        if (contract.Status != ContractStatus.Accepted
+        if (contract.Status is not (
+                ContractStatus.Accepted
+                or ContractStatus.InProgress)
             || contract.AcceptedAt is not { } acceptedAt)
         {
             throw new InvalidOperationException(
-                "Cargo manifest can only be accepted for an accepted job contract.");
+                "Cargo manifest requires an accepted or in-progress job contract.");
         }
 
         if (!IsCargoContract(contract.Kind))
@@ -284,7 +303,9 @@ public sealed record AcceptedCargoManifest(
         Validate();
         contract.Validate();
 
-        if (contract.Status != ContractStatus.Accepted
+        if (contract.Status is not (
+                ContractStatus.Accepted
+                or ContractStatus.InProgress)
             || contract.AcceptedAt is not { } acceptedAt)
         {
             throw new InvalidOperationException(
@@ -305,6 +326,14 @@ public sealed record AcceptedCargoManifest(
         {
             throw new InvalidOperationException(
                 "Cargo manifest does not match the accepted job contract.");
+        }
+
+        if (contract.PlanningTerms is { } planningTerms
+            && !planningTerms.EffectiveCargoLots.IsEmpty
+            && !Lots.SequenceEqual(planningTerms.EffectiveCargoLots))
+        {
+            throw new InvalidOperationException(
+                "Cargo manifest does not match the immutable contract cargo lots.");
         }
     }
 

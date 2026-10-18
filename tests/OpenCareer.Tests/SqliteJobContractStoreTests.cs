@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.Application.Careers;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Infrastructure.Persistence;
 
 namespace OpenCareer.Tests;
@@ -99,6 +100,67 @@ public sealed class SqliteJobContractStoreTests : IAsyncLifetime
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => store.UpdateJobContractAsync(tampered, expectedVersion: 0));
+    }
+
+    [Fact]
+    public async Task NamedCargoLotsRoundTripAndRemainEquivalentAcrossRestart()
+    {
+        AcceptedCargoLot lot = new(
+            Guid.Parse("70000000-0000-0000-0000-000000000010"),
+            "coffee.roasted",
+            "Roasted coffee",
+            CargoCommodityCategory.GeneralFreight,
+            Quantity: 500m,
+            CargoUnitOfTrade.Pound,
+            MassPounds: 500,
+            VolumeCubicFeet: null,
+            "KRME",
+            "KSYR",
+            "Mohawk Valley Roasters",
+            "Syracuse Coffee Supply",
+            DeclaredValue: 3_700m,
+            OriginMarketUnitValue: 7.40m,
+            DestinationMarketUnitValue: 8.05m,
+            CargoHandlingRequirement.None);
+
+        JobContract offered = CreateContract() with
+        {
+            PlanningTerms = new(
+                RouteDistanceNauticalMiles: 73.5,
+                PayloadPounds: 500,
+                CargoLots: [lot])
+        };
+        offered.Validate();
+
+        SqliteJobContractStore store = CreateStore();
+        await store.CreateJobContractAsync(offered);
+
+        PersistedJobContract restarted = Assert.IsType<PersistedJobContract>(
+            await CreateStore().ReadJobContractAsync(offered.ContractId));
+        Assert.Equal(
+            lot,
+            Assert.Single(
+                restarted.Contract.PlanningTerms!.EffectiveCargoLots));
+
+        JobContract accepted = restarted.Contract with
+        {
+            Status = ContractStatus.Accepted,
+            AcceptedAt = OfferedAt.AddMinutes(10)
+        };
+
+        Assert.Equal(
+            JobContractSaveResult.Updated,
+            await store.UpdateJobContractAsync(
+                accepted,
+                expectedVersion: 0));
+
+        PersistedJobContract recovered = Assert.IsType<PersistedJobContract>(
+            await CreateStore().ReadJobContractAsync(offered.ContractId));
+        AcceptedCargoManifest manifest =
+            AcceptedCargoManifest.Create(recovered.Contract);
+
+        Assert.Equal(500, manifest.TotalMassPounds);
+        Assert.Equal("coffee.roasted", Assert.Single(manifest.Lots).CommodityId);
     }
 
     [Fact]

@@ -476,7 +476,26 @@ public sealed class SqliteJobContractStore : IJobContractStore
             StringComparison.Ordinal)
         && left.GovernmentAuthorizationRequired
             == right.GovernmentAuthorizationRequired
-        && left.PlanningTerms == right.PlanningTerms;
+        && EquivalentPlanningTerms(
+            left.PlanningTerms,
+            right.PlanningTerms);
+
+    private static bool EquivalentPlanningTerms(
+        JobContractPlanningTerms? left,
+        JobContractPlanningTerms? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+
+        if (left is null || right is null)
+            return false;
+
+        return left.RouteDistanceNauticalMiles.Equals(
+                right.RouteDistanceNauticalMiles)
+            && left.PayloadPounds.Equals(right.PayloadPounds)
+            && left.EffectiveCargoLots.SequenceEqual(
+                right.EffectiveCargoLots);
+    }
 
     private static bool AllowedTransition(
         ContractStatus from,
