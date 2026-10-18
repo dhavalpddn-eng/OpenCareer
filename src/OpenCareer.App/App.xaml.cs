@@ -249,6 +249,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<StandardCivilianPassengerDispatchAuthoritySource>();
         services.AddSingleton<ICareerJobDispatchAuthoritySource>(provider =>
             provider.GetRequiredService<StandardCivilianPassengerDispatchAuthoritySource>());
+        services.AddSingleton<StandardCivilianCargoDispatchAuthoritySource>();
+        services.AddSingleton<ICareerJobDispatchAuthoritySource>(provider =>
+            provider.GetRequiredService<StandardCivilianCargoDispatchAuthoritySource>());
         services.AddSingleton<CareerJobStartInputSource>();
         services.AddSingleton<CareerJobAircraftSelectionSource>();
         services.AddSingleton<CareerJobStartActionService>();
