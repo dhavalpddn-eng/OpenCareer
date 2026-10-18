@@ -124,6 +124,39 @@ public sealed class OperationDispatchWeightSafetyTests
     }
 
     [Fact]
+    public async Task ExplicitLandingWeightAboveMaximumIsInfeasible()
+    {
+        var service = Service(
+            Resolution(
+                dispatchPerformance: DispatchProfile(
+                    maximumLandingWeight: 7600)),
+            Airport("KAAA", Runway("18")),
+            Airport("KBBB", Runway("36")));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB",
+            new(
+                PayloadPounds: 1000,
+                RequiredRangeNauticalMiles: 500,
+                LandingPerformanceConditions: new(
+                    WeightPounds: 7800,
+                    OutsideAirTemperatureCelsius: 20,
+                    PressureAltitudeFeet: 1000)));
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(
+            result.Issues,
+            static issue => issue.Reason
+                == DispatchFeasibilityReason.LandingWeightExceedsMaximum);
+
+        Assert.Equal(DispatchEndpoint.Destination, issue.Endpoint);
+        Assert.Equal(7800, issue.RequiredPounds);
+        Assert.Equal(7600, issue.AvailablePounds);
+    }
+
+    [Fact]
     public async Task MissingWeightFieldsRemainInsufficientData()
     {
         var service = Service(
@@ -396,7 +429,8 @@ public sealed class OperationDispatchWeightSafetyTests
         IReadOnlyList<AircraftPayloadRangePoint>? envelope = null,
         AircraftDataConfidence confidence = AircraftDataConfidence.Verified,
         string source = "test",
-        double? maximumZeroFuelWeight = null) =>
+        double? maximumZeroFuelWeight = null,
+        double? maximumLandingWeight = null) =>
         new(
             operatingEmptyWeight,
             maximumTakeoffWeight,
@@ -404,6 +438,7 @@ public sealed class OperationDispatchWeightSafetyTests
             envelope,
             confidence,
             source,
+            MaximumLandingWeightPounds: maximumLandingWeight,
             MaximumZeroFuelWeightPounds: maximumZeroFuelWeight);
 
     private static AirportRecord Airport(

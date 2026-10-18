@@ -180,6 +180,12 @@ public static class OperationDispatchPhysicalEvaluator
                 requirements.PayloadPounds,
                 capabilityIssues,
                 ref hasDefiniteCapabilityFailure);
+
+            EvaluateLandingWeight(
+                dispatchPerformance,
+                requirements.LandingPerformanceConditions,
+                capabilityIssues,
+                ref hasDefiniteCapabilityFailure);
         }
 
         if (requirements.PlannedFuelPounds is { } plannedFuel)
@@ -487,6 +493,28 @@ public static class OperationDispatchPhysicalEvaluator
             AircraftField: AircraftRegistryField.DispatchPerformance,
             RequiredPounds: plannedZeroFuelWeight,
             AvailablePounds: maximumZeroFuelWeight));
+        hasDefiniteFailure = true;
+    }
+
+    private static void EvaluateLandingWeight(
+        AircraftDispatchPerformanceProfile performance,
+        DispatchRunwayPerformanceConditions? landingConditions,
+        ICollection<DispatchFeasibilityIssue> issues,
+        ref bool hasDefiniteFailure)
+    {
+        if (landingConditions is null
+            || performance.MaximumLandingWeightPounds is not { } maximumLandingWeight
+            || landingConditions.WeightPounds <= maximumLandingWeight)
+        {
+            return;
+        }
+
+        issues.Add(new(
+            DispatchFeasibilityReason.LandingWeightExceedsMaximum,
+            DispatchEndpoint.Destination,
+            AircraftField: AircraftRegistryField.DispatchPerformance,
+            RequiredPounds: landingConditions.WeightPounds,
+            AvailablePounds: maximumLandingWeight));
         hasDefiniteFailure = true;
     }
 
