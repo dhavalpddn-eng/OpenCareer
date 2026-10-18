@@ -174,6 +174,7 @@ public static class JobMarketGenerator
                         * kind.Weight
                         * destination.Weight,
                     CreateContractTermsEnvelope(
+                        request,
                         track.Value,
                         kind.Value,
                         JobScenarioKind.Standard,
@@ -431,6 +432,7 @@ public static class JobMarketGenerator
     }
 
     private static JobMarketContractTermsEnvelope? CreateContractTermsEnvelope(
+        JobMarketGenerationRequest request,
         ServiceTrack track,
         ContractKind kind,
         JobScenarioKind scenario,
@@ -500,6 +502,68 @@ public static class JobMarketGenerator
                     AircraftAccess.Civilian);
         }
 
+        if (kind is
+                ContractKind.Cargo
+                or ContractKind.ExpressCargo
+                or ContractKind.AogPartsDelivery
+            && TryGetCargoLot(
+                request,
+                kind,
+                destination.Icao) is { } cargoLot)
+        {
+            var cargoRequirements =
+                new AircraftMissionRequirements(
+                    RequiredCapabilities:
+                        AircraftCapability.Cargo,
+                    AllowedAccess:
+                        AircraftAccess.Civilian,
+                    MinimumPayloadPounds:
+                        cargoLot.MassPounds,
+                    MinimumRangeNauticalMiles:
+                        destination.DistanceNm,
+                    MinimumSeats:
+                        0);
+
+            return new(
+                AuthorityId:
+                    "job-market:standard-civilian-cargo-v1",
+                cargoRequirements,
+                EstimatedFlightHours:
+                    hours,
+                PayloadPounds:
+                    cargoLot.MassPounds,
+                DemandAttractiveness:
+                    destination.DemandAttractiveness,
+                Urgency:
+                    0,
+                Difficulty:
+                    0,
+                EstimatedPlayerOperatingCosts:
+                    0m,
+                EmployerId:
+                    null,
+                MustStartBy:
+                    null,
+                MustCompleteBy:
+                    null,
+                ReputationReward:
+                    1.0,
+                ReputationPenalty:
+                    2.0,
+                MarketId:
+                    null,
+                WorldEventId:
+                    null,
+                GovernmentAuthorizationRequired:
+                    false,
+                RequiredPilotQualifications:
+                    PilotQualificationState.Entry,
+                AuthorizedAircraftAccess:
+                    AircraftAccess.Civilian,
+                CargoLots:
+                    [cargoLot]);
+        }
+
         if (kind is not (
             ContractKind.Ferry
             or ContractKind.Reposition))
@@ -552,6 +616,27 @@ public static class JobMarketGenerator
                 PilotQualificationState.Entry,
             AuthorizedAircraftAccess:
                 AircraftAccess.Civilian);
+    }
+
+    private static AcceptedCargoLot? TryGetCargoLot(
+        JobMarketGenerationRequest request,
+        ContractKind kind,
+        string destinationIcao)
+    {
+        if (request.CargoLotsByKindAndDestination is null
+            || !request.CargoLotsByKindAndDestination.TryGetValue(
+                kind,
+                out IReadOnlyDictionary<string, AcceptedCargoLot>? lots))
+        {
+            return null;
+        }
+
+        return lots.FirstOrDefault(
+                pair => string.Equals(
+                    pair.Key,
+                    destinationIcao,
+                    StringComparison.OrdinalIgnoreCase))
+            .Value;
     }
 
     private static double DemandAttractiveness(

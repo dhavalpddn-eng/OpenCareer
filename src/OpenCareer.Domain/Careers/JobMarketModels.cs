@@ -91,7 +91,9 @@ public sealed record JobMarketGenerationRequest(
     AirportMarketCapacity? Capacity = null,
     IReadOnlySet<ContractKind>? AllowedContractKinds = null,
     IReadOnlyDictionary<ContractKind, IReadOnlySet<string>>?
-        EligibleDestinationIcaosByKind = null)
+        EligibleDestinationIcaosByKind = null,
+    IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>>?
+        CargoLotsByKindAndDestination = null)
 {
     public JobMarketPolicy EffectivePolicy =>
         Policy ?? JobMarketPolicy.Default;
@@ -109,6 +111,9 @@ public sealed record JobMarketGenerationRequest(
         Origin.Validate();
         EffectivePolicy.Validate();
         EffectiveCapacity.Validate();
+
+        string originIcao =
+            JobMarketIcao.Normalize(Origin.Icao);
 
         if ((Access & ~JobMarketAccess.All) != 0)
             throw new ArgumentOutOfRangeException(nameof(Access));
@@ -139,6 +144,47 @@ public sealed record JobMarketGenerationRequest(
             }
         }
 
+        if (CargoLotsByKindAndDestination is not null)
+        {
+            foreach ((ContractKind kind, IReadOnlyDictionary<string, AcceptedCargoLot> lots)
+                in CargoLotsByKindAndDestination)
+            {
+                if (kind is not (
+                        ContractKind.Cargo
+                        or ContractKind.ExpressCargo
+                        or ContractKind.AogPartsDelivery))
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(CargoLotsByKindAndDestination));
+                }
+
+                ArgumentNullException.ThrowIfNull(lots);
+
+                foreach ((string destinationIcao, AcceptedCargoLot lot) in lots)
+                {
+                    string normalizedDestination =
+                        JobMarketIcao.Normalize(destinationIcao);
+
+                    ArgumentNullException.ThrowIfNull(lot);
+                    lot.Validate();
+
+                    if (!string.Equals(
+                            lot.OriginIcao,
+                            originIcao,
+                            StringComparison.Ordinal)
+                        || !string.Equals(
+                            lot.DestinationIcao,
+                            normalizedDestination,
+                            StringComparison.Ordinal))
+                    {
+                        throw new ArgumentException(
+                            "Preselected cargo lots must match the generation route.",
+                            nameof(CargoLotsByKindAndDestination));
+                    }
+                }
+            }
+        }
+
         if (CareerLevel < 1
             || CareerLevel > EffectivePolicy.CareerLevelCap)
         {
@@ -152,9 +198,6 @@ public sealed record JobMarketGenerationRequest(
                 "At least one destination is required.",
                 nameof(Destinations));
         }
-
-        string originIcao =
-            JobMarketIcao.Normalize(Origin.Icao);
 
         foreach (JobMarketDestination destination in Destinations)
         {

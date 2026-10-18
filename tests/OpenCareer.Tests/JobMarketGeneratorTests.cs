@@ -422,6 +422,90 @@ public sealed class JobMarketGeneratorTests
     }
 
     [Fact]
+    public void PreselectedCargoLotProducesImmutableCargoTerms()
+    {
+        JobMarketPolicy policy = JobMarketPolicy.Default with
+        {
+            MinimumOffers = 1,
+            MaximumOffers = 1,
+            ShowLockedPreviews = false
+        };
+
+        AcceptedCargoLot lot = CargoLot("KALB", 480);
+
+        var request = new JobMarketGenerationRequest(
+            GenerationSeed: 123456789,
+            Time: Epoch,
+            Origin: InitialAirportProfiles.GriffissInternational,
+            Destinations:
+            [
+                new(
+                    "KALB",
+                    80,
+                    EstimatedFlightHours: 0.8)
+            ],
+            Access: JobMarketAccess.CivilianEmployment,
+            Policy: policy,
+            AllowedContractKinds:
+                new HashSet<ContractKind> { ContractKind.Cargo },
+            EligibleDestinationIcaosByKind:
+                new Dictionary<ContractKind, IReadOnlySet<string>>
+                {
+                    [ContractKind.Cargo] =
+                        new HashSet<string> { "KALB" }
+                },
+            CargoLotsByKindAndDestination:
+                new Dictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>>
+                {
+                    [ContractKind.Cargo] =
+                        new Dictionary<string, AcceptedCargoLot>
+                        {
+                            ["KALB"] = lot
+                        }
+                });
+
+        JobMarketOfferDraft offer =
+            Assert.Single(JobMarketGenerator.Generate(request));
+
+        JobMarketContractTermsEnvelope terms =
+            Assert.IsType<JobMarketContractTermsEnvelope>(
+                offer.ContractTerms);
+
+        terms.ValidateForOffer(offer);
+        Assert.Equal(
+            "job-market:standard-civilian-cargo-v1",
+            terms.AuthorityId);
+        Assert.Equal(480, terms.PayloadPounds);
+        Assert.Equal(
+            AircraftCapability.Cargo,
+            terms.AircraftRequirements.RequiredCapabilities);
+        Assert.Equal(480, terms.AircraftRequirements.MinimumPayloadPounds);
+        Assert.Equal(lot, Assert.Single(terms.EffectiveCargoLots));
+    }
+
+    [Fact]
+    public void PreselectedCargoLotMustMatchGenerationRoute()
+    {
+        JobMarketGenerationRequest request =
+            Request(
+                Epoch,
+                JobMarketAccess.CivilianEmployment) with
+            {
+                CargoLotsByKindAndDestination =
+                    new Dictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>>
+                    {
+                        [ContractKind.Cargo] =
+                            new Dictionary<string, AcceptedCargoLot>
+                            {
+                                ["KSYR"] = CargoLot("KALB", 480)
+                            }
+                    }
+            };
+
+        Assert.Throws<ArgumentException>(request.Validate);
+    }
+
+    [Fact]
     public void UnsupportedCivilianKindsDoNotReceiveContractEnvelope()
     {
         JobMarketOfferDraft[] offers =
@@ -465,6 +549,27 @@ public sealed class JobMarketGeneratorTests
             Access: access,
             CareerLevel: careerLevel,
             Capacity: capacity);
+
+    private static AcceptedCargoLot CargoLot(
+        string destinationIcao,
+        double massPounds) =>
+        new(
+            Guid.Parse("c1000000-0000-0000-0000-000000000001"),
+            "coffee.green-beans",
+            "Green coffee beans",
+            CargoCommodityCategory.GeneralFreight,
+            (decimal)massPounds,
+            CargoUnitOfTrade.Pound,
+            massPounds,
+            massPounds * 0.023,
+            "KRME",
+            destinationIcao,
+            "Upstate Coffee Cooperative",
+            "Destination Roaster",
+            (decimal)massPounds * 5m,
+            4.50m,
+            5m,
+            CargoHandlingRequirement.None);
 
     private static RouteDemandProfile DemandProfile(
         string origin,
