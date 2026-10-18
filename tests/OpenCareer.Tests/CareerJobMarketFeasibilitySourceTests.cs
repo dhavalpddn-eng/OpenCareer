@@ -279,7 +279,6 @@ public sealed class CareerJobMarketFeasibilitySourceTests
             installation,
             new(
                 aircraftId,
-                null,
                 Capabilities: capabilities,
                 Access: access,
                 MaximumPayloadPounds: maximumPayloadPounds,
