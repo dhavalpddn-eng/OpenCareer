@@ -174,6 +174,12 @@ public static class OperationDispatchPhysicalEvaluator
                     hasDefiniteCapabilityFailure = true;
                 }
             }
+
+            EvaluateZeroFuelWeight(
+                dispatchPerformance,
+                requirements.PayloadPounds,
+                capabilityIssues,
+                ref hasDefiniteCapabilityFailure);
         }
 
         if (requirements.PlannedFuelPounds is { } plannedFuel)
@@ -455,6 +461,33 @@ public static class OperationDispatchPhysicalEvaluator
                 AvailablePounds: maximumTakeoffWeight.Value));
             hasDefiniteFailure = true;
         }
+    }
+
+    private static void EvaluateZeroFuelWeight(
+        AircraftDispatchPerformanceProfile performance,
+        double payloadPounds,
+        ICollection<DispatchFeasibilityIssue> issues,
+        ref bool hasDefiniteFailure)
+    {
+        if (performance.OperatingEmptyWeightPounds is not { } emptyWeight
+            || performance.MaximumZeroFuelWeightPounds is not { } maximumZeroFuelWeight)
+        {
+            return;
+        }
+
+        double plannedZeroFuelWeight = emptyWeight + payloadPounds;
+        if (!double.IsFinite(plannedZeroFuelWeight))
+            throw new ArgumentOutOfRangeException(nameof(payloadPounds));
+
+        if (plannedZeroFuelWeight <= maximumZeroFuelWeight)
+            return;
+
+        issues.Add(new(
+            DispatchFeasibilityReason.ZeroFuelWeightExceedsMaximum,
+            AircraftField: AircraftRegistryField.DispatchPerformance,
+            RequiredPounds: plannedZeroFuelWeight,
+            AvailablePounds: maximumZeroFuelWeight));
+        hasDefiniteFailure = true;
     }
 
     private static double? ResolvePayloadLimitedRange(

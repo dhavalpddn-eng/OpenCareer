@@ -94,6 +94,36 @@ public sealed class OperationDispatchWeightSafetyTests
     }
 
     [Fact]
+    public async Task LoadedZeroFuelWeightAboveMaximumIsInfeasibleWithoutFuelPlan()
+    {
+        var service = Service(
+            Resolution(
+                dispatchPerformance: DispatchProfile(
+                    operatingEmptyWeight: 6000,
+                    maximumTakeoffWeight: 9000,
+                    maximumZeroFuelWeight: 7000)),
+            Airport("KAAA", Runway("18")),
+            Airport("KBBB", Runway("36")));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB",
+            new(
+                PayloadPounds: 1200,
+                RequiredRangeNauticalMiles: 500));
+
+        Assert.Equal(DispatchFeasibilityStatus.Infeasible, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(
+            result.Issues,
+            static issue => issue.Reason
+                == DispatchFeasibilityReason.ZeroFuelWeightExceedsMaximum);
+
+        Assert.Equal(7200, issue.RequiredPounds);
+        Assert.Equal(7000, issue.AvailablePounds);
+    }
+
+    [Fact]
     public async Task MissingWeightFieldsRemainInsufficientData()
     {
         var service = Service(
@@ -365,14 +395,16 @@ public sealed class OperationDispatchWeightSafetyTests
         double? maximumFuelWeight = 1500,
         IReadOnlyList<AircraftPayloadRangePoint>? envelope = null,
         AircraftDataConfidence confidence = AircraftDataConfidence.Verified,
-        string source = "test") =>
+        string source = "test",
+        double? maximumZeroFuelWeight = null) =>
         new(
             operatingEmptyWeight,
             maximumTakeoffWeight,
             maximumFuelWeight,
             envelope,
             confidence,
-            source);
+            source,
+            MaximumZeroFuelWeightPounds: maximumZeroFuelWeight);
 
     private static AirportRecord Airport(
         string icao,
