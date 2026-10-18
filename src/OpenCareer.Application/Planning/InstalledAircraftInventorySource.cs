@@ -36,6 +36,8 @@ public sealed record InstalledAircraftInventoryItem(
     string CertifiedCeilingText = "Certified ceiling unknown",
     string OperatingEmptyWeightText = "Operating empty weight unknown",
     string MaximumTakeoffWeightText = "Maximum takeoff weight unknown",
+    string MaximumLandingWeightText = "Maximum landing weight unknown",
+    string MaximumZeroFuelWeightText = "Maximum zero-fuel weight unknown",
     string MaximumFuelWeightText = "Maximum fuel weight unknown",
     string FuelCapacityText = "Fuel capacity unknown");
 
@@ -230,6 +232,8 @@ public sealed class InstalledAircraftInventorySource(
         bool hasWeightFuelEnvelope = dispatchPerformance is not null
             && (dispatchPerformance.OperatingEmptyWeightPounds is not null
                 || dispatchPerformance.MaximumTakeoffWeightPounds is not null
+                || dispatchPerformance.MaximumLandingWeightPounds is not null
+                || dispatchPerformance.MaximumZeroFuelWeightPounds is not null
                 || dispatchPerformance.MaximumFuelWeightPounds is not null
                 || dispatchPerformance.FuelCapacityGallons is not null);
 
@@ -297,6 +301,14 @@ public sealed class InstalledAircraftInventorySource(
             FormatOptionalNumber(
                 dispatchPerformance?.MaximumTakeoffWeightPounds,
                 "Maximum takeoff weight",
+                "lb"),
+            FormatOptionalNumber(
+                dispatchPerformance?.MaximumLandingWeightPounds,
+                "Maximum landing weight",
+                "lb"),
+            FormatOptionalNumber(
+                dispatchPerformance?.MaximumZeroFuelWeightPounds,
+                "Maximum zero-fuel weight",
                 "lb"),
             FormatOptionalNumber(
                 dispatchPerformance?.MaximumFuelWeightPounds,

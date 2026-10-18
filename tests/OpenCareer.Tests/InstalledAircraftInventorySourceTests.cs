@@ -96,6 +96,8 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Certified ceiling 14000 ft", alpha.CertifiedCeilingText);
         Assert.Equal("Operating empty weight 1680 lb", alpha.OperatingEmptyWeightText);
         Assert.Equal("Maximum takeoff weight 2550 lb", alpha.MaximumTakeoffWeightText);
+        Assert.Equal("Maximum landing weight 2450 lb", alpha.MaximumLandingWeightText);
+        Assert.Equal("Maximum zero-fuel weight 2200 lb", alpha.MaximumZeroFuelWeightText);
         Assert.Equal("Maximum fuel weight 318 lb", alpha.MaximumFuelWeightText);
         Assert.Equal("Fuel capacity 53 gal", alpha.FuelCapacityText);
         Assert.Equal("Aircraft class Airplane", alpha.ObjectClassText);
@@ -126,6 +128,8 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Certified ceiling unknown", zulu.CertifiedCeilingText);
         Assert.Equal("Operating empty weight unknown", zulu.OperatingEmptyWeightText);
         Assert.Equal("Maximum takeoff weight unknown", zulu.MaximumTakeoffWeightText);
+        Assert.Equal("Maximum landing weight unknown", zulu.MaximumLandingWeightText);
+        Assert.Equal("Maximum zero-fuel weight unknown", zulu.MaximumZeroFuelWeightText);
         Assert.Equal("Maximum fuel weight unknown", zulu.MaximumFuelWeightText);
         Assert.Equal("Fuel capacity unknown", zulu.FuelCapacityText);
         Assert.Equal("IFR capability unknown", zulu.IfrCapabilityText);
@@ -160,6 +164,8 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Certified ceiling unknown", item.CertifiedCeilingText);
         Assert.Equal("Operating empty weight unknown", item.OperatingEmptyWeightText);
         Assert.Equal("Maximum takeoff weight unknown", item.MaximumTakeoffWeightText);
+        Assert.Equal("Maximum landing weight unknown", item.MaximumLandingWeightText);
+        Assert.Equal("Maximum zero-fuel weight unknown", item.MaximumZeroFuelWeightText);
         Assert.Equal("Maximum fuel weight unknown", item.MaximumFuelWeightText);
         Assert.Equal("Fuel capacity unknown", item.FuelCapacityText);
         Assert.Equal("IFR capability unknown", item.IfrCapabilityText);
@@ -248,6 +254,8 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Certified ceiling unknown", item.CertifiedCeilingText);
         Assert.Equal("Operating empty weight unknown", item.OperatingEmptyWeightText);
         Assert.Equal("Maximum takeoff weight unknown", item.MaximumTakeoffWeightText);
+        Assert.Equal("Maximum landing weight unknown", item.MaximumLandingWeightText);
+        Assert.Equal("Maximum zero-fuel weight unknown", item.MaximumZeroFuelWeightText);
         Assert.Equal("Maximum fuel weight unknown", item.MaximumFuelWeightText);
         Assert.Equal("Fuel capacity unknown", item.FuelCapacityText);
         Assert.Equal("Capability evidence sources unavailable", item.CapabilityEvidenceText);
@@ -389,6 +397,8 @@ public sealed class InstalledAircraftInventorySourceTests
             PayloadRangeEnvelope: null,
             Confidence: AircraftDataConfidence.Verified,
             Source: "test flight_model.cfg",
+            MaximumLandingWeightPounds: 2450,
+            MaximumZeroFuelWeightPounds: 2200,
             FuelCapacityGallons: 53);
 
     private sealed class StubDiscovery(InstalledAircraftDiscoverySnapshot current)

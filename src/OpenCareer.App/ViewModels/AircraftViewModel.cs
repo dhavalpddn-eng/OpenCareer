@@ -69,6 +69,8 @@ public sealed class AircraftViewModel : INotifyPropertyChanged
                         item.CertifiedCeilingText,
                         item.OperatingEmptyWeightText,
                         item.MaximumTakeoffWeightText,
+                        item.MaximumLandingWeightText,
+                        item.MaximumZeroFuelWeightText,
                         item.MaximumFuelWeightText,
                         item.FuelCapacityText))
                     .ToArray(),
@@ -123,5 +125,7 @@ public sealed record InstalledAircraftItemViewModel(
     string CertifiedCeilingText,
     string OperatingEmptyWeightText,
     string MaximumTakeoffWeightText,
+    string MaximumLandingWeightText,
+    string MaximumZeroFuelWeightText,
     string MaximumFuelWeightText,
     string FuelCapacityText);

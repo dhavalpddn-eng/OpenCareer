@@ -37,6 +37,8 @@ public sealed class AircraftViewModelTests
                     CertifiedCeilingText: "Certified ceiling 14000 ft",
                     OperatingEmptyWeightText: "Operating empty weight 1680 lb",
                     MaximumTakeoffWeightText: "Maximum takeoff weight 2550 lb",
+                    MaximumLandingWeightText: "Maximum landing weight 2450 lb",
+                    MaximumZeroFuelWeightText: "Maximum zero-fuel weight 2200 lb",
                     MaximumFuelWeightText: "Maximum fuel weight 318 lb",
                     FuelCapacityText: "Fuel capacity 53 gal")
             ]));
@@ -60,6 +62,8 @@ public sealed class AircraftViewModelTests
         Assert.Equal("Certified ceiling 14000 ft", Assert.Single(viewModel.Aircraft).CertifiedCeilingText);
         Assert.Equal("Operating empty weight 1680 lb", Assert.Single(viewModel.Aircraft).OperatingEmptyWeightText);
         Assert.Equal("Maximum takeoff weight 2550 lb", Assert.Single(viewModel.Aircraft).MaximumTakeoffWeightText);
+        Assert.Equal("Maximum landing weight 2450 lb", Assert.Single(viewModel.Aircraft).MaximumLandingWeightText);
+        Assert.Equal("Maximum zero-fuel weight 2200 lb", Assert.Single(viewModel.Aircraft).MaximumZeroFuelWeightText);
         Assert.Equal("Maximum fuel weight 318 lb", Assert.Single(viewModel.Aircraft).MaximumFuelWeightText);
         Assert.Equal("Fuel capacity 53 gal", Assert.Single(viewModel.Aircraft).FuelCapacityText);
         Assert.Equal(
