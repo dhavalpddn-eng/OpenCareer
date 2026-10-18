@@ -418,11 +418,20 @@ public sealed class CareerJobPreFlightSessionRecoveryService
         ArgumentNullException.ThrowIfNull(contract);
         contract.Validate();
 
+        bool supportedKind = contract.Kind is
+            ContractKind.Ferry
+                or ContractKind.Reposition;
+
+        if (contract.Kind == ContractKind.Passenger)
+        {
+            supportedKind = AcceptedPassengerManifest.TryCreate(
+                contract,
+                out _);
+        }
+
         return contract.ServiceTrack
                 == ServiceTrack.CivilianEmployment
-            && contract.Kind is
-                ContractKind.Ferry
-                    or ContractKind.Reposition
+            && supportedKind
             && contract.WorldEventId is null
             && !contract.GovernmentAuthorizationRequired
             && (contract.AircraftRequirements.AllowedAccess

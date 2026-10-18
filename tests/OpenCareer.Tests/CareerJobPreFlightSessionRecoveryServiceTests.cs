@@ -182,6 +182,33 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
             context.Checkpoints.SaveCount);
     }
 
+    [Theory]
+    [InlineData(ContractStatus.Accepted)]
+    [InlineData(ContractStatus.InProgress)]
+    public async Task PassengerContractRetainsManifestAuthorityAcrossRecovery(
+        ContractStatus status)
+    {
+        TestContext context = CreateContext(
+            Persisted(status, ContractKind.Passenger),
+            hasReservation: true,
+            now: StartedAt.AddMinutes(1));
+
+        CareerJobPreFlightSessionRecoveryResult result =
+            await context.Recovery.RecoverAsync();
+
+        Assert.True(result.Recovered, result.Detail);
+        Assert.Equal(
+            ContractStatus.InProgress,
+            context.Contracts.Current.Contract.Status);
+
+        AcceptedPassengerManifest manifest =
+            AcceptedPassengerManifest.Create(
+                context.Contracts.Current.Contract);
+
+        Assert.Equal(3, manifest.PassengerCount);
+        Assert.Equal(540, manifest.PassengerAndBaggageWeightPounds);
+    }
+
     private static TestContext CreateContext(
         PersistedJobContract persisted,
         bool hasReservation,
@@ -297,8 +324,11 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
             2,
             new(5, 30, 1));
         var fuel = new RouteFuelWeightPlan(0, 6, 30, 180, 50, 300);
+        double payload =
+            persisted.Contract.PlanningTerms?.PayloadPounds
+            ?? 0;
         OperationDispatchRequirements requirements = fuel.ApplyTo(new(
-            PayloadPounds: 0,
+            PayloadPounds: payload,
             RequiredRangeNauticalMiles: 120));
         var plan = new PreparedDispatchPlan(
             persisted.Contract.ContractId,
@@ -327,8 +357,11 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     }
 
     private static PersistedJobContract Persisted(
-        ContractStatus status)
+        ContractStatus status,
+        ContractKind kind = ContractKind.Ferry)
     {
+        bool passenger = kind == ContractKind.Passenger;
+
         var contract =
             new JobContract(
                 ContractId:
@@ -337,7 +370,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                 EmployerId:
                     null,
                 Kind:
-                    ContractKind.Ferry,
+                    kind,
                 ServiceTrack:
                     ServiceTrack.CivilianEmployment,
                 OriginIcao:
@@ -365,12 +398,20 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                     OfferedAt.AddHours(6),
                 AircraftRequirements:
                     new AircraftMissionRequirements(
+                        RequiredCapabilities:
+                            passenger
+                                ? AircraftCapability.Passenger
+                                : AircraftCapability.None,
                         AllowedAccess:
                             AircraftAccess.Civilian,
+                        MinimumPayloadPounds:
+                            passenger ? 540 : 0,
                         MinimumRangeNauticalMiles:
                             120,
                         MinimumSeats:
-                            0),
+                            passenger ? 1 : 0,
+                        MinimumPassengerCapacity:
+                            passenger ? 3 : 0),
                 Status:
                     status,
                 AcceptedAt:
@@ -378,7 +419,11 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                 StartedAt:
                     status == ContractStatus.InProgress
                         ? StartedAt
-                        : null);
+                        : null,
+                PlanningTerms:
+                    new JobContractPlanningTerms(
+                        RouteDistanceNauticalMiles: 120,
+                        PayloadPounds: passenger ? 540 : 0));
 
         contract.Validate();
 
@@ -569,7 +614,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                         DisplayName:
                             "Fixture Aircraft",
                         Capabilities:
-                            AircraftCapability.None,
+                            AircraftCapability.Passenger,
                         Access:
                             AircraftAccess.Civilian,
                         MaximumPayloadPounds:
@@ -580,6 +625,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                             120,
                         Seats:
                             4,
+                        PassengerCapacity:
+                            3,
                         EngineCount:
                             1,
                         IfrCapable:
