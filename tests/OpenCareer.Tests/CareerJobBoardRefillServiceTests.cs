@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.Application.Careers;
+using OpenCareer.Application.Economy;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Infrastructure.Persistence;
 
 namespace OpenCareer.Tests;
@@ -263,6 +265,55 @@ public sealed class CareerJobBoardRefillServiceTests
     }
 
     [Fact]
+    public async Task CargoRequiresMarketSnapshotsAndCarriesSelectedLot()
+    {
+        var store = new FakeBoardStore();
+        var payloads = new Dictionary<ContractKind, IReadOnlyDictionary<string, double>>
+        {
+            [ContractKind.Cargo] = new Dictionary<string, double>
+            {
+                ["KSYR"] = 500,
+                ["KALB"] = 500
+            }
+        };
+        var feasibility = new FakeMarketFeasibilitySource(
+            supportedKinds:
+                new HashSet<ContractKind> { ContractKind.Cargo },
+            cargoPayloads: payloads);
+        var markets = new FakeCommodityMarketSnapshotStore(
+            Market("KRME", supply: 2, demand: 1, price: 4.50m),
+            Market("KSYR", supply: 1, demand: 2, price: 5m),
+            Market("KALB", supply: 1, demand: 2, price: 5.25m));
+        var service = Service(
+            store,
+            Airports(),
+            new FixedTimeProvider(Epoch),
+            feasibility,
+            markets);
+
+        JobBoardState board = await service.RefillAsync(Profile("KRME"));
+
+        Assert.NotEmpty(board.Offers);
+        Assert.All(
+            board.Offers,
+            offer =>
+            {
+                Assert.Equal(ContractKind.Cargo, offer.Kind);
+                JobMarketContractTermsEnvelope terms =
+                    Assert.IsType<JobMarketContractTermsEnvelope>(
+                        offer.ContractTerms);
+                Assert.Equal(
+                    PersistedCargoJobContractTermsSource.AuthorityId,
+                    terms.AuthorityId);
+                AcceptedCargoLot lot =
+                    Assert.Single(terms.EffectiveCargoLots);
+                Assert.Equal("coffee.green-beans", lot.CommodityId);
+                Assert.Equal(500, lot.MassPounds);
+                Assert.Equal(terms.PayloadPounds, lot.MassPounds);
+            });
+    }
+
+    [Fact]
     public async Task NoFeasibleAircraftDestinationPersistsValidEmptyBoard()
     {
         var store = new FakeBoardStore();
@@ -370,14 +421,39 @@ public sealed class CareerJobBoardRefillServiceTests
         IJobBoardStateStore store,
         ICareerJobMarketAirportSource airports,
         TimeProvider timeProvider,
-        ICareerJobMarketFeasibilitySource? feasibility = null) =>
+        ICareerJobMarketFeasibilitySource? feasibility = null,
+        ICommodityMarketSnapshotStore? commodityMarkets = null) =>
         new(
             new JobBoardGenerationService(
                 store),
             store,
             airports,
             feasibility ?? new FakeMarketFeasibilitySource(),
+            commodityMarkets ?? new FakeCommodityMarketSnapshotStore(),
             timeProvider);
+
+    private static CommodityMarketSnapshot Market(
+        string icao,
+        double supply,
+        double demand,
+        decimal price) =>
+        CommodityMarketSnapshot.Create(
+            CommodityMarketScope.Airport,
+            icao,
+            Epoch,
+            [
+                new(
+                    "coffee.green-beans",
+                    supply,
+                    demand,
+                    price,
+                    Trend: 0,
+                    demand > supply
+                        ? CommodityMarketBalance.Scarce
+                        : CommodityMarketBalance.Surplus,
+                    ActiveEventModifierIds: [],
+                    AvailabilityConfidence: 1)
+            ]);
 
     private static PlayerCareerProfile Profile(
         string airportIcao) =>
@@ -459,7 +535,9 @@ public sealed class CareerJobBoardRefillServiceTests
 
     private sealed class FakeMarketFeasibilitySource(
         Func<JobMarketDestination, bool>? predicate = null,
-        IReadOnlySet<ContractKind>? supportedKinds = null)
+        IReadOnlySet<ContractKind>? supportedKinds = null,
+        IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, double>>?
+            cargoPayloads = null)
         : ICareerJobMarketFeasibilitySource
     {
         public int LastCandidateCount { get; private set; }
@@ -496,7 +574,46 @@ public sealed class CareerJobBoardRefillServiceTests
                 "Fixture feasibility.",
                 kinds.ToDictionary(
                     static kind => kind,
-                    _ => eligibleIcaos)));
+                    _ => eligibleIcaos),
+                cargoPayloads));
+        }
+    }
+
+    private sealed class FakeCommodityMarketSnapshotStore(
+        params CommodityMarketSnapshot[] snapshots)
+        : ICommodityMarketSnapshotStore
+    {
+        private readonly Dictionary<(CommodityMarketScope Scope, string LocationId), CommodityMarketSnapshot>
+            _snapshots = snapshots.ToDictionary(
+                static snapshot => (snapshot.Scope, snapshot.LocationId));
+
+        public Task SaveAsync(
+            CommodityMarketSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _snapshots[(snapshot.Scope, snapshot.LocationId)] = snapshot;
+            return Task.CompletedTask;
+        }
+
+        public Task<CommodityMarketSnapshot?> GetAsync(
+            CommodityMarketScope scope,
+            string locationId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _snapshots.TryGetValue(
+                (scope, locationId),
+                out CommodityMarketSnapshot? snapshot);
+            return Task.FromResult(snapshot);
+        }
+
+        public Task<IReadOnlyList<CommodityMarketSnapshot>> LoadAllAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<IReadOnlyList<CommodityMarketSnapshot>>(
+                _snapshots.Values.ToArray());
         }
     }
 

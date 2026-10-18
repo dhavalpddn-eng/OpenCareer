@@ -1,6 +1,8 @@
 using OpenCareer.Application.Planning;
+using OpenCareer.Application.Economy;
 using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 
 namespace OpenCareer.Application.Careers;
 
@@ -36,7 +38,10 @@ public sealed class CareerJobBoardRefillService
         {
             ContractKind.Ferry,
             ContractKind.Reposition,
-            ContractKind.Passenger
+            ContractKind.Passenger,
+            ContractKind.Cargo,
+            ContractKind.ExpressCargo,
+            ContractKind.AogPartsDelivery
         };
 
     private static readonly JobMarketPolicy PlayableLoopPolicy =
@@ -51,6 +56,7 @@ public sealed class CareerJobBoardRefillService
     private readonly IJobBoardStateStore _store;
     private readonly ICareerJobMarketAirportSource _airports;
     private readonly ICareerJobMarketFeasibilitySource _feasibility;
+    private readonly ICommodityMarketSnapshotStore _commodityMarkets;
     private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -59,6 +65,7 @@ public sealed class CareerJobBoardRefillService
         IJobBoardStateStore store,
         ICareerJobMarketAirportSource airports,
         ICareerJobMarketFeasibilitySource feasibility,
+        ICommodityMarketSnapshotStore commodityMarkets,
         TimeProvider timeProvider)
     {
         _generation =
@@ -73,6 +80,9 @@ public sealed class CareerJobBoardRefillService
         _feasibility =
             feasibility
             ?? throw new ArgumentNullException(nameof(feasibility));
+        _commodityMarkets =
+            commodityMarkets
+            ?? throw new ArgumentNullException(nameof(commodityMarkets));
         _timeProvider =
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -163,6 +173,15 @@ public sealed class CareerJobBoardRefillService
                 CreateBaselineCivilianProfile(
                     origin);
 
+            IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>>
+                cargoLots =
+                await BuildCargoLotsAsync(
+                        CreateGenerationSeed(profile.CareerId),
+                        originIcao,
+                        feasibility,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
             var request =
                 new JobMarketGenerationRequest(
                     GenerationSeed:
@@ -186,12 +205,17 @@ public sealed class CareerJobBoardRefillService
                     AllowedContractKinds:
                         SupportedKinds
                             .Where(
-                                feasibility
-                                    .EligibleDestinationIcaosByKind
-                                    .ContainsKey)
+                                kind =>
+                                    feasibility
+                                        .EligibleDestinationIcaosByKind
+                                        .ContainsKey(kind)
+                                    && (!IsCargoKind(kind)
+                                        || cargoLots.ContainsKey(kind)))
                             .ToHashSet(),
                     EligibleDestinationIcaosByKind:
-                        feasibility.EligibleDestinationIcaosByKind);
+                        feasibility.EligibleDestinationIcaosByKind,
+                    CargoLotsByKindAndDestination:
+                        cargoLots);
 
             JobBoardState board =
                 await _generation
@@ -218,6 +242,76 @@ public sealed class CareerJobBoardRefillService
             _gate.Release();
         }
     }
+
+    private async Task<IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>>>
+        BuildCargoLotsAsync(
+            ulong generationSeed,
+            string originIcao,
+            CareerJobMarketFeasibilitySnapshot feasibility,
+            CancellationToken cancellationToken)
+    {
+        CommodityMarketSnapshot? originMarket =
+            await _commodityMarkets.GetAsync(
+                    CommodityMarketScope.Airport,
+                    originIcao,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (originMarket is null)
+        {
+            return new Dictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>>();
+        }
+
+        var result =
+            new Dictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>>();
+
+        foreach ((ContractKind kind, IReadOnlyDictionary<string, double> payloads)
+            in feasibility.EffectiveMaximumCargoPayloadPoundsByKindAndDestination)
+        {
+            var lots = new Dictionary<string, AcceptedCargoLot>(
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach ((string destinationIcao, double maximumPayload) in payloads)
+            {
+                CommodityMarketSnapshot? destinationMarket =
+                    await _commodityMarkets.GetAsync(
+                            CommodityMarketScope.Airport,
+                            destinationIcao,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                if (destinationMarket is null)
+                    continue;
+
+                AcceptedCargoLot? lot = CargoMarketLotSelector.Select(
+                    new(
+                        generationSeed,
+                        kind,
+                        originIcao,
+                        destinationIcao,
+                        maximumPayload,
+                        $"{originIcao} market shipper",
+                        $"{destinationIcao} market consignee",
+                        InitialCommodityCatalog.Default,
+                        originMarket,
+                        destinationMarket));
+
+                if (lot is not null)
+                    lots.Add(destinationIcao, lot);
+            }
+
+            if (lots.Count > 0)
+                result.Add(kind, lots);
+        }
+
+        return result;
+    }
+
+    private static bool IsCargoKind(ContractKind kind) =>
+        kind is
+            ContractKind.Cargo
+                or ContractKind.ExpressCargo
+                or ContractKind.AogPartsDelivery;
 
     private async Task<IReadOnlyList<JobMarketDestination>> BuildDestinationsAsync(
         AirportRecord origin,

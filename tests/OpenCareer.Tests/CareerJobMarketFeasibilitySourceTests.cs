@@ -59,6 +59,51 @@ public sealed class CareerJobMarketFeasibilitySourceTests
     }
 
     [Fact]
+    public async Task CargoKindsExposeLargestFeasiblePayloadByRoute()
+    {
+        var source = Source(
+            AvailableDiscovery(
+                Observation("cargo-small"),
+                Observation("cargo-large")),
+            new StubRegistry(
+                ("cargo-small", Resolution(
+                    "cargo-small",
+                    AircraftInstallationStatus.Installed,
+                    AircraftAccess.Civilian,
+                    maximumRangeNauticalMiles: 500,
+                    capabilities: AircraftCapability.Cargo,
+                    maximumPayloadPounds: 600)),
+                ("cargo-large", Resolution(
+                    "cargo-large",
+                    AircraftInstallationStatus.Installed,
+                    AircraftAccess.Civilian,
+                    maximumRangeNauticalMiles: 500,
+                    capabilities: AircraftCapability.Cargo,
+                    maximumPayloadPounds: 1_200))));
+
+        CareerJobMarketFeasibilitySnapshot result = await source.FilterAsync(
+            "KORG",
+            [Destination("KAAA", 75)]);
+
+        Assert.Equal(CareerJobMarketFeasibilityStatus.Ready, result.Status);
+
+        foreach (ContractKind kind in new[]
+        {
+            ContractKind.Cargo,
+            ContractKind.ExpressCargo,
+            ContractKind.AogPartsDelivery
+        })
+        {
+            Assert.Contains(
+                "KAAA",
+                result.EligibleDestinationIcaosByKind[kind]);
+            Assert.Equal(
+                1_200,
+                result.EffectiveMaximumCargoPayloadPoundsByKindAndDestination[kind]["KAAA"]);
+        }
+    }
+
+    [Fact]
     public async Task UnprovenPassengerCapacityCannotAuthorizePassengerGeneration()
     {
         var source = Source(

@@ -20,9 +20,16 @@ public sealed record CareerJobMarketFeasibilitySnapshot(
     IReadOnlyList<JobMarketDestination> Destinations,
     string Detail,
     IReadOnlyDictionary<ContractKind, IReadOnlySet<string>>
-        EligibleDestinationIcaosByKind)
+        EligibleDestinationIcaosByKind,
+    IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, double>>?
+        MaximumCargoPayloadPoundsByKindAndDestination = null)
 {
     public bool IsReady => Status == CareerJobMarketFeasibilityStatus.Ready;
+
+    public IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, double>>
+        EffectiveMaximumCargoPayloadPoundsByKindAndDestination =>
+        MaximumCargoPayloadPoundsByKindAndDestination
+        ?? new Dictionary<ContractKind, IReadOnlyDictionary<string, double>>();
 }
 
 public interface ICareerJobMarketFeasibilitySource
@@ -131,6 +138,8 @@ public sealed class CareerJobMarketFeasibilitySource(
 
         var feasible = new List<JobMarketDestination>();
         var eligibleByKind = new Dictionary<ContractKind, HashSet<string>>();
+        var cargoPayloadByKind =
+            new Dictionary<ContractKind, Dictionary<string, double>>();
         foreach (JobMarketDestination destination in destinations)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -154,11 +163,15 @@ public sealed class CareerJobMarketFeasibilitySource(
                         kind,
                         destination);
 
-                if (!aircraft.Any(item => IsFeasible(
+                MarketAircraftEvidence[] eligibleAircraft = aircraft
+                    .Where(item => IsFeasible(
                         item,
                         origin,
                         destinationAirport,
-                        requirements)))
+                        requirements))
+                    .ToArray();
+
+                if (eligibleAircraft.Length == 0)
                 {
                     continue;
                 }
@@ -172,6 +185,27 @@ public sealed class CareerJobMarketFeasibilitySource(
                 }
 
                 eligible.Add(destination.NormalizedIcao);
+
+                if (IsCargoKind(kind))
+                {
+                    double maximumPayload = eligibleAircraft.Max(
+                        static item =>
+                            item.Record.Capabilities.MaximumPayloadPounds);
+
+                    if (maximumPayload > 0)
+                    {
+                        if (!cargoPayloadByKind.TryGetValue(
+                                kind,
+                                out Dictionary<string, double>? payloads))
+                        {
+                            payloads = new(StringComparer.OrdinalIgnoreCase);
+                            cargoPayloadByKind.Add(kind, payloads);
+                        }
+
+                        payloads[destination.NormalizedIcao] = maximumPayload;
+                    }
+                }
+
                 destinationIsFeasible = true;
             }
 
@@ -192,7 +226,11 @@ public sealed class CareerJobMarketFeasibilitySource(
             $"{feasible.Count} of {destinations.Count} market destination(s) have at least one capability- and runway-qualified installed aircraft.",
             eligibleByKind.ToDictionary(
                 static pair => pair.Key,
-                static pair => (IReadOnlySet<string>)pair.Value));
+                static pair => (IReadOnlySet<string>)pair.Value),
+            cargoPayloadByKind.ToDictionary(
+                static pair => pair.Key,
+                static pair =>
+                    (IReadOnlyDictionary<string, double>)pair.Value));
     }
 
     private static bool IsFeasible(
@@ -227,7 +265,10 @@ public sealed class CareerJobMarketFeasibilitySource(
     [
         ContractKind.Ferry,
         ContractKind.Reposition,
-        ContractKind.Passenger
+        ContractKind.Passenger,
+        ContractKind.Cargo,
+        ContractKind.ExpressCargo,
+        ContractKind.AogPartsDelivery
     ];
 
     private static AircraftMissionRequirements Requirements(
@@ -243,10 +284,22 @@ public sealed class CareerJobMarketFeasibilitySource(
                 MinimumSeats: 1,
                 MinimumPassengerCapacity:
                     JobMarketPolicy.Default.StandardPassengerCount)
-            : new(
+            : IsCargoKind(kind)
+                ? new(
+                    RequiredCapabilities: AircraftCapability.Cargo,
+                    AllowedAccess: AircraftAccess.Civilian,
+                    MinimumRangeNauticalMiles: destination.DistanceNm,
+                    MinimumSeats: 0)
+                : new(
                 AllowedAccess: AircraftAccess.Civilian,
                 MinimumRangeNauticalMiles: destination.DistanceNm,
                 MinimumSeats: 0);
+
+    private static bool IsCargoKind(ContractKind kind) =>
+        kind is
+            ContractKind.Cargo
+                or ContractKind.ExpressCargo
+                or ContractKind.AogPartsDelivery;
 
     private static string NormalizeIcao(string value)
     {
