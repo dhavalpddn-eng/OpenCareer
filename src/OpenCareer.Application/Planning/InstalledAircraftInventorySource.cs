@@ -33,7 +33,11 @@ public sealed record InstalledAircraftInventoryItem(
     string PassengerCapacityText = "Passenger capacity unknown",
     string TypicalCruiseText = "Typical cruise unknown",
     string ObjectClassText = "Aircraft class unknown",
-    string CertifiedCeilingText = "Certified ceiling unknown");
+    string CertifiedCeilingText = "Certified ceiling unknown",
+    string OperatingEmptyWeightText = "Operating empty weight unknown",
+    string MaximumTakeoffWeightText = "Maximum takeoff weight unknown",
+    string MaximumFuelWeightText = "Maximum fuel weight unknown",
+    string FuelCapacityText = "Fuel capacity unknown");
 
 public sealed record InstalledAircraftInventorySnapshot(
     InstalledAircraftInventoryStatus Status,
@@ -216,6 +220,18 @@ public sealed class InstalledAircraftInventorySource(
             resolution,
             AircraftRegistryField.CertifiedCeilingFeet,
             facts?.CertifiedCeilingFeet);
+        AircraftDispatchPerformanceProfile? dispatchPerformance =
+            resolution?.DispatchPerformance is { } candidate
+            && resolution.Provenance.ContainsKey(
+                AircraftRegistryField.DispatchPerformance)
+                ? candidate
+                : null;
+        dispatchPerformance?.Validate();
+        bool hasWeightFuelEnvelope = dispatchPerformance is not null
+            && (dispatchPerformance.OperatingEmptyWeightPounds is not null
+                || dispatchPerformance.MaximumTakeoffWeightPounds is not null
+                || dispatchPerformance.MaximumFuelWeightPounds is not null
+                || dispatchPerformance.FuelCapacityGallons is not null);
 
         return new(
             aircraftId,
@@ -266,13 +282,30 @@ public sealed class InstalledAircraftInventorySource(
                 passengerCapacity,
                 typicalCruise,
                 objectClass,
-                certifiedCeiling),
+                certifiedCeiling,
+                hasWeightFuelEnvelope),
             passengerCapacity is { } displayCapacity
                 ? $"Passenger capacity {displayCapacity} (cabin value; crew and total seats not inferred)"
                 : "Passenger capacity unknown",
             FormatOptionalNumber(typicalCruise, "Typical cruise", "kt"),
             FormatObjectClass(objectClass),
-            FormatOptionalNumber(certifiedCeiling, "Certified ceiling", "ft"));
+            FormatOptionalNumber(certifiedCeiling, "Certified ceiling", "ft"),
+            FormatOptionalNumber(
+                dispatchPerformance?.OperatingEmptyWeightPounds,
+                "Operating empty weight",
+                "lb"),
+            FormatOptionalNumber(
+                dispatchPerformance?.MaximumTakeoffWeightPounds,
+                "Maximum takeoff weight",
+                "lb"),
+            FormatOptionalNumber(
+                dispatchPerformance?.MaximumFuelWeightPounds,
+                "Maximum fuel weight",
+                "lb"),
+            FormatOptionalNumber(
+                dispatchPerformance?.FuelCapacityGallons,
+                "Fuel capacity",
+                "gal"));
     }
 
     private static (string Status, string Reservation) FormatAvailability(
@@ -419,7 +452,8 @@ public sealed class InstalledAircraftInventorySource(
         int? passengerCapacity,
         double? typicalCruise,
         AircraftObjectClass? objectClass,
-        double? certifiedCeiling)
+        double? certifiedCeiling,
+        bool hasWeightFuelEnvelope)
     {
         if (resolution is null)
             return "Capability evidence sources unavailable";
@@ -435,6 +469,10 @@ public sealed class InstalledAircraftInventorySource(
         Add(AircraftRegistryField.PassengerCapacity, "passenger capacity", passengerCapacity is not null);
         Add(AircraftRegistryField.ObjectClass, "aircraft class", objectClass is not null);
         Add(AircraftRegistryField.CertifiedCeilingFeet, "certified ceiling", certifiedCeiling is not null);
+        Add(
+            AircraftRegistryField.DispatchPerformance,
+            "weight/fuel envelope",
+            hasWeightFuelEnvelope);
 
         return evidence.Count == 0
             ? "Capability evidence sources unavailable"

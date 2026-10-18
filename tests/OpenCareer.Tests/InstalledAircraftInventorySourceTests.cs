@@ -61,7 +61,8 @@ public sealed class InstalledAircraftInventorySourceTests
                 ifrCapable: true,
                 pressurized: false,
                 retractableGear: false,
-                objectClass: AircraftObjectClass.Airplane)),
+                objectClass: AircraftObjectClass.Airplane,
+                dispatchPerformance: DispatchPerformance())),
             (zuluId, Resolution(zuluId, "Zulu Aircraft", null, null)));
         var source = new InstalledAircraftInventorySource(
             new StubDiscovery(new(
@@ -93,6 +94,10 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("4 seat(s)", alpha.SeatsText);
         Assert.Equal("Typical cruise 122.5 kt", alpha.TypicalCruiseText);
         Assert.Equal("Certified ceiling 14000 ft", alpha.CertifiedCeilingText);
+        Assert.Equal("Operating empty weight 1680 lb", alpha.OperatingEmptyWeightText);
+        Assert.Equal("Maximum takeoff weight 2550 lb", alpha.MaximumTakeoffWeightText);
+        Assert.Equal("Maximum fuel weight 318 lb", alpha.MaximumFuelWeightText);
+        Assert.Equal("Fuel capacity 53 gal", alpha.FuelCapacityText);
         Assert.Equal("Aircraft class Airplane", alpha.ObjectClassText);
         Assert.Contains("typical cruise — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Equal(
@@ -106,6 +111,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Contains("passenger capacity — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Contains("aircraft class — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Contains("certified ceiling — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
+        Assert.Contains("weight/fuel envelope — test-registry (Verified)", alpha.CapabilityEvidenceText, StringComparison.Ordinal);
         Assert.Contains("access unknown", alpha.AccessText, StringComparison.OrdinalIgnoreCase);
 
         InstalledAircraftInventoryItem zulu = result.Aircraft[1];
@@ -118,6 +124,10 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Passenger capacity unknown", zulu.PassengerCapacityText);
         Assert.Equal("Aircraft class unknown", zulu.ObjectClassText);
         Assert.Equal("Certified ceiling unknown", zulu.CertifiedCeilingText);
+        Assert.Equal("Operating empty weight unknown", zulu.OperatingEmptyWeightText);
+        Assert.Equal("Maximum takeoff weight unknown", zulu.MaximumTakeoffWeightText);
+        Assert.Equal("Maximum fuel weight unknown", zulu.MaximumFuelWeightText);
+        Assert.Equal("Fuel capacity unknown", zulu.FuelCapacityText);
         Assert.Equal("IFR capability unknown", zulu.IfrCapabilityText);
     }
 
@@ -148,6 +158,10 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Passenger capacity unknown", item.PassengerCapacityText);
         Assert.Equal("Aircraft class unknown", item.ObjectClassText);
         Assert.Equal("Certified ceiling unknown", item.CertifiedCeilingText);
+        Assert.Equal("Operating empty weight unknown", item.OperatingEmptyWeightText);
+        Assert.Equal("Maximum takeoff weight unknown", item.MaximumTakeoffWeightText);
+        Assert.Equal("Maximum fuel weight unknown", item.MaximumFuelWeightText);
+        Assert.Equal("Fuel capacity unknown", item.FuelCapacityText);
         Assert.Equal("IFR capability unknown", item.IfrCapabilityText);
         Assert.Equal("Pressurization unknown", item.PressurizationText);
         Assert.Equal("Landing gear configuration unknown", item.LandingGearText);
@@ -218,6 +232,7 @@ public sealed class InstalledAircraftInventorySourceTests
                 certifiedCeilingFeet: 20_000,
                 seats: 6,
                 objectClass: AircraftObjectClass.Helicopter,
+                dispatchPerformance: DispatchPerformance(),
                 includeCapabilityProvenance: false))),
             new StubAvailability());
 
@@ -231,6 +246,10 @@ public sealed class InstalledAircraftInventorySourceTests
         Assert.Equal("Passenger capacity unknown", item.PassengerCapacityText);
         Assert.Equal("Aircraft class unknown", item.ObjectClassText);
         Assert.Equal("Certified ceiling unknown", item.CertifiedCeilingText);
+        Assert.Equal("Operating empty weight unknown", item.OperatingEmptyWeightText);
+        Assert.Equal("Maximum takeoff weight unknown", item.MaximumTakeoffWeightText);
+        Assert.Equal("Maximum fuel weight unknown", item.MaximumFuelWeightText);
+        Assert.Equal("Fuel capacity unknown", item.FuelCapacityText);
         Assert.Equal("Capability evidence sources unavailable", item.CapabilityEvidenceText);
     }
 
@@ -292,7 +311,8 @@ public sealed class InstalledAircraftInventorySourceTests
         bool includeCapabilityProvenance = true,
         double? typicalCruiseKnots = null,
         AircraftObjectClass? objectClass = null,
-        double? certifiedCeilingFeet = null)
+        double? certifiedCeilingFeet = null,
+        AircraftDispatchPerformanceProfile? dispatchPerformance = null)
     {
         var provenance =
             new Dictionary<AircraftRegistryField, AircraftRegistryFieldProvenance>();
@@ -307,6 +327,7 @@ public sealed class InstalledAircraftInventorySourceTests
         Add(AircraftRegistryField.PassengerCapacity, passengerCapacity is not null);
         Add(AircraftRegistryField.ObjectClass, objectClass is not null);
         Add(AircraftRegistryField.CertifiedCeilingFeet, certifiedCeilingFeet is not null);
+        Add(AircraftRegistryField.DispatchPerformance, dispatchPerformance is not null);
 
         var resolution = new AircraftRegistryResolution(
             aircraftId,
@@ -331,7 +352,7 @@ public sealed class InstalledAircraftInventorySourceTests
                 : new AircraftReferenceMetadata(PassengerCapacity: passengerCapacity),
             type,
             powerplant,
-            null,
+            dispatchPerformance,
             [
                 AircraftRegistryField.Capabilities,
                 AircraftRegistryField.Access
@@ -359,6 +380,16 @@ public sealed class InstalledAircraftInventorySourceTests
                     InstalledEvidence: true));
         }
     }
+
+    private static AircraftDispatchPerformanceProfile DispatchPerformance() =>
+        new(
+            OperatingEmptyWeightPounds: 1680,
+            MaximumTakeoffWeightPounds: 2550,
+            MaximumFuelWeightPounds: 318,
+            PayloadRangeEnvelope: null,
+            Confidence: AircraftDataConfidence.Verified,
+            Source: "test flight_model.cfg",
+            FuelCapacityGallons: 53);
 
     private sealed class StubDiscovery(InstalledAircraftDiscoverySnapshot current)
         : IInstalledAircraftDiscoverySource

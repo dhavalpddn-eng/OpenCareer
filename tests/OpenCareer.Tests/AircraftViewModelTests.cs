@@ -34,7 +34,11 @@ public sealed class AircraftViewModelTests
                     CapabilityEvidenceText: "Evidence: payload — cfg (Verified)",
                     PassengerCapacityText: "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
                     ObjectClassText: "Aircraft class Airplane",
-                    CertifiedCeilingText: "Certified ceiling 14000 ft")
+                    CertifiedCeilingText: "Certified ceiling 14000 ft",
+                    OperatingEmptyWeightText: "Operating empty weight 1680 lb",
+                    MaximumTakeoffWeightText: "Maximum takeoff weight 2550 lb",
+                    MaximumFuelWeightText: "Maximum fuel weight 318 lb",
+                    FuelCapacityText: "Fuel capacity 53 gal")
             ]));
         var viewModel = new AircraftViewModel(source);
 
@@ -54,6 +58,10 @@ public sealed class AircraftViewModelTests
         Assert.Equal("IFR capable", Assert.Single(viewModel.Aircraft).IfrCapabilityText);
         Assert.Equal("Aircraft class Airplane", Assert.Single(viewModel.Aircraft).ObjectClassText);
         Assert.Equal("Certified ceiling 14000 ft", Assert.Single(viewModel.Aircraft).CertifiedCeilingText);
+        Assert.Equal("Operating empty weight 1680 lb", Assert.Single(viewModel.Aircraft).OperatingEmptyWeightText);
+        Assert.Equal("Maximum takeoff weight 2550 lb", Assert.Single(viewModel.Aircraft).MaximumTakeoffWeightText);
+        Assert.Equal("Maximum fuel weight 318 lb", Assert.Single(viewModel.Aircraft).MaximumFuelWeightText);
+        Assert.Equal("Fuel capacity 53 gal", Assert.Single(viewModel.Aircraft).FuelCapacityText);
         Assert.Equal(
             "Passenger capacity 3 (cabin value; crew and total seats not inferred)",
             Assert.Single(viewModel.Aircraft).PassengerCapacityText);

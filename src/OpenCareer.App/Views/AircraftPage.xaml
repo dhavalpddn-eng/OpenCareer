@@ -167,6 +167,37 @@
                                 <TextBlock Text="{Binding CertifiedCeilingText}"
                                            Style="{StaticResource OpenCareerPaperDataValueStyle}"
                                            TextWrapping="Wrap" />
+                                <Grid ColumnSpacing="18">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="OPERATING EMPTY"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding OperatingEmptyWeightText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="MTOW"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding MaximumTakeoffWeightText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Spacing="3">
+                                        <TextBlock Text="MAX FUEL"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                        <TextBlock Text="{Binding MaximumFuelWeightText}"
+                                                   Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Text="{Binding FuelCapacityText}"
+                                           Style="{StaticResource OpenCareerInputHelpStyle}"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding CapabilityEvidenceText}"
                                            Style="{StaticResource OpenCareerInputHelpStyle}"
                                            TextWrapping="Wrap" />

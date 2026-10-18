@@ -66,7 +66,11 @@ public sealed class AircraftViewModel : INotifyPropertyChanged
                         item.PassengerCapacityText,
                         item.TypicalCruiseText,
                         item.ObjectClassText,
-                        item.CertifiedCeilingText))
+                        item.CertifiedCeilingText,
+                        item.OperatingEmptyWeightText,
+                        item.MaximumTakeoffWeightText,
+                        item.MaximumFuelWeightText,
+                        item.FuelCapacityText))
                     .ToArray(),
                 nameof(Aircraft));
             SetField(ref _statusText, snapshot.Detail, nameof(StatusText));
@@ -116,4 +120,8 @@ public sealed record InstalledAircraftItemViewModel(
     string PassengerCapacityText,
     string TypicalCruiseText,
     string ObjectClassText,
-    string CertifiedCeilingText);
+    string CertifiedCeilingText,
+    string OperatingEmptyWeightText,
+    string MaximumTakeoffWeightText,
+    string MaximumFuelWeightText,
+    string FuelCapacityText);
