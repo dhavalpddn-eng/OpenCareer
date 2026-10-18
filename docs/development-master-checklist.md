@@ -689,7 +689,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Resolve cabin passenger capacity through a dedicated registry field with its own provider/confidence provenance; shared reference metadata alone is not capacity authority.
 - [x] Derive positive retractable-wheel-gear capability from valid paired official `flight_model.cfg` contact-point times; preserve zero, absent, inconsistent and malformed timing as unknown rather than fixed-gear proof.
 - [x] Resolve official MSFS `object_class` through dedicated field provenance and project it read-only on Aircraft without synthesizing mission capability, qualification or access.
-- [x] Resolve positive official `ui_certified_ceiling` through dedicated provenance and project it read-only on Aircraft without silently constraining Dispatch.
+- [x] Resolve positive official `ui_certified_ceiling` through dedicated provenance, project it read-only on Aircraft, cap selectable Dispatch cruise envelopes, and reject above-ceiling authoritative cruise plans; missing or unproven evidence adds no limit.
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.

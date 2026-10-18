@@ -70,8 +70,8 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - MBL-08: official MSFS 2024 `object_class` values now resolve through a dedicated registry field/provenance path and appear read-only on Aircraft. Object class does not synthesize OpenCareer mission-capability flags, access or qualification.
 - Source, resolver, inventory and ViewModel tests cover all nine documented classes, invalid/missing values, provenance gating and no mission-capability leakage. Exact-head Linux build #1010 and Windows `winui-build` #943 passed.
 - Code checkpoint: `9cc9fc8d4ee9886f77062d32a483411a321e271e` on `feature/playable-loop-integration`.
-- MBL-08: positive official MSFS 2024 `ui_certified_ceiling` now resolves through its own registry field/provenance and appears read-only on Aircraft. Missing, zero, invalid and unproven values remain unknown; Dispatch behavior is unchanged.
-- Source, resolver, inventory and ViewModel coverage includes valid, zero/invalid, unproven and non-required profile behavior. Exact-head Linux build #1012 and Windows `winui-build` #945 passed.
+- MBL-08/09: positive official MSFS 2024 `ui_certified_ceiling` resolves through its own registry field/provenance, appears read-only on Aircraft, caps selectable Dispatch cruise-profile envelopes, and is rechecked by the authoritative cruise planner. Missing, zero, invalid and unproven values remain unknown and do not create a Dispatch limit.
+- Source, resolver, inventory, ViewModel, profile-envelope and planner coverage includes valid, zero/invalid, unproven, exceeded-ceiling and non-required behavior. Exact-head Linux build #1014 and Windows `winui-build` #947 passed at `f541dad7b4cd20d718906e3dd953512939c858e3`.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition job through dispatch, settlement, Logbook, location and restart replay.
