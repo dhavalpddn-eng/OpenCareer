@@ -3,6 +3,7 @@ using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Logbook;
 
@@ -168,7 +169,7 @@ public sealed class StandardPointToPointMissionCompletionSourceTests
     }
 
     [Fact]
-    public async Task CargoContractIsLeftForManifestAwareMissionAuthority()
+    public async Task CargoArrivalProjectsAcceptedManifest()
     {
         Guid contractId =
             Guid.Parse(
@@ -180,16 +181,74 @@ public sealed class StandardPointToPointMissionCompletionSourceTests
                     Destination()),
                 StandardPointToPointMissionPolicy.Default);
 
-        Assert.Null(
-            await source.ReadAsync(
-                InProgressContract(
-                    contractId,
-                    ContractKind.Cargo),
-                ShutdownSession(
-                    contractId,
-                    43.111,
-                    -76.106)));
+        JobContract contract = InProgressContract(
+            contractId,
+            ContractKind.Cargo) with
+        {
+            AircraftRequirements = new(
+                RequiredCapabilities: AircraftCapability.Cargo,
+                AllowedAccess: AircraftAccess.Civilian,
+                MinimumPayloadPounds: 800,
+                MinimumRangeNauticalMiles: 150),
+            PlanningTerms = new(
+                RouteDistanceNauticalMiles: 150,
+                PayloadPounds: 800,
+                CargoLots: [CargoLot()])
+        };
+
+        CareerJobMissionCompletionEvidence evidence =
+            Assert.IsType<CareerJobMissionCompletionEvidence>(
+                await source.ReadAsync(
+                    contract,
+                    ShutdownSession(
+                        contractId,
+                        43.111,
+                        -76.106)));
+
+        Assert.True(evidence.MissionConditionsVerified);
+        Assert.Equal(MissionOutcome.Succeeded, evidence.MissionOutcome);
+        Assert.Null(evidence.Payload.PassengerCount);
+        Assert.Equal(800, evidence.Payload.CargoMassPounds);
+        Assert.Equal("Roasted coffee", evidence.Payload.CargoDescription);
     }
+
+    [Fact]
+    public async Task CargoContractWithoutManifestTermsFailsClosed()
+    {
+        Guid contractId = Guid.Parse(
+            "a3000000-0000-0000-0000-000000000032");
+
+        var source = new StandardPointToPointMissionCompletionSource(
+            new StubAirportSource(Destination()),
+            StandardPointToPointMissionPolicy.Default);
+
+        Assert.Null(await source.ReadAsync(
+            InProgressContract(contractId, ContractKind.Cargo),
+            ShutdownSession(
+                contractId,
+                43.111,
+                -76.106)));
+    }
+
+    private static AcceptedCargoLot CargoLot() =>
+        new(
+            Guid.Parse("a3000000-0000-0000-0000-000000000033"),
+            "roasted-coffee",
+            "Roasted coffee",
+            CargoCommodityCategory.GeneralFreight,
+            Quantity: 800,
+            CargoUnitOfTrade.Pound,
+            MassPounds: 800,
+            VolumeCubicFeet: 100,
+            "KRME",
+            "KSYR",
+            "Mohawk Valley Coffee",
+            "Syracuse Distribution",
+            DeclaredValue: 6000m,
+            OriginMarketUnitValue: 7.40m,
+            DestinationMarketUnitValue: 8.05m,
+            CargoHandlingRequirement.None,
+            AcceptedCondition: 1.0);
 
     [Fact]
     public async Task PassengerArrivalProjectsAcceptedManifestCount()

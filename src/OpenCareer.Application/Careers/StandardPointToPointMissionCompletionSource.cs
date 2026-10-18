@@ -1,6 +1,7 @@
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Logbook;
 
@@ -56,7 +57,10 @@ public sealed class StandardPointToPointMissionCompletionSource
         if (contract.Kind
             is not ContractKind.Ferry
                 and not ContractKind.Reposition
-                and not ContractKind.Passenger)
+                and not ContractKind.Passenger
+                and not ContractKind.Cargo
+                and not ContractKind.ExpressCargo
+                and not ContractKind.AogPartsDelivery)
         {
             return null;
         }
@@ -74,6 +78,22 @@ public sealed class StandardPointToPointMissionCompletionSource
                 out passengerManifest))
         {
             return null;
+        }
+
+        AcceptedCargoManifest? cargoManifest = null;
+        if (contract.Kind is
+                ContractKind.Cargo
+                    or ContractKind.ExpressCargo
+                    or ContractKind.AogPartsDelivery)
+        {
+            if (contract.PlanningTerms is not { } planningTerms
+                || planningTerms.EffectiveCargoLots.IsEmpty)
+            {
+                return null;
+            }
+
+            cargoManifest =
+                AcceptedCargoManifest.Create(contract);
         }
 
         if (flightSession.ContractId
@@ -111,7 +131,8 @@ public sealed class StandardPointToPointMissionCompletionSource
                 contract,
                 flightSession,
                 anchor.Timestamp,
-                passengerManifest);
+                passengerManifest,
+                cargoManifest);
         }
 
         AirportRecord? destination =
@@ -143,7 +164,8 @@ public sealed class StandardPointToPointMissionCompletionSource
                 contract,
                 flightSession,
                 anchor.Timestamp,
-                passengerManifest);
+                passengerManifest,
+                cargoManifest);
         }
 
         string actualArrival =
@@ -166,6 +188,7 @@ public sealed class StandardPointToPointMissionCompletionSource
             Payload:
                 CreatePayload(
                     passengerManifest,
+                    cargoManifest,
                     "Arrived at contracted destination"),
             SafetyOutcome:
                 FlightSafetyOutcome.CompletedNormally,
@@ -177,7 +200,8 @@ public sealed class StandardPointToPointMissionCompletionSource
         JobContract contract,
         FlightSession flightSession,
         DateTimeOffset observedAt,
-        AcceptedPassengerManifest? passengerManifest) =>
+        AcceptedPassengerManifest? passengerManifest,
+        AcceptedCargoManifest? cargoManifest) =>
         new(
             contract.ContractId,
             flightSession.SessionId,
@@ -193,6 +217,7 @@ public sealed class StandardPointToPointMissionCompletionSource
             Payload:
                 CreatePayload(
                     passengerManifest,
+                    cargoManifest,
                     "Contracted destination not verified"),
             SafetyOutcome:
                 FlightSafetyOutcome.CompletedNormally,
@@ -201,14 +226,21 @@ public sealed class StandardPointToPointMissionCompletionSource
 
     private static PayloadDebrief CreatePayload(
         AcceptedPassengerManifest? passengerManifest,
+        AcceptedCargoManifest? cargoManifest,
         string outcome) =>
         new(
             PassengerCount:
                 passengerManifest?.PassengerCount,
             CargoMassPounds:
-                null,
+                cargoManifest?.TotalMassPounds,
             CargoDescription:
-                null,
+                cargoManifest is null
+                    ? null
+                    : string.Join(
+                        ", ",
+                        cargoManifest.Lots
+                            .Select(static lot => lot.CommodityName)
+                            .Distinct(StringComparer.Ordinal)),
             Outcome:
                 outcome,
             EvidenceQuality:
