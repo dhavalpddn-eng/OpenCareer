@@ -237,6 +237,9 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<PersistedJobContractTermsSource>();
         services.AddSingleton<ICareerJobContractTermsSource>(provider =>
             provider.GetRequiredService<PersistedJobContractTermsSource>());
+        services.AddSingleton<PersistedPassengerJobContractTermsSource>();
+        services.AddSingleton<ICareerJobContractTermsSource>(provider =>
+            provider.GetRequiredService<PersistedPassengerJobContractTermsSource>());
         services.AddSingleton<StandardCivilianPointToPointDispatchAuthoritySource>();
         services.AddSingleton<ICareerJobDispatchAuthoritySource>(provider =>
             provider.GetRequiredService<StandardCivilianPointToPointDispatchAuthoritySource>());

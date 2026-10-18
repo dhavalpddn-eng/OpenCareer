@@ -37,25 +37,7 @@ public sealed class PersistedJobContractTermsSource
             offer);
 
         return Task.FromResult<CareerJobContractTermsEvidence?>(
-            new(
-                offer.OfferId,
-                envelope.AircraftRequirements,
-                envelope.EstimatedFlightHours,
-                envelope.PayloadPounds,
-                envelope.DemandAttractiveness,
-                envelope.Urgency,
-                envelope.Difficulty,
-                envelope.EstimatedPlayerOperatingCosts,
-                envelope.EmployerId,
-                envelope.MustStartBy,
-                envelope.MustCompleteBy,
-                envelope.ReputationReward,
-                envelope.ReputationPenalty,
-                envelope.MarketId,
-                envelope.WorldEventId,
-                envelope.GovernmentAuthorizationRequired,
-                envelope.RequiredPilotQualifications,
-                envelope.AuthorizedAircraftAccess));
+            Project(offer, envelope));
     }
 
     private static bool Supports(
@@ -67,4 +49,27 @@ public sealed class PersistedJobContractTermsSource
         && offer.Kind is
             ContractKind.Ferry
                 or ContractKind.Reposition;
+
+    internal static CareerJobContractTermsEvidence Project(
+        JobMarketOfferDraft offer,
+        JobMarketContractTermsEnvelope envelope) =>
+        new(
+            offer.OfferId,
+            envelope.AircraftRequirements,
+            envelope.EstimatedFlightHours,
+            envelope.PayloadPounds,
+            envelope.DemandAttractiveness,
+            envelope.Urgency,
+            envelope.Difficulty,
+            envelope.EstimatedPlayerOperatingCosts,
+            envelope.EmployerId,
+            envelope.MustStartBy,
+            envelope.MustCompleteBy,
+            envelope.ReputationReward,
+            envelope.ReputationPenalty,
+            envelope.MarketId,
+            envelope.WorldEventId,
+            envelope.GovernmentAuthorizationRequired,
+            envelope.RequiredPilotQualifications,
+            envelope.AuthorizedAircraftAccess);
 }
