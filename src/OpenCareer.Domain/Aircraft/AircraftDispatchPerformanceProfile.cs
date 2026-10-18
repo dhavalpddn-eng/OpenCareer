@@ -77,6 +77,37 @@ public sealed record AircraftDispatchPerformanceProfile(
                 "Configured empty weight cannot exceed maximum takeoff weight.");
         }
 
+        ValidateWeightHierarchy(
+            MaximumLandingWeightPounds,
+            MaximumTakeoffWeightPounds,
+            nameof(MaximumLandingWeightPounds),
+            nameof(MaximumTakeoffWeightPounds));
+        ValidateWeightHierarchy(
+            MaximumZeroFuelWeightPounds,
+            MaximumTakeoffWeightPounds,
+            nameof(MaximumZeroFuelWeightPounds),
+            nameof(MaximumTakeoffWeightPounds));
+        ValidateWeightHierarchy(
+            OperatingEmptyWeightPounds,
+            MaximumLandingWeightPounds,
+            nameof(OperatingEmptyWeightPounds),
+            nameof(MaximumLandingWeightPounds));
+        ValidateWeightHierarchy(
+            OperatingEmptyWeightPounds,
+            MaximumZeroFuelWeightPounds,
+            nameof(OperatingEmptyWeightPounds),
+            nameof(MaximumZeroFuelWeightPounds));
+        ValidateWeightHierarchy(
+            ConfiguredEmptyWeightPounds,
+            MaximumLandingWeightPounds,
+            nameof(ConfiguredEmptyWeightPounds),
+            nameof(MaximumLandingWeightPounds));
+        ValidateWeightHierarchy(
+            ConfiguredEmptyWeightPounds,
+            MaximumZeroFuelWeightPounds,
+            nameof(ConfiguredEmptyWeightPounds),
+            nameof(MaximumZeroFuelWeightPounds));
+
         ConditionedPerformance?.Validate();
 
         if (FuelDensities is not null)
@@ -195,5 +226,20 @@ public sealed record AircraftDispatchPerformanceProfile(
     {
         if (value is { } number && (!double.IsFinite(number) || number < 0))
             throw new ArgumentOutOfRangeException(name);
+    }
+
+    private static void ValidateWeightHierarchy(
+        double? lowerWeight,
+        double? upperWeight,
+        string lowerName,
+        string upperName)
+    {
+        if (lowerWeight is { } lower
+            && upperWeight is { } upper
+            && lower > upper)
+        {
+            throw new ArgumentException(
+                $"{lowerName} cannot exceed {upperName}.");
+        }
     }
 }

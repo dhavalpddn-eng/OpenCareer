@@ -655,6 +655,40 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
     }
 
     [Fact]
+    public async Task ContradictoryLandingAndTakeoffWeightsFailClosed()
+    {
+        string root = CreatePackageRoot("Community2024");
+
+        WriteAircraftCfg(
+            root,
+            "contradictory-landing-fixture",
+            """
+            [FLTSIM.0]
+            title = "Contradictory Landing Fixture"
+            """);
+
+        WriteAircraftFile(
+            root,
+            "contradictory-landing-fixture",
+            "flight_model.cfg",
+            """
+            [WEIGHT_AND_BALANCE]
+            empty_weight = 3000
+            max_takeoff_weight = 4000
+            max_landing_weight = 4500
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftRegistryObservation observation = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle(
+                    "Contradictory Landing Fixture")));
+
+        Assert.Null(observation.DispatchPerformance);
+    }
+
+    [Fact]
     public async Task CfgEnrichmentCombinesWithInstalledIdentityWithoutInventingSeats()
     {
         string root = CreatePackageRoot("Community2024");
