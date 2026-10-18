@@ -259,6 +259,47 @@ public sealed class OperationDispatchConditionedPerformanceTests
     }
 
     [Fact]
+    public async Task LandingPerformanceWeightBelowZeroFuelWeightFailsClosed()
+    {
+        AircraftConditionedPerformanceProfile conditioned = Conditioned(
+            landingTotal: SinglePointGrid(
+                weight: 5500,
+                temperature: 20,
+                pressureAltitude: 1000,
+                value: 1600));
+
+        var service = Service(
+            Resolution(
+                runwayPerformance: RunwayProfile(
+                    takeoff: 1200,
+                    landing: 1200),
+                conditioned: conditioned,
+                operatingEmptyWeight: 5000),
+            Airport("KAAA", Runway("18", lengthFeet: 5000)),
+            Airport("KBBB", Runway("36", lengthFeet: 5000)));
+
+        DispatchFeasibilityResult result = await service.EvaluateAsync(
+            "fixture-aircraft",
+            "KAAA",
+            "KBBB",
+            Requirements(
+                landing: Conditions(5500, 20, 1000)));
+
+        Assert.Equal(DispatchFeasibilityStatus.InsufficientData, result.Status);
+        DispatchFeasibilityIssue issue = Assert.Single(
+            result.Issues,
+            static issue => issue.Reason
+                == DispatchFeasibilityReason.AircraftLandingPerformanceWeightBelowZeroFuel);
+
+        Assert.Equal(6000, issue.RequiredPounds);
+        Assert.Equal(5500, issue.AvailablePounds);
+        Assert.Equal(DispatchEndpoint.Destination, issue.Endpoint);
+        Assert.DoesNotContain(
+            result.Issues,
+            static issue => issue.Reason == DispatchFeasibilityReason.RunwayTooShort);
+    }
+
+    [Fact]
     public async Task ConditionedTotalDistanceCanFillUnknownBaselineLength()
     {
         AircraftRunwayPerformanceProfile baseline = RunwayProfile(

@@ -303,15 +303,21 @@ public static class OperationDispatchPhysicalEvaluator
 
         if (landingTable is not null)
         {
-            landingLength = ResolveConditionedDistance(
-                landingTable,
-                requirements.LandingPerformanceConditions,
-                DispatchEndpoint.Destination,
-                destination.Icao,
-                DispatchFeasibilityReason.AircraftLandingPerformanceConditionsMissing,
-                DispatchFeasibilityReason.AircraftLandingPerformanceOutsideEnvelope,
-                DispatchFeasibilityReason.AircraftLandingPerformanceValueInvalid,
-                issues);
+            landingLength = HasSafeLandingPerformanceWeight(
+                    dispatchPerformance!,
+                    requirements,
+                    destination.Icao,
+                    issues)
+                ? ResolveConditionedDistance(
+                    landingTable,
+                    requirements.LandingPerformanceConditions,
+                    DispatchEndpoint.Destination,
+                    destination.Icao,
+                    DispatchFeasibilityReason.AircraftLandingPerformanceConditionsMissing,
+                    DispatchFeasibilityReason.AircraftLandingPerformanceOutsideEnvelope,
+                    DispatchFeasibilityReason.AircraftLandingPerformanceValueInvalid,
+                    issues)
+                : null;
         }
 
         AircraftRunwayPerformanceProfile effective =
@@ -365,6 +371,35 @@ public static class OperationDispatchPhysicalEvaluator
             originIcao,
             AircraftField: AircraftRegistryField.DispatchPerformance,
             RequiredPounds: plannedTakeoffWeight,
+            AvailablePounds: conditions.WeightPounds));
+        return false;
+    }
+
+    private static bool HasSafeLandingPerformanceWeight(
+        AircraftDispatchPerformanceProfile performance,
+        OperationDispatchRequirements requirements,
+        string destinationIcao,
+        ICollection<DispatchFeasibilityIssue> issues)
+    {
+        if (requirements.LandingPerformanceConditions is not { } conditions
+            || performance.OperatingEmptyWeightPounds is not { } emptyWeight)
+        {
+            return true;
+        }
+
+        double minimumLandingWeight = emptyWeight + requirements.PayloadPounds;
+        if (!double.IsFinite(minimumLandingWeight))
+            throw new ArgumentOutOfRangeException(nameof(requirements));
+
+        if (conditions.WeightPounds >= minimumLandingWeight)
+            return true;
+
+        issues.Add(new(
+            DispatchFeasibilityReason.AircraftLandingPerformanceWeightBelowZeroFuel,
+            DispatchEndpoint.Destination,
+            destinationIcao,
+            AircraftField: AircraftRegistryField.DispatchPerformance,
+            RequiredPounds: minimumLandingWeight,
             AvailablePounds: conditions.WeightPounds));
         return false;
     }
