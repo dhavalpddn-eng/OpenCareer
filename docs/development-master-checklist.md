@@ -393,7 +393,7 @@ Chapter status: **ACTIVE FOUNDATION**
 - [x] Implement immutable accepted cargo manifests.
 - [x] Implement airport/region commodity snapshots.
 - [x] Select and price an immutable named cargo lot deterministically from matching airport supply/demand snapshots.
-- [ ] Generate cargo jobs from supply/demand/event state.
+- [x] Generate cargo jobs from persisted supply/demand snapshots, with event effects inherited through those authoritative snapshots.
 - [ ] Implement cargo condition/outcome evidence only where supported.
 - [ ] Settle cargo freight/penalties atomically.
 - [ ] Implement long-absence advancement in authoritative career state.
