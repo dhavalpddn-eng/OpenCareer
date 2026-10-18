@@ -334,9 +334,10 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Build deterministic board refill foundation; authoritative market-demand integration remains open.
 - [x] Fail closed through aircraft/runway/qualification readiness before acceptance/start.
 - [x] Filter ordinary Ferry/Reposition destinations before offer generation unless at least one currently discovered installed civilian aircraft satisfies the shared fail-closed static capability projection and provenance-backed endpoint runway compatibility.
+- [x] Filter standard Passenger offers independently by explicit passenger capability, payload/range, total seats, dedicated passenger-capacity provenance and endpoint runway compatibility; persist immutable count/payload terms through restart and completion evidence.
 - [ ] Add generation-time fuel/weather feasibility and ranking only from authoritative inputs; final start must continue to recheck current evidence.
 - [ ] Build a richer dedicated briefing flow beyond the current Jobs offer/readiness surface.
-- [x] Build dispatch-to-active-mission flow for Ferry/Reposition and Development/Test.
+- [x] Build dispatch-to-active-mission flow for Ferry/Reposition, standard Passenger and Development/Test.
 - [x] Bind supported mission evidence to FlightSession.
 - [x] Implement mission-specific validation for the supported standard point-to-point path.
 - [x] Require parking/shutdown and mission/post-flight verification beyond landing.
@@ -357,7 +358,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Atomically settle travel/location once.
 - [x] Prevent duplicate settlement/logbook/experience/location/finalization effects on replay.
 - [ ] Keep employee work viable without company ownership.
-- [ ] Add first representative passenger/cargo/utility job.
+- [x] Add the first representative Passenger job; cargo and utility breadth remain open.
 - [ ] Live-certify one ordinary compensated market-generated civilian route; the zero-progression KJFK circuit is already live accepted.
 - [x] Automatically reconstruct/resume a terminal workflow interrupted midway through settlement/finalization.
 
@@ -829,7 +830,7 @@ The first supported C172/KJFK playable-loop foundation is complete; unchecked it
 
 Do not skip this order without an explicit reason:
 
-1. Live-certify one ordinary compensated market-generated Ferry/Reposition job through dispatch, settlement, Logbook, location and restart replay.
+1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
 2. Live-validate the implemented aircraft-mismatch, touch-and-go/go-around, simulation-rate, night and actual-instrument paths on representative simulator sessions.
 3. Expand registry/capability/job breadth without rebuilding the validated KJFK loop.
 4. Add Dashboard ranking/pay or Company/World/Fleet values only when authoritative upstream inputs exist; do not rebuild eligible-offer projection.
