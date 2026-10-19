@@ -2,6 +2,78 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonBackground" Color="#29475C" />
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonBackgroundPointerOver" Color="#365E77" />
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonBackgroundPressed" Color="#1E384A" />
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonBackgroundDisabled" Color="#7B878E" />
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonForeground" Color="#FFFDF8" />
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonForegroundDisabled" Color="#111C26" />
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonBorder" Color="#6E818D" />
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonBorderPointerOver" Color="#FFFDF8" />
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonBorderPressed" Color="#6E818D" />
+            <SolidColorBrush x:Key="OpenCareerPrimaryButtonBorderDisabled" Color="#405867" />
+
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonBackground" Color="#F5F2E9" />
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonBackgroundPointerOver" Color="#9FB7C7" />
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonBackgroundPressed" Color="#829DAC" />
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonBackgroundDisabled" Color="#E9E5DA" />
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonForeground" Color="#18252D" />
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonForegroundDisabled" Color="#5C6870" />
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonBorder" Color="#29475C" />
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonBorderPointerOver" Color="#365E77" />
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonBorderPressed" Color="#1E384A" />
+            <SolidColorBrush x:Key="OpenCareerSecondaryButtonBorderDisabled" Color="#C8C1B4" />
+
+            <SolidColorBrush x:Key="OpenCareerDangerButtonBackground" Color="#B8453E" />
+            <SolidColorBrush x:Key="OpenCareerDangerButtonBackgroundPointerOver" Color="#C04B44" />
+            <SolidColorBrush x:Key="OpenCareerDangerButtonBackgroundPressed" Color="#8F302B" />
+            <SolidColorBrush x:Key="OpenCareerDangerButtonBackgroundDisabled" Color="#6B6261" />
+            <SolidColorBrush x:Key="OpenCareerDangerButtonForeground" Color="#FFFDF8" />
+            <SolidColorBrush x:Key="OpenCareerDangerButtonForegroundDisabled" Color="#FFFDF8" />
+            <SolidColorBrush x:Key="OpenCareerDangerButtonBorder" Color="#FFFDF8" />
+            <SolidColorBrush x:Key="OpenCareerDangerButtonBorderPointerOver" Color="#FFFDF8" />
+            <SolidColorBrush x:Key="OpenCareerDangerButtonBorderPressed" Color="#FFFDF8" />
+            <SolidColorBrush x:Key="OpenCareerDangerButtonBorderDisabled" Color="#405867" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="HighContrast">
+            <StaticResource x:Key="OpenCareerPrimaryButtonBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+            <StaticResource x:Key="OpenCareerPrimaryButtonBackgroundPointerOver" ResourceKey="SystemColorHighlightColorBrush" />
+            <StaticResource x:Key="OpenCareerPrimaryButtonBackgroundPressed" ResourceKey="SystemColorHighlightColorBrush" />
+            <StaticResource x:Key="OpenCareerPrimaryButtonBackgroundDisabled" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+            <StaticResource x:Key="OpenCareerPrimaryButtonForeground" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="OpenCareerPrimaryButtonForegroundDisabled" ResourceKey="SystemControlDisabledBaseMediumLowBrush" />
+            <StaticResource x:Key="OpenCareerPrimaryButtonBorder" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="OpenCareerPrimaryButtonBorderPointerOver" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="OpenCareerPrimaryButtonBorderPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="OpenCareerPrimaryButtonBorderDisabled" ResourceKey="SystemControlDisabledBaseMediumLowBrush" />
+
+            <StaticResource x:Key="OpenCareerSecondaryButtonBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+            <StaticResource x:Key="OpenCareerSecondaryButtonBackgroundPointerOver" ResourceKey="SystemColorHighlightColorBrush" />
+            <StaticResource x:Key="OpenCareerSecondaryButtonBackgroundPressed" ResourceKey="SystemColorHighlightColorBrush" />
+            <StaticResource x:Key="OpenCareerSecondaryButtonBackgroundDisabled" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+            <StaticResource x:Key="OpenCareerSecondaryButtonForeground" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="OpenCareerSecondaryButtonForegroundDisabled" ResourceKey="SystemControlDisabledBaseMediumLowBrush" />
+            <StaticResource x:Key="OpenCareerSecondaryButtonBorder" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="OpenCareerSecondaryButtonBorderPointerOver" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="OpenCareerSecondaryButtonBorderPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="OpenCareerSecondaryButtonBorderDisabled" ResourceKey="SystemControlDisabledBaseMediumLowBrush" />
+
+            <StaticResource x:Key="OpenCareerDangerButtonBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+            <StaticResource x:Key="OpenCareerDangerButtonBackgroundPointerOver" ResourceKey="SystemColorHighlightColorBrush" />
+            <StaticResource x:Key="OpenCareerDangerButtonBackgroundPressed" ResourceKey="SystemColorHighlightColorBrush" />
+            <StaticResource x:Key="OpenCareerDangerButtonBackgroundDisabled" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+            <StaticResource x:Key="OpenCareerDangerButtonForeground" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="OpenCareerDangerButtonForegroundDisabled" ResourceKey="SystemControlDisabledBaseMediumLowBrush" />
+            <StaticResource x:Key="OpenCareerDangerButtonBorder" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="OpenCareerDangerButtonBorderPointerOver" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="OpenCareerDangerButtonBorderPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="OpenCareerDangerButtonBorderDisabled" ResourceKey="SystemControlDisabledBaseMediumLowBrush" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
     <!--
         OpenCareer Jet Age palette.
         Canonical direction: cool dark aircraft/operations framing + vivid ivory briefing paper.

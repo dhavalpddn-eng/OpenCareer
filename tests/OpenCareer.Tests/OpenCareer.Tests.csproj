@@ -53,12 +53,6 @@
     <None Include="../../src/OpenCareer.App/Styles/ComponentStyles.xaml"
           Link="UiDesign/ComponentStyles.xaml"
           CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../../src/OpenCareer.App/Styles/*ButtonStates.xaml"
-          Link="UiDesign/%(Filename)%(Extension)"
-          CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../../src/OpenCareer.App/Styles/ButtonStateResources.cs"
-          Link="UiDesign/ButtonStateResources.cs"
-          CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/OpenCareer.App/App.xaml"
           Link="UiDesign/App.xaml"
           CopyToOutputDirectory="PreserveNewest" />

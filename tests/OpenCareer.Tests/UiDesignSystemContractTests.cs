@@ -8,21 +8,6 @@ public sealed class UiDesignSystemContractTests
     private static readonly XNamespace XamlNamespace =
         "http://schemas.microsoft.com/winfx/2006/xaml";
 
-    private static readonly string[] ButtonStateSuffixes =
-    [
-        string.Empty,
-        "PointerOver",
-        "Pressed",
-        "Disabled"
-    ];
-
-    private static readonly string[] NativeButtonResourcePrefixes =
-    [
-        "ButtonBackground",
-        "ButtonForeground",
-        "ButtonBorderBrush"
-    ];
-
     [Fact]
     public void CanonicalPaletteKeepsVividPaperAndCoolShell()
     {
@@ -105,9 +90,6 @@ public sealed class UiDesignSystemContractTests
     [Theory]
     [InlineData("DesignTokens.xaml")]
     [InlineData("ComponentStyles.xaml")]
-    [InlineData("PrimaryButtonStates.xaml")]
-    [InlineData("SecondaryButtonStates.xaml")]
-    [InlineData("DangerButtonStates.xaml")]
     public void ResourceDictionariesDoNotContainDuplicateKeys(string fileName)
     {
         XDocument document = XDocument.Load(GetDesignFilePath(fileName));
@@ -132,38 +114,35 @@ public sealed class UiDesignSystemContractTests
         }
     }
 
-    [Theory]
-    [InlineData("PrimaryButtonStates.xaml")]
-    [InlineData("SecondaryButtonStates.xaml")]
-    [InlineData("DangerButtonStates.xaml")]
-    public void ButtonVariantStatesRemainDistinctAndReadable(string fileName)
+    [Fact]
+    public void ButtonThemeResourcesCoverEveryReadableStateAndHighContrast()
     {
-        IReadOnlyDictionary<string, string> brushColors = ReadNamedBrushColors();
+        XDocument document = XDocument.Load(GetDesignFilePath("DesignTokens.xaml"));
+        XElement defaultTheme = FindThemeDictionary(document, "Default");
+        XElement highContrastTheme = FindThemeDictionary(document, "HighContrast");
 
-        foreach (string theme in new[] { "Default", "Light" })
+        foreach (string variant in new[] { "Primary", "Secondary", "Danger" })
         {
-            IReadOnlyDictionary<string, string> resources = ReadThemeResources(fileName, theme);
             Dictionary<string, string> backgrounds = new(StringComparer.Ordinal);
-
-            foreach (string suffix in ButtonStateSuffixes)
+            foreach (string state in new[] { string.Empty, "PointerOver", "Pressed", "Disabled" })
             {
-                string backgroundKey = $"ButtonBackground{suffix}";
-                string foregroundKey = $"ButtonForeground{suffix}";
-                string borderKey = $"ButtonBorderBrush{suffix}";
+                string backgroundKey = $"OpenCareer{variant}ButtonBackground{state}";
+                string foregroundKey = $"OpenCareer{variant}ButtonForeground{(state == "Disabled" ? "Disabled" : string.Empty)}";
+                string borderKey = $"OpenCareer{variant}ButtonBorder{state}";
 
-                Assert.Contains(backgroundKey, resources.Keys);
-                Assert.Contains(foregroundKey, resources.Keys);
-                Assert.Contains(borderKey, resources.Keys);
-
-                string background = brushColors[resources[backgroundKey]];
-                string foreground = brushColors[resources[foregroundKey]];
-                backgrounds.Add(suffix, background);
+                string background = ReadSolidBrushColor(defaultTheme, backgroundKey);
+                string foreground = ReadSolidBrushColor(defaultTheme, foregroundKey);
+                backgrounds.Add(state, background);
 
                 double contrast = ContrastRatio(ParseRgb(foreground), ParseRgb(background));
-                string stateName = string.IsNullOrEmpty(suffix) ? "Normal" : suffix;
+                string stateName = string.IsNullOrEmpty(state) ? "Normal" : state;
                 Assert.True(
                     contrast >= 4.5,
-                    $"{fileName} {theme} {stateName} contrast was {contrast:F2}:1.");
+                    $"{variant} {stateName} button contrast was {contrast:F2}:1.");
+
+                AssertSystemHighContrastResource(highContrastTheme, backgroundKey);
+                AssertSystemHighContrastResource(highContrastTheme, foregroundKey);
+                AssertSystemHighContrastResource(highContrastTheme, borderKey);
             }
 
             Assert.NotEqual(backgrounds[string.Empty], backgrounds["PointerOver"]);
@@ -172,113 +151,62 @@ public sealed class UiDesignSystemContractTests
         }
     }
 
-    [Theory]
-    [InlineData("PrimaryButtonStates.xaml")]
-    [InlineData("SecondaryButtonStates.xaml")]
-    [InlineData("DangerButtonStates.xaml")]
-    public void ButtonVariantStatesDeferToSystemHighContrastResources(string fileName)
-    {
-        IReadOnlyDictionary<string, string> resources = ReadThemeResources(fileName, "HighContrast");
-
-        foreach (string suffix in ButtonStateSuffixes)
-        {
-            foreach (string prefix in NativeButtonResourcePrefixes)
-            {
-                string key = $"{prefix}{suffix}";
-                Assert.True(resources.TryGetValue(key, out string? resourceKey), $"{fileName} lacks {key}.");
-                Assert.True(
-                    resourceKey is not null && resourceKey.StartsWith("System", StringComparison.Ordinal),
-                    $"{fileName} {key} must defer to a system high-contrast resource.");
-            }
-        }
-    }
-
     [Fact]
-    public void ButtonStylesInstallVariantLocalResourcesAndKeepTheStockTemplate()
+    public void ButtonStylesUseDeterministicTemplatesAndSystemFocus()
     {
         XDocument document = XDocument.Load(GetDesignFilePath("ComponentStyles.xaml"));
-
         XElement baseStyle = FindStyle(document, "OpenCareerButtonBaseStyle");
+
         Assert.Equal("{StaticResource DefaultButtonStyle}", baseStyle.Attribute("BasedOn")?.Value);
+        AssertStyleSetter(baseStyle, "UseSystemFocusVisuals", "True");
+        AssertStyleSetter(baseStyle, "MinHeight", "46");
 
-        AssertVariantSetter(document, "OpenCareerPrimaryButtonStyle", "Primary");
-        AssertVariantSetter(document, "OpenCareerSecondaryButtonStyle", "Secondary");
-        AssertVariantSetter(document, "OpenCareerDangerButtonStyle", "Danger");
-
-        Assert.DoesNotContain(
-            document.Descendants(),
-            static element => element.Name.LocalName == "ControlTemplate");
-        Assert.DoesNotContain(
-            document.Descendants().Where(static element => element.Name.LocalName == "Setter"),
-            static setter => string.Equals(setter.Attribute("Property")?.Value, "Template", StringComparison.Ordinal));
-        Assert.DoesNotContain(
-            document.Descendants().Where(static element => element.Name.LocalName == "Setter"),
-            static setter => string.Equals(
-                setter.Attribute("Property")?.Value,
-                "UseSystemFocusVisuals",
-                StringComparison.Ordinal));
-
-        foreach (string fileName in new[]
-                 {
-                     "PrimaryButtonStates.xaml",
-                     "SecondaryButtonStates.xaml",
-                     "DangerButtonStates.xaml"
-                 })
+        foreach (string variant in new[] { "Primary", "Secondary", "Danger" })
         {
-            XDocument stateDocument = XDocument.Load(GetDesignFilePath(fileName));
-            string[] mergedSources = stateDocument
-                .Root!
-                .Elements()
-                .Where(static element =>
-                    element.Name.LocalName == "ResourceDictionary.MergedDictionaries")
-                .Elements()
-                .Where(static element => element.Name.LocalName == "ResourceDictionary")
-                .Select(element => element.Attribute("Source")?.Value)
-                .Where(static source => source is not null)
-                .Select(static source => source!)
-                .ToArray();
-            Assert.Equal(
-                ["ms-appx:///Styles/DesignTokens.xaml"],
-                mergedSources);
-            Assert.DoesNotContain(
-                stateDocument.Descendants(),
-                static element =>
-                    element.Attribute(XamlNamespace + "Key")?.Value.StartsWith(
-                        "FocusVisual",
-                        StringComparison.Ordinal) == true);
-        }
+            XElement style = FindStyle(document, $"OpenCareer{variant}ButtonStyle");
+            AssertStyleSetter(
+                style,
+                "Template",
+                $"{{StaticResource OpenCareer{variant}ButtonTemplate}}");
+            AssertStyleSetter(
+                style,
+                "Background",
+                $"{{ThemeResource OpenCareer{variant}ButtonBackground}}");
+            AssertStyleSetter(
+                style,
+                "Foreground",
+                $"{{ThemeResource OpenCareer{variant}ButtonForeground}}");
 
-        string resourceScopeSource = File.ReadAllText(GetDesignFilePath("ButtonStateResources.cs"));
-        Assert.Contains("button.Resources.MergedDictionaries.Add", resourceScopeSource, StringComparison.Ordinal);
-        Assert.Contains("ms-appx:///Styles/{variant}ButtonStates.xaml", resourceScopeSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("Application.Current.Resources", resourceScopeSource, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void NativeButtonStateKeysAreNeverDefinedAtApplicationOrPageScope()
-    {
-        IEnumerable<string> globallyScopedFiles =
-        [
-            GetDesignFilePath("App.xaml"),
-            GetDesignFilePath("DesignTokens.xaml"),
-            GetDesignFilePath("ComponentStyles.xaml"),
-            .. GetProductionButtonXamlPaths()
-        ];
-
-        foreach (string path in globallyScopedFiles)
-        {
-            XDocument document = XDocument.Load(path);
-            string[] nativeKeys = document
+            XElement template = document
                 .Descendants()
-                .Select(element => element.Attribute(XamlNamespace + "Key")?.Value)
-                .Where(static value => value is not null && IsNativeButtonResourceKey(value))
-                .Select(static value => value!)
-                .ToArray();
+                .Single(element =>
+                    element.Name.LocalName == "ControlTemplate" &&
+                    string.Equals(
+                        element.Attribute(XamlNamespace + "Key")?.Value,
+                        $"OpenCareer{variant}ButtonTemplate",
+                        StringComparison.Ordinal));
 
-            Assert.True(
-                nativeKeys.Length == 0,
-                $"{Path.GetFileName(path)} globally scopes native Button resource(s): {string.Join(", ", nativeKeys)}");
+            string[] states = template
+                .Descendants()
+                .Where(static element => element.Name.LocalName == "VisualState")
+                .Select(element => element.Attribute(XamlNamespace + "Name")?.Value)
+                .Where(static name => name is not null)
+                .Select(static name => name!)
+                .ToArray();
+            Assert.Contains("Normal", states);
+            Assert.Contains("PointerOver", states);
+            Assert.Contains("Pressed", states);
+            Assert.Contains("Disabled", states);
+            Assert.Contains(
+                template.Descendants(),
+                static element =>
+                    element.Name.LocalName == "ContentPresenter" &&
+                    string.Equals(element.Attribute(XamlNamespace + "Name")?.Value, "ButtonContent", StringComparison.Ordinal));
         }
+
+        Assert.DoesNotContain(
+            document.Descendants().Where(static element => element.Name.LocalName == "Setter"),
+            static setter => setter.Attribute("Property")?.Value == "styles:ButtonStateResources.Variant");
     }
 
     [Fact]
@@ -328,6 +256,34 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
+    public void JobsPagePresentsFlightCenterWorkflowAndUnhiddenTestAction()
+    {
+        XDocument page = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "UiContracts", "JobsPage.xaml"));
+        string[] visibleText = page
+            .Descendants()
+            .Select(element => element.Attribute("Text")?.Value ?? element.Attribute("Content")?.Value)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value!)
+            .ToArray();
+
+        Assert.Contains("CAREER FLIGHT CENTER", visibleText);
+        Assert.Contains("AIRCRAFT", visibleText);
+        Assert.Contains("CONTRACT", visibleText);
+        Assert.Contains("DISPATCH", visibleText);
+        Assert.Contains("FLY", visibleText);
+        Assert.Contains("CREATE TEST FLIGHT", visibleText);
+        Assert.DoesNotContain(page.Descendants(), static element => element.Name.LocalName == "Expander");
+
+        XElement testButton = page
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Button" &&
+                string.Equals(element.Attribute("Click")?.Value, "GenerateDevelopmentFlight_Click", StringComparison.Ordinal));
+        Assert.Equal("{StaticResource OpenCareerPrimaryButtonStyle}", testButton.Attribute("Style")?.Value);
+        Assert.Equal("Stretch", testButton.Attribute("HorizontalAlignment")?.Value);
+    }
+
+    [Fact]
     public void CareerStudentTrainingSurfaceCanStartButCannotCompleteOrGrant()
     {
         string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
@@ -372,23 +328,15 @@ public sealed class UiDesignSystemContractTests
         }
     }
 
-    private static void AssertVariantSetter(XDocument document, string styleKey, string expectedVariant)
+    private static void AssertStyleSetter(XElement style, string property, string expectedValue)
     {
-        XElement style = FindStyle(document, styleKey);
         XElement setter = style
             .Elements()
             .Single(element =>
                 element.Name.LocalName == "Setter" &&
-                string.Equals(
-                    element.Attribute("Property")?.Value,
-                    "styles:ButtonStateResources.Variant",
-                    StringComparison.Ordinal));
+                string.Equals(element.Attribute("Property")?.Value, property, StringComparison.Ordinal));
 
-        Assert.Equal(expectedVariant, setter.Attribute("Value")?.Value);
-        Assert.DoesNotContain(
-            style.Elements().Where(static element => element.Name.LocalName == "Setter"),
-            static element => element.Attribute("Property")?.Value is
-                "Background" or "Foreground" or "BorderBrush");
+        Assert.Equal(expectedValue, setter.Attribute("Value")?.Value);
     }
 
     private static XElement FindStyle(XDocument document, string styleKey) =>
@@ -398,56 +346,32 @@ public sealed class UiDesignSystemContractTests
                 element.Name.LocalName == "Style" &&
                 string.Equals(element.Attribute(XamlNamespace + "Key")?.Value, styleKey, StringComparison.Ordinal));
 
-    private static IReadOnlyDictionary<string, string> ReadThemeResources(string fileName, string theme)
-    {
-        XDocument document = XDocument.Load(GetDesignFilePath(fileName));
-        XElement themeDictionary = document
+    private static XElement FindThemeDictionary(XDocument document, string theme) =>
+        document
             .Descendants()
             .Single(element =>
                 element.Name.LocalName == "ResourceDictionary" &&
                 string.Equals(element.Attribute(XamlNamespace + "Key")?.Value, theme, StringComparison.Ordinal));
 
-        return themeDictionary
+    private static string ReadSolidBrushColor(XElement dictionary, string resourceKey) =>
+        dictionary
             .Elements()
-            .Where(static element => element.Attribute(XamlNamespace + "Key") is not null)
-            .ToDictionary(
-                element => element.Attribute(XamlNamespace + "Key")!.Value,
-                element => element.Attribute("ResourceKey")?.Value
-                    ?? throw new InvalidDataException("Button state resource must alias a named brush."),
-                StringComparer.Ordinal);
-    }
+            .Single(element =>
+                element.Name.LocalName == "SolidColorBrush" &&
+                string.Equals(element.Attribute(XamlNamespace + "Key")?.Value, resourceKey, StringComparison.Ordinal))
+            .Attribute("Color")?.Value
+        ?? throw new InvalidDataException($"Button resource '{resourceKey}' must declare a color.");
 
-    private static IReadOnlyDictionary<string, string> ReadNamedBrushColors()
+    private static void AssertSystemHighContrastResource(XElement dictionary, string resourceKey)
     {
-        XDocument document = XDocument.Load(GetDesignFilePath("DesignTokens.xaml"));
-        IReadOnlyDictionary<string, string> colors = ReadNamedColors();
-
-        return document
-            .Descendants()
-            .Where(static element => element.Name.LocalName == "SolidColorBrush")
-            .Select(element => new
-            {
-                Key = element.Attribute(XamlNamespace + "Key")?.Value,
-                Color = element.Attribute("Color")?.Value
-            })
-            .Where(static pair => !string.IsNullOrWhiteSpace(pair.Key) && !string.IsNullOrWhiteSpace(pair.Color))
-            .ToDictionary(
-                static pair => pair.Key!,
-                pair => ResolveColor(pair.Color!, colors),
-                StringComparer.Ordinal);
-    }
-
-    private static string ResolveColor(string value, IReadOnlyDictionary<string, string> colors)
-    {
-        const string staticResourcePrefix = "{StaticResource ";
-        if (value.StartsWith('#'))
-            return value;
-
-        if (!value.StartsWith(staticResourcePrefix, StringComparison.Ordinal) || !value.EndsWith('}'))
-            throw new InvalidDataException($"Unsupported brush color reference '{value}'.");
-
-        string key = value[staticResourcePrefix.Length..^1];
-        return colors[key];
+        XElement resource = dictionary
+            .Elements()
+            .Single(element =>
+                string.Equals(element.Attribute(XamlNamespace + "Key")?.Value, resourceKey, StringComparison.Ordinal));
+        string? systemKey = resource.Attribute("ResourceKey")?.Value;
+        Assert.True(
+            systemKey is not null && systemKey.StartsWith("System", StringComparison.Ordinal),
+            $"{resourceKey} must defer to a system high-contrast resource.");
     }
 
     private static IEnumerable<string> GetProductionButtonXamlPaths()
@@ -485,9 +409,6 @@ public sealed class UiDesignSystemContractTests
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal);
     }
-
-    private static bool IsNativeButtonResourceKey(string key) =>
-        NativeButtonResourcePrefixes.Any(prefix => key.StartsWith(prefix, StringComparison.Ordinal));
 
     private static IReadOnlyDictionary<string, string> ReadNamedColors()
     {
