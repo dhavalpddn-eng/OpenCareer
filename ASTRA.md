@@ -100,6 +100,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoints: `1bb5283612a7ea4fcb7c3eebadcdf700ed22219a` and `c7bc5c236f1827ed497040ef157c0fc7202d67dd` on `feature/playable-loop-integration`.
 - MBL-10: the job generator can bind an explicitly supplied route-matching lot into the existing immutable cargo authority envelope. Production refill now enables Cargo, Express Cargo and AOG-parts generation only when installed-aircraft capability/payload/range/access, endpoint runways, persisted origin/destination market snapshots and deterministic lot selection all succeed.
 - Verification: exact-head Linux builds #1049 / #1050 and Windows `winui-build` #982 / #983 passed for the two checkpoints respectively.
+- Code checkpoint: `8ddcb1590c61cb9b54682217a2e9ecb9872be31a` on `feature/playable-loop-integration`.
+- Fixed the onboarding-to-Jobs UI freeze: MSFS `aircraft.cfg` enrichment now builds one cancellable package index on a background thread and reuses it across installed-aircraft lookups, keeping recursive package scans and file parsing off the WinUI thread.
+- Verification: exact-head Linux build #1053 and Windows `winui-build` #986 passed.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
