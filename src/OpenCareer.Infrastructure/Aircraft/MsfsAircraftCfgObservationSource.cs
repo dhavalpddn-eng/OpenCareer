@@ -18,10 +18,13 @@ public sealed class MsfsAircraftCfgObservationSource(
             .ToArray()
         ?? throw new ArgumentNullException(nameof(packageRoots));
 
+    private readonly SemaphoreSlim _indexGate = new(1, 1);
+    private IReadOnlyDictionary<string, MatchingVariation[]>? _variationIndex;
+
     public static MsfsAircraftCfgObservationSource FromUserConfig(string userConfigPath) =>
         new(MsfsPackageRootLocator.FromUserConfig(userConfigPath));
 
-    public Task<IReadOnlyList<AircraftRegistryObservation>> FindAircraftObservationsAsync(
+    public async Task<IReadOnlyList<AircraftRegistryObservation>> FindAircraftObservationsAsync(
         string canonicalAircraftId,
         CancellationToken cancellationToken = default)
     {
@@ -30,21 +33,39 @@ public sealed class MsfsAircraftCfgObservationSource(
 
         if (!AircraftCanonicalIdentity.TryGetMsfsTitle(canonicalAircraftId, out string title))
         {
-            return Task.FromResult<IReadOnlyList<AircraftRegistryObservation>>(
-                Array.Empty<AircraftRegistryObservation>());
+            return Array.Empty<AircraftRegistryObservation>();
         }
 
-        MatchingVariation[] matches = FindMatches(title, cancellationToken).ToArray();
+        IReadOnlyDictionary<string, MatchingVariation[]> index =
+            await GetVariationIndexAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!index.TryGetValue(title, out MatchingVariation[]? matches))
+            return Array.Empty<AircraftRegistryObservation>();
 
         // Without a VFS-resolved source path, multiple local definitions are ambiguous.
         // Fail closed rather than arbitrarily choosing an override.
         if (matches.Length != 1)
         {
-            return Task.FromResult<IReadOnlyList<AircraftRegistryObservation>>(
-                Array.Empty<AircraftRegistryObservation>());
+            return Array.Empty<AircraftRegistryObservation>();
         }
 
-        MatchingVariation match = matches[0];
+        return await Task.Run<IReadOnlyList<AircraftRegistryObservation>>(
+                () => CreateObservations(
+                    canonicalAircraftId,
+                    matches[0],
+                    cancellationToken),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static IReadOnlyList<AircraftRegistryObservation> CreateObservations(
+        string canonicalAircraftId,
+        MatchingVariation match,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
         AircraftCfgDocument document = match.Document;
         AircraftCfgVariation variation = match.Variation;
 
@@ -99,13 +120,50 @@ public sealed class MsfsAircraftCfgObservationSource(
             PassengerCapacity: variation.PassengerCapacity,
             ObjectClass: document.ObjectClass);
 
-        return Task.FromResult<IReadOnlyList<AircraftRegistryObservation>>([observation]);
+        return [observation];
     }
 
-    private IEnumerable<MatchingVariation> FindMatches(
-        string exactTitle,
+    private async Task<IReadOnlyDictionary<string, MatchingVariation[]>> GetVariationIndexAsync(
         CancellationToken cancellationToken)
     {
+        IReadOnlyDictionary<string, MatchingVariation[]>? current =
+            Volatile.Read(ref _variationIndex);
+
+        if (current is not null)
+            return current;
+
+        await _indexGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            current = Volatile.Read(ref _variationIndex);
+            if (current is not null)
+                return current;
+
+            IReadOnlyDictionary<string, MatchingVariation[]> built =
+                await Task.Run(
+                        () => BuildVariationIndex(cancellationToken),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            Volatile.Write(ref _variationIndex, built);
+            return built;
+        }
+        finally
+        {
+            _indexGate.Release();
+        }
+    }
+
+    private IReadOnlyDictionary<string, MatchingVariation[]> BuildVariationIndex(
+        CancellationToken cancellationToken)
+    {
+        var matchesByTitle =
+            new Dictionary<string, List<MatchingVariation>>(
+                StringComparer.Ordinal);
+
         for (int rootIndex = 0; rootIndex < _packageRoots.Length; rootIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -149,21 +207,38 @@ public sealed class MsfsAircraftCfgObservationSource(
 
                 foreach (AircraftCfgVariation variation in document.Variations)
                 {
-                    if (string.Equals(variation.Title, exactTitle, StringComparison.Ordinal))
-                    {
-                        string relativePath = Path.GetRelativePath(root, path)
-                            .Replace(Path.DirectorySeparatorChar, '/')
-                            .Replace(Path.AltDirectorySeparatorChar, '/');
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                        yield return new(
+                    string title = variation.Title.Trim();
+                    if (title.Length == 0)
+                        continue;
+
+                    string relativePath = Path.GetRelativePath(root, path)
+                        .Replace(Path.DirectorySeparatorChar, '/')
+                        .Replace(Path.AltDirectorySeparatorChar, '/');
+
+                    if (!matchesByTitle.TryGetValue(
+                            title,
+                            out List<MatchingVariation>? matches))
+                    {
+                        matches = [];
+                        matchesByTitle.Add(title, matches);
+                    }
+
+                    matches.Add(
+                        new(
                             $"root-{rootIndex}:{relativePath}#{variation.SectionName}",
                             path,
                             document,
-                            variation);
-                    }
+                            variation));
                 }
             }
         }
+
+        return matchesByTitle.ToDictionary(
+            static pair => pair.Key,
+            static pair => pair.Value.ToArray(),
+            StringComparer.Ordinal);
     }
 
     private static AircraftCfgDocument? TryRead(string path)

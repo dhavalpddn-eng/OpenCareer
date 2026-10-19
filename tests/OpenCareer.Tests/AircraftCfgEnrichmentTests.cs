@@ -112,6 +112,43 @@ public sealed class AircraftCfgEnrichmentTests : IDisposable
     }
 
     [Fact]
+    public async Task PackageIndexIsReusedAcrossAircraftLookups()
+    {
+        string root = CreatePackageRoot("Community2024");
+        WriteAircraftCfg(
+            root,
+            "cached-variations",
+            """
+            [GENERAL]
+            icao_engine_type = "Piston"
+            icao_engine_count = 1
+
+            [FLTSIM.0]
+            title = "Cached Aircraft A"
+            ui_max_range = 500
+
+            [FLTSIM.1]
+            title = "Cached Aircraft B"
+            ui_max_range = 600
+            """);
+
+        var source = new MsfsAircraftCfgObservationSource([root]);
+
+        AircraftRegistryObservation first = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle("Cached Aircraft A")));
+
+        Directory.Delete(root, recursive: true);
+
+        AircraftRegistryObservation second = Assert.Single(
+            await source.FindAircraftObservationsAsync(
+                AircraftCanonicalIdentity.FromMsfsTitle("Cached Aircraft B")));
+
+        Assert.Equal(500, first.MaximumRangeNauticalMiles);
+        Assert.Equal(600, second.MaximumRangeNauticalMiles);
+    }
+
+    [Fact]
     public async Task InvalidOrMissingValuesStayUnknownInsteadOfBecomingDefaults()
     {
         string root = CreatePackageRoot("Official2024");
