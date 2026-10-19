@@ -103,6 +103,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `8ddcb1590c61cb9b54682217a2e9ecb9872be31a` on `feature/playable-loop-integration`.
 - Fixed the onboarding-to-Jobs UI freeze: MSFS `aircraft.cfg` enrichment now builds one cancellable package index on a background thread and reuses it across installed-aircraft lookups, keeping recursive package scans and file parsing off the WinUI thread.
 - Verification: exact-head Linux build #1053 and Windows `winui-build` #986 passed.
+- Code checkpoint: `22a139571b5f1c0cb121053320d03f4e32dc2e34` on `feature/playable-loop-integration`.
+- Fixed terminal shutdown recognition after persisted parking: later stable, identity-valid zero-engine telemetry now records shutdown without requiring the parking-brake signal to remain asserted on that same sample.
+- Verification: exact-head Linux build #1055 and Windows `winui-build` #988 passed.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
