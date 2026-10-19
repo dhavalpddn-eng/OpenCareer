@@ -114,6 +114,38 @@ public sealed partial class DispatchPage : Page
         }
     }
 
+    private async void CancelAcceptedJob_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DispatchViewModel viewModel
+            || !viewModel.CanCancelAcceptedJob)
+        {
+            return;
+        }
+
+        var confirmation = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Cancel accepted job?",
+            Content = "The contract will be cancelled and its aircraft reservation released. The flight has not started, so no logbook entry or pay will be created.",
+            PrimaryButtonText = "Cancel Job",
+            CloseButtonText = "Keep Job",
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+            return;
+
+        try
+        {
+            await viewModel.CancelAcceptedJobAsync(
+                _navigationCts?.Token ?? CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+            when (_navigationCts?.IsCancellationRequested == true)
+        {
+        }
+    }
+
     private DispatchPlanningFormInput ReadInput() =>
         new(
             OriginIcaoBox.Text,

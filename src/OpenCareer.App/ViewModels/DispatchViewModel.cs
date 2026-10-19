@@ -51,6 +51,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     private readonly ICompositeDispatchPlanningService _planning;
     private readonly IAcceptedDispatchPlanningContextSource _acceptedContext;
     private readonly IPreparedDispatchPlanService? _preparation;
+    private readonly AcceptedJobCancellationService? _cancellation;
     private IReadOnlyList<DispatchAircraftOptionViewModel> _aircraftOptions =
         Array.Empty<DispatchAircraftOptionViewModel>();
     private string? _selectedAircraftId;
@@ -92,7 +93,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         IDispatchCruiseProfileSource cruiseProfiles,
         ICompositeDispatchPlanningService planning,
         IAcceptedDispatchPlanningContextSource acceptedContext,
-        IPreparedDispatchPlanService? preparation = null)
+        IPreparedDispatchPlanService? preparation = null,
+        AcceptedJobCancellationService? cancellation = null)
     {
         _aircraftInventory = aircraftInventory
             ?? throw new ArgumentNullException(nameof(aircraftInventory));
@@ -103,6 +105,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         _acceptedContext = acceptedContext
             ?? throw new ArgumentNullException(nameof(acceptedContext));
         _preparation = preparation;
+        _cancellation = cancellation;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -147,6 +150,10 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             _selectedAircraftId,
             _acceptedAircraftId,
             StringComparison.OrdinalIgnoreCase);
+    public bool CanCancelAcceptedJob =>
+        !_isBusy
+        && _cancellation is not null
+        && _acceptedContractId is not null;
     public string EvaluateButtonText =>
         _isBusy && _busyOperation == DispatchBusyOperation.Evaluate
             ? "Evaluating…"
@@ -155,6 +162,10 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         _isBusy && _busyOperation == DispatchBusyOperation.Prepare
             ? "Preparing…"
             : "Prepare Plan";
+    public string CancelAcceptedJobButtonText =>
+        _isBusy && _busyOperation == DispatchBusyOperation.Cancel
+            ? "Cancelling…"
+            : "Cancel Accepted Job";
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -545,6 +556,51 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         }
     }
 
+    public async Task CancelAcceptedJobAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_isBusy)
+            return;
+
+        if (_cancellation is not { } cancellation
+            || _acceptedContractId is not { } contractId)
+        {
+            SetField(
+                ref _acceptedContextText,
+                "No accepted preflight job is available to cancel.",
+                nameof(AcceptedContextText));
+            return;
+        }
+
+        SetBusy(true, DispatchBusyOperation.Cancel);
+        try
+        {
+            await cancellation
+                .CancelAsync(contractId, cancellationToken)
+                .ConfigureAwait(true);
+
+            ApplyAcceptedContext(
+                new AcceptedDispatchPlanningContext(
+                    AcceptedDispatchPlanningContextStatus.NoAcceptedContract,
+                    "Accepted job cancelled and its aircraft reservation released."));
+            NavigationRequested?.Invoke(
+                this,
+                new DispatchNavigationRequestedEventArgs(
+                    DispatchNavigationTarget.Jobs));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            SetField(
+                ref _acceptedContextText,
+                $"Accepted job cancellation failed: {ex.Message}",
+                nameof(AcceptedContextText));
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
     private void ApplyAcceptedContext(
         AcceptedDispatchPlanningContext context)
     {
@@ -575,7 +631,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 ? context.CanonicalAircraftId
                 : null;
         _acceptedContractId =
-            context.Status == AcceptedDispatchPlanningContextStatus.Ready
+            context.Status is AcceptedDispatchPlanningContextStatus.Ready
+                or AcceptedDispatchPlanningContextStatus.ReservationUnavailable
                 ? context.ContractId
                 : null;
         _acceptedReservationId =
@@ -590,6 +647,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             _acceptedReservationId is not null,
             nameof(IsAcceptedContextLocked));
         OnPropertyChanged(nameof(CanPrepare));
+        OnPropertyChanged(nameof(CanCancelAcceptedJob));
     }
 
     private bool MatchesAcceptedContext(
@@ -922,8 +980,10 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         SetField(ref _isBusy, value, nameof(IsBusy));
         OnPropertyChanged(nameof(CanEvaluate));
         OnPropertyChanged(nameof(CanPrepare));
+        OnPropertyChanged(nameof(CanCancelAcceptedJob));
         OnPropertyChanged(nameof(EvaluateButtonText));
         OnPropertyChanged(nameof(PrepareButtonText));
+        OnPropertyChanged(nameof(CancelAcceptedJobButtonText));
     }
 
     private bool SetField<T>(ref T field, T value, string propertyName)
@@ -950,7 +1010,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     {
         None = 0,
         Evaluate,
-        Prepare
+        Prepare,
+        Cancel
     }
 }
 

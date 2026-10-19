@@ -139,7 +139,8 @@ public enum CareerJobStartInputState
     PreflightDataInsufficient = 14,
     DomainDispatchGateRejected = 15,
     Ready = 16,
-    PreparedDispatchUnavailable = 17
+    PreparedDispatchUnavailable = 17,
+    DispatchPerformanceUnavailable = 18
 }
 
 public sealed record CareerJobStartInputSnapshot(
@@ -161,6 +162,7 @@ public sealed class CareerJobStartInputSource
     private readonly IJobContractStore _contracts;
     private readonly IAircraftRegistrySource _aircraftRegistry;
     private readonly OperationDispatchPlanningService _dispatchPlanning;
+    private readonly IDispatchCruiseProfileSource _cruiseProfiles;
     private readonly IPreparedDispatchStartAuthority? _preparedDispatch;
     private readonly ICareerJobContractTermsSource[] _contractTermSources;
     private readonly ICareerJobDispatchAuthoritySource[] _dispatchAuthoritySources;
@@ -172,6 +174,7 @@ public sealed class CareerJobStartInputSource
         IJobContractStore contracts,
         IAircraftRegistrySource aircraftRegistry,
         OperationDispatchPlanningService dispatchPlanning,
+        IDispatchCruiseProfileSource cruiseProfiles,
         IEnumerable<ICareerJobContractTermsSource> contractTermSources,
         IEnumerable<ICareerJobDispatchAuthoritySource> dispatchAuthoritySources,
         TimeProvider timeProvider,
@@ -192,6 +195,9 @@ public sealed class CareerJobStartInputSource
         _dispatchPlanning =
             dispatchPlanning
             ?? throw new ArgumentNullException(nameof(dispatchPlanning));
+        _cruiseProfiles =
+            cruiseProfiles
+            ?? throw new ArgumentNullException(nameof(cruiseProfiles));
         _contractTermSources =
             contractTermSources?.ToArray()
             ?? throw new ArgumentNullException(nameof(contractTermSources));
@@ -398,6 +404,25 @@ public sealed class CareerJobStartInputSource
                 resolution is null
                     ? $"Selected aircraft '{aircraftId}' has no registry resolution."
                     : $"Selected aircraft '{aircraftId}' resolved with installation status {resolution.InstallationStatus}, not Installed.");
+        }
+
+        if (!DevelopmentFlight.IsDevelopment(offer))
+        {
+            DispatchCruiseProfileCatalog cruiseProfiles =
+                await _cruiseProfiles
+                    .ReadAsync(
+                        resolution.CanonicalAircraftId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (cruiseProfiles.Status != DispatchCruiseProfileCatalogStatus.Ready
+                || cruiseProfiles.Profiles.Count == 0)
+            {
+                return Blocked(
+                    CareerJobStartInputState.DispatchPerformanceUnavailable,
+                    offerId,
+                    $"Selected aircraft '{resolution.CanonicalAircraftId}' cannot prepare this paid job because authoritative dispatch cruise profiles are unavailable. {cruiseProfiles.Detail}");
+            }
         }
 
         AircraftRegistryRecord? aircraft =

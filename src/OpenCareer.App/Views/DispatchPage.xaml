@@ -35,6 +35,11 @@
                     <TextBlock Text="{Binding AcceptedContextText}"
                                Style="{StaticResource OpenCareerPaperBodyStyle}"
                                TextWrapping="Wrap" />
+                    <Button Content="{Binding CancelAcceptedJobButtonText}"
+                            IsEnabled="{Binding CanCancelAcceptedJob}"
+                            Click="CancelAcceptedJob_Click"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource OpenCareerSecondaryButtonStyle}" />
 
                     <Grid ColumnSpacing="14" RowSpacing="12">
                         <Grid.ColumnDefinitions>

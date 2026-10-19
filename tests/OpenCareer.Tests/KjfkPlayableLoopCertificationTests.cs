@@ -723,6 +723,7 @@ public sealed class KjfkPlayableLoopCertificationTests
                 new CompletedJobContractBridge(ContractStore, lifecycle, Sessions), ContractStore, terminal,
                 terminalRecovery);
             var inputs = new CareerJobStartInputSource(boards, _career, ContractStore, _registry, dispatch,
+                new DispatchCruiseProfileSource(_registry),
                 [new PersistedJobContractTermsSource()], [new StandardCivilianPointToPointDispatchAuthoritySource()], clock);
             Development = new(new JobBoardGenerationService(boards), _career, recoverySource, Checkpoints, clock, location);
             Jobs = new(boards, _career, clock, new CareerJobAircraftSelectionSource(discovery),

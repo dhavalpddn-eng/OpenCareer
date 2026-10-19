@@ -63,6 +63,33 @@ public sealed class CareerJobStartInputSourceTests
     }
 
     [Fact]
+    public async Task PaidOfferWithoutAuthoritativeCruiseProfileFailsBeforeAcceptance()
+    {
+        TestFixture fixture =
+            CreateFixture(
+                contractTerms:
+                    [new FixedContractTermsSource()],
+                dispatchAuthorities:
+                    [new FixedDispatchAuthoritySource()],
+                cruiseProfiles:
+                    UnavailableCruiseProfiles());
+
+        CareerJobStartInputSnapshot snapshot =
+            await fixture.Source.ReadAsync(
+                fixture.Offer.OfferId,
+                "fixture-aircraft");
+
+        Assert.Equal(
+            CareerJobStartInputState.DispatchPerformanceUnavailable,
+            snapshot.State);
+        Assert.Null(snapshot.Request);
+        Assert.Contains(
+            "cannot prepare this paid job",
+            snapshot.Detail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task VerifiedAuthoritiesProduceDispatchVerifiedStartRequest()
     {
         TestFixture fixture =
@@ -134,6 +161,7 @@ public sealed class CareerJobStartInputSourceTests
             new OperationDispatchPlanningService(
                 registry,
                 new FakeAirportSource()),
+            ReadyCruiseProfiles(),
             [new PersistedPassengerJobContractTermsSource()],
             [new StandardCivilianPassengerDispatchAuthoritySource()],
             new FixedTimeProvider(Now));
@@ -210,6 +238,7 @@ public sealed class CareerJobStartInputSourceTests
                 new OperationDispatchPlanningService(
                     registry,
                     new FakeAirportSource()),
+                UnavailableCruiseProfiles(),
                 [new PersistedJobContractTermsSource()],
                 [new StandardCivilianPointToPointDispatchAuthoritySource()],
                 new FixedTimeProvider(Now));
@@ -334,6 +363,7 @@ public sealed class CareerJobStartInputSourceTests
                 new FakeContractStore(existing: null),
                 registry,
                 dispatchPlanning,
+                ReadyCruiseProfiles(),
                 [new PersistedJobContractTermsSource()],
                 [new StandardCivilianPointToPointDispatchAuthoritySource()],
                 new FixedTimeProvider(Now));
@@ -466,6 +496,7 @@ public sealed class CareerJobStartInputSourceTests
             var inputs = new CareerJobStartInputSource(boards, career,
                 new FakeContractStore(existing: null), registry,
                 new OperationDispatchPlanningService(registry, airports),
+                ReadyCruiseProfiles(),
                 [new PersistedJobContractTermsSource()],
                 [new StandardCivilianPointToPointDispatchAuthoritySource()], new FixedTimeProvider(Now));
 
@@ -682,7 +713,8 @@ public sealed class CareerJobStartInputSourceTests
         IReadOnlyList<ICareerJobDispatchAuthoritySource> dispatchAuthorities,
         DateTimeOffset? acceptedAt = null,
         IAircraftRegistrySource? registry = null,
-        PreparedDispatchStartAuthorityResult? preparedResult = null)
+        PreparedDispatchStartAuthorityResult? preparedResult = null,
+        IDispatchCruiseProfileSource? cruiseProfiles = null)
     {
         JobMarketOfferDraft offer =
             Offer();
@@ -739,6 +771,7 @@ public sealed class CareerJobStartInputSourceTests
                 new OperationDispatchPlanningService(
                     registry,
                     new FakeAirportSource()),
+                cruiseProfiles ?? ReadyCruiseProfiles(),
                 contractTerms,
                 dispatchAuthorities,
                 new FixedTimeProvider(
@@ -750,6 +783,33 @@ public sealed class CareerJobStartInputSourceTests
             offer,
             preparedDispatch);
     }
+
+    private static IDispatchCruiseProfileSource ReadyCruiseProfiles() =>
+        new StubCruiseProfiles(
+            new DispatchCruiseProfileCatalog(
+                DispatchCruiseProfileCatalogStatus.Ready,
+                "Fixture cruise profile is ready.",
+                [
+                    new DispatchCruiseProfileOption(
+                        ProfileIndex: 0,
+                        FuelTypeIndex: 0,
+                        DisplayName: "Fixture cruise",
+                        Envelope: new DispatchCruiseProfileEnvelope(
+                            MinimumWeightPounds: 1_000,
+                            MaximumWeightPounds: 3_000,
+                            MinimumIsaDeviationCelsius: -30,
+                            MaximumIsaDeviationCelsius: 30,
+                            MinimumPressureAltitudeFeet: 0,
+                            MaximumPressureAltitudeFeet: 14_000),
+                        EvidenceDetail: "Fixture evidence.")
+                ]));
+
+    private static IDispatchCruiseProfileSource UnavailableCruiseProfiles() =>
+        new StubCruiseProfiles(
+            new DispatchCruiseProfileCatalog(
+                DispatchCruiseProfileCatalogStatus.DispatchPerformanceUnavailable,
+                "Authoritative cruise-performance evidence is unavailable for this aircraft.",
+                Array.Empty<DispatchCruiseProfileOption>()));
 
     private static JobMarketOfferDraft Offer() =>
         new(
@@ -1407,5 +1467,19 @@ public sealed class CareerJobStartInputSourceTests
     {
         public override DateTimeOffset GetUtcNow() =>
             now;
+    }
+
+    private sealed class StubCruiseProfiles(
+        DispatchCruiseProfileCatalog catalog)
+        : IDispatchCruiseProfileSource
+    {
+        public Task<DispatchCruiseProfileCatalog> ReadAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(canonicalAircraftId);
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(catalog);
+        }
     }
 }
