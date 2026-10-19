@@ -358,8 +358,14 @@ public sealed class FlightSessionRuntime : IFlightStateEvidenceSource
                     telemetry);
 
             bool shutdownConfirmed =
-                evidence.ParkingConfirmed
-                && telemetry.EnginesRunning == 0;
+                telemetry.EnginesRunning == 0
+                && evidence.StableTelemetry
+                && evidence.ValidLoadedAircraft
+                && evidence.ContinuityPlausible
+                && !telemetry.SlewActive
+                && (evidence.ParkingConfirmed
+                    || current.Tracking.State
+                        == FlightTrackingState.Parked);
 
             await _persistence
                 .AdvanceAsync(

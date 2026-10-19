@@ -104,6 +104,41 @@ public sealed class FlightSessionRuntimeTests
     }
 
     [Fact]
+    public async Task ParkedSessionAcceptsLaterAuthoritativeEngineShutdown()
+    {
+        FlightSession parked = ParkedSession();
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(parked);
+        var store = new MemoryStore { Checkpoint = parked };
+        DateTimeOffset shutdownAt = Epoch.AddSeconds(9);
+        AircraftTelemetrySnapshot engineOff =
+            Telemetry(
+                shutdownAt,
+                32,
+                -97,
+                onGround: true) with
+            {
+                ParkingBrakeSet = false,
+                EnginesRunning = 0
+            };
+
+        var runtime =
+            CreateRuntime(
+                coordinator,
+                store,
+                Connected(),
+                new TestTelemetrySource { Latest = engineOff });
+
+        Assert.True(await runtime.RefreshAsync());
+
+        FlightSession shutdown =
+            Assert.IsType<FlightSession>(coordinator.Current);
+        Assert.Equal(FlightOperationState.Shutdown, shutdown.OperationState);
+        Assert.Equal(shutdownAt, shutdown.Milestones.ShutdownAt);
+        Assert.Equal(shutdown, store.Checkpoint);
+    }
+
+    [Fact]
     public async Task MatchingLoadedAircraftAllowsContractSessionProgress()
     {
         FlightSession active = ContractSession(
@@ -1829,6 +1864,40 @@ public sealed class FlightSessionRuntimeTests
                         -97,
                         700,
                         OnGround: false)));
+    }
+
+    private static FlightSession ParkedSession()
+    {
+        FlightSession session = ApproachSession();
+
+        session =
+            FlightSessionEngine.Advance(
+                session,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(6),
+                        Connected: true,
+                        ContinuityPlausible: true,
+                        TouchdownConfirmed: true)));
+
+        session =
+            FlightSessionEngine.Advance(
+                session,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(7),
+                        Connected: true,
+                        ContinuityPlausible: true,
+                        LandingRolloutConfirmed: true)));
+
+        return FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(8),
+                    Connected: true,
+                    ContinuityPlausible: true,
+                    ParkingConfirmed: true)));
     }
 
     private static FlightSession Suspend(
