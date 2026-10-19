@@ -57,7 +57,8 @@ public sealed class KjfkPlayableLoopCertificationTests
             await Until(() => live.Current.Availability == InstalledAircraftDiscoveryAvailability.Available);
             var clock = new TestClock();
             var app = new Harness(Path.Combine(root, "career.db"), live, connection, new TestTelemetry(), clock,
-                liveAirports: new SimConnectAirportDataObservationSource(connection, clock));
+                liveAirports: new SimConnectAirportDataObservationSource(connection, clock),
+                cruiseProfiles: ReadyCruiseProfiles());
             await app.Profiles.SaveAsync(PlayerCareerProfile.Start(Guid.NewGuid(), "KJFK", clock.Now),
                 expectedRevision: null, savedAt: clock.Now);
             await app.InitializeAsync();
@@ -675,7 +676,8 @@ public sealed class KjfkPlayableLoopCertificationTests
 
         public Harness(string path, IInstalledAircraftDiscoverySource discovery,
             ISimulatorConnection connection, TestTelemetry telemetry, TestClock clock, Action? afterAircraftResolution = null,
-            IAirportDataObservationSource? liveAirports = null)
+            IAirportDataObservationSource? liveAirports = null,
+            IDispatchCruiseProfileSource? cruiseProfiles = null)
         {
             DatabasePath = path; Clock = clock; Telemetry = telemetry;
             var options = new OpenCareerDatabaseOptions(path);
@@ -723,7 +725,7 @@ public sealed class KjfkPlayableLoopCertificationTests
                 new CompletedJobContractBridge(ContractStore, lifecycle, Sessions), ContractStore, terminal,
                 terminalRecovery);
             var inputs = new CareerJobStartInputSource(boards, _career, ContractStore, _registry, dispatch,
-                new DispatchCruiseProfileSource(_registry),
+                cruiseProfiles ?? new DispatchCruiseProfileSource(_registry),
                 [new PersistedJobContractTermsSource()], [new StandardCivilianPointToPointDispatchAuthoritySource()], clock);
             Development = new(new JobBoardGenerationService(boards), _career, recoverySource, Checkpoints, clock, location);
             Jobs = new(boards, _career, clock, new CareerJobAircraftSelectionSource(discovery),
@@ -896,6 +898,23 @@ public sealed class KjfkPlayableLoopCertificationTests
     {
         public DateTimeOffset Now { get; set; } = new DateTimeOffset(2026, 9, 25, 12, 0, 0, TimeSpan.Zero).AddTicks(1_234_567);
         public override DateTimeOffset GetUtcNow() => Now;
+    }
+    private static IDispatchCruiseProfileSource ReadyCruiseProfiles() =>
+        new StubCruiseProfiles(new(
+            DispatchCruiseProfileCatalogStatus.Ready,
+            "Fixture cruise profile is ready.",
+            [new(0, 0, "Fixture cruise", new(1_000, 3_000, -30, 30, 0, 14_000), "Fixture evidence.")]));
+    private sealed class StubCruiseProfiles(DispatchCruiseProfileCatalog catalog)
+        : IDispatchCruiseProfileSource
+    {
+        public Task<DispatchCruiseProfileCatalog> ReadAsync(
+            string canonicalAircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(canonicalAircraftId);
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(catalog);
+        }
     }
     private sealed class TestTelemetry : ISimulatorTelemetrySource
     {
