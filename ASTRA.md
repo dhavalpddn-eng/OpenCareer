@@ -106,6 +106,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `22a139571b5f1c0cb121053320d03f4e32dc2e34` on `feature/playable-loop-integration`.
 - Fixed terminal shutdown recognition after persisted parking: later stable, identity-valid zero-engine telemetry now records shutdown without requiring the parking-brake signal to remain asserted on that same sample.
 - Verification: exact-head Linux build #1055 and Windows `winui-build` #988 passed.
+- Code checkpoint: `f15292a940e4cef0cf77788ad541e10aba5beea2` on `feature/playable-loop-integration`.
+- Paid-job acceptance now fails closed unless the selected aircraft has at least one authoritative Dispatch cruise profile. Dispatch also exposes a confirmed preflight cancellation path that cancels a trapped accepted contract, retires its runtime state, releases its exact Fleet reservation and clears any prepared plan. Development quick flights remain exempt.
+- Verification: exact-head Linux build #1058 and Windows `winui-build` #991 passed.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
