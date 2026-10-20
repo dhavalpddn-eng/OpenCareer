@@ -109,6 +109,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `f15292a940e4cef0cf77788ad541e10aba5beea2` on `feature/playable-loop-integration`.
 - Paid-job acceptance now fails closed unless the selected aircraft has at least one authoritative Dispatch cruise profile. Dispatch also exposes a confirmed preflight cancellation path that cancels a trapped accepted contract, retires its runtime state, releases its exact Fleet reservation and clears any prepared plan. Development quick flights remain exempt.
 - Verification: exact-head Linux build #1058 and Windows `winui-build` #991 passed.
+- Code checkpoint: `8961e4029eb01aa65fb0cbe83625128d3d1abf11` on `feature/playable-loop-integration`.
+- Fixed the trapped cancellation state when repeated testing leaves multiple Accepted contracts: Dispatch now retains every accepted contract identity, exposes one prominent cancel-all action, and releases each contract reservation through the existing idempotent cancellation authority.
+- Verification: exact-head Linux build #1060 and Windows `winui-build` #993 passed, including WinUI, LiveProbe, rapid-loop certification and the full test suite.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
