@@ -337,6 +337,37 @@ public sealed class DispatchViewModelTests
     }
 
     [Fact]
+    public async Task MultipleAcceptedContractsCanAllBeCancelledFromBlockedDispatchState()
+    {
+        Guid first = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        Guid second = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var cancellation = new StubAcceptedJobCancellation();
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            new StubAcceptedContext(new(
+                AcceptedDispatchPlanningContextStatus.MultipleAcceptedContracts,
+                "2 accepted jobs are blocking Dispatch.",
+                AcceptedContractIds: [first, second])),
+            cancellation: cancellation);
+        DispatchNavigationTarget? navigationTarget = null;
+        viewModel.NavigationRequested += (_, args) => navigationTarget = args.Target;
+
+        await viewModel.InitializeAsync();
+
+        Assert.True(viewModel.CanCancelAcceptedJob);
+        Assert.Equal("Cancel All 2 Accepted Jobs", viewModel.CancelAcceptedJobButtonText);
+
+        await viewModel.CancelAcceptedJobAsync();
+
+        Assert.Equal(new[] { first, second }, cancellation.ContractIds);
+        Assert.False(viewModel.CanCancelAcceptedJob);
+        Assert.Equal(DispatchNavigationTarget.Jobs, navigationTarget);
+        Assert.Contains("All 2 accepted jobs", viewModel.AcceptedContextText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExplicitWeatherLimitsReachCompositePlannerWithoutDefaults()
     {
         var planning = new StubPlanning();
@@ -738,6 +769,23 @@ public sealed class DispatchViewModelTests
         public Task<AcceptedDispatchPlanningContext> ReadAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult(context);
+    }
+
+    private sealed class StubAcceptedJobCancellation : IAcceptedJobCancellationService
+    {
+        public List<Guid> ContractIds { get; } = [];
+
+        public Task<AcceptedJobCancellationResult> CancelAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ContractIds.Add(contractId);
+            return Task.FromResult(new AcceptedJobCancellationResult(
+                contractId,
+                JobAcceptanceFleetBridge.GetReservationId(contractId),
+                ReservationWasAlreadyReleased: false));
+        }
     }
 
     private sealed class StubProfiles(DispatchCruiseProfileCatalog catalog)

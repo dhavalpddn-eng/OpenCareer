@@ -22,7 +22,8 @@ public sealed record AcceptedDispatchPlanningContext(
     string? CanonicalAircraftId = null,
     string? ReservationId = null,
     double? RouteDistanceNauticalMiles = null,
-    double? PayloadPounds = null);
+    double? PayloadPounds = null,
+    IReadOnlyList<Guid>? AcceptedContractIds = null);
 
 public interface IAcceptedDispatchPlanningContextSource
 {
@@ -72,7 +73,10 @@ public sealed class AcceptedDispatchPlanningContextSource(
         {
             return new(
                 AcceptedDispatchPlanningContextStatus.MultipleAcceptedContracts,
-                "Multiple accepted jobs are present. Dispatch will not choose between them.");
+                $"{accepted.Length} accepted jobs are present. Dispatch will not choose between them; cancel them to clear the blocked preflight state.",
+                AcceptedContractIds: accepted
+                    .Select(static item => item.Contract.ContractId)
+                    .ToArray());
         }
 
         JobContract contract = accepted[0].Contract;
@@ -121,6 +125,7 @@ public sealed class AcceptedDispatchPlanningContextSource(
             ownership.CanonicalAircraftId,
             reservationId,
             contract.PlanningTerms?.RouteDistanceNauticalMiles,
-            contract.PlanningTerms?.PayloadPounds);
+            contract.PlanningTerms?.PayloadPounds,
+            [contract.ContractId]);
     }
 }

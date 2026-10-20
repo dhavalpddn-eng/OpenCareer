@@ -9,6 +9,13 @@ public sealed record AcceptedJobCancellationResult(
     string ReservationId,
     bool ReservationWasAlreadyReleased);
 
+public interface IAcceptedJobCancellationService
+{
+    Task<AcceptedJobCancellationResult> CancelAsync(
+        Guid contractId,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Cancels an accepted job before flight start, retires its recoverable runtime
 /// state, releases its exact Fleet reservation, and clears any prepared plan.
@@ -21,6 +28,7 @@ public sealed class AcceptedJobCancellationService(
     IAircraftReservationLookup reservationLookup,
     IAircraftReservationStore reservationStore,
     IPreparedDispatchPlanStore preparedPlans)
+    : IAcceptedJobCancellationService
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
 

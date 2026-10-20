@@ -126,7 +126,7 @@ public sealed partial class DispatchPage : Page
         {
             XamlRoot = XamlRoot,
             Title = "Cancel accepted job?",
-            Content = "The contract will be cancelled and its aircraft reservation released. The flight has not started, so no logbook entry or pay will be created.",
+            Content = viewModel.CancelAcceptedJobDialogText,
             PrimaryButtonText = "Cancel Job",
             CloseButtonText = "Keep Job",
             DefaultButton = ContentDialogButton.Close

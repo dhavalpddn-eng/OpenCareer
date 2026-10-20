@@ -41,20 +41,27 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
     public async Task MultipleAcceptedContractsAreAmbiguous()
     {
         var reservations = new StubReservations(null);
+        var contracts = new StubContracts(
+            true,
+            [
+                Persisted(ContractStatus.Accepted),
+                Persisted(
+                    ContractStatus.Accepted,
+                    "22222222-2222-2222-2222-222222222222")
+            ]);
         var source = new AcceptedDispatchPlanningContextSource(
-            new StubContracts(
-                true,
-                [
-                    Persisted(ContractStatus.Accepted),
-                    Persisted(
-                        ContractStatus.Accepted,
-                        "22222222-2222-2222-2222-222222222222")
-                ]),
+            contracts,
             reservations);
 
         AcceptedDispatchPlanningContext result = await source.ReadAsync();
 
         Assert.Equal(AcceptedDispatchPlanningContextStatus.MultipleAcceptedContracts, result.Status);
+        Assert.Equal(
+            contracts.Current
+                .Select(static item => item.Contract.ContractId)
+                .OrderBy(static id => id),
+            Assert.IsAssignableFrom<IReadOnlyList<Guid>>(result.AcceptedContractIds)
+                .OrderBy(static id => id));
         Assert.Equal(0, reservations.CallCount);
     }
 

@@ -79,6 +79,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<JobContractLifecycleService>();
         services.AddSingleton<JobOfferAcceptanceService>();
         services.AddSingleton<AcceptedJobCancellationService>();
+        services.AddSingleton<IAcceptedJobCancellationService>(provider =>
+            provider.GetRequiredService<AcceptedJobCancellationService>());
         services.AddSingleton<IEconomyLedgerStore, SqliteEconomyLedgerStore>();
 
         services.AddSingleton<EconomySettlementService>();
