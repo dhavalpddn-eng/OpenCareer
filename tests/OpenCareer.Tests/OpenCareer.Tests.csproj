@@ -63,11 +63,9 @@
           Link="UiButtons/MainWindow.xaml.cs"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/OpenCareer.App/Views/*.xaml"
-          Exclude="../../src/OpenCareer.App/Views/JobsPage.xaml;../../src/OpenCareer.App/Views/CurrentFlightPage.xaml"
           Link="UiButtons/%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/OpenCareer.App/Views/*.xaml.cs"
-          Exclude="../../src/OpenCareer.App/Views/JobsPage.xaml.cs;../../src/OpenCareer.App/Views/CurrentFlightPage.xaml.cs"
           Link="UiButtons/%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
