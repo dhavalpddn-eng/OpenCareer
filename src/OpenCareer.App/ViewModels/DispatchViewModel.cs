@@ -174,6 +174,15 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             ? $"All {_acceptedContractIds.Count} accepted preflight contracts will be cancelled and their aircraft reservations released. No flights will be started."
             : "The contract will be cancelled and its aircraft reservation released. The flight has not started, so no logbook entry or pay will be created.";
 
+    public void ReportInitializationFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        SetField(
+            ref _acceptedContextText,
+            $"Dispatch could not load: {exception.Message} Reopen Dispatch to retry.",
+            nameof(AcceptedContextText));
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         InstalledAircraftInventorySnapshot snapshot = await _aircraftInventory

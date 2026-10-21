@@ -24,8 +24,10 @@ public sealed partial class CareerPage : Page
 
         _navigationCts?.Cancel();
         _navigationCts?.Dispose();
-        _navigationCts =
+        var navigationCts =
             new CancellationTokenSource();
+        _navigationCts =
+            navigationCts;
 
         DataContext =
             viewModel;
@@ -34,11 +36,15 @@ public sealed partial class CareerPage : Page
         {
             await viewModel
                 .InitializeAsync(
-                    _navigationCts.Token);
+                    navigationCts.Token);
         }
         catch (OperationCanceledException)
-            when (_navigationCts.IsCancellationRequested)
+            when (navigationCts.IsCancellationRequested)
         {
+        }
+        catch (Exception ex)
+        {
+            viewModel.ReportInitializationFailure(ex);
         }
     }
 
@@ -74,6 +80,15 @@ public sealed partial class CareerPage : Page
         if (DataContext is not CareerViewModel viewModel)
             return;
 
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
         viewModel.HomeAirportIcao =
             HomeAirportTextBox.Text;
 
@@ -81,11 +96,10 @@ public sealed partial class CareerPage : Page
         {
             await viewModel
                 .StartCareerAsync(
-                    _navigationCts?.Token
-                        ?? CancellationToken.None);
+                    navigationCts.Token);
         }
         catch (OperationCanceledException)
-            when (_navigationCts?.IsCancellationRequested == true)
+            when (navigationCts.IsCancellationRequested)
         {
         }
     }
@@ -97,15 +111,23 @@ public sealed partial class CareerPage : Page
         if (DataContext is not CareerViewModel viewModel)
             return;
 
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
         try
         {
             await viewModel
                 .StartStudentTrainingAsync(
-                    _navigationCts?.Token
-                        ?? CancellationToken.None);
+                    navigationCts.Token);
         }
         catch (OperationCanceledException)
-            when (_navigationCts?.IsCancellationRequested == true)
+            when (navigationCts.IsCancellationRequested)
         {
         }
     }

@@ -28,8 +28,10 @@ public sealed partial class JobsPage : Page
 
         _navigationCts?.Cancel();
         _navigationCts?.Dispose();
-        _navigationCts =
+        var navigationCts =
             new CancellationTokenSource();
+        _navigationCts =
+            navigationCts;
 
         DataContext =
             viewModel;
@@ -38,15 +40,25 @@ public sealed partial class JobsPage : Page
         {
             await viewModel
                 .RefreshAsync(
-                    _navigationCts.Token);
+                    navigationCts.Token);
+
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
+            {
+                return;
+            }
 
             SynchronizeAircraftSelection(viewModel);
             StartAircraftRefreshTimer(
                 viewModel);
         }
         catch (OperationCanceledException)
-            when (_navigationCts.IsCancellationRequested)
+            when (navigationCts.IsCancellationRequested)
         {
+        }
+        catch (Exception ex)
+        {
+            viewModel.ReportRefreshFailure(ex);
         }
     }
 
@@ -77,9 +89,12 @@ public sealed partial class JobsPage : Page
         _refreshTimer.Tick +=
             async (_, _) =>
             {
+                CancellationTokenSource? navigationCts =
+                    _navigationCts;
+
                 if (_refreshingAircraft
-                    || _navigationCts is null
-                    || _navigationCts.IsCancellationRequested)
+                    || navigationCts is null
+                    || navigationCts.IsCancellationRequested)
                 {
                     return;
                 }
@@ -90,12 +105,24 @@ public sealed partial class JobsPage : Page
                 {
                     await viewModel
                         .RefreshAircraftAndReadinessAsync(
-                            _navigationCts.Token);
+                            navigationCts.Token);
+
+                    if (!ReferenceEquals(_navigationCts, navigationCts)
+                        || navigationCts.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
                     SynchronizeAircraftSelection(viewModel);
                 }
                 catch (OperationCanceledException)
-                    when (_navigationCts.IsCancellationRequested)
+                    when (navigationCts.IsCancellationRequested)
                 {
+                }
+                catch (Exception ex)
+                {
+                    StopAircraftRefreshTimer();
+                    viewModel.ReportRefreshFailure(ex);
                 }
                 finally
                 {
@@ -129,16 +156,36 @@ public sealed partial class JobsPage : Page
             return;
         }
 
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
         string? aircraftId =
             (comboBox.SelectedItem as CareerJobAircraftOption)
                 ?.AircraftId;
 
-        await viewModel
-            .SelectAircraftAsync(
-                aircraftId,
-                _navigationCts?.Token
-                    ?? CancellationToken.None);
-        SynchronizeAircraftSelection(viewModel);
+        try
+        {
+            await viewModel
+                .SelectAircraftAsync(
+                    aircraftId,
+                    navigationCts.Token);
+
+            if (ReferenceEquals(_navigationCts, navigationCts)
+                && !navigationCts.IsCancellationRequested)
+            {
+                SynchronizeAircraftSelection(viewModel);
+            }
+        }
+        catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
+        {
+        }
     }
 
     private void SynchronizeAircraftSelection(JobsViewModel viewModel)
@@ -159,6 +206,48 @@ public sealed partial class JobsPage : Page
         }
     }
 
+    private async void RefreshJobs_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (DataContext is not JobsViewModel viewModel)
+            return;
+
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        CancellationToken cancellationToken =
+            navigationCts.Token;
+
+        try
+        {
+            await viewModel.RefreshAsync(cancellationToken);
+
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            SynchronizeAircraftSelection(viewModel);
+            StartAircraftRefreshTimer(viewModel);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            viewModel.ReportRefreshFailure(ex);
+        }
+    }
+
     private async void AcceptStartFlight_Click(
         object sender,
         RoutedEventArgs e)
@@ -171,12 +260,32 @@ public sealed partial class JobsPage : Page
             return;
         }
 
-        await viewModel
-            .StartOfferAsync(
-                offer.OfferId,
-                _navigationCts?.Token
-                    ?? CancellationToken.None);
-        SynchronizeAircraftSelection(viewModel);
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            await viewModel
+                .StartOfferAsync(
+                    offer.OfferId,
+                    navigationCts.Token);
+
+            if (ReferenceEquals(_navigationCts, navigationCts)
+                && !navigationCts.IsCancellationRequested)
+            {
+                SynchronizeAircraftSelection(viewModel);
+            }
+        }
+        catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
+        {
+        }
     }
 
     private async void GenerateDevelopmentFlight_Click(
@@ -186,16 +295,30 @@ public sealed partial class JobsPage : Page
         if (DataContext is not JobsViewModel viewModel)
             return;
 
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
         try
         {
             await viewModel
                 .GenerateDevelopmentFlightAsync(
                     PositionTestPilot.IsChecked == true,
-                    _navigationCts?.Token
-                        ?? CancellationToken.None);
-            SynchronizeAircraftSelection(viewModel);
+                    navigationCts.Token);
+
+            if (ReferenceEquals(_navigationCts, navigationCts)
+                && !navigationCts.IsCancellationRequested)
+            {
+                SynchronizeAircraftSelection(viewModel);
+            }
         }
         catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
         {
         }
     }

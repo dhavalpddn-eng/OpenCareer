@@ -38,6 +38,7 @@
                     <Button Content="{Binding CancelAcceptedJobButtonText}"
                             IsEnabled="{Binding CanCancelAcceptedJob}"
                             Click="CancelAcceptedJob_Click"
+                            MinHeight="46"
                             HorizontalAlignment="Stretch"
                             Style="{StaticResource OpenCareerDangerButtonStyle}" />
 

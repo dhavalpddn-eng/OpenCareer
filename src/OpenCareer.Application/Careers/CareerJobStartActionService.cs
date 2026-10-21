@@ -1,3 +1,4 @@
+using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Careers;
 
 namespace OpenCareer.Application.Careers;
@@ -41,11 +42,15 @@ public sealed class CareerJobStartActionService
     private readonly CareerJobStartInputSource _inputs;
     private readonly CareerJobPlayableLoopCoordinator _playableLoop;
     private readonly JobAcceptanceFleetBridge? _acceptance;
+    private readonly IAutomaticDispatchPlanService? _automaticDispatch;
+    private readonly IAcceptedJobCancellationService? _cancellation;
 
     public CareerJobStartActionService(
         CareerJobStartInputSource inputs,
         CareerJobPlayableLoopCoordinator playableLoop,
-        JobAcceptanceFleetBridge? acceptance = null)
+        JobAcceptanceFleetBridge? acceptance = null,
+        IAutomaticDispatchPlanService? automaticDispatch = null,
+        IAcceptedJobCancellationService? cancellation = null)
     {
         _inputs =
             inputs
@@ -54,6 +59,8 @@ public sealed class CareerJobStartActionService
             playableLoop
             ?? throw new ArgumentNullException(nameof(playableLoop));
         _acceptance = acceptance;
+        _automaticDispatch = automaticDispatch;
+        _cancellation = cancellation;
     }
 
     public async Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
@@ -110,12 +117,89 @@ public sealed class CareerJobStartActionService
                 "Separate job acceptance is unavailable.");
         }
 
-        return await acceptance
+        if (_automaticDispatch is null || _cancellation is null)
+        {
+            throw new InvalidOperationException(
+                "Automatic job preflight is unavailable.");
+        }
+
+        JobAcceptanceFleetResult accepted = await acceptance
             .AcceptAndReserveAsync(
                 request.Contract,
                 request.DispatchContext,
                 cancellationToken)
             .ConfigureAwait(false);
+
+        if (accepted.AcceptedContract is not { } persisted)
+        {
+            throw new InvalidOperationException(
+                $"The job was not accepted and reserved: {accepted.Status}.");
+        }
+
+        IAutomaticDispatchPlanService automaticDispatch = _automaticDispatch;
+        IAcceptedJobCancellationService cancellation = _cancellation;
+
+        try
+        {
+            if (accepted.CanonicalAircraftId is null)
+            {
+                throw new InvalidOperationException(
+                    "The accepted job reservation has no canonical aircraft identity.");
+            }
+
+            JobContract contract = persisted.Contract;
+            JobContractPlanningTerms terms = contract.PlanningTerms
+                ?? throw new InvalidOperationException(
+                    "The accepted job has no authoritative planning terms.");
+
+            PrepareDispatchPlanResult prepared = await automaticDispatch
+                .PrepareAsync(
+                    contract.ContractId,
+                    accepted.CanonicalAircraftId,
+                    accepted.ReservationId,
+                    contract.OriginIcao,
+                    contract.DestinationIcao,
+                    terms.PayloadPounds,
+                    terms.RouteDistanceNauticalMiles,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!prepared.IsPrepared)
+            {
+                throw new InvalidOperationException(
+                    $"Automatic job preflight failed: {prepared.Status}. {prepared.Detail}");
+            }
+        }
+        catch (Exception preparationException)
+        {
+            await CancelFailedPreparationAsync(
+                    cancellation,
+                    persisted.Contract.ContractId,
+                    preparationException)
+                .ConfigureAwait(false);
+            throw;
+        }
+
+        return accepted;
+    }
+
+    private static async Task CancelFailedPreparationAsync(
+        IAcceptedJobCancellationService cancellation,
+        Guid contractId,
+        Exception preparationException)
+    {
+        try
+        {
+            await cancellation
+                .CancelAsync(contractId, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch (Exception cleanupException)
+        {
+            throw new InvalidOperationException(
+                "Automatic preflight failed and the accepted job could not be safely cancelled.",
+                new AggregateException(preparationException, cleanupException));
+        }
     }
 
     public async Task<CareerJobPlayableStartResult> StartAsync(

@@ -26,6 +26,15 @@ public sealed class AircraftViewModel : INotifyPropertyChanged
     public bool HasAircraft => _aircraft.Count > 0;
     public string RefreshButtonText => _isRefreshing ? "Refreshing…" : "Refresh Aircraft";
 
+    public void ReportRefreshFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        SetField(
+            ref _statusText,
+            $"Aircraft inventory could not refresh: {exception.Message} Click Refresh Aircraft to retry.",
+            nameof(StatusText));
+    }
+
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
         if (_isRefreshing)

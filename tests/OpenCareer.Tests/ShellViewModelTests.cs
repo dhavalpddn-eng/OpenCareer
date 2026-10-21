@@ -360,8 +360,10 @@ public sealed class ShellViewModelTests
         Assert.True(
             viewModel.CanCompleteCareerFlight);
 
-        await viewModel.CompleteCareerFlightAsync();
+        bool completed =
+            await viewModel.CompleteCareerFlightAsync();
 
+        Assert.True(completed);
         Assert.Equal(
             1,
             action.CompleteCount);
@@ -369,10 +371,25 @@ public sealed class ShellViewModelTests
             viewModel.CanCompleteCareerFlight);
         Assert.False(
             viewModel.IsCareerCompletionBusy);
+        Assert.Equal(
+            "Flight Evaluated",
+            viewModel.CareerCompletionActionText);
         Assert.Contains(
-            "completed",
+            "EVALUATION COMPLETE",
             viewModel.CareerCompletionActionDetail,
-            StringComparison.OrdinalIgnoreCase);
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Pay +$425",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "KJFK → KBOS logged",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Career flight #7",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -425,6 +442,51 @@ public sealed class ShellViewModelTests
             "no completion rewards",
             viewModel.CareerAbandonActionDetail,
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AuthoritativeAbandonRefreshWaitsForInFlightCareerActionRefresh()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var completion = new BlockingCareerCompletionAction();
+        var abandon =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned.")
+            };
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: completion,
+                careerAbandonAction: abandon,
+                logger: null);
+
+        Task backgroundRefresh =
+            viewModel.RefreshCareerCompletionActionAsync();
+        await completion.ReadStarted.Task;
+
+        Task authoritativeRefresh =
+            viewModel.RefreshCareerAbandonActionAsync(
+                waitForCurrentAction: true);
+
+        Assert.False(authoritativeRefresh.IsCompleted);
+
+        completion.ReleaseRead.TrySetResult(true);
+        await Task.WhenAll(backgroundRefresh, authoritativeRefresh);
+
+        Assert.True(viewModel.CanAbandonCurrentFlight);
     }
 
     [Fact]
@@ -615,14 +677,50 @@ public sealed class ShellViewModelTests
                 Availability);
         }
 
-        public Task CompleteAsync(
+        public Task<CareerJobCompletionReceipt> CompleteAsync(
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             CompleteCount++;
 
-            return Task.CompletedTask;
+            return Task.FromResult(
+                new CareerJobCompletionReceipt(
+                    Guid.Parse("aaaaaaaa-0000-0000-0000-000000000010"),
+                    425m,
+                    5_425m,
+                    "KJFK",
+                    "KBOS",
+                    Guid.Parse("aaaaaaaa-0000-0000-0000-000000000011"),
+                    "KBOS",
+                    7,
+                    IsZeroPayCalibration: false));
         }
+    }
+
+    private sealed class BlockingCareerCompletionAction
+        : ICareerJobCompletionAction
+    {
+        public TaskCompletionSource<bool> ReadStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<bool> ReleaseRead { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            ReadStarted.TrySetResult(true);
+            await ReleaseRead.Task.WaitAsync(cancellationToken);
+
+            return new(
+                CanComplete: false,
+                CareerJobCompletionInputState.FlightEvidenceIncomplete,
+                "The career flight is still active.");
+        }
+
+        public Task<CareerJobCompletionReceipt> CompleteAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeCareerAbandonAction

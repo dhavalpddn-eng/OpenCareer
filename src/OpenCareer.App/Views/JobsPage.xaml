@@ -21,22 +21,33 @@
                     <TextBlock Text="Choose an assignment, prepare the aircraft, and launch the flight."
                                Style="{StaticResource OpenCareerPageSubtitleStyle}" />
                 </StackPanel>
-                <Border Grid.Column="1"
-                        Style="{StaticResource OpenCareerMetalInsetStyle}"
-                        Padding="16,10"
-                        VerticalAlignment="Center">
-                    <StackPanel>
-                        <TextBlock Text="CURRENT STATION"
-                                   Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   CharacterSpacing="70" />
-                        <TextBlock Text="{Binding AirportText}"
-                                   Foreground="{StaticResource OpenCareerShellTextBrush}"
-                                   FontSize="18"
-                                   FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="10"
+                            VerticalAlignment="Center">
+                    <ProgressRing Width="28"
+                                  Height="28"
+                                  IsActive="{Binding IsRefreshing}" />
+                    <Border Style="{StaticResource OpenCareerMetalInsetStyle}"
+                            Padding="16,10">
+                        <StackPanel>
+                            <TextBlock Text="CURRENT STATION"
+                                       Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       CharacterSpacing="70" />
+                            <TextBlock Text="{Binding AirportText}"
+                                       Foreground="{StaticResource OpenCareerShellTextBrush}"
+                                       FontSize="18"
+                                       FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+                    <Button Content="Refresh Jobs"
+                            Click="RefreshJobs_Click"
+                            MinWidth="120"
+                            MinHeight="44"
+                            Style="{StaticResource OpenCareerSecondaryButtonStyle}" />
+                </StackPanel>
             </Grid>
 
             <Border Style="{StaticResource OpenCareerMetalCardStyle}"
@@ -137,17 +148,22 @@
                             Style="{StaticResource OpenCareerPaperInsetStyle}"
                             Padding="18">
                         <StackPanel Spacing="9">
-                            <TextBlock Text="QUICK TEST FLIGHT"
+                            <TextBlock Text="ZERO-PAY CALIBRATION"
                                        Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                             <TextBlock Text="KJFK LOCAL CIRCUIT"
                                        Style="{StaticResource OpenCareerPaperTitleStyle}" />
-                            <TextBlock Text="Uses the real aircraft, telemetry, landing, shutdown, settlement, and logbook path. It awards no pay or progression."
+                            <Border Style="{StaticResource OpenCareerWarningBadgeStyle}"
+                                    HorizontalAlignment="Left">
+                                <TextBlock Text="$0 PAY · $0 PROGRESSION"
+                                           Style="{StaticResource OpenCareerStatusBadgeTextStyle}" />
+                            </Border>
+                            <TextBlock Text="Calibration only. This verifies aircraft, telemetry, landing, shutdown, settlement, and logbook plumbing. Use an Available Contract below to test earnings and career progression."
                                        Style="{StaticResource OpenCareerPaperBodyStyle}"
                                        TextWrapping="Wrap" />
                             <CheckBox x:Name="PositionTestPilot"
                                       Content="Move pilot to KJFK for this test"
                                       Style="{StaticResource OpenCareerCheckBoxStyle}" />
-                            <Button Content="CREATE TEST FLIGHT"
+                            <Button Content="CREATE ZERO-PAY CALIBRATION"
                                     Click="GenerateDevelopmentFlight_Click"
                                     HorizontalAlignment="Stretch"
                                     Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
@@ -229,6 +245,14 @@
                                         Padding="18">
                                     <StackPanel Spacing="7"
                                                 VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding CompensationText}"
+                                                   Foreground="{StaticResource OpenCareerNavyBrush}"
+                                                   FontSize="19"
+                                                   FontWeight="Bold"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding ProgressionText}"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                                   TextWrapping="Wrap" />
                                         <Grid ColumnSpacing="12">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
@@ -256,6 +280,7 @@
                                                 Click="AcceptStartFlight_Click"
                                                 HorizontalAlignment="Stretch"
                                                 Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                                MinHeight="44"
                                                 Margin="0,8,0,0" />
                                     </StackPanel>
                                 </Border>

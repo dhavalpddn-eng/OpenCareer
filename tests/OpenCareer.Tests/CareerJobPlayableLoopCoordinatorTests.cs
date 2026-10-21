@@ -35,7 +35,15 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             ContractStatus.Completed,
             first.CompletedContract.Contract.Status);
         Assert.True(
+            first.CompletedContract.Contract.Compensation.PilotCompensation > 0m);
+        Assert.True(
             first.Terminal.Settlement.WasNewlyPosted);
+        Assert.Equal(
+            first.CompletedContract.Contract.Compensation.PilotCompensation,
+            first.Terminal.Settlement.Settlement.GrossCashReceipt);
+        Assert.Equal(
+            first.Terminal.Settlement.Settlement.GrossCashReceipt,
+            first.Terminal.Settlement.Settlement.NetCashChange);
         Assert.Equal(
             LogbookAppendDisposition.Appended,
             first.Terminal.Logbook.Disposition);
@@ -667,53 +675,96 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
     private static PersistedJobContract InProgressContract(
         Guid contractId)
     {
-        var contract =
-            new JobContract(
-                ContractId:
-                    contractId,
-                EmployerId:
-                    null,
-                Kind:
-                    ContractKind.Cargo,
-                ServiceTrack:
-                    ServiceTrack.CompanyContract,
-                OriginIcao:
-                    "KRME",
-                DestinationIcao:
-                    "KSYR",
-                Compensation:
-                    new ContractCompensation(
-                        CompensationModel.CompanyRevenue,
-                        GrossCustomerRevenue:
-                            1_000m,
-                        PilotCompensation:
-                            0m,
-                        EmployerCoversFuel:
-                            false,
-                        EmployerCoversMaintenance:
-                            false,
-                        EmployerCoversAirportFees:
-                            false),
+        var requirements =
+            new AircraftMissionRequirements(
+                RequiredCapabilities:
+                    AircraftCapability.Cargo,
+                AllowedAccess:
+                    AircraftAccess.Civilian,
+                MinimumSeats:
+                    0,
+                MinimumPayloadPounds:
+                    500,
+                MinimumRangeNauticalMiles:
+                    40);
+
+        var offer =
+            new JobMarketOfferDraft(
+                contractId,
+                ServiceTrack.CivilianEmployment,
+                ContractKind.Cargo,
+                JobScenarioKind.Standard,
+                "KRME",
+                "KSYR",
+                DistanceNm:
+                    40,
+                EstimatedFlightHours:
+                    0.5,
                 OfferedAt:
                     Epoch.AddHours(-1),
-                MustStartBy:
-                    null,
-                MustCompleteBy:
-                    Epoch.AddHours(2),
-                AircraftRequirements:
-                    new AircraftMissionRequirements(
-                        RequiredCapabilities:
-                            AircraftCapability.Cargo,
-                        AllowedAccess:
-                            AircraftAccess.Civilian,
-                        MinimumSeats:
-                            0),
-                Status:
-                    ContractStatus.InProgress,
-                AcceptedAt:
+                ExpiresAt:
+                    Epoch.AddHours(1),
+                IsLockedPreview:
+                    false,
+                RouteStrength:
+                    0.8,
+                RelationshipStrength:
+                    0.5,
+                MarketSelectionWeight:
+                    1,
+                ContractTerms:
+                    new JobMarketContractTermsEnvelope(
+                        "job-market:standard-civilian-point-to-point-v2",
+                        requirements,
+                        EstimatedFlightHours:
+                            0.5,
+                        PayloadPounds:
+                            500,
+                        DemandAttractiveness:
+                            1,
+                        Urgency:
+                            0.2,
+                        Difficulty:
+                            0.1,
+                        EstimatedPlayerOperatingCosts:
+                            175m,
+                        ReputationReward:
+                            2,
+                        ReputationPenalty:
+                            2));
+
+        JobContract created =
+            JobContractFactory.Create(
+                new JobContractCreationRequest(
+                    offer,
                     Epoch.AddMinutes(-30),
-                StartedAt:
-                    Epoch);
+                    requirements,
+                    EstimatedFlightHours:
+                        0.5,
+                    PayloadPounds:
+                        500,
+                    DemandAttractiveness:
+                        1,
+                    Urgency:
+                        0.2,
+                    Difficulty:
+                        0.1,
+                    EstimatedPlayerOperatingCosts:
+                        175m,
+                    MustCompleteBy:
+                        Epoch.AddHours(2),
+                    ReputationReward:
+                        2,
+                    ReputationPenalty:
+                        2));
+
+        JobContract contract =
+            created with
+            {
+                Status = ContractStatus.InProgress,
+                AcceptedAt = Epoch.AddMinutes(-30),
+                StartedAt = Epoch
+            };
 
         contract.Validate();
 

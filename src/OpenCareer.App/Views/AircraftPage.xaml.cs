@@ -23,16 +23,21 @@ public sealed partial class AircraftPage : Page
 
         _navigationCts?.Cancel();
         _navigationCts?.Dispose();
-        _navigationCts = new();
+        var navigationCts = new CancellationTokenSource();
+        _navigationCts = navigationCts;
         DataContext = viewModel;
 
         try
         {
-            await viewModel.RefreshAsync(_navigationCts.Token);
+            await viewModel.RefreshAsync(navigationCts.Token);
         }
         catch (OperationCanceledException)
-            when (_navigationCts.IsCancellationRequested)
+            when (navigationCts.IsCancellationRequested)
         {
+        }
+        catch (Exception ex)
+        {
+            viewModel.ReportRefreshFailure(ex);
         }
     }
 
@@ -49,14 +54,22 @@ public sealed partial class AircraftPage : Page
         if (DataContext is not AircraftViewModel viewModel)
             return;
 
+        CancellationTokenSource? navigationCts = _navigationCts;
+        if (navigationCts is null || navigationCts.IsCancellationRequested)
+            return;
+
         try
         {
             await viewModel.RefreshAsync(
-                _navigationCts?.Token ?? CancellationToken.None);
+                navigationCts.Token);
         }
         catch (OperationCanceledException)
-            when (_navigationCts?.IsCancellationRequested == true)
+            when (navigationCts.IsCancellationRequested)
         {
+        }
+        catch (Exception ex)
+        {
+            viewModel.ReportRefreshFailure(ex);
         }
     }
 }

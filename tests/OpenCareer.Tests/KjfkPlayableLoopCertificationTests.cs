@@ -476,7 +476,8 @@ public sealed class KjfkPlayableLoopCertificationTests
                 Assert.Single((await app.Profiles.LoadAsync())!.Profile.AppliedExperienceDebriefIds);
             };
             await app.Shell.CompleteCareerFlightAsync(); // actual completion action + terminal workflow
-            Assert.Contains("Career flight completed.", app.Shell.CareerCompletionActionDetail);
+            Assert.Contains("EVALUATION COMPLETE", app.Shell.CareerCompletionActionDetail);
+            Assert.Contains("$0 calibration pay (by design)", app.Shell.CareerCompletionActionDetail);
             Assert.Null(app.Sessions.Current);
             Assert.Null(await app.Checkpoints.LoadAsync());
             Assert.False(app.Shell.HasFlightSession);
@@ -599,7 +600,10 @@ public sealed class KjfkPlayableLoopCertificationTests
         Assert.Contains("SynchronizeAircraftSelection(viewModel)", Read("JobsPage.xaml.cs"));
         string jobsCode = Read("JobsPage.xaml.cs");
         foreach (string method in new[] { "RefreshAsync", "RefreshAircraftAndReadinessAsync", "SelectAircraftAsync" })
-            Assert.Matches(@"\." + method + @"\([^;]+;\s*SynchronizeAircraftSelection\(viewModel\);", jobsCode);
+            Assert.Matches(
+                @"\." + method + @"\([\s\S]{0,1200}?SynchronizeAircraftSelection\(viewModel\);",
+                jobsCode);
+        Assert.Contains("ReferenceEquals(_navigationCts, navigationCts)", jobsCode);
         Assert.Contains("if (_synchronizingAircraftSelection", jobsCode);
         Assert.Matches(@"private void SynchronizeAircraftSelection\(JobsViewModel viewModel\)\s*\{\s*if \(AircraftPicker\.IsDropDownOpen\)\s*return;", jobsCode);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(

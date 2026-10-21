@@ -24,19 +24,29 @@ public sealed partial class CurrentFlightPage : Page
 
         _navigationCts?.Cancel();
         _navigationCts?.Dispose();
-        _navigationCts = new CancellationTokenSource();
+        var navigationCts = new CancellationTokenSource();
+        _navigationCts = navigationCts;
 
         DataContext = context.Shell;
         _jobs = context.Jobs;
 
-        await context.Shell.RefreshCareerCompletionActionAsync(
-            _navigationCts.Token);
+        try
+        {
+            await context.Shell.RefreshCareerCompletionActionAsync(
+                waitForCurrentAction: true,
+                cancellationToken: navigationCts.Token);
 
-        await context.Shell.RefreshCareerAbandonActionAsync(
-            _navigationCts.Token);
+            await context.Shell.RefreshCareerAbandonActionAsync(
+                waitForCurrentAction: true,
+                cancellationToken: navigationCts.Token);
 
-        await context.Shell.RefreshManualPostflightAsync(
-            _navigationCts.Token);
+            await context.Shell.RefreshManualPostflightAsync(
+                navigationCts.Token);
+        }
+        catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
+        {
+        }
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -56,12 +66,69 @@ public sealed partial class CurrentFlightPage : Page
         if (DataContext is not ShellViewModel viewModel)
             return;
 
-        CancellationToken cancellationToken =
-            _navigationCts?.Token
-            ?? CancellationToken.None;
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
 
-        await viewModel.CompleteCareerFlightAsync(
-            cancellationToken);
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        CancellationToken cancellationToken =
+            navigationCts.Token;
+
+        try
+        {
+            bool completed =
+                await viewModel.CompleteCareerFlightAsync(
+                    cancellationToken);
+
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            Exception? jobsRefreshFailure = null;
+
+            if (completed
+                && _jobs is { } jobs)
+            {
+                try
+                {
+                    await jobs.RefreshAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                    when (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    jobsRefreshFailure = ex;
+                }
+            }
+
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await viewModel.RefreshCareerAbandonActionAsync(
+                cancellationToken);
+
+            if (jobsRefreshFailure is not null)
+            {
+                viewModel.ReportCareerCompletionProjectionRefreshFailure(
+                    jobsRefreshFailure);
+            }
+        }
+        catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
+        {
+        }
     }
 
     private async void AbandonCurrentFlight_Click(
@@ -70,6 +137,15 @@ public sealed partial class CurrentFlightPage : Page
     {
         if (DataContext is not ShellViewModel viewModel)
             return;
+
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
 
         var confirmation = new ContentDialog
         {
@@ -84,52 +160,74 @@ public sealed partial class CurrentFlightPage : Page
         ContentDialogResult answer =
             await confirmation.ShowAsync();
 
-        if (answer != ContentDialogResult.Primary)
+        if (answer != ContentDialogResult.Primary
+            || !ReferenceEquals(_navigationCts, navigationCts)
+            || navigationCts.IsCancellationRequested)
+        {
             return;
+        }
 
         CancellationToken cancellationToken =
-            _navigationCts?.Token
-            ?? CancellationToken.None;
+            navigationCts.Token;
 
-        bool abandoned =
-            await viewModel.AbandonCurrentFlightAsync(
-                cancellationToken);
-
-        JobsViewModel? jobs =
-            _jobs;
-
-        Exception? jobsRefreshFailure =
-            null;
-
-        if (abandoned
-            && jobs is not null)
+        try
         {
-            try
-            {
-                await jobs.RefreshAsync(
+            bool abandoned =
+                await viewModel.AbandonCurrentFlightAsync(
                     cancellationToken);
-            }
-            catch (OperationCanceledException)
-                when (cancellationToken.IsCancellationRequested)
+
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
             {
                 return;
             }
-            catch (Exception ex)
+
+            JobsViewModel? jobs =
+                _jobs;
+
+            Exception? jobsRefreshFailure =
+                null;
+
+            if (abandoned
+                && jobs is not null)
             {
-                jobsRefreshFailure = ex;
+                try
+                {
+                    await jobs.RefreshAsync(
+                        cancellationToken);
+                }
+                catch (OperationCanceledException)
+                    when (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    jobsRefreshFailure = ex;
+                }
+            }
+
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await viewModel.RefreshCareerCompletionActionAsync(
+                cancellationToken);
+
+            await viewModel.RefreshCareerAbandonActionAsync(
+                cancellationToken);
+
+            if (jobsRefreshFailure is not null)
+            {
+                viewModel.ReportCareerAbandonProjectionRefreshFailure(
+                    jobsRefreshFailure);
             }
         }
-
-        await viewModel.RefreshCareerCompletionActionAsync(
-            cancellationToken);
-
-        await viewModel.RefreshCareerAbandonActionAsync(
-            cancellationToken);
-
-        if (jobsRefreshFailure is not null)
+        catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
         {
-            viewModel.ReportCareerAbandonProjectionRefreshFailure(
-                jobsRefreshFailure);
         }
     }
 
@@ -138,14 +236,39 @@ public sealed partial class CurrentFlightPage : Page
         if (DataContext is not ShellViewModel viewModel)
             return;
 
-        await viewModel.LogManualFlightAsync(
-            _navigationCts?.Token ?? CancellationToken.None);
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            await viewModel.LogManualFlightAsync(
+                navigationCts.Token);
+        }
+        catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
+        {
+        }
     }
 
     private async void DiscardManualFlight_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not ShellViewModel viewModel)
             return;
+
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
 
         var confirmation = new ContentDialog
         {
@@ -157,10 +280,21 @@ public sealed partial class CurrentFlightPage : Page
             DefaultButton = ContentDialogButton.Close
         };
 
-        if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+        if (await confirmation.ShowAsync() != ContentDialogResult.Primary
+            || !ReferenceEquals(_navigationCts, navigationCts)
+            || navigationCts.IsCancellationRequested)
+        {
             return;
+        }
 
-        await viewModel.DiscardManualFlightAsync(
-            _navigationCts?.Token ?? CancellationToken.None);
+        try
+        {
+            await viewModel.DiscardManualFlightAsync(
+                navigationCts.Token);
+        }
+        catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
+        {
+        }
     }
 }

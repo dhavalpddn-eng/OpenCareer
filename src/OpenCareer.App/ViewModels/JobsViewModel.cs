@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Tutorials;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 
 namespace OpenCareer.App.ViewModels;
 
@@ -49,6 +50,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         "Installed-aircraft catalog has not been checked yet.";
     private string _acceptanceStatus =
         "Select an installed aircraft to verify an active offer for dispatch.";
+    private bool _isRefreshing;
 
     public JobsViewModel(
         IJobBoardStateStore jobBoards,
@@ -121,6 +123,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public string StatusText => _statusText;
     public string AircraftStatus => _aircraftStatus;
     public string AcceptanceStatus => _acceptanceStatus;
+    public bool IsRefreshing => _isRefreshing;
 
     public async Task GenerateDevelopmentFlightAsync(
         bool positionPilotAtKjfk,
@@ -149,7 +152,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
             SetField(
                 ref _acceptanceStatus,
-                "TEST / DEVELOPMENT offer ready. Select an installed aircraft; normal dispatch and FlightSession validation apply. Pay and career progression are zero.",
+                "ZERO-PAY CALIBRATION ready. It validates the flight pipeline only and will award $0. Choose an Available Contract to test earnings and career progression.",
                 nameof(AcceptanceStatus));
         }
         catch (Exception ex)
@@ -177,11 +180,14 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             .WaitAsync(cancellationToken)
             .ConfigureAwait(true);
 
+        SetRefreshing(true);
+
         try
         {
             PlayerCareerProfileStoreRecord? career =
-                await _career
-                    .InitializeAsync(cancellationToken)
+                await Task.Run(
+                        () => _career.InitializeAsync(cancellationToken),
+                        cancellationToken)
                     .ConfigureAwait(true);
 
             if (career is null)
@@ -205,8 +211,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             {
                 try
                 {
-                    await _startRecovery
-                        .RecoverAsync(
+                    await Task.Run(
+                            () => _startRecovery.RecoverAsync(cancellationToken),
                             cancellationToken)
                         .ConfigureAwait(true);
                 }
@@ -228,9 +234,10 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 try
                 {
                     board =
-                        await _boardRefill
-                            .RefillAsync(
+                        await Task.Run(
+                                () => _boardRefill.RefillAsync(
                                 career.Profile,
+                                cancellationToken),
                                 cancellationToken)
                             .ConfigureAwait(true);
                 }
@@ -242,9 +249,10 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                         currentAirport);
 
                     board =
-                        await _jobBoards
-                            .GetAsync(
+                        await Task.Run(
+                                () => _jobBoards.GetAsync(
                                 currentAirport,
+                                cancellationToken),
                                 cancellationToken)
                             .ConfigureAwait(true);
                 }
@@ -252,9 +260,10 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             else
             {
                 board =
-                    await _jobBoards
-                        .GetAsync(
+                    await Task.Run(
+                            () => _jobBoards.GetAsync(
                             currentAirport,
+                            cancellationToken),
                             cancellationToken)
                         .ConfigureAwait(true);
             }
@@ -302,8 +311,23 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         }
         finally
         {
+            SetRefreshing(false);
             _refreshGate.Release();
         }
+    }
+
+    public void ReportRefreshFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        _logger?.LogError(
+            exception,
+            "Jobs view refresh failed.");
+
+        SetField(
+            ref _statusText,
+            $"Jobs could not refresh: {exception.Message} Click Refresh Jobs to retry.",
+            nameof(StatusText));
     }
 
     public async Task RefreshAircraftAndReadinessAsync(
@@ -400,9 +424,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             _selectedAircraftId
             ?? throw new InvalidOperationException(
                 "Select an installed aircraft before starting a career flight.");
-        CareerJobActionKind actionKind = _offers
-            .Single(offer => offer.OfferId == offerId)
-            .ActionKind;
+        JobOfferItemViewModel selectedOffer = _offers
+            .Single(offer => offer.OfferId == offerId);
+        CareerJobActionKind actionKind = selectedOffer.ActionKind;
 
         await _startGate
             .WaitAsync(cancellationToken)
@@ -432,7 +456,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             {
                 SetField(
                     ref _acceptanceStatus,
-                    "Accepting offer and reserving its exact aircraft for Dispatch preparation…",
+                    "Accepting job and completing automatic aircraft, fuel and runway checks…",
                     nameof(AcceptanceStatus));
 
                 await _startAction
@@ -441,17 +465,28 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                         aircraftId,
                         cancellationToken);
 
+                SetField(
+                    ref _acceptanceStatus,
+                    "Automatic preflight passed. Starting the persistent FlightSession…",
+                    nameof(AcceptanceStatus));
+
+                _ = await _startAction
+                    .StartAsync(
+                        offerId,
+                        aircraftId,
+                        cancellationToken);
+
                 await RefreshAsync(cancellationToken);
 
                 SetField(
                     ref _acceptanceStatus,
-                    "Job accepted and aircraft reserved. Dispatch is loading the exact planning context; prepare the plan there, then return to Jobs for authoritative start/recovery.",
+                    $"Career flight started: {selectedOffer.Offer.OriginIcao} → {selectedOffer.Offer.DestinationIcao}. Opening Current Flight.",
                     nameof(AcceptanceStatus));
 
                 NavigationRequested?.Invoke(
                     this,
                     new JobsNavigationRequestedEventArgs(
-                        JobsNavigationTarget.Dispatch));
+                        JobsNavigationTarget.CurrentFlight));
                 return;
             }
 
@@ -627,10 +662,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 try
                 {
                     CareerJobStartActionAvailability availability =
-                        await _startAction
-                            .ReadAvailabilityAsync(
+                        await Task.Run(
+                                () => _startAction.ReadAvailabilityAsync(
                                 offer.OfferId,
                                 _selectedAircraftId,
+                                cancellationToken),
                                 cancellationToken)
                             .ConfigureAwait(true);
 
@@ -738,6 +774,15 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             propertyName);
     }
 
+    private void SetRefreshing(bool value)
+    {
+        if (_isRefreshing == value)
+            return;
+
+        _isRefreshing = value;
+        OnPropertyChanged(nameof(IsRefreshing));
+    }
+
     private void OnPropertyChanged(
         [CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(
@@ -800,8 +845,8 @@ public sealed class JobOfferItemViewModel
     public CareerJobActionKind ActionKind { get; }
     public string ActionButtonText => ActionKind switch
     {
-        CareerJobActionKind.AcceptForDispatch => "Accept for Dispatch",
-        CareerJobActionKind.AcceptAndStartDevelopmentFlight => "Accept & Start Test Flight",
+        CareerJobActionKind.AcceptForDispatch => "Accept & Start Flight",
+        CareerJobActionKind.AcceptAndStartDevelopmentFlight => "Start $0 Calibration Flight",
         _ => "Start Prepared Flight"
     };
     public string ActionText { get; }
@@ -823,6 +868,45 @@ public sealed class JobOfferItemViewModel
         Friendly(
             Offer.Scenario);
 
+    public string CompensationText
+    {
+        get
+        {
+            if (DevelopmentFlight.IsDevelopment(Offer))
+                return "$0 CALIBRATION PAY";
+
+            ContractPayQuote? quote =
+                CreatePayQuote();
+
+            if (quote is null)
+                return "PAY PENDING CONTRACT TERMS";
+
+            ContractCompensation compensation =
+                quote.Compensation;
+
+            return compensation.Model switch
+            {
+                CompensationModel.CompanyRevenue =>
+                    $"COMPANY REVENUE {FormatCurrency(compensation.GrossCustomerRevenue)}",
+                CompensationModel.SalaryDuty =>
+                    $"DUTY PAY {FormatCurrency(compensation.PilotCompensation)}",
+                CompensationModel.MissionFee =>
+                    $"MISSION PAY {FormatCurrency(compensation.PilotCompensation)}",
+                CompensationModel.Reimbursement =>
+                    $"REIMBURSEMENT {FormatCurrency(compensation.PilotCompensation)}",
+                _ =>
+                    $"PILOT PAY {FormatCurrency(compensation.PilotCompensation)}"
+            };
+        }
+    }
+
+    public string ProgressionText =>
+        DevelopmentFlight.IsDevelopment(Offer)
+            ? "$0 PROGRESSION"
+            : Offer.ContractTerms is { } terms
+                ? $"+{terms.ReputationReward:0.#} reputation on success"
+                : "Progression pending contract terms";
+
     public string DistanceText =>
         $"{Offer.DistanceNm:0} nm";
 
@@ -842,6 +926,31 @@ public sealed class JobOfferItemViewModel
                 : CanStart
                     ? "READY TO START"
                     : "ACTIVE OFFER";
+
+    private ContractPayQuote? CreatePayQuote()
+    {
+        JobMarketContractTermsEnvelope? terms =
+            Offer.ContractTerms;
+
+        if (terms is null)
+            return null;
+
+        return ContractPayQuoteEngine.Quote(
+            new ContractPayQuoteRequest(
+                Offer.ServiceTrack,
+                Offer.Kind,
+                terms.EstimatedFlightHours,
+                Offer.DistanceNm,
+                terms.PayloadPounds,
+                terms.DemandAttractiveness,
+                terms.Urgency,
+                terms.Difficulty,
+                Offer.RelationshipStrength,
+                terms.EstimatedPlayerOperatingCosts));
+    }
+
+    private static string FormatCurrency(decimal value) =>
+        $"${value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}";
 
     private static string Friendly<T>(
         T value)

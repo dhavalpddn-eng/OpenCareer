@@ -443,6 +443,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public async Task RefreshCareerCompletionActionAsync(
         CancellationToken cancellationToken = default)
     {
+        await RefreshCareerCompletionActionAsync(
+            waitForCurrentAction: false,
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task RefreshCareerCompletionActionAsync(
+        bool waitForCurrentAction,
+        CancellationToken cancellationToken = default)
+    {
         if (_careerCompletionAction is null)
         {
             SetBoolean(
@@ -458,12 +467,22 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        bool entered =
+        bool entered;
+        if (waitForCurrentAction)
+        {
             await _careerActionGate
-                .WaitAsync(
-                    millisecondsTimeout:
-                        0,
-                    cancellationToken);
+                .WaitAsync(cancellationToken);
+            entered = true;
+        }
+        else
+        {
+            entered =
+                await _careerActionGate
+                    .WaitAsync(
+                        millisecondsTimeout:
+                            0,
+                        cancellationToken);
+        }
 
         if (!entered)
             return;
@@ -512,11 +531,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
     }
 
-    public async Task CompleteCareerFlightAsync(
+    public async Task<bool> CompleteCareerFlightAsync(
         CancellationToken cancellationToken = default)
     {
         if (_careerCompletionAction is null)
-            return;
+            return false;
+
+        bool completed = false;
 
         await _careerActionGate
             .WaitAsync(cancellationToken);
@@ -548,8 +569,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 "Applying authoritative completion, settlement, logbook, career progression, and cleanup.",
                 nameof(CareerCompletionActionDetail));
 
-            await _careerCompletionAction
+            CareerJobCompletionReceipt receipt =
+                await _careerCompletionAction
                 .CompleteAsync(cancellationToken);
+
+            completed = true;
 
             _abandonSessionId = null;
             _abandonContractId = null;
@@ -558,7 +582,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
             SetField(
                 ref _careerCompletionActionDetail,
-                "Career flight completed. Settlement, logbook, experience, Fleet release, and terminal cleanup finished.",
+                FormatCareerCompletionReceipt(receipt),
                 nameof(CareerCompletionActionDetail));
         }
         catch (OperationCanceledException)
@@ -604,15 +628,52 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
             SetField(
                 ref _careerCompletionActionText,
-                "Complete Career Flight",
+                completed
+                    ? "Flight Evaluated"
+                    : "Complete Career Flight",
                 nameof(CareerCompletionActionText));
 
             _careerActionGate.Release();
         }
 
+        return completed;
+    }
+
+    private static string FormatCareerCompletionReceipt(
+        CareerJobCompletionReceipt receipt)
+    {
+        string payment =
+            receipt.IsZeroPayCalibration
+                ? "$0 calibration pay (by design)"
+                : $"Pay {FormatSignedCurrency(receipt.NetCashChange)}";
+
+        return
+            $"EVALUATION COMPLETE · {payment} · Balance {FormatCurrency(receipt.CashBalanceAfter)} · " +
+            $"{receipt.OriginIcao} → {receipt.DestinationIcao} logged · " +
+            $"Pilot location {receipt.CurrentAirportIcao} · Career flight #{receipt.CareerFlightCount}.";
+    }
+
+    private static string FormatSignedCurrency(decimal value) =>
+        value switch
+        {
+            > 0 => $"+{FormatCurrency(value)}",
+            < 0 => $"-{FormatCurrency(Math.Abs(value))}",
+            _ => "$0"
+        };
+
+    private static string FormatCurrency(decimal value) =>
+        $"${value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}";
+
+    public async Task RefreshCareerAbandonActionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await RefreshCareerAbandonActionAsync(
+            waitForCurrentAction: false,
+            cancellationToken: cancellationToken);
     }
 
     public async Task RefreshCareerAbandonActionAsync(
+        bool waitForCurrentAction,
         CancellationToken cancellationToken = default)
     {
         if (_careerAbandonAction is null)
@@ -626,12 +687,22 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             return;
         }
 
-        bool entered =
+        bool entered;
+        if (waitForCurrentAction)
+        {
             await _careerActionGate
-                .WaitAsync(
-                    millisecondsTimeout:
-                        0,
-                    cancellationToken);
+                .WaitAsync(cancellationToken);
+            entered = true;
+        }
+        else
+        {
+            entered =
+                await _careerActionGate
+                    .WaitAsync(
+                        millisecondsTimeout:
+                            0,
+                        cancellationToken);
+        }
 
         if (!entered)
             return;
@@ -829,6 +900,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ref _careerAbandonActionDetail,
             "Current flight was abandoned successfully, but the Jobs view could not refresh. Reopen Jobs to retry its authoritative refresh.",
             nameof(CareerAbandonActionDetail));
+    }
+
+    public void ReportCareerCompletionProjectionRefreshFailure(
+        Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        _logger?.LogWarning(
+            exception,
+            "Career flight completed, but the Jobs projection refresh failed.");
+
+        SetField(
+            ref _careerCompletionActionDetail,
+            $"{CareerCompletionActionDetail} Jobs could not refresh; reopen Jobs to reload the authoritative board.",
+            nameof(CareerCompletionActionDetail));
     }
 
     public async Task RefreshManualPostflightAsync(

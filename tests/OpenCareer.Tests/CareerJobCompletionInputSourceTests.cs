@@ -36,6 +36,50 @@ public sealed class CareerJobCompletionInputSourceTests
     }
 
     [Fact]
+    public async Task IncompleteShutdownNamesTheMissingLiveEvidence()
+    {
+        Guid contractId =
+            Guid.Parse(
+                "a2000000-0000-0000-0000-000000000001");
+        FlightSession session =
+            FlightSession.Start(
+                Epoch,
+                contractId,
+                sessionId: contractId);
+        session = Advance(session, 1, stable: true, validAircraft: true);
+        session = Advance(session, 2, movement: true);
+        session = Advance(session, 3, takeoffCandidate: true);
+        session = Advance(session, 4, airborne: true);
+        session = Advance(session, 5, touchdown: true);
+        session = Advance(session, 6, rollout: true);
+
+        TestFixture fixture =
+            CreateFixture(
+                missionSources: [new FixedMissionSource()],
+                costSources: [new FixedCostsSource()],
+                sessionOverride: session);
+
+        CareerJobCompletionInputSnapshot snapshot =
+            await fixture.Source.ReadCurrentAsync();
+
+        Assert.Equal(
+            CareerJobCompletionInputState.FlightEvidenceIncomplete,
+            snapshot.State);
+        Assert.Contains(
+            "parking brake while stopped on the ground",
+            snapshot.Detail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "all engines off after parking",
+            snapshot.Detail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"Current operation state: {session.OperationState}",
+            snapshot.Detail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task MissingActualCostsBlocksAfterVerifiedMissionEvidence()
     {
         TestFixture fixture =
@@ -157,7 +201,8 @@ public sealed class CareerJobCompletionInputSourceTests
 
     private static TestFixture CreateFixture(
         IReadOnlyList<ICareerJobMissionCompletionSource> missionSources,
-        IReadOnlyList<ICareerJobSettlementCostsSource> costSources)
+        IReadOnlyList<ICareerJobSettlementCostsSource> costSources,
+        FlightSession? sessionOverride = null)
     {
         Guid contractId =
             Guid.Parse(
@@ -168,7 +213,8 @@ public sealed class CareerJobCompletionInputSourceTests
                 contractId);
 
         FlightSession session =
-            ShutdownSession(
+            sessionOverride
+            ?? ShutdownSession(
                 contractId);
 
         var sessions =

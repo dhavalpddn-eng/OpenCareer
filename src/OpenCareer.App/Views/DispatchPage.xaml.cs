@@ -22,12 +22,20 @@ public sealed partial class DispatchPage : Page
 
         _navigationCts?.Cancel();
         _navigationCts?.Dispose();
-        _navigationCts = new();
+        var navigationCts = new CancellationTokenSource();
+        _navigationCts = navigationCts;
         DataContext = viewModel;
 
         try
         {
-            await viewModel.InitializeAsync(_navigationCts.Token);
+            await viewModel.InitializeAsync(navigationCts.Token);
+
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
+            {
+                return;
+            }
+
             AircraftPicker.SelectedValue = viewModel.SelectedAircraftId;
             OriginIcaoBox.Text = viewModel.AcceptedOriginIcao ?? string.Empty;
             DestinationIcaoBox.Text = viewModel.AcceptedDestinationIcao ?? string.Empty;
@@ -35,8 +43,12 @@ public sealed partial class DispatchPage : Page
             TotalRouteDistanceBox.Text = viewModel.AcceptedRouteDistanceText ?? string.Empty;
         }
         catch (OperationCanceledException)
-            when (_navigationCts.IsCancellationRequested)
+            when (navigationCts.IsCancellationRequested)
         {
+        }
+        catch (Exception ex)
+        {
+            viewModel.ReportInitializationFailure(ex);
         }
     }
 
@@ -55,14 +67,18 @@ public sealed partial class DispatchPage : Page
         if (DataContext is not DispatchViewModel viewModel)
             return;
 
+        CancellationTokenSource? navigationCts = _navigationCts;
+        if (navigationCts is null || navigationCts.IsCancellationRequested)
+            return;
+
         try
         {
             await viewModel.SetSelectedAircraftAsync(
                 AircraftPicker.SelectedValue?.ToString(),
-                _navigationCts?.Token ?? CancellationToken.None);
+                navigationCts.Token);
         }
         catch (OperationCanceledException)
-            when (_navigationCts?.IsCancellationRequested == true)
+            when (navigationCts.IsCancellationRequested)
         {
         }
     }
@@ -85,14 +101,18 @@ public sealed partial class DispatchPage : Page
         if (DataContext is not DispatchViewModel viewModel)
             return;
 
+        CancellationTokenSource? navigationCts = _navigationCts;
+        if (navigationCts is null || navigationCts.IsCancellationRequested)
+            return;
+
         try
         {
             await viewModel.EvaluateAsync(
                 ReadInput(),
-                _navigationCts?.Token ?? CancellationToken.None);
+                navigationCts.Token);
         }
         catch (OperationCanceledException)
-            when (_navigationCts?.IsCancellationRequested == true)
+            when (navigationCts.IsCancellationRequested)
         {
         }
     }
@@ -102,14 +122,18 @@ public sealed partial class DispatchPage : Page
         if (DataContext is not DispatchViewModel viewModel)
             return;
 
+        CancellationTokenSource? navigationCts = _navigationCts;
+        if (navigationCts is null || navigationCts.IsCancellationRequested)
+            return;
+
         try
         {
             await viewModel.PrepareAsync(
                 ReadInput(),
-                _navigationCts?.Token ?? CancellationToken.None);
+                navigationCts.Token);
         }
         catch (OperationCanceledException)
-            when (_navigationCts?.IsCancellationRequested == true)
+            when (navigationCts.IsCancellationRequested)
         {
         }
     }
@@ -122,6 +146,10 @@ public sealed partial class DispatchPage : Page
             return;
         }
 
+        CancellationTokenSource? navigationCts = _navigationCts;
+        if (navigationCts is null || navigationCts.IsCancellationRequested)
+            return;
+
         var confirmation = new ContentDialog
         {
             XamlRoot = XamlRoot,
@@ -132,16 +160,20 @@ public sealed partial class DispatchPage : Page
             DefaultButton = ContentDialogButton.Close
         };
 
-        if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+        if (await confirmation.ShowAsync() != ContentDialogResult.Primary
+            || !ReferenceEquals(_navigationCts, navigationCts)
+            || navigationCts.IsCancellationRequested)
+        {
             return;
+        }
 
         try
         {
             await viewModel.CancelAcceptedJobAsync(
-                _navigationCts?.Token ?? CancellationToken.None);
+                navigationCts.Token);
         }
         catch (OperationCanceledException)
-            when (_navigationCts?.IsCancellationRequested == true)
+            when (navigationCts.IsCancellationRequested)
         {
         }
     }

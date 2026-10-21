@@ -1,3 +1,5 @@
+using OpenCareer.Domain.Careers;
+
 namespace OpenCareer.Application.Careers;
 
 public sealed record CareerJobCompletionActionAvailability(
@@ -5,12 +7,23 @@ public sealed record CareerJobCompletionActionAvailability(
     CareerJobCompletionInputState State,
     string Detail);
 
+public sealed record CareerJobCompletionReceipt(
+    Guid ContractId,
+    decimal NetCashChange,
+    decimal CashBalanceAfter,
+    string OriginIcao,
+    string DestinationIcao,
+    Guid LogbookEntryId,
+    string CurrentAirportIcao,
+    int CareerFlightCount,
+    bool IsZeroPayCalibration);
+
 public interface ICareerJobCompletionAction
 {
     Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
         CancellationToken cancellationToken = default);
 
-    Task CompleteAsync(
+    Task<CareerJobCompletionReceipt> CompleteAsync(
         CancellationToken cancellationToken = default);
 }
 
@@ -46,7 +59,7 @@ public sealed class CareerJobCompletionActionService
             snapshot.Detail);
     }
 
-    public async Task CompleteAsync(
+    public async Task<CareerJobCompletionReceipt> CompleteAsync(
         CancellationToken cancellationToken = default)
     {
         CareerJobCompletionInputSnapshot snapshot =
@@ -61,10 +74,22 @@ public sealed class CareerJobCompletionActionService
                 snapshot.Detail);
         }
 
-        await _playableLoop
-            .CompleteAsync(
+        CareerJobPlayableCompletionResult result =
+            await _playableLoop.CompleteAsync(
                 snapshot.Request,
                 cancellationToken)
             .ConfigureAwait(false);
+
+        return new(
+            result.CompletedContract.Contract.ContractId,
+            result.Terminal.Settlement.Settlement.NetCashChange,
+            result.Terminal.Settlement.CashBalanceAfter,
+            result.CompletedContract.Contract.OriginIcao,
+            result.CompletedContract.Contract.DestinationIcao,
+            result.Terminal.Logbook.Entry.EntryId,
+            result.Terminal.CareerProfile.Profile.Location.CurrentAirportIcao,
+            result.Terminal.CareerProfile.Profile.Experience.FlightCount,
+            DevelopmentFlight.IsDevelopment(
+                result.CompletedContract.Contract));
     }
 }

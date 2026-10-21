@@ -9,9 +9,9 @@
                     MaxWidth="760"
                     HorizontalAlignment="Left">
             <StackPanel Spacing="4">
-                <TextBlock Text="CAREER"
+                <TextBlock Text="PILOT PROFILE / CAREER"
                            Style="{StaticResource OpenCareerPageTitleStyle}" />
-                <TextBlock Text="Create the persistent civilian career profile used by local jobs, travel and progression."
+                <TextBlock Text="Create or review the pilot profile used by jobs, qualifications, travel and progression."
                            Style="{StaticResource OpenCareerPageSubtitleStyle}" />
             </StackPanel>
 

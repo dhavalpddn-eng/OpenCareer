@@ -159,6 +159,15 @@ public sealed class CareerViewModel : INotifyPropertyChanged
             ? "Starting Career…"
             : "Start Career";
 
+    public void ReportInitializationFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        SetField(
+            ref _statusText,
+            $"Career profile could not load: {exception.Message} Reopen Career to retry.",
+            nameof(StatusText));
+    }
+
     public async Task InitializeAsync(
         CancellationToken cancellationToken = default)
     {

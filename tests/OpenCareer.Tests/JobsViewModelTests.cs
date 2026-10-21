@@ -55,6 +55,68 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public void OfferCardShowsAuthoritativePayAndProgressionBeforeAcceptance()
+    {
+        JobMarketOfferDraft offer =
+            Offer(
+                "KRME",
+                "KSYR",
+                locked: false) with
+            {
+                ContractTerms =
+                    new JobMarketContractTermsEnvelope(
+                        "test:paid-terms:v1",
+                        new AircraftMissionRequirements(
+                            AllowedAccess: AircraftAccess.Civilian,
+                            MinimumRangeNauticalMiles: 100),
+                        EstimatedFlightHours: 1,
+                        PayloadPounds: 0,
+                        DemandAttractiveness: 1,
+                        Urgency: 0,
+                        Difficulty: 0,
+                        ReputationReward: 1)
+            };
+
+        var projected =
+            new JobOfferItemViewModel(
+                offer,
+                Now);
+
+        Assert.StartsWith(
+            "PILOT PAY $",
+            projected.CompensationText,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "$0",
+            projected.CompensationText,
+            StringComparison.Ordinal);
+        Assert.Equal(
+            "+1 reputation on success",
+            projected.ProgressionText);
+    }
+
+    [Fact]
+    public void CalibrationCardCannotBeMistakenForPaidCareerWork()
+    {
+        JobMarketOfferDraft offer =
+            DevelopmentFlight.CreateOffer(
+                Guid.NewGuid(),
+                Now);
+
+        var projected =
+            new JobOfferItemViewModel(
+                offer,
+                Now);
+
+        Assert.Equal(
+            "$0 CALIBRATION PAY",
+            projected.CompensationText);
+        Assert.Equal(
+            "$0 PROGRESSION",
+            projected.ProgressionText);
+    }
+
+    [Fact]
     public async Task LockedAndExpiredOffersRemainVisibleButNotActive()
     {
         var expired =
@@ -218,12 +280,13 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
-    public async Task FirstTimeOfferDelegatesAcceptanceWithoutStartingFlight()
+    public async Task FirstTimeOfferAutomaticallyPreparesAndStartsFlight()
     {
         JobMarketOfferDraft offer = Offer("KRME", "KSYR", locked: false);
         var action = new FakeStartAction
         {
-            ActionKind = CareerJobActionKind.AcceptForDispatch
+            ActionKind = CareerJobActionKind.AcceptForDispatch,
+            CompleteStart = true
         };
         var viewModel = new JobsViewModel(
             new FakeBoardStore(Board("KRME", offer)),
@@ -241,15 +304,15 @@ public sealed class JobsViewModelTests
             navigationTargets.Add(args.Target);
 
         JobOfferItemViewModel projected = Assert.Single(viewModel.Offers);
-        Assert.Equal("Accept for Dispatch", projected.ActionButtonText);
+        Assert.Equal("Accept & Start Flight", projected.ActionButtonText);
 
         await viewModel.StartOfferAsync(projected.OfferId);
 
         Assert.Equal(1, action.AcceptCount);
-        Assert.Equal(0, action.StartCount);
-        Assert.Contains("Dispatch is loading", viewModel.AcceptanceStatus, StringComparison.Ordinal);
+        Assert.Equal(1, action.StartCount);
+        Assert.Contains("Career flight started", viewModel.AcceptanceStatus, StringComparison.Ordinal);
         Assert.Equal(
-            new[] { JobsNavigationTarget.Dispatch },
+            new[] { JobsNavigationTarget.CurrentFlight },
             navigationTargets);
     }
 
@@ -381,6 +444,45 @@ public sealed class JobsViewModelTests
             refill.CallCount);
         Assert.Single(
             viewModel.Offers);
+    }
+
+    [Fact]
+    public async Task RefreshPublishesBusyStateUntilBoardLoadCompletes()
+    {
+        JobBoardState board =
+            Board(
+                "KRME",
+                Offer(
+                    "KRME",
+                    "KSYR",
+                    locked: false));
+        var refill =
+            new BlockingBoardRefill(board);
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(board),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection: null,
+                startAction: null,
+                logger: null,
+                boardRefill: refill);
+
+        Task refresh =
+            viewModel.RefreshAsync();
+
+        await refill.Entered.Task.WaitAsync(
+            TimeSpan.FromSeconds(5));
+
+        Assert.True(viewModel.IsRefreshing);
+        Assert.False(refresh.IsCompleted);
+
+        refill.Release.TrySetResult();
+        await refresh.WaitAsync(
+            TimeSpan.FromSeconds(5));
+
+        Assert.False(viewModel.IsRefreshing);
+        Assert.Single(viewModel.Offers);
     }
 
     [Fact]
@@ -772,6 +874,28 @@ public sealed class JobsViewModelTests
         }
     }
 
+    private sealed class BlockingBoardRefill(
+        JobBoardState board)
+        : ICareerJobBoardRefillService
+    {
+        public TaskCompletionSource Entered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Release { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<JobBoardState> RefillAsync(
+            PlayerCareerProfile profile,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            profile.Validate();
+            Entered.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            return board;
+        }
+    }
+
     private sealed class FakeDiscovery
         : IInstalledAircraftDiscoverySource
     {
@@ -811,6 +935,7 @@ public sealed class JobsViewModelTests
         public CareerJobActionKind ActionKind { get; init; } =
             CareerJobActionKind.StartPreparedFlight;
         public bool FailAcceptance { get; init; }
+        public bool CompleteStart { get; init; }
 
         public Func<Task>? BeforeRead { get; init; }
 
@@ -858,6 +983,11 @@ public sealed class JobsViewModelTests
                 offerId;
             LastAircraftId =
                 aircraftId;
+
+            if (CompleteStart)
+            {
+                return Task.FromResult<CareerJobPlayableStartResult>(null!);
+            }
 
             throw new InvalidOperationException(
                 "Synthetic start result intentionally stops after delegation.");

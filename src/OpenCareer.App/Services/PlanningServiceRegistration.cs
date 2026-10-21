@@ -123,6 +123,9 @@ internal static class PlanningServiceRegistration
         services.AddSingleton<PreparedDispatchPlanService>();
         services.AddSingleton<IPreparedDispatchPlanService>(provider =>
             provider.GetRequiredService<PreparedDispatchPlanService>());
+        services.AddSingleton<AutomaticDispatchPlanService>();
+        services.AddSingleton<IAutomaticDispatchPlanService>(provider =>
+            provider.GetRequiredService<AutomaticDispatchPlanService>());
         services.AddSingleton<PreparedDispatchStartAuthority>();
         services.AddSingleton<IPreparedDispatchStartAuthority>(provider =>
             provider.GetRequiredService<PreparedDispatchStartAuthority>());

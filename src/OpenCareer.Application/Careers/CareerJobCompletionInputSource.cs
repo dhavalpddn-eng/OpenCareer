@@ -225,7 +225,9 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.FlightEvidenceIncomplete,
                 contractId,
-                "Authoritative takeoff, airborne, landing, parking, and shutdown evidence is not complete.");
+                BuildFlightEvidenceIncompleteDetail(
+                    session,
+                    flightEvidence));
         }
 
         string reservationId =
@@ -374,6 +376,41 @@ public sealed class CareerJobCompletionInputSource
             contractId,
             request,
             "Authoritative flight, mission, aircraft, settlement-cost, and debrief inputs are ready.");
+    }
+
+    private static string BuildFlightEvidenceIncompleteDetail(
+        FlightSession session,
+        JobFlightCompletionEvidenceSnapshot? evidence)
+    {
+        var missing = new List<string>();
+
+        if (evidence?.TakeoffObserved != true)
+            missing.Add("takeoff");
+        if (evidence?.AirborneObserved != true)
+            missing.Add("airborne flight");
+        if (evidence?.TouchdownObserved != true)
+            missing.Add("landing");
+        if (evidence?.ParkingObserved != true)
+            missing.Add("parking brake while stopped on the ground");
+        if (evidence?.ShutdownObserved != true
+            || session.OperationState != FlightOperationState.Shutdown)
+        {
+            missing.Add("all engines off after parking");
+        }
+        if (evidence?.HasTrustworthyLatestEvidence != true)
+            missing.Add("a stable connected telemetry sample");
+        if (evidence?.CrashReported == true)
+            missing.Add("a non-crash flight outcome");
+
+        string missingText =
+            missing.Count == 0
+                ? "the complete flight sequence"
+                : string.Join(", ", missing.Distinct(StringComparer.Ordinal));
+
+        return
+            $"Completion blocked. Still waiting for: {missingText}. " +
+            $"Current operation state: {session.OperationState}. " +
+            "To finish shutdown, stop on the ground, set the parking brake, turn every engine off, and keep MSFS connected until the checklist updates.";
     }
 
     private async Task<CareerJobMissionCompletionEvidence?> ReadSingleMissionEvidenceAsync(
