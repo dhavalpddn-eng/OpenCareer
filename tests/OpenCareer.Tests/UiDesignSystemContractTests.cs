@@ -304,6 +304,47 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
+    public void DashboardPresentsATestOnlyDirectEntryToThePlayableLoop()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
+        XDocument page = XDocument.Load(Path.Combine(directory, "DashboardPage.xaml"));
+        string viewModel = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "UiContracts",
+            "DashboardViewModel.cs"));
+
+        XElement entry = page
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Border"
+                && string.Equals(
+                    element.Attribute(XamlNamespace + "Name")?.Value,
+                    "DevelopmentTestFlightEntry",
+                    StringComparison.Ordinal));
+
+        Assert.Equal(
+            "{Binding IsDevelopmentLiveTest, Converter={StaticResource BooleanToVisibilityConverter}}",
+            entry.Attribute("Visibility")?.Value);
+        Assert.Contains(
+            entry.Descendants(),
+            element => string.Equals(
+                element.Attribute("Text")?.Value,
+                "TEST DATA ONLY · $0 PAY · $0 PROGRESSION · ADVANCED DISPATCH NOT REQUIRED",
+                StringComparison.Ordinal));
+
+        XElement launch = entry
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Button"
+                && string.Equals(element.Attribute("Tag")?.Value, "Jobs", StringComparison.Ordinal));
+
+        Assert.Equal("OPEN TEST FLIGHT DESK", launch.Attribute("Content")?.Value);
+        Assert.Equal("NavigateButton_Click", launch.Attribute("Click")?.Value);
+        Assert.Equal("{StaticResource OpenCareerPrimaryButtonStyle}", launch.Attribute("Style")?.Value);
+        Assert.Contains("IsDevelopmentLiveTest = dataPaths.IsDevelopmentLiveTest", viewModel, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CareerStudentTrainingSurfaceCanStartButCannotCompleteOrGrant()
     {
         string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");

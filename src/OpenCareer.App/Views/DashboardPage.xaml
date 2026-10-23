@@ -51,6 +51,46 @@
                 </Border>
             </Grid>
 
+            <!-- Test-profile entry point: keep the supported playable loop above the dashboard detail. -->
+            <Border x:Name="DevelopmentTestFlightEntry"
+                    Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="22"
+                    Visibility="{Binding IsDevelopmentLiveTest, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid ColumnSpacing="22">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Width="8"
+                            Background="{StaticResource OpenCareerBrassBrush}"
+                            CornerRadius="2" />
+
+                    <StackPanel Grid.Column="1" Spacing="5">
+                        <TextBlock Text="KJFK PLAYABLE-LOOP TEST"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="Start the isolated zero-pay test flight"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                        <TextBlock Text="1. Open the Flight Center  ·  2. Create or select the KJFK calibration  ·  3. Accept and start from the same page"
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="TEST DATA ONLY · $0 PAY · $0 PROGRESSION · ADVANCED DISPATCH NOT REQUIRED"
+                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Button Grid.Column="2"
+                            Content="OPEN TEST FLIGHT DESK"
+                            Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                            MinHeight="48"
+                            MinWidth="220"
+                            VerticalAlignment="Center"
+                            Tag="Jobs"
+                            Click="NavigateButton_Click" />
+                </Grid>
+            </Border>
+
             <!-- Split hero: flight/aircraft on the left, career/company on the right. -->
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>

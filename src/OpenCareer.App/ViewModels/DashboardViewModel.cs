@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using OpenCareer.App.Services;
 using OpenCareer.Application.Dashboard;
 
 namespace OpenCareer.App.ViewModels;
@@ -28,11 +29,13 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     public DashboardViewModel(
         ShellViewModel shell,
         IDashboardSnapshotSource snapshotSource,
-        DashboardGuidanceEngine guidanceEngine)
+        DashboardGuidanceEngine guidanceEngine,
+        OpenCareerDataPaths dataPaths)
     {
         _shell = shell;
         _snapshotSource = snapshotSource;
         _guidanceEngine = guidanceEngine;
+        IsDevelopmentLiveTest = dataPaths.IsDevelopmentLiveTest;
         _shell.PropertyChanged += OnShellPropertyChanged;
     }
 
@@ -40,6 +43,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     public event EventHandler<DashboardNavigationRequestedEventArgs>? NavigationRequested;
 
     public ShellViewModel Shell => _shell;
+    public bool IsDevelopmentLiveTest { get; }
 
     public IReadOnlyList<DashboardOpportunityItemViewModel> TopOpportunities =>
         _topOpportunities;
