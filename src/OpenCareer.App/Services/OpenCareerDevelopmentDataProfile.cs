@@ -71,7 +71,9 @@ public sealed record OpenCareerDataProfileSelection(
 
     public void Prepare()
     {
-        if (ResetRequested)
+        if (ResetRequested
+            || (Paths.IsDevelopmentLiveTest
+                && OpenCareerDevelopmentDataProfile.IsResetRequested(Paths)))
             OpenCareerDevelopmentDataProfile.Reset(Paths);
 
         Paths.EnsureDirectories();
@@ -81,6 +83,8 @@ public sealed record OpenCareerDataProfileSelection(
 internal static class OpenCareerDevelopmentDataProfile
 {
     private const string MarkerContents = "OpenCareer DEVELOPMENT / TEST profile: KJFK v1";
+    private const string ResetRequestContents =
+        "Reset the isolated KJFK DEVELOPMENT / TEST profile on next launch.";
 
     internal static void EnsureMarker(OpenCareerDataPaths paths)
     {
@@ -114,6 +118,28 @@ internal static class OpenCareerDevelopmentDataProfile
 
         ValidateMarker(paths);
         Directory.Delete(paths.Root, recursive: true);
+    }
+
+    internal static bool IsResetRequested(OpenCareerDataPaths paths)
+    {
+        RequireDevelopmentProfile(paths);
+        return File.Exists(paths.DevelopmentResetRequestFile);
+    }
+
+    internal static void RequestResetOnNextLaunch(OpenCareerDataPaths paths)
+    {
+        RequireDevelopmentProfile(paths);
+        ValidateMarker(paths);
+
+        if (File.Exists(paths.DevelopmentResetRequestFile)
+            && File.GetAttributes(paths.DevelopmentResetRequestFile)
+                .HasFlag(FileAttributes.ReparsePoint))
+        {
+            throw new InvalidOperationException(
+                "KJFK development data reset refused a redirected reset request.");
+        }
+
+        File.WriteAllText(paths.DevelopmentResetRequestFile, ResetRequestContents);
     }
 
     private static void RequireDevelopmentProfile(OpenCareerDataPaths paths)

@@ -29,6 +29,21 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public void NormalCareerClearlyDisablesCleanTestReset()
+    {
+        TestContext context = Create();
+
+        Assert.Contains("NORMAL CAREER", context.ViewModel.DataProfileStatus);
+        Assert.False(context.ViewModel.CanScheduleDevelopmentProfileReset);
+
+        context.ViewModel.ScheduleDevelopmentProfileReset();
+
+        Assert.Contains("normal career profile", context.ViewModel.ActionStatus);
+        Assert.False(File.Exists(
+            Path.Combine(_root, ".opencareer-reset-on-next-launch")));
+    }
+
+    [Fact]
     public void BindingStatusUsesReadOnlyDiscoverySourceWithoutClaimingUnbound()
     {
         TestContext context = Create(

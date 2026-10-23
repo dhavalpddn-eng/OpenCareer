@@ -119,6 +119,51 @@ public sealed class OpenCareerDevelopmentDataProfileTests
     }
 
     [Fact]
+    public async Task ScheduledResetDeletesOnlyKjfkProfileOnNextLaunch()
+    {
+        using var root = new TemporaryDirectory();
+        OpenCareerDataProfileSelection normal =
+            OpenCareerDataProfileSelection.Resolve([], root.Path);
+        normal.Prepare();
+        await File.WriteAllTextAsync(normal.SettingsFile, "keep-normal-career");
+
+        OpenCareerDataProfileSelection testProfile =
+            OpenCareerDataProfileSelection.Resolve(
+                [OpenCareerDataProfileSelection.ProfileArgument],
+                root.Path);
+        testProfile.Prepare();
+        await File.WriteAllTextAsync(testProfile.Paths.SettingsFile, "delete-test-career");
+
+        OpenCareerDevelopmentDataProfile.RequestResetOnNextLaunch(testProfile.Paths);
+
+        Assert.True(OpenCareerDevelopmentDataProfile.IsResetRequested(testProfile.Paths));
+        Assert.True(File.Exists(testProfile.Paths.SettingsFile));
+
+        OpenCareerDataProfileSelection restarted =
+            OpenCareerDataProfileSelection.Resolve(
+                [OpenCareerDataProfileSelection.ProfileArgument],
+                root.Path);
+        restarted.Prepare();
+
+        Assert.False(File.Exists(restarted.Paths.SettingsFile));
+        Assert.False(File.Exists(restarted.Paths.DevelopmentResetRequestFile));
+        Assert.True(File.Exists(restarted.Paths.ProfileMarkerFile));
+        Assert.Equal("keep-normal-career", await File.ReadAllTextAsync(normal.SettingsFile));
+    }
+
+    [Fact]
+    public void NormalProfileCannotScheduleDevelopmentReset()
+    {
+        using var root = new TemporaryDirectory();
+        OpenCareerDataProfileSelection normal =
+            OpenCareerDataProfileSelection.Resolve([], root.Path);
+        normal.Prepare();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            OpenCareerDevelopmentDataProfile.RequestResetOnNextLaunch(normal.Paths));
+    }
+
+    [Fact]
     public async Task ProductionRecoveryStateIsRetainedUntilAnExplicitCleanReset()
     {
         using var root = new TemporaryDirectory();

@@ -145,6 +145,28 @@ public sealed partial class SettingsPage : Page
     private void OpenBackupsFolder_Click(object sender, RoutedEventArgs e) =>
         _settings?.OpenBackupsFolder();
 
+    private async void ScheduleDevelopmentProfileReset_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_settings is null)
+            return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Reset the KJFK test profile next launch?",
+            Content =
+                "This deletes only the isolated DEVELOPMENT / TEST jobs, flights, money, aircraft, logs and settings. Your normal career data is not touched.",
+            PrimaryButtonText = "Schedule clean reset",
+            CloseButtonText = "Keep test data",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            _settings.ScheduleDevelopmentProfileReset();
+    }
+
     private async void ExportDiagnostics_Click(object sender, RoutedEventArgs e)
     {
         if (_settings is not null)

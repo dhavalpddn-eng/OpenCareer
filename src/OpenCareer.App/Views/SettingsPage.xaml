@@ -207,6 +207,31 @@
                     <TextBlock Text="{Binding CareerRecoveryStatus}"
                                Style="{StaticResource OpenCareerPaperBodyStyle}" />
 
+                    <Border Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <Grid ColumnSpacing="18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="ACTIVE DATA PROFILE"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                <TextBlock Text="{Binding DataProfileStatus}"
+                                           Style="{StaticResource OpenCareerPaperDataValueStyle}"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding DevelopmentProfileResetHelp}"
+                                           Style="{StaticResource OpenCareerInputHelpStyle}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Content="Schedule clean test reset"
+                                    Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                    VerticalAlignment="Center"
+                                    IsEnabled="{Binding CanScheduleDevelopmentProfileReset}"
+                                    Click="ScheduleDevelopmentProfileReset_Click" />
+                        </Grid>
+                    </Border>
+
                     <StackPanel Spacing="3">
                         <TextBlock Text="DATA FOLDER" Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                         <TextBlock Text="{Binding DataFolder}"

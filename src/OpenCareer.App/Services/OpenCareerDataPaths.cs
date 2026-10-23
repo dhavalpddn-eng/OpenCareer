@@ -34,6 +34,9 @@ public sealed class OpenCareerDataPaths
         BackupsFolder = Path.Combine(Root, "Backups");
         DiagnosticsFolder = Path.Combine(Root, "Diagnostics");
         ProfileMarkerFile = Path.Combine(Root, ".opencareer-development-profile");
+        DevelopmentResetRequestFile = Path.Combine(
+            Root,
+            ".opencareer-reset-on-next-launch");
     }
 
     public string Root { get; }
@@ -49,6 +52,7 @@ public sealed class OpenCareerDataPaths
     public string BackupsFolder { get; }
     public string DiagnosticsFolder { get; }
     internal string ProfileMarkerFile { get; }
+    internal string DevelopmentResetRequestFile { get; }
 
     public void EnsureDirectories()
     {

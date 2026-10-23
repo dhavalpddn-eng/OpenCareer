@@ -35,6 +35,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private string _careerRecoveryStatus;
     private string _inputBindingStatus =
         "UNAVAILABLE · No supported binding source is connected.";
+    private bool _developmentProfileResetScheduled;
 
     public SettingsViewModel(
         IAppSettingsService settings,
@@ -60,6 +61,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _inputBindings = inputBindings;
         _careerRecoveryStatus =
             FormatCareerRecoveryStatus(_flightSessions.Current);
+        _developmentProfileResetScheduled =
+            _paths.IsDevelopmentLiveTest
+            && OpenCareerDevelopmentDataProfile.IsResetRequested(_paths);
 
         _settings.Changed += OnSettingsChanged;
         _flightSessions.SessionChanged += OnFlightSessionChanged;
@@ -114,6 +118,19 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public string LogFile => _paths.LogFile;
     public string BackupsFolder => _paths.BackupsFolder;
     public string DiagnosticsFolder => _paths.DiagnosticsFolder;
+
+    public string DataProfileStatus => _paths.IsDevelopmentLiveTest
+        ? "DEVELOPMENT / TEST · KJFK · Isolated from normal career data"
+        : "NORMAL CAREER · Persistent career data";
+
+    public string DevelopmentProfileResetHelp => _paths.IsDevelopmentLiveTest
+        ? _developmentProfileResetScheduled
+            ? "CLEAN RESET SCHEDULED · Close OpenCareer and launch the KJFK test profile again."
+            : "Use this after a test run to remove only the isolated KJFK jobs, flights, money, aircraft, logs and settings on the next launch."
+        : "Clean test reset is disabled because this is the normal career profile.";
+
+    public bool CanScheduleDevelopmentProfileReset =>
+        _paths.IsDevelopmentLiveTest && !_developmentProfileResetScheduled;
 
     public string InputBindingStatus => _inputBindingStatus;
 
@@ -311,6 +328,34 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public void OpenDiagnosticsFolder() =>
         ActionStatus = _shell.OpenFolder(_paths.DiagnosticsFolder).Message;
+
+    public void ScheduleDevelopmentProfileReset()
+    {
+        if (!_paths.IsDevelopmentLiveTest)
+        {
+            ActionStatus =
+                "Clean test reset is unavailable because this is the normal career profile.";
+            return;
+        }
+
+        try
+        {
+            OpenCareerDevelopmentDataProfile.RequestResetOnNextLaunch(_paths);
+            _developmentProfileResetScheduled = true;
+            OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
+            OnPropertyChanged(nameof(DevelopmentProfileResetHelp));
+            ActionStatus =
+                "Clean KJFK test reset scheduled. Close OpenCareer, then launch the KJFK test profile again.";
+        }
+        catch (Exception ex) when (
+            ex is IOException
+                or UnauthorizedAccessException
+                or InvalidDataException
+                or InvalidOperationException)
+        {
+            ActionStatus = $"Could not schedule the clean test reset: {ex.Message}";
+        }
+    }
 
     private async Task UpdateAsync(
         AppPreferences preferences,
