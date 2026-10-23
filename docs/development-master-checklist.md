@@ -723,6 +723,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Replace stale Settings recovery copy with a read-only live projection of the current SQLite-backed FlightSession recovery state.
 - [x] Label the active normal versus isolated KJFK Development/Test data profile in Settings and provide a confirmed next-launch clean reset that is disabled for normal career data.
 - [x] Keep the active KJFK Development/Test profile visibly identified in the main shell on every page while leaving normal career mode unmarked.
+- [x] Group primary navigation around functional workflows, label optional Dispatch as advanced and remove unfinished placeholder destinations from the active test path.
 - [ ] Verify Settings persistence, backup/export and diagnostics interactively on Windows.
 - [ ] Verify keyboard navigation/text scaling.
 - [ ] Verify adaptive layouts.
