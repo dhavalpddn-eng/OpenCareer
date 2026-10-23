@@ -301,6 +301,29 @@ public sealed class UiDesignSystemContractTests
         Assert.Equal("{Binding CanCancelAcceptedJobs}", cancelButton.Attribute("IsEnabled")?.Value);
         Assert.Equal("{StaticResource OpenCareerDangerButtonStyle}", cancelButton.Attribute("Style")?.Value);
         Assert.Equal("44", cancelButton.Attribute("MinHeight")?.Value);
+
+        XElement activeFlightPanel = page
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Border" &&
+                string.Equals(
+                    element.Attribute("Visibility")?.Value,
+                    "{Binding HasActiveCareerFlight, Converter={StaticResource BooleanToVisibilityConverter}}",
+                    StringComparison.Ordinal));
+        Assert.Contains(
+            activeFlightPanel.Descendants(),
+            element =>
+                element.Name.LocalName == "TextBlock" &&
+                element.Attribute("Text")?.Value == "{Binding ActiveCareerFlightStatus}");
+
+        XElement openCurrentFlightButton = activeFlightPanel
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Button" &&
+                element.Attribute("Click")?.Value == "OpenCurrentFlight_Click");
+        Assert.Equal("OPEN CURRENT FLIGHT", openCurrentFlightButton.Attribute("Content")?.Value);
+        Assert.Equal("{StaticResource OpenCareerPrimaryButtonStyle}", openCurrentFlightButton.Attribute("Style")?.Value);
+        Assert.Equal("44", openCurrentFlightButton.Attribute("MinHeight")?.Value);
     }
 
     [Fact]

@@ -376,4 +376,12 @@ public sealed partial class JobsPage : Page
         {
         }
     }
+
+    private void OpenCurrentFlight_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (DataContext is JobsViewModel viewModel)
+            viewModel.OpenCurrentFlight();
+    }
 }

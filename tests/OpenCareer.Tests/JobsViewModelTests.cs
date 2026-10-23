@@ -1,9 +1,11 @@
 using System.Collections.Immutable;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Careers;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Flights;
 
 namespace OpenCareer.Tests;
 
@@ -385,6 +387,64 @@ public sealed class JobsViewModelTests
             "All 2 accepted jobs were cancelled",
             viewModel.AcceptanceStatus,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ActiveCareerFlightCanBeOpenedDirectlyFromJobs()
+    {
+        Guid contractId = Guid.Parse(
+            "a7000000-0000-0000-0000-000000000001");
+        CareerJobPlayableLoopReadinessSource readiness =
+            ActiveFlightReadiness(contractId);
+        var viewModel = new JobsViewModel(
+            new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", locked: false))),
+            CareerRuntime("KRME"),
+            new FixedTimeProvider(Now),
+            aircraftSelection: null,
+            startAction: null,
+            logger: null,
+            playableReadiness: readiness);
+
+        var navigationTargets = new List<JobsNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.HasActiveCareerFlight);
+        Assert.Equal("CAREER FLIGHT IN PROGRESS", viewModel.ActiveCareerFlightStatus);
+        Assert.Contains("Accepted", viewModel.ActiveCareerFlightDetail, StringComparison.Ordinal);
+
+        viewModel.OpenCurrentFlight();
+
+        Assert.Equal(
+            new[] { JobsNavigationTarget.CurrentFlight },
+            navigationTargets);
+    }
+
+    [Fact]
+    public async Task MissingCareerFlightDoesNotExposeOrNavigateRecoveryAction()
+    {
+        CareerJobPlayableLoopReadinessSource readiness =
+            ActiveFlightReadiness(contractId: null);
+        var viewModel = new JobsViewModel(
+            new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", locked: false))),
+            CareerRuntime("KRME"),
+            new FixedTimeProvider(Now),
+            aircraftSelection: null,
+            startAction: null,
+            logger: null,
+            playableReadiness: readiness);
+
+        var navigationTargets = new List<JobsNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
+
+        await viewModel.RefreshAsync();
+        viewModel.OpenCurrentFlight();
+
+        Assert.False(viewModel.HasActiveCareerFlight);
+        Assert.Empty(navigationTargets);
     }
 
     [Fact]
@@ -849,6 +909,55 @@ public sealed class JobsViewModelTests
                         Now.AddDays(-1))));
     }
 
+    private static CareerJobPlayableLoopReadinessSource ActiveFlightReadiness(
+        Guid? contractId)
+    {
+        var sessions = new FlightSessionCoordinator();
+        PersistedJobContract[] contracts = [];
+
+        if (contractId is { } activeContractId)
+        {
+            sessions.Start(
+                Now,
+                activeContractId,
+                sessionId: activeContractId);
+
+            var contract = new JobContract(
+                ContractId: activeContractId,
+                EmployerId: null,
+                Kind: ContractKind.Ferry,
+                ServiceTrack: ServiceTrack.CivilianEmployment,
+                OriginIcao: "KRME",
+                DestinationIcao: "KSYR",
+                Compensation: new ContractCompensation(
+                    CompensationModel.PilotWage,
+                    500m,
+                    0m,
+                    EmployerCoversFuel: true,
+                    EmployerCoversMaintenance: true,
+                    EmployerCoversAirportFees: true),
+                OfferedAt: Now.AddHours(-1),
+                MustStartBy: null,
+                MustCompleteBy: Now.AddHours(2),
+                AircraftRequirements: new AircraftMissionRequirements(
+                    AllowedAccess: AircraftAccess.Civilian),
+                Status: ContractStatus.InProgress,
+                AcceptedAt: Now.AddMinutes(-30),
+                StartedAt: Now,
+                CompletedAt: null);
+
+            contract.Validate();
+            contracts = [new PersistedJobContract(contract, Version: 2)];
+        }
+
+        return new CareerJobPlayableLoopReadinessSource(
+            sessions,
+            new StaticContractRuntimeSource(contracts),
+            new JobFlightCompletionEvidenceTracker(
+                sessions,
+                new EmptyFlightEvidenceSource()));
+    }
+
     private static JobBoardState Board(
         string airportIcao,
         params JobMarketOfferDraft[] offers)
@@ -1138,6 +1247,30 @@ public sealed class JobsViewModelTests
             DateTimeOffset savedAt,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class StaticContractRuntimeSource(
+        IReadOnlyList<PersistedJobContract> contracts)
+        : IJobContractRuntimeSource
+    {
+        public bool IsInitialized => true;
+        public IReadOnlyList<PersistedJobContract> Current => contracts;
+
+        public PersistedJobContract? Find(Guid contractId) =>
+            contracts.SingleOrDefault(
+                contract => contract.Contract.ContractId == contractId);
+    }
+
+    private sealed class EmptyFlightEvidenceSource
+        : IFlightStateEvidenceSource
+    {
+        public FlightStateEvidence? Current => null;
+
+        public event Action<FlightStateEvidence?>? EvidenceChanged
+        {
+            add { }
+            remove { }
+        }
     }
 
     private sealed class FixedTimeProvider(

@@ -33,6 +33,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private readonly ICareerJobStartAction? _startAction;
     private readonly IAcceptedDispatchPlanningContextSource? _acceptedContext;
     private readonly IAcceptedJobCancellationService? _acceptedCancellation;
+    private readonly CareerJobPlayableLoopReadinessSource? _playableReadiness;
     private readonly ILogger<JobsViewModel>? _logger;
     private readonly FirstJobTutorialAutoTrigger? _firstJobTutorial;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
@@ -55,6 +56,10 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private bool _isRefreshing;
     private bool _isCancellingAcceptedJobs;
     private IReadOnlyList<Guid> _acceptedContractIds = Array.Empty<Guid>();
+    private bool _hasActiveCareerFlight;
+    private string _activeCareerFlightStatus = "NO ACTIVE CAREER FLIGHT";
+    private string _activeCareerFlightDetail =
+        "Accept and start a career job to create a contract-linked FlightSession.";
 
     public JobsViewModel(
         IJobBoardStateStore jobBoards,
@@ -89,7 +94,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         DevelopmentFlightService? developmentFlights = null,
         FirstJobTutorialAutoTrigger? firstJobTutorial = null,
         IAcceptedDispatchPlanningContextSource? acceptedContext = null,
-        IAcceptedJobCancellationService? acceptedCancellation = null)
+        IAcceptedJobCancellationService? acceptedCancellation = null,
+        CareerJobPlayableLoopReadinessSource? playableReadiness = null)
     {
         _jobBoards =
             jobBoards
@@ -114,6 +120,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             acceptedContext;
         _acceptedCancellation =
             acceptedCancellation;
+        _playableReadiness =
+            playableReadiness;
         _logger =
             logger;
         _firstJobTutorial =
@@ -134,6 +142,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public string AircraftStatus => _aircraftStatus;
     public string AcceptanceStatus => _acceptanceStatus;
     public bool IsRefreshing => _isRefreshing;
+    public bool HasActiveCareerFlight => _hasActiveCareerFlight;
+    public string ActiveCareerFlightStatus => _activeCareerFlightStatus;
+    public string ActiveCareerFlightDetail => _activeCareerFlightDetail;
     public bool CanCancelAcceptedJobs =>
         !_isCancellingAcceptedJobs
         && _acceptedCancellation is not null
@@ -218,6 +229,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
             if (career is null)
             {
+                RefreshActiveCareerFlight();
                 _boardOffers =
                     Array.Empty<JobMarketOfferDraft>();
                 SetOffers(
@@ -249,6 +261,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                         "Pre-FlightSession career-job recovery failed during Jobs refresh; persisted recovery state was preserved.");
                 }
             }
+
+            RefreshActiveCareerFlight();
 
             string currentAirport =
                 career.Profile.Location.CurrentAirportIcao;
@@ -373,6 +387,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 await RebuildOffersLockedAsync(cancellationToken);
             else
                 RefreshOfferExpirationLocked();
+
+            RefreshActiveCareerFlight();
         }
         finally
         {
@@ -585,6 +601,17 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         }
     }
 
+    public void OpenCurrentFlight()
+    {
+        if (!HasActiveCareerFlight)
+            return;
+
+        NavigationRequested?.Invoke(
+            this,
+            new JobsNavigationRequestedEventArgs(
+                JobsNavigationTarget.CurrentFlight));
+    }
+
     public async Task CancelAcceptedJobsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -679,6 +706,30 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 : Array.Empty<Guid>());
 
         SetAcceptedContractIds(contractIds);
+    }
+
+    private void RefreshActiveCareerFlight()
+    {
+        CareerJobPlayableReadinessSnapshot? snapshot =
+            _playableReadiness?.Current;
+
+        bool hasActiveCareerFlight =
+            snapshot?.ContractId is not null
+            && snapshot.State != CareerJobPlayableReadinessState.NoCareerFlight;
+
+        SetField(
+            ref _hasActiveCareerFlight,
+            hasActiveCareerFlight,
+            nameof(HasActiveCareerFlight));
+        SetField(
+            ref _activeCareerFlightStatus,
+            snapshot?.StatusText ?? "NO ACTIVE CAREER FLIGHT",
+            nameof(ActiveCareerFlightStatus));
+        SetField(
+            ref _activeCareerFlightDetail,
+            snapshot?.Detail
+                ?? "Accept and start a career job to create a contract-linked FlightSession.",
+            nameof(ActiveCareerFlightDetail));
     }
 
     private void SetAcceptedContractIds(
