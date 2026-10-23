@@ -357,6 +357,37 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
+    public void DevelopmentTestProfileIsPermanentlyVisibleInTheShell()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
+        XDocument shell = XDocument.Load(Path.Combine(directory, "MainWindow.xaml"));
+        string code = File.ReadAllText(Path.Combine(directory, "MainWindow.xaml.cs"));
+
+        XElement banner = shell
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Border"
+                && string.Equals(
+                    element.Attribute(XamlNamespace + "Name")?.Value,
+                    "DevelopmentProfileBanner",
+                    StringComparison.Ordinal));
+
+        Assert.Equal(
+            "{x:Bind DevelopmentProfileBannerVisibility}",
+            banner.Attribute("Visibility")?.Value);
+        Assert.Contains(
+            banner.Descendants(),
+            element =>
+                element.Name.LocalName == "TextBlock"
+                && string.Equals(
+                    element.Attribute("Text")?.Value,
+                    "DEVELOPMENT / TEST",
+                    StringComparison.Ordinal));
+        Assert.Contains("dataPaths.IsDevelopmentLiveTest", code, StringComparison.Ordinal);
+        Assert.Contains("Visibility.Collapsed", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AsyncNavigationUsesStableLocalCancellationLifetimes()
     {
         string directory =

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
 using OpenCareer.App.Views;
 using OpenCareer.Application.Dashboard;
@@ -31,6 +32,7 @@ public sealed partial class MainWindow : Window
         MilitaryGovernmentViewModel militaryGovernment,
         TutorialViewModel tutorial,
         SettingsViewModel settings,
+        OpenCareerDataPaths dataPaths,
         FlightSessionRuntime flightRuntime,
         FirstJobTutorialAutoTrigger firstJobTutorial,
         ILogger<MainWindow> logger)
@@ -45,6 +47,10 @@ public sealed partial class MainWindow : Window
         MilitaryGovernment = militaryGovernment;
         Tutorial = tutorial;
         Settings = settings;
+        DevelopmentProfileBannerVisibility =
+            dataPaths.IsDevelopmentLiveTest
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         _flightRuntime =
             flightRuntime
             ?? throw new ArgumentNullException(nameof(flightRuntime));
@@ -85,6 +91,7 @@ public sealed partial class MainWindow : Window
     public MilitaryGovernmentViewModel MilitaryGovernment { get; }
     public TutorialViewModel Tutorial { get; }
     public SettingsViewModel Settings { get; }
+    public Visibility DevelopmentProfileBannerVisibility { get; }
 
     public void StopStatusUpdates()
     {

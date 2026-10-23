@@ -31,6 +31,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <StackPanel>
@@ -38,7 +39,30 @@
                         <TextBlock Text="Career, dispatch and live flight management" Style="{StaticResource OpenCareerShellBodyStyle}" />
                     </StackPanel>
 
-                    <Border Grid.Column="1"
+                    <Border x:Name="DevelopmentProfileBanner"
+                            Grid.Column="1"
+                            Visibility="{x:Bind DevelopmentProfileBannerVisibility}"
+                            Background="{StaticResource OpenCareerBrassBrush}"
+                            BorderBrush="{StaticResource OpenCareerShellTextBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="14,7"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Development test profile active; KJFK isolated data">
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="DEVELOPMENT / TEST"
+                                       Foreground="{StaticResource OpenCareerNavyBrush}"
+                                       FontSize="12"
+                                       FontWeight="Bold"
+                                       CharacterSpacing="80" />
+                            <TextBlock Text="KJFK · ISOLATED DATA"
+                                       Foreground="{StaticResource OpenCareerNavyBrush}"
+                                       FontSize="10"
+                                       FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="2"
                             Style="{StaticResource OpenCareerMetalCardStyle}"
                             Padding="14,8">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
