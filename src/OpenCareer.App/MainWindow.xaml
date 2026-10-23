@@ -77,20 +77,21 @@
             </NavigationView.Header>
 
             <NavigationView.MenuItems>
+                <NavigationViewItemHeader Content="FLIGHT DESK" />
                 <NavigationViewItem x:Name="DashboardItem" Content="Dashboard" Tag="dashboard" />
-                <NavigationViewItem Content="Dispatch" Tag="dispatch" />
                 <NavigationViewItem Content="Jobs" Tag="jobs" />
                 <NavigationViewItem Content="Current Flight" Tag="current-flight" />
-                <NavigationViewItem Content="Map / World" Tag="world" />
-                <NavigationViewItem Content="Aircraft" Tag="aircraft" />
-                <NavigationViewItem Content="Hangar / Bases" Tag="bases" />
-                <NavigationViewItem Content="Maintenance" Tag="maintenance" />
-                <NavigationViewItem Content="Company" Tag="company" />
-                <NavigationViewItem Content="Finances" Tag="finances" />
-                <NavigationViewItem Content="Markets" Tag="markets" />
-                <NavigationViewItem Content="Military / Government" Tag="military" />
-                <NavigationViewItem Content="Logbook" Tag="logbook" />
+                <NavigationViewItem Content="Advanced Dispatch" Tag="dispatch" />
+
+                <NavigationViewItemHeader Content="CAREER" />
                 <NavigationViewItem Content="Pilot Profile / Career" Tag="career" />
+                <NavigationViewItem Content="Aircraft" Tag="aircraft" />
+                <NavigationViewItem Content="Logbook" Tag="logbook" />
+
+                <NavigationViewItemHeader Content="SPECIAL OPERATIONS" />
+                <NavigationViewItem Content="Military / Government" Tag="military" />
+
+                <NavigationViewItemHeader Content="SYSTEM" />
                 <NavigationViewItem Content="Settings" Tag="settings" />
             </NavigationView.MenuItems>
 

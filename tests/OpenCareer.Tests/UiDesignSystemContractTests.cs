@@ -388,6 +388,53 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
+    public void PrimaryNavigationExposesWorkingScreensWithoutPlaceholderDeadEnds()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
+        XDocument shell = XDocument.Load(Path.Combine(directory, "MainWindow.xaml"));
+
+        XElement[] items = shell
+            .Descendants()
+            .Where(element => element.Name.LocalName == "NavigationViewItem")
+            .ToArray();
+        string[] tags = items
+            .Select(element => element.Attribute("Tag")?.Value)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value!)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "dashboard",
+                "jobs",
+                "current-flight",
+                "dispatch",
+                "career",
+                "aircraft",
+                "logbook",
+                "military",
+                "settings"
+            ],
+            tags);
+
+        Assert.DoesNotContain("world", tags);
+        Assert.DoesNotContain("bases", tags);
+        Assert.DoesNotContain("maintenance", tags);
+        Assert.DoesNotContain("company", tags);
+        Assert.DoesNotContain("finances", tags);
+        Assert.DoesNotContain("markets", tags);
+
+        Assert.Contains(
+            items,
+            item =>
+                string.Equals(item.Attribute("Tag")?.Value, "dispatch", StringComparison.Ordinal)
+                && string.Equals(
+                    item.Attribute("Content")?.Value,
+                    "Advanced Dispatch",
+                    StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void AsyncNavigationUsesStableLocalCancellationLifetimes()
     {
         string directory =
