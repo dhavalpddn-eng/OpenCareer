@@ -371,6 +371,60 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task AircraftSelectionCannotChangeWhileStartIsInProgress()
+    {
+        JobMarketOfferDraft offer = Offer("KRME", "KSYR", locked: false);
+        var entered = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var discovery = new FakeDiscovery
+        {
+            Current = new InstalledAircraftDiscoverySnapshot(
+                InstalledAircraftDiscoveryAvailability.Available,
+                [
+                    Installed("first-aircraft", "First Aircraft"),
+                    Installed("second-aircraft", "Second Aircraft")
+                ])
+        };
+        var action = new FakeStartAction
+        {
+            CompleteStart = true,
+            BeforeStart = async () =>
+            {
+                entered.TrySetResult();
+                await release.Task;
+            }
+        };
+        var viewModel = new JobsViewModel(
+            new FakeBoardStore(Board("KRME", offer)),
+            CareerRuntime("KRME"),
+            new FixedTimeProvider(Now),
+            new CareerJobAircraftSelectionSource(discovery),
+            action,
+            logger: null);
+
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("first-aircraft");
+
+        Task start = viewModel.StartOfferAsync(offer.OfferId);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await viewModel.SelectAircraftAsync("second-aircraft")
+            .WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Equal("first-aircraft", viewModel.SelectedAircraftId);
+        Assert.Equal("first-aircraft", action.LastAircraftId);
+        Assert.False(start.IsCompleted);
+
+        release.TrySetResult();
+        await start.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal("first-aircraft", viewModel.SelectedAircraftId);
+        Assert.Equal("first-aircraft", action.LastAircraftId);
+    }
+
+    [Fact]
     public async Task FailedAcceptanceDoesNotRequestDispatchNavigation()
     {
         JobMarketOfferDraft offer = Offer("KRME", "KSYR", locked: false);

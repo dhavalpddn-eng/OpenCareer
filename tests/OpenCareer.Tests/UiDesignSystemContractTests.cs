@@ -299,6 +299,25 @@ public sealed class UiDesignSystemContractTests
                 string.Equals(element.Attribute("Click")?.Value, "RefreshJobs_Click", StringComparison.Ordinal));
         Assert.Equal("Refresh Jobs", refreshButton.Attribute("Content")?.Value);
         Assert.Equal("44", refreshButton.Attribute("MinHeight")?.Value);
+        Assert.Equal("{Binding CanRunJobActions}", refreshButton.Attribute("IsEnabled")?.Value);
+
+        XElement aircraftPicker = page
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "ComboBox" &&
+                element.Attributes().Any(attribute =>
+                    attribute.Name.LocalName == "Name" &&
+                    string.Equals(attribute.Value, "AircraftPicker", StringComparison.Ordinal)));
+        Assert.Equal("{Binding CanRunJobActions}", aircraftPicker.Attribute("IsEnabled")?.Value);
+
+        XElement positionTestPilot = page
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "CheckBox" &&
+                element.Attributes().Any(attribute =>
+                    attribute.Name.LocalName == "Name" &&
+                    string.Equals(attribute.Value, "PositionTestPilot", StringComparison.Ordinal)));
+        Assert.Equal("{Binding CanRunJobActions}", positionTestPilot.Attribute("IsEnabled")?.Value);
 
         XElement cancelButton = page
             .Descendants()

@@ -410,61 +410,78 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         string? aircraftId,
         CancellationToken cancellationToken = default)
     {
-        await _refreshGate
-            .WaitAsync(cancellationToken)
-            .ConfigureAwait(true);
+        if (!await _startGate
+                .WaitAsync(0, cancellationToken)
+                .ConfigureAwait(true))
+        {
+            return;
+        }
+
+        SetJobActionBusy(true);
 
         try
         {
-            string? normalized =
-                string.IsNullOrWhiteSpace(aircraftId)
-                    ? null
-                    : aircraftId.Trim();
+            await _refreshGate
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(true);
 
-            // ItemsSource replacement can queue a null SelectionChanged behind this gate.
-            // Discovery removes unavailable selections; a picker reset must not remove a valid one.
-            if (normalized is null
-                && _selectedAircraftId is not null
-                && _aircraftOptions.Any(
-                    item => string.Equals(
-                        item.AircraftId,
+            try
+            {
+                string? normalized =
+                    string.IsNullOrWhiteSpace(aircraftId)
+                        ? null
+                        : aircraftId.Trim();
+
+                // ItemsSource replacement can queue a null SelectionChanged behind this gate.
+                // Discovery removes unavailable selections; a picker reset must not remove a valid one.
+                if (normalized is null
+                    && _selectedAircraftId is not null
+                    && _aircraftOptions.Any(
+                        item => string.Equals(
+                            item.AircraftId,
+                            _selectedAircraftId,
+                            StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+
+                if (normalized is not null
+                    && !_aircraftOptions.Any(
+                        item => string.Equals(
+                            item.AircraftId,
+                            normalized,
+                            StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new InvalidOperationException(
+                        "Selected aircraft is not present in the authoritative installed-aircraft catalog.");
+                }
+
+                // Restoring SelectedValue can echo the retained ID through SelectionChanged.
+                if (string.Equals(
                         _selectedAircraftId,
-                        StringComparison.OrdinalIgnoreCase)))
-            {
-                return;
-            }
-
-            if (normalized is not null
-                && !_aircraftOptions.Any(
-                    item => string.Equals(
-                        item.AircraftId,
                         normalized,
-                        StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new InvalidOperationException(
-                    "Selected aircraft is not present in the authoritative installed-aircraft catalog.");
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _selectedAircraftId =
+                    normalized;
+                OnPropertyChanged(
+                    nameof(SelectedAircraftId));
+
+                await RebuildOffersLockedAsync(
+                    cancellationToken);
             }
-
-            // Restoring SelectedValue can echo the retained ID through SelectionChanged.
-            if (string.Equals(
-                    _selectedAircraftId,
-                    normalized,
-                    StringComparison.OrdinalIgnoreCase))
+            finally
             {
-                return;
+                _refreshGate.Release();
             }
-
-            _selectedAircraftId =
-                normalized;
-            OnPropertyChanged(
-                nameof(SelectedAircraftId));
-
-            await RebuildOffersLockedAsync(
-                cancellationToken);
         }
         finally
         {
-            _refreshGate.Release();
+            SetJobActionBusy(false);
+            _startGate.Release();
         }
     }
 
