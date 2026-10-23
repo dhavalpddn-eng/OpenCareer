@@ -347,6 +347,47 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task AcceptedJobsCanBeCancelledDirectlyFromJobs()
+    {
+        Guid firstContractId = Guid.NewGuid();
+        Guid secondContractId = Guid.NewGuid();
+        var acceptedContext = new MutableAcceptedContext(
+            firstContractId,
+            secondContractId);
+        var cancellation = new RecordingAcceptedCancellation(acceptedContext);
+        var viewModel = new JobsViewModel(
+            new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", locked: false))),
+            CareerRuntime("KRME"),
+            new FixedTimeProvider(Now),
+            aircraftSelection: null,
+            startAction: null,
+            logger: null,
+            acceptedContext: acceptedContext,
+            acceptedCancellation: cancellation);
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.Equal(
+            "Cancel All 2 Accepted Jobs",
+            viewModel.CancelAcceptedJobsButtonText);
+
+        await viewModel.CancelAcceptedJobsAsync();
+
+        Assert.Equal(
+            new[] { firstContractId, secondContractId }.OrderBy(static id => id),
+            cancellation.CancelledContractIds);
+        Assert.False(viewModel.CanCancelAcceptedJobs);
+        Assert.Equal(
+            "No Accepted Job to Cancel",
+            viewModel.CancelAcceptedJobsButtonText);
+        Assert.Contains(
+            "All 2 accepted jobs were cancelled",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AircraftOnlyRefreshConsumesLateDiscoveryWithoutRefillingBoard()
     {
         JobBoardState board =
@@ -991,6 +1032,61 @@ public sealed class JobsViewModelTests
 
             throw new InvalidOperationException(
                 "Synthetic start result intentionally stops after delegation.");
+        }
+    }
+
+    private sealed class MutableAcceptedContext(
+        params Guid[] contractIds)
+        : IAcceptedDispatchPlanningContextSource
+    {
+        private readonly List<Guid> _contractIds = contractIds.ToList();
+
+        public void Remove(Guid contractId) =>
+            _contractIds.Remove(contractId);
+
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(
+                _contractIds.Count switch
+                {
+                    0 => new AcceptedDispatchPlanningContext(
+                        AcceptedDispatchPlanningContextStatus.NoAcceptedContract,
+                        "No accepted job is waiting for dispatch preparation."),
+                    1 => new AcceptedDispatchPlanningContext(
+                        AcceptedDispatchPlanningContextStatus.Ready,
+                        "One accepted job is waiting.",
+                        ContractId: _contractIds[0],
+                        AcceptedContractIds: _contractIds.ToArray()),
+                    _ => new AcceptedDispatchPlanningContext(
+                        AcceptedDispatchPlanningContextStatus.MultipleAcceptedContracts,
+                        "Multiple accepted jobs are waiting.",
+                        AcceptedContractIds: _contractIds.ToArray())
+                });
+        }
+    }
+
+    private sealed class RecordingAcceptedCancellation(
+        MutableAcceptedContext context)
+        : IAcceptedJobCancellationService
+    {
+        public List<Guid> CancelledContractIds { get; } = [];
+
+        public Task<AcceptedJobCancellationResult> CancelAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CancelledContractIds.Add(contractId);
+            context.Remove(contractId);
+
+            return Task.FromResult(
+                new AcceptedJobCancellationResult(
+                    contractId,
+                    $"job:{contractId:N}",
+                    ReservationWasAlreadyReleased: false));
         }
     }
 

@@ -291,6 +291,16 @@ public sealed class UiDesignSystemContractTests
                 string.Equals(element.Attribute("Click")?.Value, "RefreshJobs_Click", StringComparison.Ordinal));
         Assert.Equal("Refresh Jobs", refreshButton.Attribute("Content")?.Value);
         Assert.Equal("44", refreshButton.Attribute("MinHeight")?.Value);
+
+        XElement cancelButton = page
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Button" &&
+                string.Equals(element.Attribute("Click")?.Value, "CancelAcceptedJobs_Click", StringComparison.Ordinal));
+        Assert.Equal("{Binding CancelAcceptedJobsButtonText}", cancelButton.Attribute("Content")?.Value);
+        Assert.Equal("{Binding CanCancelAcceptedJobs}", cancelButton.Attribute("IsEnabled")?.Value);
+        Assert.Equal("{StaticResource OpenCareerDangerButtonStyle}", cancelButton.Attribute("Style")?.Value);
+        Assert.Equal("44", cancelButton.Attribute("MinHeight")?.Value);
     }
 
     [Fact]

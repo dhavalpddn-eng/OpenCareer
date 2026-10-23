@@ -31,6 +31,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private readonly ICareerJobPreFlightSessionRecoveryService? _startRecovery;
     private readonly CareerJobAircraftSelectionSource? _aircraftSelection;
     private readonly ICareerJobStartAction? _startAction;
+    private readonly IAcceptedDispatchPlanningContextSource? _acceptedContext;
+    private readonly IAcceptedJobCancellationService? _acceptedCancellation;
     private readonly ILogger<JobsViewModel>? _logger;
     private readonly FirstJobTutorialAutoTrigger? _firstJobTutorial;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
@@ -51,6 +53,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private string _acceptanceStatus =
         "Select an installed aircraft to verify an active offer for dispatch.";
     private bool _isRefreshing;
+    private bool _isCancellingAcceptedJobs;
+    private IReadOnlyList<Guid> _acceptedContractIds = Array.Empty<Guid>();
 
     public JobsViewModel(
         IJobBoardStateStore jobBoards,
@@ -83,7 +87,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         ICareerJobBoardRefillService? boardRefill = null,
         ICareerJobPreFlightSessionRecoveryService? startRecovery = null,
         DevelopmentFlightService? developmentFlights = null,
-        FirstJobTutorialAutoTrigger? firstJobTutorial = null)
+        FirstJobTutorialAutoTrigger? firstJobTutorial = null,
+        IAcceptedDispatchPlanningContextSource? acceptedContext = null,
+        IAcceptedJobCancellationService? acceptedCancellation = null)
     {
         _jobBoards =
             jobBoards
@@ -104,6 +110,10 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             aircraftSelection;
         _startAction =
             startAction;
+        _acceptedContext =
+            acceptedContext;
+        _acceptedCancellation =
+            acceptedCancellation;
         _logger =
             logger;
         _firstJobTutorial =
@@ -124,6 +134,22 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public string AircraftStatus => _aircraftStatus;
     public string AcceptanceStatus => _acceptanceStatus;
     public bool IsRefreshing => _isRefreshing;
+    public bool CanCancelAcceptedJobs =>
+        !_isCancellingAcceptedJobs
+        && _acceptedCancellation is not null
+        && _acceptedContractIds.Count > 0;
+    public string CancelAcceptedJobsButtonText =>
+        _isCancellingAcceptedJobs
+            ? "Cancelling…"
+            : _acceptedContractIds.Count > 1
+                ? $"Cancel All {_acceptedContractIds.Count} Accepted Jobs"
+                : _acceptedContractIds.Count == 1
+                    ? "Cancel Accepted Job"
+                    : "No Accepted Job to Cancel";
+    public string CancelAcceptedJobsDialogText =>
+        _acceptedContractIds.Count > 1
+            ? $"All {_acceptedContractIds.Count} accepted preflight contracts will be cancelled and their aircraft reservations released. No flights will be started."
+            : "The accepted preflight contract will be cancelled, its prepared plan cleared, and its aircraft reservation released. No pay or logbook entry will be created.";
 
     public async Task GenerateDevelopmentFlightAsync(
         bool positionPilotAtKjfk,
@@ -284,6 +310,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 cancellationToken);
 
             await RebuildOffersLockedAsync(
+                cancellationToken);
+
+            await RefreshAcceptedJobsAsync(
                 cancellationToken);
 
             int actionable =
@@ -536,6 +565,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             {
                 await RebuildOffersLockedAsync(
                     cancellationToken);
+
+                await RefreshAcceptedJobsAsync(
+                    cancellationToken);
             }
             finally
             {
@@ -551,6 +583,121 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         {
             _startGate.Release();
         }
+    }
+
+    public async Task CancelAcceptedJobsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await _startGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(true);
+
+        try
+        {
+            if (_acceptedCancellation is not { } cancellation
+                || _acceptedContractIds.Count == 0)
+            {
+                SetField(
+                    ref _acceptanceStatus,
+                    "No accepted preflight job is available to cancel.",
+                    nameof(AcceptanceStatus));
+                return;
+            }
+
+            SetCancellingAcceptedJobs(true);
+            Guid[] contractIds = _acceptedContractIds.ToArray();
+
+            foreach (Guid contractId in contractIds)
+            {
+                await cancellation
+                    .CancelAsync(contractId, cancellationToken)
+                    .ConfigureAwait(true);
+            }
+
+            await RefreshAsync(cancellationToken)
+                .ConfigureAwait(true);
+
+            SetField(
+                ref _acceptanceStatus,
+                contractIds.Length == 1
+                    ? "Accepted job cancelled. Its prepared plan was cleared and aircraft reservation released."
+                    : $"All {contractIds.Length} accepted jobs were cancelled. Their prepared plans were cleared and aircraft reservations released.",
+                nameof(AcceptanceStatus));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger?.LogError(
+                ex,
+                "Accepted career-job cancellation failed from Jobs.");
+
+            await RefreshAcceptedJobsAsync(CancellationToken.None)
+                .ConfigureAwait(true);
+
+            SetField(
+                ref _acceptanceStatus,
+                $"Accepted job cancellation failed: {ex.Message}",
+                nameof(AcceptanceStatus));
+        }
+        finally
+        {
+            SetCancellingAcceptedJobs(false);
+            _startGate.Release();
+        }
+    }
+
+    private async Task RefreshAcceptedJobsAsync(
+        CancellationToken cancellationToken)
+    {
+        if (_acceptedContext is null)
+        {
+            SetAcceptedContractIds(Array.Empty<Guid>());
+            return;
+        }
+
+        AcceptedDispatchPlanningContext context;
+        try
+        {
+            context = await _acceptedContext
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger?.LogWarning(
+                ex,
+                "Accepted career-job cancellation state could not be refreshed from Jobs.");
+            return;
+        }
+
+        IReadOnlyList<Guid> contractIds = context.AcceptedContractIds?
+            .Where(static contractId => contractId != Guid.Empty)
+            .Distinct()
+            .OrderBy(static contractId => contractId)
+            .ToArray()
+            ?? (context.ContractId is { } contractId
+                ? [contractId]
+                : Array.Empty<Guid>());
+
+        SetAcceptedContractIds(contractIds);
+    }
+
+    private void SetAcceptedContractIds(
+        IReadOnlyList<Guid> contractIds)
+    {
+        _acceptedContractIds = contractIds;
+        OnPropertyChanged(nameof(CanCancelAcceptedJobs));
+        OnPropertyChanged(nameof(CancelAcceptedJobsButtonText));
+        OnPropertyChanged(nameof(CancelAcceptedJobsDialogText));
+    }
+
+    private void SetCancellingAcceptedJobs(bool value)
+    {
+        if (_isCancellingAcceptedJobs == value)
+            return;
+
+        _isCancellingAcceptedJobs = value;
+        OnPropertyChanged(nameof(CanCancelAcceptedJobs));
+        OnPropertyChanged(nameof(CancelAcceptedJobsButtonText));
     }
 
     private async Task<bool> RefreshAircraftLockedAsync(

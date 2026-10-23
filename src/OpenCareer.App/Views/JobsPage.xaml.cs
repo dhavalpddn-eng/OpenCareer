@@ -322,4 +322,58 @@ public sealed partial class JobsPage : Page
         {
         }
     }
+
+    private async void CancelAcceptedJobs_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (DataContext is not JobsViewModel viewModel
+            || !viewModel.CanCancelAcceptedJobs)
+        {
+            return;
+        }
+
+        CancellationTokenSource? navigationCts =
+            _navigationCts;
+
+        if (navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        var confirmation = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Cancel accepted job?",
+            Content = viewModel.CancelAcceptedJobsDialogText,
+            PrimaryButtonText = "Cancel Job",
+            CloseButtonText = "Keep Job",
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        if (await confirmation.ShowAsync() != ContentDialogResult.Primary
+            || !ReferenceEquals(_navigationCts, navigationCts)
+            || navigationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            await viewModel
+                .CancelAcceptedJobsAsync(
+                    navigationCts.Token);
+
+            if (ReferenceEquals(_navigationCts, navigationCts)
+                && !navigationCts.IsCancellationRequested)
+            {
+                SynchronizeAircraftSelection(viewModel);
+            }
+        }
+        catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
+        {
+        }
+    }
 }

@@ -142,6 +142,13 @@
                         <TextBlock Text="{Binding AcceptanceStatus}"
                                    Style="{StaticResource OpenCareerPaperBodyStyle}"
                                    TextWrapping="Wrap" />
+                        <Button Content="{Binding CancelAcceptedJobsButtonText}"
+                                IsEnabled="{Binding CanCancelAcceptedJobs}"
+                                Click="CancelAcceptedJobs_Click"
+                                HorizontalAlignment="Stretch"
+                                MinHeight="44"
+                                Margin="0,6,0,0"
+                                Style="{StaticResource OpenCareerDangerButtonStyle}" />
                     </StackPanel>
 
                     <Border Grid.Column="1"
