@@ -2,14 +2,14 @@
 
 **Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
 
-Updated: 2026-10-23 against validated integration code head `28af515f40366e4e77c545cf54a1296262e64728`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
+Updated: 2026-10-23 against validated integration code head `d7dddefa00daf6ead8360be03bdd0fb055d4948b`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/playable-loop-integration`. Keep `main` stable.
-- Validated implementation baseline: `28af515f40366e4e77c545cf54a1296262e64728`.
-- Exact-head Linux build #1071 and Windows `winui-build` #1004 passed.
+- Validated implementation baseline: `d7dddefa00daf6ead8360be03bdd0fb055d4948b`.
+- Exact-head Linux build #1073 and Windows `winui-build` #1006 passed.
 - Exact-PC C172/KJFK validation passed the SimConnect/current-aircraft path, production FlightSession takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, exact-once terminal settlement/finalization, facility-request containment with corrected receive IDs, Jobs aircraft-picker stability and shared button-state readability.
 - The isolated KJFK Development/Test profile and `tools/run-kjfk-live-test.ps1` protect normal career data while retaining restart/recovery behavior between launches unless explicitly reset. Settings labels the active profile and can schedule a marker-validated clean test reset before SQLite opens on the next launch; normal career data cannot use that action. The shell displays a permanent high-contrast DEVELOPMENT / TEST KJFK isolated-data placard on every page while the test profile is active.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
@@ -22,6 +22,7 @@ Updated: 2026-10-23 against validated integration code head `28af515f40366e4e77c
 Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI 3/Windows App SDK, isolated SimConnect boundary, SQLite, deterministic/testable domain. No aircraft whitelist. AI is optional and never authoritative for money, ownership, mission completion or critical state.
 - UI identity is fixed as a retro-modern aviation operations interface: dark blue-gray riveted structure, vivid ivory briefing panels, realistic MSFS 2024 imagery, restrained navy/brass/status accents, and 1950s/60s aviation character without sepia/olive drift. See `docs/ui-design-language.md`.
 - Primary navigation exposes only functional destinations, organized as Flight Desk, Career, Special Operations and System. Dispatch remains available as Advanced Dispatch; unfinished Map/World, Bases, Maintenance, Company, Finances and Markets placeholders are not presented as usable screens.
+- In the isolated KJFK test profile, Home presents a prominent playable-loop entry that opens Jobs directly and states the zero-pay/zero-progression and no-Advanced-Dispatch test boundary; normal career mode hides it.
 
 ## Confirmed gameplay
 
