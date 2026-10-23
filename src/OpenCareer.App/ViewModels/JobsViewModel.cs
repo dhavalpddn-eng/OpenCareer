@@ -717,10 +717,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             snapshot?.ContractId is not null
             && snapshot.State != CareerJobPlayableReadinessState.NoCareerFlight;
 
-        SetField(
-            ref _hasActiveCareerFlight,
-            hasActiveCareerFlight,
-            nameof(HasActiveCareerFlight));
+        if (_hasActiveCareerFlight != hasActiveCareerFlight)
+        {
+            _hasActiveCareerFlight = hasActiveCareerFlight;
+            OnPropertyChanged(nameof(HasActiveCareerFlight));
+        }
         SetField(
             ref _activeCareerFlightStatus,
             snapshot?.StatusText ?? "NO ACTIVE CAREER FLIGHT",
