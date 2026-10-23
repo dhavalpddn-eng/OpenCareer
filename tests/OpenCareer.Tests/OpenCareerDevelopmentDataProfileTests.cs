@@ -125,7 +125,7 @@ public sealed class OpenCareerDevelopmentDataProfileTests
         OpenCareerDataProfileSelection normal =
             OpenCareerDataProfileSelection.Resolve([], root.Path);
         normal.Prepare();
-        await File.WriteAllTextAsync(normal.SettingsFile, "keep-normal-career");
+        await File.WriteAllTextAsync(normal.Paths.SettingsFile, "keep-normal-career");
 
         OpenCareerDataProfileSelection testProfile =
             OpenCareerDataProfileSelection.Resolve(
@@ -148,7 +148,9 @@ public sealed class OpenCareerDevelopmentDataProfileTests
         Assert.False(File.Exists(restarted.Paths.SettingsFile));
         Assert.False(File.Exists(restarted.Paths.DevelopmentResetRequestFile));
         Assert.True(File.Exists(restarted.Paths.ProfileMarkerFile));
-        Assert.Equal("keep-normal-career", await File.ReadAllTextAsync(normal.SettingsFile));
+        Assert.Equal(
+            "keep-normal-career",
+            await File.ReadAllTextAsync(normal.Paths.SettingsFile));
     }
 
     [Fact]
