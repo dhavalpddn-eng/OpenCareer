@@ -319,6 +319,58 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task ConcurrentStartAttemptIsRejectedInsteadOfQueued()
+    {
+        JobMarketOfferDraft offer = Offer("KRME", "KSYR", locked: false);
+        var entered = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var action = new FakeStartAction
+        {
+            ActionKind = CareerJobActionKind.AcceptForDispatch,
+            CompleteStart = true,
+            BeforeStart = async () =>
+            {
+                entered.TrySetResult();
+                await release.Task;
+            }
+        };
+        var viewModel = new JobsViewModel(
+            new FakeBoardStore(Board("KRME", offer)),
+            CareerRuntime("KRME"),
+            new FixedTimeProvider(Now),
+            new CareerJobAircraftSelectionSource(new FakeDiscovery()),
+            action,
+            logger: null);
+
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync(
+            Assert.Single(viewModel.AircraftOptions).AircraftId);
+
+        Task firstStart = viewModel.StartOfferAsync(offer.OfferId);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(viewModel.IsJobActionBusy);
+        Assert.False(viewModel.CanRunJobActions);
+
+        Task duplicateStart = viewModel.StartOfferAsync(offer.OfferId);
+        await duplicateStart.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Equal(1, action.AcceptCount);
+        Assert.Equal(1, action.StartCount);
+        Assert.False(firstStart.IsCompleted);
+
+        release.TrySetResult();
+        await firstStart.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(viewModel.IsJobActionBusy);
+        Assert.True(viewModel.CanRunJobActions);
+        Assert.Equal(1, action.AcceptCount);
+        Assert.Equal(1, action.StartCount);
+    }
+
+    [Fact]
     public async Task FailedAcceptanceDoesNotRequestDispatchNavigation()
     {
         JobMarketOfferDraft offer = Offer("KRME", "KSYR", locked: false);
@@ -1088,6 +1140,7 @@ public sealed class JobsViewModelTests
         public bool CompleteStart { get; init; }
 
         public Func<Task>? BeforeRead { get; init; }
+        public Func<Task>? BeforeStart { get; init; }
 
         public async Task<CareerJobStartActionAvailability> ReadAvailabilityAsync(
             Guid offerId,
@@ -1122,7 +1175,7 @@ public sealed class JobsViewModelTests
             return Task.FromResult<JobAcceptanceFleetResult>(null!);
         }
 
-        public Task<CareerJobPlayableStartResult> StartAsync(
+        public async Task<CareerJobPlayableStartResult> StartAsync(
             Guid offerId,
             string aircraftId,
             CancellationToken cancellationToken = default)
@@ -1134,9 +1187,12 @@ public sealed class JobsViewModelTests
             LastAircraftId =
                 aircraftId;
 
+            if (BeforeStart is not null)
+                await BeforeStart();
+
             if (CompleteStart)
             {
-                return Task.FromResult<CareerJobPlayableStartResult>(null!);
+                return null!;
             }
 
             throw new InvalidOperationException(

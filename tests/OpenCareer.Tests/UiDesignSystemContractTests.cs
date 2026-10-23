@@ -283,6 +283,14 @@ public sealed class UiDesignSystemContractTests
                 string.Equals(element.Attribute("Click")?.Value, "GenerateDevelopmentFlight_Click", StringComparison.Ordinal));
         Assert.Equal("{StaticResource OpenCareerPrimaryButtonStyle}", testButton.Attribute("Style")?.Value);
         Assert.Equal("Stretch", testButton.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal("{Binding CanRunJobActions}", testButton.Attribute("IsEnabled")?.Value);
+
+        XElement offers = page
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "ItemsControl" &&
+                string.Equals(element.Attribute("ItemsSource")?.Value, "{Binding Offers}", StringComparison.Ordinal));
+        Assert.Equal("{Binding CanRunJobActions}", offers.Attribute("IsEnabled")?.Value);
 
         XElement refreshButton = page
             .Descendants()

@@ -206,6 +206,7 @@
                                       Style="{StaticResource OpenCareerCheckBoxStyle}" />
                             <Button Content="CREATE ZERO-PAY CALIBRATION"
                                     Click="GenerateDevelopmentFlight_Click"
+                                    IsEnabled="{Binding CanRunJobActions}"
                                     HorizontalAlignment="Stretch"
                                     Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
                         </StackPanel>
@@ -236,7 +237,8 @@
                 </Border>
             </Grid>
 
-            <ItemsControl ItemsSource="{Binding Offers}">
+            <ItemsControl ItemsSource="{Binding Offers}"
+                          IsEnabled="{Binding CanRunJobActions}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Style="{StaticResource OpenCareerPaperCardStyle}"

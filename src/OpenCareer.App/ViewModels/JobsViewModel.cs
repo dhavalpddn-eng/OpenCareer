@@ -54,6 +54,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private string _acceptanceStatus =
         "Select an installed aircraft to verify an active offer for dispatch.";
     private bool _isRefreshing;
+    private bool _isJobActionBusy;
     private bool _isCancellingAcceptedJobs;
     private IReadOnlyList<Guid> _acceptedContractIds = Array.Empty<Guid>();
     private bool _hasActiveCareerFlight;
@@ -142,11 +143,14 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public string AircraftStatus => _aircraftStatus;
     public string AcceptanceStatus => _acceptanceStatus;
     public bool IsRefreshing => _isRefreshing;
+    public bool IsJobActionBusy => _isJobActionBusy;
+    public bool CanRunJobActions => !_isJobActionBusy;
     public bool HasActiveCareerFlight => _hasActiveCareerFlight;
     public string ActiveCareerFlightStatus => _activeCareerFlightStatus;
     public string ActiveCareerFlightDetail => _activeCareerFlightDetail;
     public bool CanCancelAcceptedJobs =>
-        !_isCancellingAcceptedJobs
+        CanRunJobActions
+        && !_isCancellingAcceptedJobs
         && _acceptedCancellation is not null
         && _acceptedContractIds.Count > 0;
     public string CancelAcceptedJobsButtonText =>
@@ -166,9 +170,14 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         bool positionPilotAtKjfk,
         CancellationToken cancellationToken = default)
     {
-        await _startGate
-            .WaitAsync(cancellationToken)
-            .ConfigureAwait(true);
+        if (!await _startGate
+                .WaitAsync(0, cancellationToken)
+                .ConfigureAwait(true))
+        {
+            return;
+        }
+
+        SetJobActionBusy(true);
 
         try
         {
@@ -206,6 +215,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         }
         finally
         {
+            SetJobActionBusy(false);
             _startGate.Release();
         }
     }
@@ -465,20 +475,25 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         if (_startAction is null)
             return;
 
-        string aircraftId =
-            _selectedAircraftId
-            ?? throw new InvalidOperationException(
-                "Select an installed aircraft before starting a career flight.");
-        JobOfferItemViewModel selectedOffer = _offers
-            .Single(offer => offer.OfferId == offerId);
-        CareerJobActionKind actionKind = selectedOffer.ActionKind;
+        if (!await _startGate
+                .WaitAsync(0, cancellationToken)
+                .ConfigureAwait(true))
+        {
+            return;
+        }
 
-        await _startGate
-            .WaitAsync(cancellationToken)
-            .ConfigureAwait(true);
+        SetJobActionBusy(true);
 
         try
         {
+            string aircraftId =
+                _selectedAircraftId
+                ?? throw new InvalidOperationException(
+                    "Select an installed aircraft before starting a career flight.");
+            JobOfferItemViewModel selectedOffer = _offers
+                .Single(offer => offer.OfferId == offerId);
+            CareerJobActionKind actionKind = selectedOffer.ActionKind;
+
             // CanStart is a UI projection, not permission to use retained discovery after
             // a disconnect between timer ticks. Recheck before invoking the start authority.
             await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(true);
@@ -597,6 +612,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         }
         finally
         {
+            SetJobActionBusy(false);
             _startGate.Release();
         }
     }
@@ -615,9 +631,14 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public async Task CancelAcceptedJobsAsync(
         CancellationToken cancellationToken = default)
     {
-        await _startGate
-            .WaitAsync(cancellationToken)
-            .ConfigureAwait(true);
+        if (!await _startGate
+                .WaitAsync(0, cancellationToken)
+                .ConfigureAwait(true))
+        {
+            return;
+        }
+
+        SetJobActionBusy(true);
 
         try
         {
@@ -668,6 +689,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         finally
         {
             SetCancellingAcceptedJobs(false);
+            SetJobActionBusy(false);
             _startGate.Release();
         }
     }
@@ -750,6 +772,17 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         _isCancellingAcceptedJobs = value;
         OnPropertyChanged(nameof(CanCancelAcceptedJobs));
         OnPropertyChanged(nameof(CancelAcceptedJobsButtonText));
+    }
+
+    private void SetJobActionBusy(bool value)
+    {
+        if (_isJobActionBusy == value)
+            return;
+
+        _isJobActionBusy = value;
+        OnPropertyChanged(nameof(IsJobActionBusy));
+        OnPropertyChanged(nameof(CanRunJobActions));
+        OnPropertyChanged(nameof(CanCancelAcceptedJobs));
     }
 
     private async Task<bool> RefreshAircraftLockedAsync(
