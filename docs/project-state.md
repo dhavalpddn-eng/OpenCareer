@@ -2,16 +2,16 @@
 
 **Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
 
-Updated: 2026-09-28 against validated integration code head `f2acb36773d2ee280a1e83610bfdbbe9f5749b93`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
+Updated: 2026-10-23 against validated integration code head `d98151731a5423f1fdd1b9857ff544238b935938`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/playable-loop-integration`. Keep `main` stable.
-- Validated implementation baseline: `f2acb36773d2ee280a1e83610bfdbbe9f5749b93`.
-- Exact-head Linux builds #904/#905 and Windows `winui-build` #836/#837 passed.
+- Validated implementation baseline: `d98151731a5423f1fdd1b9857ff544238b935938`.
+- Exact-head Linux build #1067 and Windows `winui-build` #1000 passed; the successful Windows rerun passed all 1,742 tests after one transient PowerShell test timeout.
 - Exact-PC C172/KJFK validation passed the SimConnect/current-aircraft path, production FlightSession takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, exact-once terminal settlement/finalization, facility-request containment with corrected receive IDs, Jobs aircraft-picker stability and shared button-state readability.
-- The isolated KJFK Development/Test profile and `tools/run-kjfk-live-test.ps1` protect normal career data while retaining restart/recovery behavior between launches unless explicitly reset.
+- The isolated KJFK Development/Test profile and `tools/run-kjfk-live-test.ps1` protect normal career data while retaining restart/recovery behavior between launches unless explicitly reset. Settings labels the active profile and can schedule a marker-validated clean test reset before SQLite opens on the next launch; normal career data cannot use that action.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
 - UI visual language: `docs/ui-design-language.md` is canonical for palette/material/aesthetic; implementation tokens/layout remain in `docs/ui-design-system.md`, and screen behavior in `docs/ui-screen-spec.md`; visual references: `docs/assets/opencareer-dashboard-concept-v2.svg`, `docs/assets/opencareer-ui-screen-atlas.svg`, and `docs/assets/opencareer-conflict-operations.svg`. `docs/ui-concept.md` remains the short visual-direction entry point.
 - Parallel military/conflict implementation: `feature/military-conflict-system`, draft PR #10 targeting `feature/m1-simulation-core`. The campaign-core completion boundary is reached: ground/air conflict, all current military mission families, authorization, fictional theater generation, deterministic operation/faction identity and phase-driven posture evolution, SQLite recovery/startup resume, strategic evolution, logistics recovery/control cycles, finite replacement reserves, terminal outcomes, persistent history, successor planning/decisions, SQLite-consistent backup/restore, production Military/Government UI, and production-wired deterministic operation resolution/consequences are implemented. Operation consequences persist in SQLite schema v5 with restart-safe duplicate protection, failure rollback and reconnect replay safety. Verified head `16cda14981bc6284e4f33833e88aa8289ff46149` is green in exact-head Linux PR CI and exact-head Windows CI. See `docs/conflict-system.md`.
