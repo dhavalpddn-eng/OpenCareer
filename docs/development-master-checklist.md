@@ -340,6 +340,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Build dispatch-to-active-mission flow for Ferry/Reposition, standard Passenger and Development/Test.
 - [x] Surface authoritative active career-flight state on Jobs with direct Current Flight recovery navigation.
 - [x] Reject overlapping Jobs mutations instead of queueing stale accept/start, calibration or accepted-job cancellation actions; publish one shared busy state and disable the corresponding controls.
+- [x] Keep the Jobs aircraft selection immutable for the duration of each action-bound operation; reject concurrent selection changes and disable refresh/development-position inputs until the operation releases its gate.
 - [x] Bind supported mission evidence to FlightSession.
 - [x] Implement mission-specific validation for the supported standard point-to-point path.
 - [x] Require parking/shutdown and mission/post-flight verification beyond landing.
