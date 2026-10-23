@@ -338,6 +338,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [ ] Add generation-time fuel/weather feasibility and ranking only from authoritative inputs; final start must continue to recheck current evidence.
 - [ ] Build a richer dedicated briefing flow beyond the current Jobs offer/readiness surface.
 - [x] Build dispatch-to-active-mission flow for Ferry/Reposition, standard Passenger and Development/Test.
+- [x] Surface authoritative active career-flight state on Jobs with direct Current Flight recovery navigation.
 - [x] Bind supported mission evidence to FlightSession.
 - [x] Implement mission-specific validation for the supported standard point-to-point path.
 - [x] Require parking/shutdown and mission/post-flight verification beyond landing.
