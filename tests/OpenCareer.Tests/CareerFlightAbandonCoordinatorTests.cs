@@ -691,6 +691,7 @@ public sealed class CareerFlightAbandonCoordinatorTests
                         contracts));
 
             await contractRuntime.InitializeAsync();
+            contracts.ResetReadCount();
 
             FlightSession session =
                 FlightSession.Start(
@@ -1002,6 +1003,9 @@ public sealed class CareerFlightAbandonCoordinatorTests
 
         public void SetCurrent(PersistedJobContract persisted) =>
             Current = persisted;
+
+        public void ResetReadCount() =>
+            ReadCount = 0;
 
         public async Task<PersistedJobContract?> ReadJobContractAsync(
             Guid contractId,
