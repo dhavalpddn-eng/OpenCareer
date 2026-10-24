@@ -2,14 +2,14 @@
 
 **Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
 
-Updated: 2026-10-24 against validated integration code head `36ce5890a8e2232f49e9ad61a65bc903fc2e8674`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
+Updated: 2026-10-24 against validated integration code head `3858abaa28fbef8a3de407710e09cd1702450b84`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/playable-loop-integration`. Keep `main` stable.
-- Validated implementation baseline: `36ce5890a8e2232f49e9ad61a65bc903fc2e8674`.
-- Exact-head Linux build #1094 and Windows `winui-build` #1027 passed on the first attempt.
+- Validated implementation baseline: `3858abaa28fbef8a3de407710e09cd1702450b84`.
+- Exact-head Linux build #1096 and Windows `winui-build` #1029 passed on the first attempt.
 - Exact-PC C172/KJFK validation passed the SimConnect/current-aircraft path, production FlightSession takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, exact-once terminal settlement/finalization, facility-request containment with corrected receive IDs, Jobs aircraft-picker stability and shared button-state readability.
 - The isolated KJFK Development/Test profile and `tools/run-kjfk-live-test.ps1` protect normal career data while retaining restart/recovery behavior between launches unless explicitly reset. Settings labels the active profile and can schedule a marker-validated clean test reset before SQLite opens on the next launch; normal career data cannot use that action. The shell displays a permanent high-contrast DEVELOPMENT / TEST KJFK isolated-data placard on every page while the test profile is active.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
@@ -58,7 +58,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - `FlightTelemetryEvidenceProcessor` and `FlightSessionRuntime` drive one authoritative career session from normalized telemetry through taxi, takeoff, airborne, approach, touchdown/bounce, rollout, taxi-in, parking and shutdown.
 - `SqliteFlightSessionCheckpointStore` and `FlightSessionPersistenceService` persist-before-publish, recover active sessions as suspended, require plausible continuity to resume and prevent failed persistence from consuming telemetry evidence.
 - Installed-aircraft discovery combines SimConnect catalog/current TITLE and package evidence; canonical registry resolution retains provenance/confidence and a C172 reference profile without treating reference data as installation or ownership.
-- Jobs uses persistent board/contracts/Fleet reservations, fail-closed dispatch readiness and the production start/completion/abandon authorities. Current ordinary production scope is Ferry/Reposition; the KJFK circuit is an explicit zero-pay/zero-progression Development/Test offer. An authoritative current-session panel exposes every current FlightSession and returns directly to Current Flight after restart or accidental navigation away; contract-linked career sessions retain their richer readiness detail, while practice/training and terminal-pending sessions still expose the recovery route. The shared acceptance input authority rejects another job before contract acceptance or aircraft reservation whenever any current/recovered FlightSession exists, including terminal state awaiting cleanup. Accept/start, calibration, accepted-job cancellation and aircraft selection share a published non-queuing mutation interlock, so rapid duplicate input cannot run stale work or change the displayed aircraft while an action remains bound to its original aircraft ID. Refresh and development-position inputs are disabled for the same action window. Current Flight completion and abandonment use their own shared non-queuing gate, preventing duplicate or cross-action terminal commands from running after the first action and overwriting its result.
+- Jobs uses persistent board/contracts/Fleet reservations, fail-closed dispatch readiness and the production start/completion/abandon authorities. Current ordinary production scope is Ferry/Reposition; the KJFK circuit is an explicit zero-pay/zero-progression Development/Test offer. An authoritative current-session panel exposes every current FlightSession and returns directly to Current Flight after restart or accidental navigation away; contract-linked career sessions retain their richer readiness detail, while practice/training and terminal-pending sessions still expose the recovery route. The shared acceptance input authority rejects another job before contract acceptance or aircraft reservation whenever any current/recovered FlightSession exists, including terminal state awaiting cleanup. Accept/start, calibration, accepted-job cancellation and aircraft selection share a published non-queuing mutation interlock, so rapid duplicate input cannot run stale work or change the displayed aircraft while an action remains bound to its original aircraft ID. Refresh and development-position inputs are disabled for the same action window. Current Flight completion and abandonment use their own shared non-queuing gate, preventing duplicate or cross-action terminal commands from running after the first action and overwriting its result. Completion also carries the exact FlightSession and contract identities reviewed by the UI into the application service; a changed ready flight is rejected before settlement, Logbook or terminal mutation and the action remains recoverable through refresh.
 - Completion orders FlightSession and contract completion before exactly-once SQLite settlement and Logbook commit, then experience/location markers, reservation release and terminal checkpoint cleanup. Replay is idempotent; automatic startup reconstruction after a crash midway through those steps remains open.
 - Exact-PC validation at `f2acb367` closed the first C172/KJFK full-stop loop, bounce capture, interrupted-session recovery, terminal finalization, facility isolation, Jobs picker stability and button readability gates. This evidence does not generalize to every aircraft, mission or accessibility state.
 
@@ -218,11 +218,11 @@ The accepted live result is deliberately narrow: stock C172, KJFK local Developm
 
 ## Next bounded work
 
-1. Bind the authoritative current canonical aircraft identity to the active FlightSession runtime and fail closed on a loaded-aircraft mismatch without deriving ownership or Airframe identity from TITLE.
-2. Add telemetry-derived touch-and-go/go-around/new-approach evidence with focused replay and later live validation.
-3. Persist/reconstruct terminal workflow intent so restart can resume safely between the existing exactly-once settlement, Logbook, experience/location, reservation-release and checkpoint-clear steps.
-4. Live-certify one ordinary compensated market-generated Ferry/Reposition route through the existing production authorities.
-5. Expand registry/capability/job breadth; do not rebuild the validated evidence, checkpoint, dispatch or settlement foundations.
+1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
+2. Live-validate the implemented aircraft-mismatch, touch-and-go/go-around, simulation-rate, night and actual-instrument paths on representative sessions; do not rebuild them.
+3. Expand registry capability/job breadth beyond the explicit type/family/powerplant-class foundation; Dashboard already projects authoritative eligible offers and must not add ranking/pay until those inputs exist.
+4. Extend checklist bindings only if a supported active-profile assignment authority becomes available; otherwise continue specialized-mission work through its prerequisites without parsing undocumented MSFS files or rebuilding completed foundations.
+5. Add later civilian qualifications only with their own authoritative mission definitions and completion requirements; never add UI-controlled qualification grants.
 
 Do **not** expand finance complexity before the playable flight foundation unless explicitly requested.
 
