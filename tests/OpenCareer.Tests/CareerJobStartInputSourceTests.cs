@@ -76,6 +76,40 @@ public sealed class CareerJobStartInputSourceTests
     }
 
     [Fact]
+    public async Task FlightSessionAppearingDuringAuthorityReadBlocksBeforeAcceptanceReadiness()
+    {
+        var flightSessions = new FlightSessionCoordinator();
+        var registry = new ChangingRegistry(
+            new FakeAircraftRegistrySource(),
+            () => flightSessions.Start(
+                Now,
+                contractId: Guid.NewGuid()));
+
+        TestFixture fixture =
+            CreateFixture(
+                contractTerms:
+                    [new FixedContractTermsSource()],
+                dispatchAuthorities:
+                    [new FixedDispatchAuthoritySource()],
+                registry:
+                    registry,
+                flightSessions:
+                    flightSessions);
+
+        CareerJobStartInputSnapshot snapshot =
+            await fixture.Source.ReadAsync(
+                fixture.Offer.OfferId,
+                "fixture-aircraft");
+
+        Assert.Equal(
+            CareerJobStartInputState.ActiveFlightSession,
+            snapshot.State);
+        Assert.Null(snapshot.Request);
+        Assert.NotNull(flightSessions.Current);
+        Assert.Equal(1, registry.Statuses.Count);
+    }
+
+    [Fact]
     public async Task MissingDispatchAuthorityFailsClosed()
     {
         TestFixture fixture =

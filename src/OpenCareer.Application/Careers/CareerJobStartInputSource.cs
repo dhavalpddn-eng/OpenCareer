@@ -239,20 +239,16 @@ public sealed class CareerJobStartInputSource
 
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftId);
 
-        if (_flightSessions?.Current is { } currentFlight)
-        {
-            return Blocked(
-                CareerJobStartInputState.ActiveFlightSession,
-                offerId,
-                currentFlight.ContractId is null
-                    ? "A FlightSession is already active. Complete or discard it on Current Flight before accepting another career job."
-                    : "A career FlightSession is already active or awaiting cleanup. Resume, complete, or abandon it on Current Flight before accepting another job.");
-        }
+        if (ReadActiveFlightBlock(offerId) is { } activeFlightBlock)
+            return activeFlightBlock;
 
         PlayerCareerProfileStoreRecord? careerRecord =
             await _career
                 .InitializeAsync(cancellationToken)
                 .ConfigureAwait(false);
+
+        if (ReadActiveFlightBlock(offerId) is { } careerFlightBlock)
+            return careerFlightBlock;
 
         if (careerRecord is null)
         {
@@ -274,6 +270,9 @@ public sealed class CareerJobStartInputSource
                     currentAirport,
                     cancellationToken)
                 .ConfigureAwait(false);
+
+        if (ReadActiveFlightBlock(offerId) is { } boardFlightBlock)
+            return boardFlightBlock;
 
         if (board is null)
         {
@@ -327,6 +326,9 @@ public sealed class CareerJobStartInputSource
                     cancellationToken)
                 .ConfigureAwait(false);
 
+        if (ReadActiveFlightBlock(offerId) is { } contractFlightBlock)
+            return contractFlightBlock;
+
         if (existing is not null)
         {
             existing.Validate();
@@ -369,6 +371,9 @@ public sealed class CareerJobStartInputSource
                     cancellationToken)
                 .ConfigureAwait(false);
 
+        if (ReadActiveFlightBlock(offerId) is { } termsFlightBlock)
+            return termsFlightBlock;
+
         if (terms is null)
         {
             return Blocked(
@@ -409,6 +414,9 @@ public sealed class CareerJobStartInputSource
                     cancellationToken)
                 .ConfigureAwait(false);
 
+        if (ReadActiveFlightBlock(offerId) is { } registryFlightBlock)
+            return registryFlightBlock;
+
         if (resolution is null
             || resolution.InstallationStatus
                 != AircraftInstallationStatus.Installed)
@@ -429,6 +437,9 @@ public sealed class CareerJobStartInputSource
                         resolution.CanonicalAircraftId,
                         cancellationToken)
                     .ConfigureAwait(false);
+
+            if (ReadActiveFlightBlock(offerId) is { } cruiseFlightBlock)
+                return cruiseFlightBlock;
 
             if (cruiseProfiles.Status != DispatchCruiseProfileCatalogStatus.Ready
                 || cruiseProfiles.Profiles.Count == 0)
@@ -467,6 +478,9 @@ public sealed class CareerJobStartInputSource
                     terms,
                     cancellationToken)
                 .ConfigureAwait(false);
+
+        if (ReadActiveFlightBlock(offerId) is { } authorityFlightBlock)
+            return authorityFlightBlock;
 
         if (dispatchAuthority is null)
         {
@@ -522,6 +536,9 @@ public sealed class CareerJobStartInputSource
                         cancellationToken)
                     .ConfigureAwait(false);
 
+            if (ReadActiveFlightBlock(offerId) is { } preparedFlightBlock)
+                return preparedFlightBlock;
+
             if (!prepared.IsReady
                 || prepared.Plan is not { } plan
                 || prepared.DispatchResult is not { } dispatch)
@@ -568,6 +585,9 @@ public sealed class CareerJobStartInputSource
                     dispatchRequirements,
                     cancellationToken)
                 .ConfigureAwait(false);
+
+        if (ReadActiveFlightBlock(offerId) is { } preflightFlightBlock)
+            return preflightFlightBlock;
 
         if (preflight.Status
             == DispatchFeasibilityStatus.Infeasible)
@@ -628,6 +648,20 @@ public sealed class CareerJobStartInputSource
                 : "Authoritative contract terms, selected aircraft, dispatch authority, and physical preflight are ready.",
             IsAcceptedContract:
                 existing?.Contract.Status == ContractStatus.Accepted);
+    }
+
+    private CareerJobStartInputSnapshot? ReadActiveFlightBlock(
+        Guid offerId)
+    {
+        if (_flightSessions?.Current is not { } currentFlight)
+            return null;
+
+        return Blocked(
+            CareerJobStartInputState.ActiveFlightSession,
+            offerId,
+            currentFlight.ContractId is null
+                ? "A FlightSession is already active. Complete or discard it on Current Flight before accepting another career job."
+                : "A career FlightSession is already active or awaiting cleanup. Resume, complete, or abandon it on Current Flight before accepting another job.");
     }
 
     private static string FormatPreflightIssues(
