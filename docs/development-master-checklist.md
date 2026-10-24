@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-24 through validated checkpoint `e451caf4` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-24 through validated checkpoint `c85d7e42` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -346,6 +346,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Restrict accepted-job preflight cancellation to an atomic persisted `Accepted` transition so stale Jobs or Dispatch state cannot cancel a contract after flight start.
 - [x] Recheck FlightSession ownership across automatic accepted/in-progress recovery authority reads; stop without contract or checkpoint mutation if another operation appears.
 - [x] Recheck FlightSession ownership across asynchronous career-job acceptance readiness reads; stop without producing an acceptance request if another operation appears.
+- [x] Reject retained same-contract FlightSessions whose explicit planned origin or destination contradicts the authoritative accepted job before contract/session mutation.
 - [x] Reject overlapping Current Flight completion and abandonment attempts instead of queueing duplicate or cross-action terminal commands that can overwrite a successful result with stale follow-up state.
 - [x] Bind career completion to the exact ready FlightSession and contract identities reviewed by Current Flight; reject a changed flight before settlement, Logbook or terminal mutation and preserve authoritative retry recovery.
 - [x] Recheck career-completion input identity after asynchronous authority reads; reproject one replacement and suppress actions with visible reopen guidance if sessions continue changing.
