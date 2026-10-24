@@ -279,6 +279,63 @@ public sealed class AcceptedJobFlightSessionBridgeTests
     }
 
     [Theory]
+    [InlineData(
+        "OpenCareer.StudentTraining",
+        "96000000-0000-0000-0000-000000000001")]
+    [InlineData(
+        "OpenCareer.JobContract",
+        "96000000-0000-0000-0000-000000000099")]
+    [InlineData(
+        "OpenCareer.JobContract",
+        null)]
+    [InlineData(
+        null,
+        "96000000-0000-0000-0000-000000000001")]
+    public async Task ContradictoryRecoveredSourceBlocksBeforeContractMutation(
+        string? sourceProvider,
+        string? sourceReference)
+    {
+        PersistedJobContract accepted = AcceptedContract();
+        var contractStore = new FakeContractStore(accepted);
+        var sessionStore = new MemorySessionStore();
+        var coordinator = new FlightSessionCoordinator();
+
+        coordinator.Restore(
+            FlightSession.Start(
+                OfferedAt.AddMinutes(20),
+                accepted.Contract.ContractId,
+                sessionId:
+                    Guid.NewGuid(),
+                plan:
+                    new FlightSessionPlan(
+                        "KRME",
+                        "KSYR",
+                        SourceProvider:
+                            sourceProvider,
+                        SourceReference:
+                            sourceReference,
+                        ExpectedCanonicalAircraftId:
+                            "canonical-aircraft")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreateBridge(
+                    contractStore,
+                    sessionStore,
+                    coordinator)
+                .StartAsync(
+                    DispatchResult(accepted),
+                    DispatchContext(
+                        OfferedAt.AddMinutes(20))));
+
+        Assert.Equal(
+            ContractStatus.Accepted,
+            contractStore.Current.Contract.Status);
+        Assert.Equal(0, contractStore.UpdateCount);
+        Assert.Equal(0, sessionStore.SaveCount);
+        Assert.NotNull(coordinator.Current);
+    }
+
+    [Theory]
     [InlineData("KJFK", "KSYR")]
     [InlineData("KRME", "KJFK")]
     public async Task ContradictoryRecoveredRouteBlocksBeforeContractMutation(

@@ -10,6 +10,9 @@ public sealed record StartedJobFlightSessionResult(
 
 public sealed class AcceptedJobFlightSessionBridge
 {
+    private const string JobContractSourceProvider =
+        "OpenCareer.JobContract";
+
     private readonly AcceptedJobStartBridge _contractStart;
     private readonly IJobContractStore _contractStore;
     private readonly FlightSessionPersistenceService _flightSessionPersistence;
@@ -128,7 +131,7 @@ public sealed class AcceptedJobFlightSessionBridge
                     PlannedDestination:
                         started.Contract.DestinationIcao,
                     SourceProvider:
-                        "OpenCareer.JobContract",
+                        JobContractSourceProvider,
                     SourceReference:
                         contractId.ToString("D"),
                     ExpectedCanonicalAircraftId:
@@ -184,6 +187,23 @@ public sealed class AcceptedJobFlightSessionBridge
         {
             throw new InvalidOperationException(
                 "A different active FlightSession already owns the simulator operation.");
+        }
+
+        if (current.Plan is { } retainedPlan
+            && (retainedPlan.SourceProvider is not null
+                || retainedPlan.SourceReference is not null)
+            && (!string.Equals(
+                    retainedPlan.SourceProvider,
+                    JobContractSourceProvider,
+                    StringComparison.Ordinal)
+                || !Guid.TryParse(
+                    retainedPlan.SourceReference,
+                    out Guid sourceContractId)
+                || sourceContractId
+                    != authoritativeContract.ContractId))
+        {
+            throw new InvalidOperationException(
+                "The active FlightSession source does not match the authoritative job contract.");
         }
 
         if (current.Plan?.ExpectedCanonicalAircraftId is { } retainedIdentity
