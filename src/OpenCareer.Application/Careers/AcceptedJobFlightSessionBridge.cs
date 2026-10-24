@@ -114,9 +114,33 @@ public sealed class AcceptedJobFlightSessionBridge
 
             if (current is not null)
             {
+                FlightSession latest =
+                    _flightSessionCoordinator.Current
+                    ?? throw new InvalidOperationException(
+                        "The active FlightSession changed while the job contract was starting. Recover or clear the current simulator operation before retrying.");
+
+                if (latest.SessionId
+                    != current.SessionId)
+                {
+                    throw new InvalidOperationException(
+                        "The active FlightSession changed while the job contract was starting. Recover or clear the current simulator operation before retrying.");
+                }
+
+                ValidateRetainedFlightSession(
+                    latest,
+                    started.Contract,
+                    expectedCanonicalAircraftId,
+                    context.Time);
+
                 return new(
                     started,
-                    current);
+                    latest);
+            }
+
+            if (_flightSessionCoordinator.Current is not null)
+            {
+                throw new InvalidOperationException(
+                    "A FlightSession appeared while the job contract was starting. Recover or clear the current simulator operation before retrying.");
             }
 
             DateTimeOffset startedAt =

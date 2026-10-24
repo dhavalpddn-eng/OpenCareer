@@ -164,6 +164,80 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         Assert.Equal(1, sessionStore.SaveCount);
     }
 
+    [Fact]
+    public async Task RecoveredSessionReplacementDuringContractStartIsRejected()
+    {
+        PersistedJobContract accepted = AcceptedContract();
+        var contractStore = new FakeContractStore(accepted);
+        var sessionStore = new MemorySessionStore();
+        var coordinator = new FlightSessionCoordinator();
+
+        FlightSession recovered =
+            FlightSession.Start(
+                OfferedAt.AddMinutes(20),
+                accepted.Contract.ContractId,
+                sessionId:
+                    Guid.Parse(
+                        "96000000-0000-0000-0000-000000000010"),
+                plan:
+                    new FlightSessionPlan(
+                        "KRME",
+                        "KSYR",
+                        SourceProvider:
+                            "OpenCareer.JobContract",
+                        SourceReference:
+                            accepted.Contract.ContractId.ToString("D"),
+                        ExpectedCanonicalAircraftId:
+                            "canonical-aircraft"));
+
+        coordinator.Restore(recovered);
+
+        Guid replacementSessionId =
+            Guid.Parse(
+                "96000000-0000-0000-0000-000000000099");
+
+        contractStore.AfterUpdate =
+            () =>
+            {
+                FlightSession cancelled =
+                    FlightSessionEngine.Advance(
+                        recovered,
+                        new FlightSessionAdvance(
+                            new FlightStateEvidence(
+                                OfferedAt.AddMinutes(21),
+                                Connected: false),
+                            CancelRequested: true));
+
+                coordinator.CommitPersisted(cancelled);
+                coordinator.Start(
+                    OfferedAt.AddMinutes(22),
+                    contractId:
+                        Guid.Parse(
+                            "96000000-0000-0000-0000-000000000098"),
+                    sessionId:
+                        replacementSessionId);
+            };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreateBridge(
+                    contractStore,
+                    sessionStore,
+                    coordinator)
+                .StartAsync(
+                    DispatchResult(accepted),
+                    DispatchContext(
+                        OfferedAt.AddMinutes(20))));
+
+        Assert.Equal(
+            ContractStatus.InProgress,
+            contractStore.Current.Contract.Status);
+        Assert.Equal(1, contractStore.UpdateCount);
+        Assert.Equal(0, sessionStore.SaveCount);
+        Assert.Equal(
+            replacementSessionId,
+            coordinator.Current?.SessionId);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -723,6 +797,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
 
         public int UpdateCount { get; private set; }
 
+        public Action? AfterUpdate { get; set; }
+
         public Task<PersistedJobContract?> ReadJobContractAsync(
             Guid contractId,
             CancellationToken cancellationToken = default)
@@ -761,6 +837,8 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                 new PersistedJobContract(
                     contract,
                     checked(expectedVersion + 1));
+
+            AfterUpdate?.Invoke();
 
             return Task.FromResult(
                 JobContractSaveResult.Updated);
