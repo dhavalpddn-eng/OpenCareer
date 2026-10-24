@@ -149,6 +149,8 @@ public sealed class JobAcceptanceFleetBridge
                             cancellationToken)
                         .ConfigureAwait(false);
 
+                EnsureNoFlightSessionOwnsThePlayableLoop();
+
                 return CreateResult(
                     reserved,
                     reservationId,

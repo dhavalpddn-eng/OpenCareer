@@ -119,6 +119,50 @@ public sealed class JobAcceptanceFleetBridgeTests
     }
 
     [Fact]
+    public async Task FlightSessionAppearingDuringAcceptanceRetainsRecoverableContractAndReservation()
+    {
+        JobContractCreationRequest request = Request();
+        var sessions = new FlightSessionCoordinator();
+        var contractStore = new FakeContractStore
+        {
+            AfterNextUpdate =
+                () => sessions.Start(
+                    request.AcceptanceTime,
+                    Guid.Parse(
+                        "97000000-0000-0000-0000-000000000097"))
+        };
+        var reservationStore = new StatefulReservationStore();
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => CreateBridge(
+                        contractStore,
+                        new FakeBoardStore(BoardWithOffer(request.Offer)),
+                        reservationStore,
+                        sessions)
+                    .AcceptAndReserveAsync(
+                        request,
+                        DispatchContext(request.AcceptanceTime)));
+
+        PersistedJobContract accepted =
+            Assert.IsType<PersistedJobContract>(
+                await contractStore.ReadJobContractAsync(
+                    request.Offer.OfferId));
+
+        Assert.Contains("FlightSession", error.Message);
+        Assert.Equal(ContractStatus.Accepted, accepted.Contract.Status);
+        Assert.Equal(1, contractStore.CreateCount);
+        Assert.Equal(1, contractStore.UpdateCount);
+        Assert.Equal(1, reservationStore.AcquiredCount);
+        Assert.Equal(0, reservationStore.ReleaseCount);
+        Assert.Equal(
+            JobAcceptanceFleetBridge.GetReservationId(
+                request.Offer.OfferId),
+            reservationStore.State?.ReservationId);
+        Assert.NotNull(sessions.Current);
+    }
+
+    [Fact]
     public async Task ReplayAfterBridgeRecreationReusesReservationWithoutDuplicateAcquire()
     {
         JobContractCreationRequest request = Request();
@@ -886,6 +930,7 @@ public sealed class JobAcceptanceFleetBridgeTests
         public int CreateCount { get; private set; }
         public int UpdateCount { get; private set; }
         public Action? BeforeNextRead { get; set; }
+        public Action? AfterNextUpdate { get; set; }
 
         public Task<PersistedJobContract?> ReadJobContractAsync(
             Guid contractId,
@@ -964,6 +1009,10 @@ public sealed class JobAcceptanceFleetBridgeTests
                 new PersistedJobContract(
                     contract,
                     checked(expectedVersion + 1));
+
+            Action? afterUpdate = AfterNextUpdate;
+            AfterNextUpdate = null;
+            afterUpdate?.Invoke();
 
             return Task.FromResult(
                 JobContractSaveResult.Updated);
