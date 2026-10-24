@@ -680,6 +680,29 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
+    public void CurrentFlightContractlessRecoveryExplainsActiveCancellationAndNoCredit()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
+        string page = File.ReadAllText(
+            Path.Combine(directory, "CurrentFlightPage.xaml"));
+        string code = File.ReadAllText(
+            Path.Combine(directory, "CurrentFlightPage.xaml.cs"));
+
+        Assert.Contains(
+            "Review, log, or discard this contractless flight",
+            page,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "If this practice or training flight is active, OpenCareer cancels it first",
+            code,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "No Logbook entry, experience, qualification, or other progression credit is granted",
+            code,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void JobsPeriodicRefreshStopsAndSurfacesUnexpectedFailures()
     {
         string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");

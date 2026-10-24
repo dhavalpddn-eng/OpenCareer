@@ -357,14 +357,15 @@ public sealed class FlightSessionPersistenceService
 
     public async Task<FlightSession> CancelAsync(
         Guid expectedSessionId,
-        Guid expectedContractId,
+        Guid? expectedContractId,
         DateTimeOffset requestedAt,
         CancellationToken cancellationToken = default)
     {
         if (expectedSessionId == Guid.Empty)
             throw new ArgumentException("Session ID is required.", nameof(expectedSessionId));
 
-        if (expectedContractId == Guid.Empty)
+        if (expectedContractId is { } contractId
+            && contractId == Guid.Empty)
             throw new ArgumentException("Contract ID is required.", nameof(expectedContractId));
 
         await _mutationGate
@@ -597,7 +598,7 @@ public sealed class FlightSessionPersistenceService
             || current.ContractId != expectedContractId)
         {
             throw new InvalidOperationException(
-                "Current FlightSession identity does not match the requested career-flight operation.");
+                "Current FlightSession identity does not match the requested cancellation operation.");
         }
     }
 

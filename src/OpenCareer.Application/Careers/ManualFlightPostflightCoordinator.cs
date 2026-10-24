@@ -21,6 +21,7 @@ public sealed class ManualFlightPostflightCoordinator
     private readonly LogbookCommitCoordinator _logbook;
     private readonly ILogbookIdempotencySource _logbookLookup;
     private readonly PlayerCareerExperienceCoordinator _experience;
+    private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public ManualFlightPostflightCoordinator(
@@ -28,13 +29,15 @@ public sealed class ManualFlightPostflightCoordinator
         FlightSessionPersistenceService persistence,
         LogbookCommitCoordinator logbook,
         ILogbookIdempotencySource logbookLookup,
-        PlayerCareerExperienceCoordinator experience)
+        PlayerCareerExperienceCoordinator experience,
+        TimeProvider? timeProvider = null)
     {
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
         _logbook = logbook ?? throw new ArgumentNullException(nameof(logbook));
         _logbookLookup = logbookLookup ?? throw new ArgumentNullException(nameof(logbookLookup));
         _experience = experience ?? throw new ArgumentNullException(nameof(experience));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<ManualFlightPostflightLogResult> LogAsync(
@@ -99,7 +102,27 @@ public sealed class ManualFlightPostflightCoordinator
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            FlightSession session = RequireTerminalManualSession();
+            FlightSession session = RequireManualSession();
+
+            if (!session.IsTerminal)
+            {
+                session = await _persistence
+                    .CancelAsync(
+                        session.SessionId,
+                        expectedContractId: null,
+                        _timeProvider.GetUtcNow(),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (session.Status != FlightSessionStatus.Cancelled
+                    || session.OperationState != FlightOperationState.Cancelled
+                    || session.ContractId is not null)
+                {
+                    throw new InvalidOperationException(
+                        "Contractless FlightSession cancellation did not preserve the expected terminal state.");
+                }
+            }
+
             await _persistence.ClearTerminalAsync(
                     session.SessionId,
                     expectedContractId: null,
@@ -129,14 +152,21 @@ public sealed class ManualFlightPostflightCoordinator
 
     private FlightSession RequireTerminalManualSession()
     {
-        FlightSession session = _sessions.Current
-            ?? throw new InvalidOperationException("No FlightSession exists for manual postflight processing.");
-
-        if (session.ContractId is not null)
-            throw new InvalidOperationException("Contract-linked FlightSessions cannot use manual postflight processing.");
+        FlightSession session = RequireManualSession();
 
         if (!session.IsTerminal)
             throw new InvalidOperationException("Manual flight discard requires a terminal FlightSession.");
+
+        return session;
+    }
+
+    private FlightSession RequireManualSession()
+    {
+        FlightSession session = _sessions.Current
+            ?? throw new InvalidOperationException("No FlightSession exists for manual flight processing.");
+
+        if (session.ContractId is not null)
+            throw new InvalidOperationException("Contract-linked FlightSessions cannot use manual flight processing.");
 
         return session;
     }

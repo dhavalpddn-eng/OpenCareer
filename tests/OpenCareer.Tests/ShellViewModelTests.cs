@@ -490,7 +490,7 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
-    public async Task ManualPostflightControlsStayHiddenForNonApplicableFlight()
+    public async Task ActiveManualFlightExposesDiscardOnlyRecovery()
     {
         var action = new FakeManualPostflightAction
         {
@@ -500,10 +500,13 @@ public sealed class ShellViewModelTests
 
         await viewModel.RefreshManualPostflightAsync();
 
-        Assert.False(viewModel.IsManualPostflightVisible);
+        Assert.True(viewModel.IsManualPostflightVisible);
         Assert.False(viewModel.CanLogManualFlight);
-        Assert.False(viewModel.CanDiscardManualFlight);
-        Assert.Equal(0, action.LogCount + action.DiscardCount);
+        Assert.True(viewModel.CanDiscardManualFlight);
+
+        Assert.True(await viewModel.DiscardManualFlightAsync());
+        Assert.Equal(1, action.DiscardCount);
+        Assert.False(viewModel.IsManualPostflightVisible);
     }
 
     [Theory]

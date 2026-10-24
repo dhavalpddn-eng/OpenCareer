@@ -977,7 +977,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             SetBoolean(ref _canDiscardManualFlight, false, nameof(CanDiscardManualFlight));
             SetField(
                 ref _manualPostflightDetail,
-                logFlight ? "Logging the authoritative completed flight…" : "Discarding the completed flight without Logbook or experience credit…",
+                logFlight ? "Logging the authoritative completed flight…" : "Discarding the contractless flight without Logbook, experience, or qualification credit…",
                 nameof(ManualPostflightDetail));
 
             if (logFlight)
@@ -1027,6 +1027,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         bool visible = snapshot.State is
             ManualFlightPostflightInputState.Ready or
+            ManualFlightPostflightInputState.FlightNotCompleted or
             ManualFlightPostflightInputState.FlightNotLoggable or
             ManualFlightPostflightInputState.AircraftIdentityUnavailable or
             ManualFlightPostflightInputState.AircraftIdentityConflict or

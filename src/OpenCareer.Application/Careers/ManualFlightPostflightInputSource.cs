@@ -34,6 +34,7 @@ public sealed record ManualFlightPostflightInputSnapshot(
         SessionId is not null
         && State is (
             ManualFlightPostflightInputState.Ready
+            or ManualFlightPostflightInputState.FlightNotCompleted
             or ManualFlightPostflightInputState.FlightNotLoggable
             or ManualFlightPostflightInputState.AircraftIdentityUnavailable
             or ManualFlightPostflightInputState.AircraftIdentityConflict
@@ -71,7 +72,10 @@ public sealed class ManualFlightPostflightInputSource
             return Blocked(ManualFlightPostflightInputState.ContractLinked, session.SessionId, "Contract-linked FlightSessions cannot use manual postflight logging.");
 
         if (!session.IsTerminal)
-            return Blocked(ManualFlightPostflightInputState.FlightNotCompleted, session.SessionId, "The FlightSession has not reached a terminal state.");
+            return Blocked(
+                ManualFlightPostflightInputState.FlightNotCompleted,
+                session.SessionId,
+                "This contractless flight is still active. It can be discarded without Logbook, experience, or qualification credit so another flight can start.");
 
         if (session.Status != FlightSessionStatus.Completed
             || session.OperationState != FlightOperationState.Complete

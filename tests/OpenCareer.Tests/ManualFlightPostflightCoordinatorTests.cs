@@ -93,18 +93,36 @@ public sealed class ManualFlightPostflightCoordinatorTests
     }
 
     [Fact]
-    public async Task ContractLinkedAndActiveSessionsFailClosed()
+    public async Task ActiveManualSessionIsCancelledThenDiscardedWithoutCredit()
+    {
+        Fixture fixture = Fixture.Create(
+            completed: false,
+            now: Epoch.AddMinutes(20));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.Subject.LogAsync(Request()));
+        await fixture.Subject.DiscardAsync();
+
+        Assert.Equal(0, fixture.Logbook.AppendCount);
+        Assert.Equal(0, fixture.Profiles.SaveCount);
+        Assert.Null(fixture.Sessions.Current);
+        Assert.Equal(1, fixture.Checkpoints.SaveCount);
+        Assert.Equal(1, fixture.Checkpoints.ClearCount);
+        Assert.Equal(FlightSessionStatus.Cancelled, fixture.Checkpoints.LastSaved?.Status);
+        Assert.Equal(FlightOperationState.Cancelled, fixture.Checkpoints.LastSaved?.OperationState);
+        Assert.Equal(Epoch.AddMinutes(20), fixture.Checkpoints.LastSaved?.UpdatedAt);
+        Assert.Null(fixture.Checkpoints.LastSaved?.ContractId);
+    }
+
+    [Fact]
+    public async Task ContractLinkedSessionFailsClosed()
     {
         Fixture contract = Fixture.Create(contractId: Guid.NewGuid());
         await Assert.ThrowsAsync<InvalidOperationException>(() => contract.Subject.LogAsync(Request()));
         await Assert.ThrowsAsync<InvalidOperationException>(() => contract.Subject.DiscardAsync());
 
-        Fixture active = Fixture.Create(completed: false);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => active.Subject.LogAsync(Request()));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => active.Subject.DiscardAsync());
-
-        Assert.Equal(0, contract.Logbook.AppendCount + active.Logbook.AppendCount);
-        Assert.Equal(0, contract.Checkpoints.ClearCount + active.Checkpoints.ClearCount);
+        Assert.Equal(0, contract.Logbook.AppendCount);
+        Assert.Equal(0, contract.Checkpoints.ClearCount);
     }
 
     private static ManualFlightPostflightLogRequest Request() =>
@@ -164,7 +182,8 @@ public sealed class ManualFlightPostflightCoordinatorTests
         public static Fixture Create(
             Guid? contractId = null,
             bool completed = true,
-            bool interrupted = false)
+            bool interrupted = false,
+            DateTimeOffset? now = null)
         {
             FlightSession session = FlightSession.Start(Epoch, contractId, plan: new("KORD", "KMSN"));
             if (interrupted)
@@ -203,7 +222,8 @@ public sealed class ManualFlightPostflightCoordinatorTests
                 persistence,
                 new LogbookCommitCoordinator(logbook),
                 logbook,
-                experience);
+                experience,
+                new FixedTimeProvider(now ?? Epoch.AddHours(2)));
             return new(subject, sessions, checkpoints, logbook, profiles);
         }
     }
@@ -236,8 +256,16 @@ public sealed class ManualFlightPostflightCoordinatorTests
     {
         private FlightSession? _session = session;
         public int ClearCount { get; private set; }
+        public int SaveCount { get; private set; }
+        public FlightSession? LastSaved { get; private set; }
         public bool FailNextClear { get; set; }
-        public Task SaveAsync(FlightSession value, CancellationToken cancellationToken = default) { _session = value; return Task.CompletedTask; }
+        public Task SaveAsync(FlightSession value, CancellationToken cancellationToken = default)
+        {
+            _session = value;
+            LastSaved = value;
+            SaveCount++;
+            return Task.CompletedTask;
+        }
         public Task<FlightSession?> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session);
         public Task ClearAsync(CancellationToken cancellationToken = default)
         {
@@ -246,6 +274,11 @@ public sealed class ManualFlightPostflightCoordinatorTests
             ClearCount++;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class FakeProfileStore : IPlayerCareerProfileStore

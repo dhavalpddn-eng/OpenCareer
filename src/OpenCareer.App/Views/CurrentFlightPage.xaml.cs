@@ -273,8 +273,8 @@ public sealed partial class CurrentFlightPage : Page
         var confirmation = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = "Discard Terminal Flight?",
-            Content = "This removes the terminal flight checkpoint without creating a Logbook entry or applying experience. This cannot be undone.",
+            Title = "Discard Contractless Flight?",
+            Content = "If this practice or training flight is active, OpenCareer cancels it first, then removes its checkpoint. No Logbook entry, experience, qualification, or other progression credit is granted. This cannot be undone.",
             PrimaryButtonText = "Discard Flight",
             CloseButtonText = "Keep Flight",
             DefaultButton = ContentDialogButton.Close

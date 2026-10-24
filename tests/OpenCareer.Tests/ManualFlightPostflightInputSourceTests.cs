@@ -38,7 +38,7 @@ public sealed class ManualFlightPostflightInputSourceTests
     }
 
     [Fact]
-    public async Task ActiveSessionIsBlockedWithoutRegistryRead()
+    public async Task ActiveSessionExposesDiscardOnlyWithoutRegistryRead()
     {
         var registry = new FakeRegistry(Resolution("Test Aircraft"));
         ManualFlightPostflightInputSource source = CreateSource(FlightSession.Start(Epoch), Identified(), registry);
@@ -47,7 +47,9 @@ public sealed class ManualFlightPostflightInputSourceTests
 
         Assert.Equal(ManualFlightPostflightInputState.FlightNotCompleted, snapshot.State);
         Assert.False(snapshot.IsReady);
+        Assert.True(snapshot.CanDiscard);
         Assert.Null(snapshot.Request);
+        Assert.Contains("still active", snapshot.Detail, StringComparison.Ordinal);
         Assert.Equal(0, registry.ReadCount);
     }
 
