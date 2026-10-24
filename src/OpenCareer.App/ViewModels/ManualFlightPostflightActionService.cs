@@ -8,10 +8,13 @@ public interface IManualFlightPostflightAction
         CancellationToken cancellationToken = default);
 
     Task LogAsync(
+        Guid expectedSessionId,
         ManualFlightPostflightLogRequest request,
         CancellationToken cancellationToken = default);
 
-    Task DiscardAsync(CancellationToken cancellationToken = default);
+    Task DiscardAsync(
+        Guid expectedSessionId,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class ManualFlightPostflightActionService(
@@ -30,13 +33,18 @@ public sealed class ManualFlightPostflightActionService(
         _inputSource.ReadCurrentAsync(DateTimeOffset.UtcNow, cancellationToken);
 
     public async Task LogAsync(
+        Guid expectedSessionId,
         ManualFlightPostflightLogRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await _coordinator.LogAsync(request, cancellationToken).ConfigureAwait(false);
+        await _coordinator
+            .LogAsync(expectedSessionId, request, cancellationToken)
+            .ConfigureAwait(false);
     }
 
-    public Task DiscardAsync(CancellationToken cancellationToken = default) =>
-        _coordinator.DiscardAsync(cancellationToken);
+    public Task DiscardAsync(
+        Guid expectedSessionId,
+        CancellationToken cancellationToken = default) =>
+        _coordinator.DiscardAsync(expectedSessionId, cancellationToken);
 }

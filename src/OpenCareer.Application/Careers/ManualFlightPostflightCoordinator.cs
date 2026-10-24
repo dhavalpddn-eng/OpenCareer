@@ -41,16 +41,18 @@ public sealed class ManualFlightPostflightCoordinator
     }
 
     public async Task<ManualFlightPostflightLogResult> LogAsync(
+        Guid expectedSessionId,
         ManualFlightPostflightLogRequest request,
         CancellationToken cancellationToken = default)
     {
+        ValidateExpectedSessionId(expectedSessionId);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.DebriefContext);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            FlightSession session = RequireCompletedManualSession();
+            FlightSession session = RequireCompletedManualSession(expectedSessionId);
             ValidateManualContext(request.DebriefContext);
             FlightDebrief debrief = FlightSessionDebriefProjector.Create(
                 session,
@@ -97,12 +99,16 @@ public sealed class ManualFlightPostflightCoordinator
         }
     }
 
-    public async Task DiscardAsync(CancellationToken cancellationToken = default)
+    public async Task DiscardAsync(
+        Guid expectedSessionId,
+        CancellationToken cancellationToken = default)
     {
+        ValidateExpectedSessionId(expectedSessionId);
+
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            FlightSession session = RequireManualSession();
+            FlightSession session = RequireManualSession(expectedSessionId);
 
             if (!session.IsTerminal)
             {
@@ -135,9 +141,9 @@ public sealed class ManualFlightPostflightCoordinator
         }
     }
 
-    private FlightSession RequireCompletedManualSession()
+    private FlightSession RequireCompletedManualSession(Guid expectedSessionId)
     {
-        FlightSession session = RequireTerminalManualSession();
+        FlightSession session = RequireTerminalManualSession(expectedSessionId);
 
         if (session.Status != FlightSessionStatus.Completed
             || session.OperationState != FlightOperationState.Complete
@@ -150,9 +156,9 @@ public sealed class ManualFlightPostflightCoordinator
         return session;
     }
 
-    private FlightSession RequireTerminalManualSession()
+    private FlightSession RequireTerminalManualSession(Guid expectedSessionId)
     {
-        FlightSession session = RequireManualSession();
+        FlightSession session = RequireManualSession(expectedSessionId);
 
         if (!session.IsTerminal)
             throw new InvalidOperationException("Manual flight discard requires a terminal FlightSession.");
@@ -160,15 +166,31 @@ public sealed class ManualFlightPostflightCoordinator
         return session;
     }
 
-    private FlightSession RequireManualSession()
+    private FlightSession RequireManualSession(Guid expectedSessionId)
     {
         FlightSession session = _sessions.Current
             ?? throw new InvalidOperationException("No FlightSession exists for manual flight processing.");
+
+        if (session.SessionId != expectedSessionId)
+        {
+            throw new InvalidOperationException(
+                "Current FlightSession identity changed after manual flight readiness was reviewed.");
+        }
 
         if (session.ContractId is not null)
             throw new InvalidOperationException("Contract-linked FlightSessions cannot use manual flight processing.");
 
         return session;
+    }
+
+    private static void ValidateExpectedSessionId(Guid expectedSessionId)
+    {
+        if (expectedSessionId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Expected FlightSession ID is required.",
+                nameof(expectedSessionId));
+        }
     }
 
     private static void ValidateManualContext(FlightSessionDebriefContext context)

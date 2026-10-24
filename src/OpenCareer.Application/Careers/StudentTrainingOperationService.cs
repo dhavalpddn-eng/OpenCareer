@@ -398,6 +398,7 @@ public sealed class StudentTrainingOperationService
 
                 ManualFlightPostflightLogResult result = await _postflight
                     .LogAsync(
+                        session.SessionId,
                         new(context, committedAt, committedAt),
                         cancellationToken)
                     .ConfigureAwait(false);

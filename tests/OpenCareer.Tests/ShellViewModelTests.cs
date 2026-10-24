@@ -492,9 +492,12 @@ public sealed class ShellViewModelTests
     [Fact]
     public async Task ActiveManualFlightExposesDiscardOnlyRecovery()
     {
+        Guid sessionId = Guid.NewGuid();
         var action = new FakeManualPostflightAction
         {
-            Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.FlightNotCompleted)
+            Snapshot = BlockedManualSnapshot(
+                ManualFlightPostflightInputState.FlightNotCompleted,
+                sessionId)
         };
         ShellViewModel viewModel = ManualViewModel(action);
 
@@ -506,6 +509,7 @@ public sealed class ShellViewModelTests
 
         Assert.True(await viewModel.DiscardManualFlightAsync());
         Assert.Equal(1, action.DiscardCount);
+        Assert.Equal(sessionId, action.LastSessionId);
         Assert.False(viewModel.IsManualPostflightVisible);
     }
 
@@ -517,9 +521,10 @@ public sealed class ShellViewModelTests
     public async Task TerminalManualFlightWithoutLogEvidenceExposesDiscardOnly(
         ManualFlightPostflightInputState state)
     {
+        Guid sessionId = Guid.NewGuid();
         var action = new FakeManualPostflightAction
         {
-            Snapshot = BlockedManualSnapshot(state)
+            Snapshot = BlockedManualSnapshot(state, sessionId)
         };
         ShellViewModel viewModel = ManualViewModel(action);
 
@@ -531,14 +536,19 @@ public sealed class ShellViewModelTests
 
         Assert.True(await viewModel.DiscardManualFlightAsync());
         Assert.Equal(1, action.DiscardCount);
+        Assert.Equal(sessionId, action.LastSessionId);
         Assert.False(viewModel.IsManualPostflightVisible);
     }
 
     [Fact]
     public async Task ManualLogUsesExactReadyRequestOnceAndClearsUi()
     {
+        Guid sessionId = Guid.NewGuid();
         ManualFlightPostflightLogRequest request = ManualRequest();
-        var action = new FakeManualPostflightAction { Snapshot = ReadyManualSnapshot(request) };
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = ReadyManualSnapshot(request, sessionId)
+        };
         ShellViewModel viewModel = ManualViewModel(action);
         await viewModel.RefreshManualPostflightAsync();
 
@@ -550,6 +560,7 @@ public sealed class ShellViewModelTests
 
         Assert.Equal(1, action.LogCount);
         Assert.Same(request, action.LastRequest);
+        Assert.Equal(sessionId, action.LastSessionId);
         Assert.False(viewModel.IsManualPostflightVisible);
         Assert.False(viewModel.CanLogManualFlight);
     }
@@ -623,12 +634,14 @@ public sealed class ShellViewModelTests
             DateTimeOffset.UtcNow);
 
     private static ManualFlightPostflightInputSnapshot ReadyManualSnapshot(
-        ManualFlightPostflightLogRequest request) =>
-        new(ManualFlightPostflightInputState.Ready, Guid.NewGuid(), request, "Ready.");
+        ManualFlightPostflightLogRequest request,
+        Guid? sessionId = null) =>
+        new(ManualFlightPostflightInputState.Ready, sessionId ?? Guid.NewGuid(), request, "Ready.");
 
     private static ManualFlightPostflightInputSnapshot BlockedManualSnapshot(
-        ManualFlightPostflightInputState state) =>
-        new(state, Guid.NewGuid(), null, "Blocked.");
+        ManualFlightPostflightInputState state,
+        Guid? sessionId = null) =>
+        new(state, sessionId ?? Guid.NewGuid(), null, "Blocked.");
 
     [Fact]
     public void MissingRuntimeIsDistinguishedFromWaitingForSimulator()
@@ -802,6 +815,7 @@ public sealed class ShellViewModelTests
         public int LogCount { get; private set; }
         public int DiscardCount { get; private set; }
         public bool FailNextLog { get; set; }
+        public Guid? LastSessionId { get; private set; }
         public ManualFlightPostflightLogRequest? LastRequest { get; private set; }
 
         public Task<ManualFlightPostflightInputSnapshot> ReadAsync(
@@ -809,10 +823,12 @@ public sealed class ShellViewModelTests
             Task.FromResult(Snapshot);
 
         public Task LogAsync(
+            Guid expectedSessionId,
             ManualFlightPostflightLogRequest request,
             CancellationToken cancellationToken = default)
         {
             LogCount++;
+            LastSessionId = expectedSessionId;
             LastRequest = request;
             if (FailNextLog)
             {
@@ -824,9 +840,12 @@ public sealed class ShellViewModelTests
             return Task.CompletedTask;
         }
 
-        public Task DiscardAsync(CancellationToken cancellationToken = default)
+        public Task DiscardAsync(
+            Guid expectedSessionId,
+            CancellationToken cancellationToken = default)
         {
             DiscardCount++;
+            LastSessionId = expectedSessionId;
             Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.NoFlightSession);
             return Task.CompletedTask;
         }

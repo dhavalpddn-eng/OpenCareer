@@ -79,6 +79,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private bool _isManualPostflightBusy;
     private string _manualPostflightDetail =
         "Manual postflight readiness has not been checked yet.";
+    private Guid? _manualPostflightSessionId;
     private ManualFlightPostflightLogRequest? _manualPostflightRequest;
     private bool _isCurrentFlightChecklistVisible;
     private string _currentFlightChecklistPhase = "NO ACTIVE CHECKLIST";
@@ -922,7 +923,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         if (_manualPostflightAction is null)
         {
-            SetManualPostflightState(false, false, null, "Manual postflight actions are not connected to this view.");
+            SetManualPostflightState(false, false, null, null, "Manual postflight actions are not connected to this view.");
             return;
         }
 
@@ -940,7 +941,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Manual postflight readiness refresh failed.");
-            SetManualPostflightState(false, false, null, "Manual postflight readiness could not be verified.");
+            SetManualPostflightState(false, false, null, null, "Manual postflight readiness could not be verified.");
         }
         finally
         {
@@ -967,8 +968,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         try
         {
+            Guid? sessionId = _manualPostflightSessionId;
             ManualFlightPostflightLogRequest? request = _manualPostflightRequest;
-            if ((logFlight && request is null)
+            if (sessionId is null
+                || (logFlight && request is null)
                 || (!logFlight && !_canDiscardManualFlight))
                 return false;
 
@@ -981,9 +984,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 nameof(ManualPostflightDetail));
 
             if (logFlight)
-                await _manualPostflightAction.LogAsync(request!, cancellationToken);
+                await _manualPostflightAction.LogAsync(sessionId.Value, request!, cancellationToken);
             else
-                await _manualPostflightAction.DiscardAsync(cancellationToken);
+                await _manualPostflightAction.DiscardAsync(sessionId.Value, cancellationToken);
 
             RefreshConnectionStatus();
             await RefreshManualPostflightLockedAsync(cancellationToken);
@@ -1004,7 +1007,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             catch (Exception refreshEx)
             {
                 _logger?.LogWarning(refreshEx, "Manual postflight readiness could not be refreshed after a failed action.");
-                SetManualPostflightState(false, false, null, "Manual postflight readiness could not be verified after the failed action.");
+                SetManualPostflightState(false, false, null, null, "Manual postflight readiness could not be verified after the failed action.");
             }
 
             SetField(
@@ -1037,6 +1040,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         SetManualPostflightState(
             snapshot.IsReady,
             snapshot.CanDiscard,
+            snapshot.SessionId,
             snapshot.Request,
             snapshot.Detail);
     }
@@ -1044,9 +1048,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private void SetManualPostflightState(
         bool canLog,
         bool canDiscard,
+        Guid? sessionId,
         ManualFlightPostflightLogRequest? request,
         string detail)
     {
+        _manualPostflightSessionId =
+            canLog || canDiscard
+                ? sessionId
+                : null;
         _manualPostflightRequest = request;
         SetBoolean(ref _canLogManualFlight, canLog, nameof(CanLogManualFlight));
         SetBoolean(ref _canDiscardManualFlight, canDiscard, nameof(CanDiscardManualFlight));
