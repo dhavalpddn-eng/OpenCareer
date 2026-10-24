@@ -4,12 +4,12 @@
 
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/playable-loop-integration`
-**Validated code baseline:** `c85d7e4285a86c47fa52d4ee1e1c8a7d19a85252`; keep `main` stable.
+**Validated code baseline:** `2d92070624ab3387ccebd680b669c709b9244378`; keep `main` stable.
 **Master build list:** `docs/master-build-list.md` — active unfinished major systems sorted low-to-high by estimated remaining engineering effort; stable `MBL-xx` IDs remain unchanged; remove items only when fully implemented, integrated, tested and accepted.  
 **Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
 **Parallel military branch:** `feature/military-conflict-system`, draft PR #10 -> `feature/m1-simulation-core`; campaign core is complete. Deterministic ground/air conflict, current military mission families, authorization, fictional theater generation, SQLite campaign/mission recovery, strategic phase/momentum/objectives, persisted threat outcomes, dispatch authorization, Military/Government UI projection, production mission-service consequence wiring, phase-driven faction-posture evolution and the operation-resolution/consequence engine are implemented. Consequences persist in SQLite schema v5 with restart-safe duplicate protection, rollback/retry safety and reconnect replay protection. Verified head `16cda14981bc6284e4f33833e88aa8289ff46149` is green in exact-head Linux PR CI and exact-head Windows CI, including the bounded 96-step deterministic campaign stress test. No next standalone campaign slice: remaining MBL-19 work is blocked on MBL-13, MBL-08/09, MBL-10/14 and MBL-06/07 + local MSFS validation.
 **CI policy:** repo is public; standard Linux/Windows hosted runners are active. Feature pushes do not duplicate PR CI; docs-only updates are excluded from full builds; changed-file gates prevent cumulative PR diffs from forcing irrelevant validation. Relevant WinUI changes get Windows validation during the draft PR.  
-**Exact-head verification:** Linux build #1112 and Windows `winui-build` #1045 passed at `c85d7e42` on the first attempt. Exact-PC validation remains the C172/KJFK SimConnect identity path, takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, terminal settlement/finalization, contained facility failures, Jobs picker stability and shared button readability. The ordinary Passenger and accepted named-cargo authority paths are CI-certified but not yet live-certified in MSFS.
+**Exact-head verification:** Linux build #1114 and Windows `winui-build` #1047 passed at `2d920706` on the first attempt. Exact-PC validation remains the C172/KJFK SimConnect identity path, takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, terminal settlement/finalization, contained facility failures, Jobs picker stability and shared button readability. The ordinary Passenger and accepted named-cargo authority paths are CI-certified but not yet live-certified in MSFS.
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
 
@@ -191,6 +191,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `c85d7e4285a86c47fa52d4ee1e1c8a7d19a85252`.
 - Accepted-job start/recovery now rejects a retained same-contract FlightSession when its explicit origin or destination contradicts the authoritative contract. Rejection occurs before an Accepted contract transitions or a session checkpoint is written; absent legacy plan fields remain backward-compatible.
 - Verification: exact-head Linux build #1112 and Windows `winui-build` #1045 passed on the first attempt, including WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite. Local test execution was unavailable because this runner had no .NET CLI.
+- Code checkpoint: `2d92070624ab3387ccebd680b669c709b9244378`.
+- Accepted-job start/recovery now also rejects a retained same-contract FlightSession whose creation time contradicts the accepted start context or authoritative in-progress contract start time. An Accepted mismatch fails before contract transition, and an InProgress mismatch performs no contract or checkpoint write.
+- Verification: exact-head Linux build #1114 and Windows `winui-build` #1047 passed on the first attempt, including WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite. Local test execution was unavailable because this runner had no .NET CLI.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
