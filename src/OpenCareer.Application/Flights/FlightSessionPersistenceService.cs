@@ -47,10 +47,10 @@ public sealed class FlightSessionPersistenceService
 
         try
         {
-            if (_coordinator.Current is { IsTerminal: false })
+            if (_coordinator.Current is not null)
             {
                 throw new InvalidOperationException(
-                    "An active flight session already exists.");
+                    "The current flight session must be cleared before a new session can start.");
             }
 
             FlightSession session =

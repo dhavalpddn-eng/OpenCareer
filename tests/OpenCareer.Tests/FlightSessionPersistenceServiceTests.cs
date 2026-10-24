@@ -49,6 +49,44 @@ public sealed class FlightSessionPersistenceServiceTests
     }
 
     [Fact]
+    public async Task StartPreservesTerminalCheckpointUntilExplicitCleanup()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        var store = new MemoryStore();
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        FlightSession started =
+            await service.StartAsync(
+                Epoch,
+                sessionId:
+                    Guid.Parse(
+                        "33333333-3333-3333-3333-333333333333"));
+
+        FlightSession cancelled =
+            await service.CancelAsync(
+                started.SessionId,
+                expectedContractId: null,
+                requestedAt: Epoch.AddSeconds(1));
+        int saveCount = store.SaveCount;
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.StartAsync(
+                    Epoch.AddSeconds(2),
+                    sessionId:
+                        Guid.Parse(
+                            "44444444-4444-4444-4444-444444444444")));
+
+        Assert.Contains("cleared", error.Message);
+        Assert.Equal(cancelled, coordinator.Current);
+        Assert.Equal(cancelled, store.Checkpoint);
+        Assert.Equal(saveCount, store.SaveCount);
+    }
+
+    [Fact]
     public async Task FailedCheckpointWriteDoesNotAdvanceInMemorySession()
     {
         var coordinator =
