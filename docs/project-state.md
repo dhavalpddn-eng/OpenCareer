@@ -2,14 +2,14 @@
 
 **Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
 
-Updated: 2026-10-24 against validated integration code head `2d92070624ab3387ccebd680b669c709b9244378`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
+Updated: 2026-10-24 against validated integration code head `fa43e3926e58d276d01e1da5a9ca0d8a93c8761f`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/playable-loop-integration`. Keep `main` stable.
-- Validated implementation baseline: `2d92070624ab3387ccebd680b669c709b9244378`.
-- Exact-head Linux build #1114 and Windows `winui-build` #1047 passed on the first attempt.
+- Validated implementation baseline: `fa43e3926e58d276d01e1da5a9ca0d8a93c8761f`.
+- Exact-head Linux build #1116 and Windows `winui-build` #1049 passed on the first attempt.
 - Exact-PC C172/KJFK validation passed the SimConnect/current-aircraft path, production FlightSession takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, exact-once terminal settlement/finalization, facility-request containment with corrected receive IDs, Jobs aircraft-picker stability and shared button-state readability.
 - The isolated KJFK Development/Test profile and `tools/run-kjfk-live-test.ps1` protect normal career data while retaining restart/recovery behavior between launches unless explicitly reset. Settings labels the active profile and can schedule a marker-validated clean test reset before SQLite opens on the next launch; normal career data cannot use that action. The shell displays a permanent high-contrast DEVELOPMENT / TEST KJFK isolated-data placard on every page while the test profile is active.
 - Master development tracker: `docs/development-master-checklist.md`; it contains the live chapter/subsystem checkboxes and Mermaid progress graphics. Update it whenever verified implementation status changes.
@@ -65,6 +65,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Career-job acceptance readiness now rechecks current-session ownership after each asynchronous career, board, contract, terms, registry, cruise, dispatch-authority, prepared-plan and physical-preflight stage. A session appearing during those reads returns the explicit active-session recovery state without producing an acceptance request; exact-head Linux build #1110 and Windows `winui-build` #1043 passed at `e451caf4` after the separate test-analyzer correction.
 - Accepted-job start/recovery now compares any explicit retained FlightSession origin and destination against the authoritative contract before transition or checkpoint mutation. Contradictory routes fail closed while the Accepted contract remains cancellable; exact-head Linux build #1112 and Windows `winui-build` #1045 passed at `c85d7e42`.
 - Accepted-job start/recovery also requires a retained same-contract FlightSession creation time to match the accepted start context or authoritative in-progress start time. Mismatches fail before an Accepted transition and never rewrite an InProgress contract or checkpoint; exact-head Linux build #1114 and Windows `winui-build` #1047 passed at `2d920706`.
+- Accepted-job start/recovery now rejects any explicitly supplied retained-session source provider/reference that is incomplete or does not identify the authoritative job contract. Fully absent legacy provenance remains compatible; exact-head Linux build #1116 and Windows `winui-build` #1049 passed at `fa43e392`.
 - Completion orders FlightSession and contract completion before exactly-once SQLite settlement and Logbook commit, then experience/location markers, reservation release and terminal checkpoint cleanup. Replay is idempotent; automatic startup reconstruction after a crash midway through those steps remains open.
 - Exact-PC validation at `f2acb367` closed the first C172/KJFK full-stop loop, bounce capture, interrupted-session recovery, terminal finalization, facility isolation, Jobs picker stability and button readability gates. This evidence does not generalize to every aircraft, mission or accessibility state.
 
