@@ -120,6 +120,56 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     }
 
     [Fact]
+    public async Task SessionAppearingDuringReservationReadStopsRecoveryWithoutMutation()
+    {
+        TestContext context =
+            CreateContext(
+                Persisted(
+                    ContractStatus.Accepted),
+                hasReservation:
+                    true,
+                now:
+                    StartedAt);
+        var readStarted =
+            new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        var release =
+            new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        context.Reservations.BeforeFindAsync =
+            async cancellationToken =>
+            {
+                readStarted.TrySetResult();
+                await release.Task.WaitAsync(cancellationToken);
+            };
+
+        Task<CareerJobPreFlightSessionRecoveryResult> recovery =
+            context.Recovery.RecoverAsync();
+        await readStarted.Task;
+
+        FlightSession competingSession =
+            context.Sessions.Start(
+                StartedAt.AddMinutes(1));
+        release.TrySetResult();
+
+        CareerJobPreFlightSessionRecoveryResult result =
+            await recovery;
+
+        Assert.Equal(
+            CareerJobPreFlightSessionRecoveryState.ActiveFlightSessionAlreadyPresent,
+            result.State);
+        Assert.Equal(
+            competingSession.SessionId,
+            context.Sessions.Current?.SessionId);
+        Assert.Equal(
+            ContractStatus.Accepted,
+            context.Contracts.Current.Contract.Status);
+        Assert.Equal(0, context.Contracts.UpdateCount);
+        Assert.Equal(0, context.Checkpoints.SaveCount);
+        Assert.Null(context.Checkpoints.Checkpoint);
+    }
+
+    [Fact]
     public async Task MissingPreparedPlanLeavesAcceptedContractUntouched()
     {
         TestContext context =
@@ -305,6 +355,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
         return new(
             service,
             contracts,
+            reservations,
             sessions,
             checkpoints,
             airports);
@@ -457,6 +508,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     private sealed record TestContext(
         CareerJobPreFlightSessionRecoveryService Recovery,
         FakeContractStore Contracts,
+        FakeReservationLookup Reservations,
         FlightSessionCoordinator Sessions,
         MemoryCheckpointStore Checkpoints,
         FakeAirportObservationSource Airports);
@@ -564,20 +616,24 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
         AircraftReservationOwnership? ownership)
         : IAircraftReservationLookup
     {
-        public Task<AircraftReservationOwnership?> FindByReservationIdAsync(
+        public Func<CancellationToken, Task>? BeforeFindAsync { get; set; }
+
+        public async Task<AircraftReservationOwnership?> FindByReservationIdAsync(
             string reservationId,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(
-                ownership is not null
+            if (BeforeFindAsync is not null)
+                await BeforeFindAsync(cancellationToken);
+
+            return ownership is not null
                 && string.Equals(
                     ownership.ReservationId,
                     reservationId,
                     StringComparison.Ordinal)
                     ? ownership
-                    : null);
+                    : null;
         }
     }
 

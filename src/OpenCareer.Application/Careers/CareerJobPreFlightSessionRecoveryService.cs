@@ -96,21 +96,22 @@ public sealed class CareerJobPreFlightSessionRecoveryService
 
         try
         {
-            FlightSession? existingSession =
-                _sessions.Current;
+            CareerJobPreFlightSessionRecoveryResult? activeSession =
+                ReadActiveSessionResult();
 
-            if (existingSession is not null)
-            {
-                return Result(
-                    CareerJobPreFlightSessionRecoveryState.ActiveFlightSessionAlreadyPresent,
-                    existingSession.ContractId,
-                    "A FlightSession already owns the current operation.");
-            }
+            if (activeSession is not null)
+                return activeSession;
 
             IReadOnlyList<PersistedJobContract> recovered =
                 await _contracts
                     .InitializeAsync(cancellationToken)
                     .ConfigureAwait(false);
+
+            activeSession =
+                ReadActiveSessionResult();
+
+            if (activeSession is not null)
+                return activeSession;
 
             PersistedJobContract? candidate =
                 SelectRecoveryCandidate(recovered);
@@ -138,6 +139,12 @@ public sealed class CareerJobPreFlightSessionRecoveryService
                         cancellationToken)
                     .ConfigureAwait(false);
 
+            activeSession =
+                ReadActiveSessionResult();
+
+            if (activeSession is not null)
+                return activeSession;
+
             if (ownership is null)
             {
                 return Result(
@@ -163,6 +170,12 @@ public sealed class CareerJobPreFlightSessionRecoveryService
                         ownership.CanonicalAircraftId,
                         cancellationToken)
                     .ConfigureAwait(false);
+
+            activeSession =
+                ReadActiveSessionResult();
+
+            if (activeSession is not null)
+                return activeSession;
 
             AircraftRegistryRecord? aircraft =
                 resolution is
@@ -209,6 +222,12 @@ public sealed class CareerJobPreFlightSessionRecoveryService
                     .InitializeAsync(cancellationToken)
                     .ConfigureAwait(false);
 
+            activeSession =
+                ReadActiveSessionResult();
+
+            if (activeSession is not null)
+                return activeSession;
+
             if (career is null
                 || !string.Equals(
                     career.Profile.Location.CurrentAirportIcao,
@@ -243,6 +262,12 @@ public sealed class CareerJobPreFlightSessionRecoveryService
                         contract.ContractId,
                         cancellationToken)
                     .ConfigureAwait(false);
+
+            activeSession =
+                ReadActiveSessionResult();
+
+            if (activeSession is not null)
+                return activeSession;
 
             if (!prepared.IsReady
                 || prepared.DispatchResult is not { } dispatch)
@@ -308,6 +333,19 @@ public sealed class CareerJobPreFlightSessionRecoveryService
         {
             _gate.Release();
         }
+    }
+
+    private CareerJobPreFlightSessionRecoveryResult? ReadActiveSessionResult()
+    {
+        FlightSession? existingSession =
+            _sessions.Current;
+
+        return existingSession is null
+            ? null
+            : Result(
+                CareerJobPreFlightSessionRecoveryState.ActiveFlightSessionAlreadyPresent,
+                existingSession.ContractId,
+                "A FlightSession already owns the current operation.");
     }
 
     private async Task<StartedJobFlightSessionResult> ResumeInProgressAsync(
