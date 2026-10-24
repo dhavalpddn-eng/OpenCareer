@@ -549,7 +549,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             new JobAcceptanceFleetBridge(
                 acceptance,
                 contractStore,
-                reservationCoordinator);
+                reservationCoordinator,
+                sessions);
 
         var dispatch =
             new AcceptedJobDispatchBridge(

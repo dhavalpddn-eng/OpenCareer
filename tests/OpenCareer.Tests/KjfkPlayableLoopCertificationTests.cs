@@ -724,7 +724,7 @@ public sealed class KjfkPlayableLoopCertificationTests
                 : [liveAirports, referenceAirports], clock: clock);
             var dispatch = new OperationDispatchPlanningService(_registry, airports, aircraftAvailability: Fleet);
             var acceptance = new JobOfferAcceptanceService(ContractStore, lifecycle, boards, Contracts);
-            var fleetBridge = new JobAcceptanceFleetBridge(acceptance, ContractStore, new AircraftReservationCoordinator(_registry, Fleet));
+            var fleetBridge = new JobAcceptanceFleetBridge(acceptance, ContractStore, new AircraftReservationCoordinator(_registry, Fleet), Sessions);
             var preparedPlans = new SqlitePreparedDispatchPlanStore(options);
             var terminal = new CareerFlightTerminalWorkflowCoordinator(
                 new SettlementPendingContractCoordinator(new EconomySettlementService(ContractStore, Ledger)),

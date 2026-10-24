@@ -1,5 +1,6 @@
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Fleet;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
@@ -46,6 +47,39 @@ public sealed class JobAcceptanceFleetBridgeTests
             result.ReservationId,
             reservationStore.State?.ReservationId);
         Assert.Equal(1, reservationStore.AcquiredCount);
+    }
+
+    [Fact]
+    public async Task FlightSessionAppearingDuringContractReadStopsBeforeMutation()
+    {
+        JobContractCreationRequest request = Request();
+        var sessions = new FlightSessionCoordinator();
+        var contractStore = new FakeContractStore
+        {
+            BeforeNextRead =
+                () => sessions.Start(
+                    request.AcceptanceTime,
+                    Guid.Parse(
+                        "95000000-0000-0000-0000-000000000095"))
+        };
+        var reservationStore = new StatefulReservationStore();
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => CreateBridge(
+                        contractStore,
+                        new FakeBoardStore(BoardWithOffer(request.Offer)),
+                        reservationStore,
+                        sessions)
+                    .AcceptAndReserveAsync(
+                        request,
+                        DispatchContext(request.AcceptanceTime)));
+
+        Assert.Contains("FlightSession", error.Message);
+        Assert.Equal(0, reservationStore.TryReserveCount);
+        Assert.Equal(0, contractStore.CreateCount);
+        Assert.Equal(0, contractStore.UpdateCount);
+        Assert.NotNull(sessions.Current);
     }
 
     [Fact]
@@ -445,7 +479,8 @@ public sealed class JobAcceptanceFleetBridgeTests
     private static JobAcceptanceFleetBridge CreateBridge(
         FakeContractStore contractStore,
         FakeBoardStore boardStore,
-        StatefulReservationStore reservationStore)
+        StatefulReservationStore reservationStore,
+        FlightSessionCoordinator? sessions = null)
     {
         JobContractRuntimeState runtimeState =
             new(
@@ -484,7 +519,8 @@ public sealed class JobAcceptanceFleetBridgeTests
         return new(
             acceptance,
             contractStore,
-            reservations);
+            reservations,
+            sessions ?? new FlightSessionCoordinator());
     }
 
     private static AcceptedJobDispatchBridge CreateDispatchBridge(
@@ -807,12 +843,17 @@ public sealed class JobAcceptanceFleetBridgeTests
 
         public int CreateCount { get; private set; }
         public int UpdateCount { get; private set; }
+        public Action? BeforeNextRead { get; set; }
 
         public Task<PersistedJobContract?> ReadJobContractAsync(
             Guid contractId,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            Action? beforeRead = BeforeNextRead;
+            BeforeNextRead = null;
+            beforeRead?.Invoke();
 
             return Task.FromResult(
                 _current?.Contract.ContractId

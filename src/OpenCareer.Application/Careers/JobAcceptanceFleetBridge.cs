@@ -1,4 +1,5 @@
 using OpenCareer.Application.Fleet;
+using OpenCareer.Application.Flights;
 using OpenCareer.Domain.Careers;
 
 namespace OpenCareer.Application.Careers;
@@ -24,12 +25,14 @@ public sealed class JobAcceptanceFleetBridge
     private readonly JobOfferAcceptanceService _acceptanceService;
     private readonly IJobContractStore _contractStore;
     private readonly AircraftReservationCoordinator _reservationCoordinator;
+    private readonly FlightSessionCoordinator _flightSessions;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public JobAcceptanceFleetBridge(
         JobOfferAcceptanceService acceptanceService,
         IJobContractStore contractStore,
-        AircraftReservationCoordinator reservationCoordinator)
+        AircraftReservationCoordinator reservationCoordinator,
+        FlightSessionCoordinator flightSessions)
     {
         _acceptanceService =
             acceptanceService
@@ -40,6 +43,9 @@ public sealed class JobAcceptanceFleetBridge
         _reservationCoordinator =
             reservationCoordinator
             ?? throw new ArgumentNullException(nameof(reservationCoordinator));
+        _flightSessions =
+            flightSessions
+            ?? throw new ArgumentNullException(nameof(flightSessions));
     }
 
     public async Task<JobAcceptanceFleetResult> AcceptAndReserveAsync(
@@ -76,12 +82,16 @@ public sealed class JobAcceptanceFleetBridge
 
         try
         {
+            EnsureNoFlightSessionOwnsThePlayableLoop();
+
             PersistedJobContract? existing =
                 await _contractStore
                     .ReadJobContractAsync(
                         offered.ContractId,
                         cancellationToken)
                     .ConfigureAwait(false);
+
+            EnsureNoFlightSessionOwnsThePlayableLoop();
 
             if (existing is not null
                 && existing.Contract.Status
@@ -171,6 +181,15 @@ public sealed class JobAcceptanceFleetBridge
         finally
         {
             _gate.Release();
+        }
+    }
+
+    private void EnsureNoFlightSessionOwnsThePlayableLoop()
+    {
+        if (_flightSessions.Current is not null)
+        {
+            throw new InvalidOperationException(
+                "A FlightSession already owns the playable loop. Complete or recover it before accepting another job.");
         }
     }
 
