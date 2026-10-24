@@ -5,7 +5,9 @@ namespace OpenCareer.Application.Careers;
 public sealed record CareerJobCompletionActionAvailability(
     bool CanComplete,
     CareerJobCompletionInputState State,
-    string Detail);
+    string Detail,
+    Guid? FlightSessionId = null,
+    Guid? ContractId = null);
 
 public sealed record CareerJobCompletionReceipt(
     Guid ContractId,
@@ -24,6 +26,8 @@ public interface ICareerJobCompletionAction
         CancellationToken cancellationToken = default);
 
     Task<CareerJobCompletionReceipt> CompleteAsync(
+        Guid expectedFlightSessionId,
+        Guid expectedContractId,
         CancellationToken cancellationToken = default);
 }
 
@@ -56,12 +60,22 @@ public sealed class CareerJobCompletionActionService
         return new(
             snapshot.IsReady,
             snapshot.State,
-            snapshot.Detail);
+            snapshot.Detail,
+            snapshot.IsReady ? snapshot.FlightSessionId : null,
+            snapshot.IsReady ? snapshot.ContractId : null);
     }
 
     public async Task<CareerJobCompletionReceipt> CompleteAsync(
+        Guid expectedFlightSessionId,
+        Guid expectedContractId,
         CancellationToken cancellationToken = default)
     {
+        if (expectedFlightSessionId == Guid.Empty)
+            throw new ArgumentException("Expected FlightSession ID is required.", nameof(expectedFlightSessionId));
+
+        if (expectedContractId == Guid.Empty)
+            throw new ArgumentException("Expected contract ID is required.", nameof(expectedContractId));
+
         CareerJobCompletionInputSnapshot snapshot =
             await _inputSource
                 .ReadCurrentAsync(cancellationToken)
@@ -72,6 +86,13 @@ public sealed class CareerJobCompletionActionService
         {
             throw new InvalidOperationException(
                 snapshot.Detail);
+        }
+
+        if (snapshot.FlightSessionId != expectedFlightSessionId
+            || snapshot.ContractId != expectedContractId)
+        {
+            throw new InvalidOperationException(
+                "Career completion inputs changed after readiness was reviewed. Refresh Current Flight and try again.");
         }
 
         CareerJobPlayableCompletionResult result =

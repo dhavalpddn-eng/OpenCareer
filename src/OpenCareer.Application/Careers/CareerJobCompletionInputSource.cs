@@ -119,6 +119,7 @@ public enum CareerJobCompletionInputState
 public sealed record CareerJobCompletionInputSnapshot(
     CareerJobCompletionInputState State,
     Guid? ContractId,
+    Guid? FlightSessionId,
     CareerJobPlayableCompletionRequest? Request,
     string Detail)
 {
@@ -186,6 +187,7 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.NoCareerFlight,
                 contractId: null,
+                flightSessionId: session?.SessionId,
                 "No contract-linked career FlightSession is active.");
         }
 
@@ -197,6 +199,7 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.ContractStateUnavailable,
                 contractId,
+                session.SessionId,
                 "Authoritative job-contract runtime state is unavailable.");
         }
 
@@ -208,6 +211,7 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.ContractNotInProgress,
                 contractId,
+                session.SessionId,
                 $"Career completion inputs require an InProgress contract, not {persisted.Contract.Status}.");
         }
 
@@ -225,6 +229,7 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.FlightEvidenceIncomplete,
                 contractId,
+                session.SessionId,
                 BuildFlightEvidenceIncompleteDetail(
                     session,
                     flightEvidence));
@@ -245,6 +250,7 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.AircraftReservationUnavailable,
                 contractId,
+                session.SessionId,
                 "The contract-owned Fleet reservation is unavailable, so aircraft debrief identity cannot be proven.");
         }
 
@@ -276,6 +282,7 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.AircraftDebriefUnavailable,
                 contractId,
+                session.SessionId,
                 "Installed-aircraft registry identity is insufficient to create the authoritative debrief.");
         }
 
@@ -291,6 +298,7 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.MissionEvidenceUnavailable,
                 contractId,
+                session.SessionId,
                 "No authoritative standard-job mission completion source produced evidence.");
         }
 
@@ -308,6 +316,7 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.MissionConditionsNotVerified,
                 contractId,
+                session.SessionId,
                 "The authoritative mission source has not verified standard-job completion conditions.");
         }
 
@@ -323,6 +332,7 @@ public sealed class CareerJobCompletionInputSource
             return Blocked(
                 CareerJobCompletionInputState.SettlementCostsUnavailable,
                 contractId,
+                session.SessionId,
                 "No authoritative actual-cost source produced settlement costs for this career flight.");
         }
 
@@ -374,6 +384,7 @@ public sealed class CareerJobCompletionInputSource
         return new(
             CareerJobCompletionInputState.Ready,
             contractId,
+            session.SessionId,
             request,
             "Authoritative flight, mission, aircraft, settlement-cost, and debrief inputs are ready.");
     }
@@ -497,10 +508,12 @@ public sealed class CareerJobCompletionInputSource
     private static CareerJobCompletionInputSnapshot Blocked(
         CareerJobCompletionInputState state,
         Guid? contractId,
+        Guid? flightSessionId,
         string detail) =>
         new(
             state,
             contractId,
+            flightSessionId,
             Request: null,
             detail);
 }

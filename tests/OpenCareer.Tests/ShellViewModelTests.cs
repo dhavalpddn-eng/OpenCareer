@@ -320,6 +320,18 @@ public sealed class ShellViewModelTests
 
         await viewModel.RefreshCareerCompletionActionAsync();
 
+        Assert.False(
+            viewModel.CanCompleteCareerFlight);
+
+        action.Availability =
+            action.Availability with
+            {
+                FlightSessionId = Guid.NewGuid(),
+                ContractId = Guid.NewGuid()
+            };
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
         Assert.True(
             viewModel.CanCompleteCareerFlight);
         Assert.Contains(
@@ -331,6 +343,8 @@ public sealed class ShellViewModelTests
     [Fact]
     public async Task CareerCompletionActionDelegatesOnceAndDisablesAfterSuccess()
     {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
         var action =
             new FakeCareerCompletionAction
             {
@@ -339,7 +353,9 @@ public sealed class ShellViewModelTests
                         CanComplete:
                             true,
                         CareerJobCompletionInputState.Ready,
-                        "Authoritative completion inputs are ready.")
+                        "Authoritative completion inputs are ready.",
+                        sessionId,
+                        contractId)
             };
 
         var viewModel =
@@ -367,6 +383,8 @@ public sealed class ShellViewModelTests
         Assert.Equal(
             1,
             action.CompleteCount);
+        Assert.Equal(sessionId, action.LastFlightSessionId);
+        Assert.Equal(contractId, action.LastContractId);
         Assert.False(
             viewModel.CanCompleteCareerFlight);
         Assert.False(
@@ -842,6 +860,8 @@ public sealed class ShellViewModelTests
                 "No career flight.");
 
         public int CompleteCount { get; private set; }
+        public Guid? LastFlightSessionId { get; private set; }
+        public Guid? LastContractId { get; private set; }
 
         public Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
             CancellationToken cancellationToken = default)
@@ -853,10 +873,14 @@ public sealed class ShellViewModelTests
         }
 
         public Task<CareerJobCompletionReceipt> CompleteAsync(
+            Guid expectedFlightSessionId,
+            Guid expectedContractId,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             CompleteCount++;
+            LastFlightSessionId = expectedFlightSessionId;
+            LastContractId = expectedContractId;
 
             return Task.FromResult(
                 new CareerJobCompletionReceipt(
@@ -894,6 +918,8 @@ public sealed class ShellViewModelTests
         }
 
         public Task<CareerJobCompletionReceipt> CompleteAsync(
+            Guid expectedFlightSessionId,
+            Guid expectedContractId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
@@ -901,6 +927,11 @@ public sealed class ShellViewModelTests
     private sealed class BlockingCareerCompletionExecutionAction
         : ICareerJobCompletionAction
     {
+        private static readonly Guid FlightSessionId =
+            Guid.Parse("aaaaaaaa-0000-0000-0000-000000000020");
+        private static readonly Guid ContractId =
+            Guid.Parse("aaaaaaaa-0000-0000-0000-000000000021");
+
         public TaskCompletionSource<bool> CompleteStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -917,12 +948,18 @@ public sealed class ShellViewModelTests
                 new CareerJobCompletionActionAvailability(
                     CanComplete: true,
                     CareerJobCompletionInputState.Ready,
-                    "Authoritative completion inputs are ready."));
+                    "Authoritative completion inputs are ready.",
+                    FlightSessionId,
+                    ContractId));
         }
 
         public async Task<CareerJobCompletionReceipt> CompleteAsync(
+            Guid expectedFlightSessionId,
+            Guid expectedContractId,
             CancellationToken cancellationToken = default)
         {
+            Assert.Equal(FlightSessionId, expectedFlightSessionId);
+            Assert.Equal(ContractId, expectedContractId);
             CompleteCount++;
             CompleteStarted.TrySetResult(true);
             await ReleaseComplete.Task.WaitAsync(cancellationToken);

@@ -373,7 +373,8 @@ public sealed class KjfkPlayableLoopCertificationTests
             Guid first = await app.GenerateAndStartAsync();
             await Assert.ThrowsAsync<InvalidOperationException>(() => app.Development.GenerateAsync());
             Assert.False((await app.Completion.ReadAvailabilityAsync()).CanComplete);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => app.Completion.CompleteAsync());
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                app.Completion.CompleteAsync(app.Session.SessionId, first));
             Assert.Equal(0, await app.RowCountAsync("economy_ledger_transactions"));
 
             await app.TakeoffAsync();
@@ -429,6 +430,14 @@ public sealed class KjfkPlayableLoopCertificationTests
             Assert.True(app.Evidence.Current!.CoreFlightSequenceObserved);
             var completionInput = await app.CompletionInputs.ReadCurrentAsync();
             Assert.True(completionInput.IsReady, completionInput.Detail);
+            CareerJobCompletionActionAvailability completionAvailability =
+                await app.Completion.ReadAvailabilityAsync();
+            Assert.Equal(app.Session.SessionId, completionAvailability.FlightSessionId);
+            Assert.Equal(first, completionAvailability.ContractId);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                app.Completion.CompleteAsync(Guid.NewGuid(), first));
+            Assert.Equal(0, await app.RowCountAsync("economy_ledger_transactions"));
+            Assert.Equal(0, await app.RowCountAsync("logbook_entries"));
             await app.Shell.RefreshCareerCompletionActionAsync();
             Assert.True(app.Shell.CanCompleteCareerFlight);
             Assert.Equal("Complete Career Flight", app.Shell.CareerCompletionActionText);

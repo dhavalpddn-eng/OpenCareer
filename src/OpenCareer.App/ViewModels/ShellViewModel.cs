@@ -65,6 +65,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         "Complete Career Flight";
     private string _careerCompletionActionDetail =
         "Career completion inputs have not been checked yet.";
+    private Guid? _completionSessionId;
+    private Guid? _completionContractId;
     private bool _canAbandonCurrentFlight;
     private bool _isCareerAbandonBusy;
     private string _careerAbandonActionText =
@@ -455,6 +457,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         if (_careerCompletionAction is null)
         {
+            _completionSessionId = null;
+            _completionContractId = null;
+
             SetBoolean(
                 ref _canCompleteCareerFlight,
                 false,
@@ -495,9 +500,20 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     .ReadAvailabilityAsync(
                         cancellationToken);
 
+            _completionSessionId =
+                availability.CanComplete
+                    ? availability.FlightSessionId
+                    : null;
+            _completionContractId =
+                availability.CanComplete
+                    ? availability.ContractId
+                    : null;
+
             SetBoolean(
                 ref _canCompleteCareerFlight,
                 availability.CanComplete
+                    && _completionSessionId is not null
+                    && _completionContractId is not null
                     && !_isCareerCompletionBusy,
                 nameof(CanCompleteCareerFlight));
 
@@ -512,6 +528,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
         catch (Exception ex)
         {
+            _completionSessionId = null;
+            _completionContractId = null;
+
             _logger?.LogError(
                 ex,
                 "Career completion readiness refresh failed.");
@@ -537,6 +556,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     {
         if (_careerCompletionAction is null)
             return false;
+
+        if (_completionSessionId is not { } sessionId
+            || _completionContractId is not { } contractId)
+        {
+            return false;
+        }
 
         bool completed = false;
 
@@ -575,12 +600,17 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
             CareerJobCompletionReceipt receipt =
                 await _careerCompletionAction
-                .CompleteAsync(cancellationToken);
+                .CompleteAsync(
+                    sessionId,
+                    contractId,
+                    cancellationToken);
 
             completed = true;
 
             _abandonSessionId = null;
             _abandonContractId = null;
+            _completionSessionId = null;
+            _completionContractId = null;
 
             RefreshConnectionStatus();
 
@@ -611,9 +641,20 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                         .ReadAvailabilityAsync(
                             cancellationToken);
 
+                _completionSessionId =
+                    availability.CanComplete
+                        ? availability.FlightSessionId
+                        : null;
+                _completionContractId =
+                    availability.CanComplete
+                        ? availability.ContractId
+                        : null;
+
                 SetBoolean(
                     ref _canCompleteCareerFlight,
-                    availability.CanComplete,
+                    availability.CanComplete
+                        && _completionSessionId is not null
+                        && _completionContractId is not null,
                     nameof(CanCompleteCareerFlight));
             }
             catch (Exception refreshEx)

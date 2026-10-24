@@ -114,6 +114,9 @@ public sealed class CareerJobCompletionInputSourceTests
 
         Assert.True(
             snapshot.IsReady);
+        Assert.Equal(
+            fixture.Session.SessionId,
+            snapshot.FlightSessionId);
 
         CareerJobPlayableCompletionRequest request =
             Assert.IsType<CareerJobPlayableCompletionRequest>(
@@ -248,7 +251,8 @@ public sealed class CareerJobCompletionInputSourceTests
 
         return new(
             source,
-            contract);
+            contract,
+            session);
     }
 
     private static PersistedJobContract InProgressContract(
@@ -411,7 +415,8 @@ public sealed class CareerJobCompletionInputSourceTests
 
     private sealed record TestFixture(
         CareerJobCompletionInputSource Source,
-        PersistedJobContract Contract);
+        PersistedJobContract Contract,
+        FlightSession Session);
 
     private sealed class FixedMissionSource(
         bool verified = true,
