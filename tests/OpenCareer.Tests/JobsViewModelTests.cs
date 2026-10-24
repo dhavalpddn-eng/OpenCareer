@@ -517,9 +517,9 @@ public sealed class JobsViewModelTests
 
         await viewModel.RefreshAsync();
 
-        Assert.True(viewModel.HasActiveCareerFlight);
-        Assert.Equal("CAREER FLIGHT IN PROGRESS", viewModel.ActiveCareerFlightStatus);
-        Assert.Contains("Accepted", viewModel.ActiveCareerFlightDetail, StringComparison.Ordinal);
+        Assert.True(viewModel.HasCurrentFlightSession);
+        Assert.Equal("CAREER FLIGHT IN PROGRESS", viewModel.CurrentFlightSessionStatus);
+        Assert.Contains("Accepted", viewModel.CurrentFlightSessionDetail, StringComparison.Ordinal);
 
         viewModel.OpenCurrentFlight();
 
@@ -549,8 +549,46 @@ public sealed class JobsViewModelTests
         await viewModel.RefreshAsync();
         viewModel.OpenCurrentFlight();
 
-        Assert.False(viewModel.HasActiveCareerFlight);
+        Assert.False(viewModel.HasCurrentFlightSession);
         Assert.Empty(navigationTargets);
+    }
+
+    [Fact]
+    public async Task ContractlessFlightSessionCanBeOpenedDirectlyFromJobs()
+    {
+        var sessions = new FlightSessionCoordinator();
+        sessions.Start(
+            Now,
+            contractId: null,
+            sessionId: Guid.Parse(
+                "a7000000-0000-0000-0000-000000000002"));
+        var viewModel = new JobsViewModel(
+            new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", locked: false))),
+            CareerRuntime("KRME"),
+            new FixedTimeProvider(Now),
+            aircraftSelection: null,
+            startAction: null,
+            logger: null,
+            flightSessions: sessions);
+
+        var navigationTargets = new List<JobsNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.HasCurrentFlightSession);
+        Assert.Equal("FLIGHT SESSION · ACTIVE", viewModel.CurrentFlightSessionStatus);
+        Assert.Contains(
+            "before accepting another job",
+            viewModel.CurrentFlightSessionDetail,
+            StringComparison.Ordinal);
+
+        viewModel.OpenCurrentFlight();
+
+        Assert.Equal(
+            new[] { JobsNavigationTarget.CurrentFlight },
+            navigationTargets);
     }
 
     [Fact]

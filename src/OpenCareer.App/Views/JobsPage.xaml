@@ -118,20 +118,20 @@
 
             <Border Style="{StaticResource OpenCareerMetalCardStyle}"
                     Padding="18"
-                    Visibility="{Binding HasActiveCareerFlight, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    Visibility="{Binding HasCurrentFlightSession, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid ColumnSpacing="18">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Spacing="4">
-                        <TextBlock Text="ACTIVE CAREER FLIGHT"
+                        <TextBlock Text="CURRENT FLIGHT SESSION"
                                    Style="{StaticResource OpenCareerShellSectionTitleStyle}" />
-                        <TextBlock Text="{Binding ActiveCareerFlightStatus}"
+                        <TextBlock Text="{Binding CurrentFlightSessionStatus}"
                                    Foreground="{StaticResource OpenCareerShellTextBrush}"
                                    FontSize="18"
                                    FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding ActiveCareerFlightDetail}"
+                        <TextBlock Text="{Binding CurrentFlightSessionDetail}"
                                    Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
                                    TextWrapping="Wrap" />
                     </StackPanel>

@@ -335,13 +335,13 @@ public sealed class UiDesignSystemContractTests
                 element.Name.LocalName == "Border" &&
                 string.Equals(
                     element.Attribute("Visibility")?.Value,
-                    "{Binding HasActiveCareerFlight, Converter={StaticResource BooleanToVisibilityConverter}}",
+                    "{Binding HasCurrentFlightSession, Converter={StaticResource BooleanToVisibilityConverter}}",
                     StringComparison.Ordinal));
         Assert.Contains(
             activeFlightPanel.Descendants(),
             element =>
                 element.Name.LocalName == "TextBlock" &&
-                element.Attribute("Text")?.Value == "{Binding ActiveCareerFlightStatus}");
+                element.Attribute("Text")?.Value == "{Binding CurrentFlightSessionStatus}");
 
         XElement openCurrentFlightButton = activeFlightPanel
             .Descendants()
