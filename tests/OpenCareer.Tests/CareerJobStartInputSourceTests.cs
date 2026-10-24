@@ -106,7 +106,7 @@ public sealed class CareerJobStartInputSourceTests
             snapshot.State);
         Assert.Null(snapshot.Request);
         Assert.NotNull(flightSessions.Current);
-        Assert.Equal(1, registry.Statuses.Count);
+        Assert.Single(registry.Statuses);
     }
 
     [Fact]
