@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
@@ -140,7 +141,8 @@ public enum CareerJobStartInputState
     DomainDispatchGateRejected = 15,
     Ready = 16,
     PreparedDispatchUnavailable = 17,
-    DispatchPerformanceUnavailable = 18
+    DispatchPerformanceUnavailable = 18,
+    ActiveFlightSession = 19
 }
 
 public sealed record CareerJobStartInputSnapshot(
@@ -167,6 +169,7 @@ public sealed class CareerJobStartInputSource
     private readonly ICareerJobContractTermsSource[] _contractTermSources;
     private readonly ICareerJobDispatchAuthoritySource[] _dispatchAuthoritySources;
     private readonly TimeProvider _timeProvider;
+    private readonly FlightSessionCoordinator? _flightSessions;
 
     public CareerJobStartInputSource(
         IJobBoardStateStore jobBoards,
@@ -178,7 +181,8 @@ public sealed class CareerJobStartInputSource
         IEnumerable<ICareerJobContractTermsSource> contractTermSources,
         IEnumerable<ICareerJobDispatchAuthoritySource> dispatchAuthoritySources,
         TimeProvider timeProvider,
-        IPreparedDispatchStartAuthority? preparedDispatch = null)
+        IPreparedDispatchStartAuthority? preparedDispatch = null,
+        FlightSessionCoordinator? flightSessions = null)
     {
         _jobBoards =
             jobBoards
@@ -208,6 +212,7 @@ public sealed class CareerJobStartInputSource
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
         _preparedDispatch = preparedDispatch;
+        _flightSessions = flightSessions;
 
         if (_contractTermSources.Any(static source => source is null))
         {
@@ -233,6 +238,16 @@ public sealed class CareerJobStartInputSource
             throw new ArgumentException("Offer ID is required.", nameof(offerId));
 
         ArgumentException.ThrowIfNullOrWhiteSpace(aircraftId);
+
+        if (_flightSessions?.Current is { } currentFlight)
+        {
+            return Blocked(
+                CareerJobStartInputState.ActiveFlightSession,
+                offerId,
+                currentFlight.ContractId is null
+                    ? "A FlightSession is already active. Complete or discard it on Current Flight before accepting another career job."
+                    : "A career FlightSession is already active or awaiting cleanup. Resume, complete, or abandon it on Current Flight before accepting another job.");
+        }
 
         PlayerCareerProfileStoreRecord? careerRecord =
             await _career

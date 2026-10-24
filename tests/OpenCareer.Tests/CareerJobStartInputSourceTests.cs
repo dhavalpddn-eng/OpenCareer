@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Careers;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
@@ -38,6 +39,40 @@ public sealed class CareerJobStartInputSourceTests
             snapshot.State);
         Assert.Null(
             snapshot.Request);
+    }
+
+    [Fact]
+    public async Task ExistingFlightSessionBlocksAnotherJobBeforeAcceptanceReadiness()
+    {
+        var flightSessions = new FlightSessionCoordinator();
+        flightSessions.Start(
+            Now,
+            contractId: Guid.NewGuid());
+
+        TestFixture fixture =
+            CreateFixture(
+                contractTerms:
+                    Array.Empty<ICareerJobContractTermsSource>(),
+                dispatchAuthorities:
+                    Array.Empty<ICareerJobDispatchAuthoritySource>(),
+                cruiseProfiles:
+                    UnavailableCruiseProfiles(),
+                flightSessions:
+                    flightSessions);
+
+        CareerJobStartInputSnapshot snapshot =
+            await fixture.Source.ReadAsync(
+                fixture.Offer.OfferId,
+                "fixture-aircraft");
+
+        Assert.Equal(
+            CareerJobStartInputState.ActiveFlightSession,
+            snapshot.State);
+        Assert.Null(snapshot.Request);
+        Assert.Contains(
+            "Current Flight",
+            snapshot.Detail,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -714,7 +749,8 @@ public sealed class CareerJobStartInputSourceTests
         DateTimeOffset? acceptedAt = null,
         IAircraftRegistrySource? registry = null,
         PreparedDispatchStartAuthorityResult? preparedResult = null,
-        IDispatchCruiseProfileSource? cruiseProfiles = null)
+        IDispatchCruiseProfileSource? cruiseProfiles = null,
+        FlightSessionCoordinator? flightSessions = null)
     {
         JobMarketOfferDraft offer =
             Offer();
@@ -776,7 +812,8 @@ public sealed class CareerJobStartInputSourceTests
                 dispatchAuthorities,
                 new FixedTimeProvider(
                     Now),
-                preparedDispatch);
+                preparedDispatch,
+                flightSessions);
 
         return new(
             source,
