@@ -393,6 +393,78 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task ConcurrentCareerCompletionAttemptIsRejectedInsteadOfQueued()
+    {
+        var action = new BlockingCareerCompletionExecutionAction();
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                action,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Task<bool> first = viewModel.CompleteCareerFlightAsync();
+        await action.CompleteStarted.Task;
+
+        Assert.False(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(1, action.CompleteCount);
+
+        action.ReleaseComplete.TrySetResult(true);
+
+        Assert.True(await first);
+        Assert.Equal(1, action.CompleteCount);
+        Assert.Equal("Flight Evaluated", viewModel.CareerCompletionActionText);
+    }
+
+    [Fact]
+    public async Task CareerAbandonAttemptIsRejectedWhileCompletionOwnsSharedActionGate()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var completion = new BlockingCareerCompletionExecutionAction();
+        var abandon =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned.")
+            };
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: completion,
+                careerAbandonAction: abandon,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Task<bool> completing = viewModel.CompleteCareerFlightAsync();
+        await completion.CompleteStarted.Task;
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(0, abandon.AbandonCount);
+
+        completion.ReleaseComplete.TrySetResult(true);
+        Assert.True(await completing);
+    }
+
+    [Fact]
     public async Task CareerAbandonActionUsesVerifiedIdentityAndDisablesAfterSuccess()
     {
         Guid sessionId =
@@ -442,6 +514,47 @@ public sealed class ShellViewModelTests
             "no completion rewards",
             viewModel.CareerAbandonActionDetail,
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ConcurrentCareerAbandonAttemptIsRejectedInsteadOfQueued()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var action = new BlockingCareerAbandonAction
+        {
+            Availability =
+                new(
+                    CanAbandon: true,
+                    CareerFlightAbandonAvailabilityState.Ready,
+                    sessionId,
+                    contractId,
+                    "The active career flight can be abandoned.")
+        };
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: null,
+                careerAbandonAction: action,
+                logger: null);
+
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Task<bool> first = viewModel.AbandonCurrentFlightAsync();
+        await action.AbandonStarted.Task;
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(1, action.AbandonCount);
+
+        action.ReleaseAbandon.TrySetResult(true);
+
+        Assert.True(await first);
+        Assert.Equal(1, action.AbandonCount);
     }
 
     [Fact]
@@ -785,6 +898,48 @@ public sealed class ShellViewModelTests
             throw new NotSupportedException();
     }
 
+    private sealed class BlockingCareerCompletionExecutionAction
+        : ICareerJobCompletionAction
+    {
+        public TaskCompletionSource<bool> CompleteStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<bool> ReleaseComplete { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int CompleteCount { get; private set; }
+
+        public Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                new CareerJobCompletionActionAvailability(
+                    CanComplete: true,
+                    CareerJobCompletionInputState.Ready,
+                    "Authoritative completion inputs are ready."));
+        }
+
+        public async Task<CareerJobCompletionReceipt> CompleteAsync(
+            CancellationToken cancellationToken = default)
+        {
+            CompleteCount++;
+            CompleteStarted.TrySetResult(true);
+            await ReleaseComplete.Task.WaitAsync(cancellationToken);
+
+            return new(
+                Guid.Parse("aaaaaaaa-0000-0000-0000-000000000010"),
+                425m,
+                5_425m,
+                "KJFK",
+                "KBOS",
+                Guid.Parse("aaaaaaaa-0000-0000-0000-000000000011"),
+                "KBOS",
+                7,
+                IsZeroPayCalibration: false);
+        }
+    }
+
     private sealed class FakeCareerAbandonAction
         : ICareerFlightAbandonAction
     {
@@ -825,6 +980,51 @@ public sealed class ShellViewModelTests
                     SessionWasAlreadyCancelled: false,
                     ContractWasAlreadyCancelled: false,
                     ReservationWasAlreadyReleased: false));
+        }
+    }
+
+    private sealed class BlockingCareerAbandonAction
+        : ICareerFlightAbandonAction
+    {
+        public CareerFlightAbandonAvailability Availability { get; set; } =
+            new(
+                CanAbandon: false,
+                CareerFlightAbandonAvailabilityState.Unavailable,
+                SessionId: null,
+                ContractId: null,
+                "No career flight.");
+
+        public TaskCompletionSource<bool> AbandonStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<bool> ReleaseAbandon { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int AbandonCount { get; private set; }
+
+        public Task<CareerFlightAbandonAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Availability);
+        }
+
+        public async Task<CareerFlightAbandonResult> AbandonAsync(
+            Guid expectedSessionId,
+            Guid expectedContractId,
+            CancellationToken cancellationToken = default)
+        {
+            AbandonCount++;
+            AbandonStarted.TrySetResult(true);
+            await ReleaseAbandon.Task.WaitAsync(cancellationToken);
+
+            return new(
+                CareerFlightAbandonStatus.Abandoned,
+                expectedSessionId,
+                expectedContractId,
+                SessionWasAlreadyCancelled: false,
+                ContractWasAlreadyCancelled: false,
+                ReservationWasAlreadyReleased: false);
         }
     }
 

@@ -540,8 +540,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         bool completed = false;
 
-        await _careerActionGate
-            .WaitAsync(cancellationToken);
+        bool entered = await _careerActionGate
+            .WaitAsync(0, cancellationToken);
+
+        if (!entered)
+            return false;
 
         try
         {
@@ -755,8 +758,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             return false;
         }
 
-        await _careerActionGate
-            .WaitAsync(cancellationToken);
+        bool entered = await _careerActionGate
+            .WaitAsync(0, cancellationToken);
+
+        if (!entered)
+            return false;
 
         try
         {
