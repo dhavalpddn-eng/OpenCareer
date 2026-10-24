@@ -105,6 +105,8 @@ public sealed class JobAcceptanceFleetBridge
                             cancellationToken)
                         .ConfigureAwait(false);
 
+                EnsureNoFlightSessionOwnsThePlayableLoop();
+
                 AircraftReservationRequestResult reservation =
                     await _reservationCoordinator
                         .ReserveAsync(
@@ -112,6 +114,8 @@ public sealed class JobAcceptanceFleetBridge
                             reservationId,
                             cancellationToken)
                         .ConfigureAwait(false);
+
+                EnsureNoFlightSessionOwnsThePlayableLoop();
 
                 return CreateResult(
                     reservation,

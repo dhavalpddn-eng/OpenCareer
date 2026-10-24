@@ -208,6 +208,106 @@ public sealed class JobAcceptanceFleetBridgeTests
     }
 
     [Fact]
+    public async Task AcceptedReplayStopsBeforeReservationWhenFlightSessionAppearsDuringAcceptance()
+    {
+        JobContractCreationRequest request = Request();
+        var sessions = new FlightSessionCoordinator();
+        var contractStore = new FakeContractStore();
+        var boardStore = new FakeBoardStore(
+            BoardWithOffer(request.Offer));
+        var reservationStore = new StatefulReservationStore();
+        JobAcceptanceFleetBridge bridge = CreateBridge(
+            contractStore,
+            boardStore,
+            reservationStore,
+            sessions);
+
+        _ = await bridge.AcceptAndReserveAsync(
+            request,
+            DispatchContext(request.AcceptanceTime));
+
+        boardStore.AfterNextGet =
+            () => sessions.Start(
+                request.AcceptanceTime,
+                Guid.Parse(
+                    "98000000-0000-0000-0000-000000000098"));
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => bridge.AcceptAndReserveAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime)));
+
+        PersistedJobContract accepted =
+            Assert.IsType<PersistedJobContract>(
+                await contractStore.ReadJobContractAsync(
+                    request.Offer.OfferId));
+
+        Assert.Contains("FlightSession", error.Message);
+        Assert.Equal(ContractStatus.Accepted, accepted.Contract.Status);
+        Assert.Equal(1, reservationStore.TryReserveCount);
+        Assert.Equal(1, reservationStore.AcquiredCount);
+        Assert.Equal(0, reservationStore.ReleaseCount);
+        Assert.Equal(
+            JobAcceptanceFleetBridge.GetReservationId(
+                request.Offer.OfferId),
+            reservationStore.State?.ReservationId);
+        Assert.Equal(1, contractStore.CreateCount);
+        Assert.Equal(1, contractStore.UpdateCount);
+        Assert.NotNull(sessions.Current);
+    }
+
+    [Fact]
+    public async Task AcceptedReplayStopsAfterReusedReservationWhenFlightSessionAppearsDuringReservation()
+    {
+        JobContractCreationRequest request = Request();
+        var sessions = new FlightSessionCoordinator();
+        var contractStore = new FakeContractStore();
+        var boardStore = new FakeBoardStore(
+            BoardWithOffer(request.Offer));
+        var reservationStore = new StatefulReservationStore();
+        JobAcceptanceFleetBridge bridge = CreateBridge(
+            contractStore,
+            boardStore,
+            reservationStore,
+            sessions);
+
+        _ = await bridge.AcceptAndReserveAsync(
+            request,
+            DispatchContext(request.AcceptanceTime));
+
+        reservationStore.AfterNextAlreadyHeld =
+            () => sessions.Start(
+                request.AcceptanceTime,
+                Guid.Parse(
+                    "99000000-0000-0000-0000-000000000099"));
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => bridge.AcceptAndReserveAsync(
+                    request,
+                    DispatchContext(request.AcceptanceTime)));
+
+        PersistedJobContract accepted =
+            Assert.IsType<PersistedJobContract>(
+                await contractStore.ReadJobContractAsync(
+                    request.Offer.OfferId));
+
+        Assert.Contains("FlightSession", error.Message);
+        Assert.Equal(ContractStatus.Accepted, accepted.Contract.Status);
+        Assert.Equal(2, reservationStore.TryReserveCount);
+        Assert.Equal(1, reservationStore.AcquiredCount);
+        Assert.Equal(0, reservationStore.ReleaseCount);
+        Assert.Equal(
+            JobAcceptanceFleetBridge.GetReservationId(
+                request.Offer.OfferId),
+            reservationStore.State?.ReservationId);
+        Assert.Equal(1, contractStore.CreateCount);
+        Assert.Equal(1, contractStore.UpdateCount);
+        Assert.NotNull(sessions.Current);
+    }
+
+    [Fact]
     public async Task ExplicitlyUnavailableAircraftRejectsBeforeContractCreation()
     {
         JobContractCreationRequest request = Request();
@@ -800,6 +900,7 @@ public sealed class JobAcceptanceFleetBridgeTests
         public int AcquiredCount { get; private set; }
         public int ReleaseCount { get; private set; }
         public Action? AfterNextAcquire { get; set; }
+        public Action? AfterNextAlreadyHeld { get; set; }
 
         public Task<AircraftAvailabilityState?> FindAsync(
             string canonicalAircraftId,
@@ -859,6 +960,10 @@ public sealed class JobAcceptanceFleetBridgeTests
                     reservationId,
                     StringComparison.Ordinal))
             {
+                Action? afterAlreadyHeld = AfterNextAlreadyHeld;
+                AfterNextAlreadyHeld = null;
+                afterAlreadyHeld?.Invoke();
+
                 return Task.FromResult(
                     AircraftReservationAcquireResult.AlreadyHeld);
             }
@@ -1025,6 +1130,7 @@ public sealed class JobAcceptanceFleetBridgeTests
     {
         public JobBoardState? State { get; private set; } =
             initial;
+        public Action? AfterNextGet { get; set; }
 
         public Task SaveAsync(
             JobBoardState state,
@@ -1050,6 +1156,10 @@ public sealed class JobAcceptanceFleetBridgeTests
                     StringComparison.Ordinal)
                     ? State
                     : null;
+
+            Action? afterGet = AfterNextGet;
+            AfterNextGet = null;
+            afterGet?.Invoke();
 
             return Task.FromResult(result);
         }
