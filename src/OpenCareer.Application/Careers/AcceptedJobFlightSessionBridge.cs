@@ -86,7 +86,8 @@ public sealed class AcceptedJobFlightSessionBridge
                 ValidateRetainedFlightSession(
                     current,
                     authoritative.Contract,
-                    expectedCanonicalAircraftId);
+                    expectedCanonicalAircraftId,
+                    context.Time);
             }
 
             PersistedJobContract started =
@@ -169,7 +170,8 @@ public sealed class AcceptedJobFlightSessionBridge
     private static void ValidateRetainedFlightSession(
         FlightSession current,
         JobContract authoritativeContract,
-        string expectedCanonicalAircraftId)
+        string expectedCanonicalAircraftId,
+        DateTimeOffset expectedStartTime)
     {
         if (current.IsTerminal)
         {
@@ -212,6 +214,28 @@ public sealed class AcceptedJobFlightSessionBridge
         {
             throw new InvalidOperationException(
                 "The active FlightSession destination does not match the authoritative job contract.");
+        }
+
+        DateTimeOffset? authoritativeStartTime =
+            authoritativeContract.Status switch
+            {
+                ContractStatus.Accepted =>
+                    expectedStartTime,
+
+                ContractStatus.InProgress =>
+                    authoritativeContract.StartedAt
+                    ?? throw new InvalidOperationException(
+                        "An InProgress contract must retain its authoritative start time."),
+
+                _ =>
+                    null
+            };
+
+        if (authoritativeStartTime is { } startedAt
+            && current.CreatedAt != startedAt)
+        {
+            throw new InvalidOperationException(
+                "The active FlightSession start time does not match the authoritative job contract.");
         }
     }
 
