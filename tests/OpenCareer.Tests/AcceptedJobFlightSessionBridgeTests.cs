@@ -278,6 +278,49 @@ public sealed class AcceptedJobFlightSessionBridgeTests
         Assert.Equal(0, sessionStore.SaveCount);
     }
 
+    [Theory]
+    [InlineData("KJFK", "KSYR")]
+    [InlineData("KRME", "KJFK")]
+    public async Task ContradictoryRecoveredRouteBlocksBeforeContractMutation(
+        string plannedOrigin,
+        string plannedDestination)
+    {
+        PersistedJobContract accepted = AcceptedContract();
+        var contractStore = new FakeContractStore(accepted);
+        var sessionStore = new MemorySessionStore();
+        var coordinator = new FlightSessionCoordinator();
+
+        coordinator.Restore(
+            FlightSession.Start(
+                OfferedAt.AddMinutes(20),
+                accepted.Contract.ContractId,
+                sessionId:
+                    Guid.NewGuid(),
+                plan:
+                    new FlightSessionPlan(
+                        plannedOrigin,
+                        plannedDestination,
+                        ExpectedCanonicalAircraftId:
+                            "canonical-aircraft")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreateBridge(
+                    contractStore,
+                    sessionStore,
+                    coordinator)
+                .StartAsync(
+                    DispatchResult(accepted),
+                    DispatchContext(
+                        OfferedAt.AddMinutes(20))));
+
+        Assert.Equal(
+            ContractStatus.Accepted,
+            contractStore.Current.Contract.Status);
+        Assert.Equal(0, contractStore.UpdateCount);
+        Assert.Equal(0, sessionStore.SaveCount);
+        Assert.NotNull(coordinator.Current);
+    }
+
     [Fact]
     public async Task MatchingRecoveredSessionAndInProgressContractConvergeWithoutNewWrites()
     {

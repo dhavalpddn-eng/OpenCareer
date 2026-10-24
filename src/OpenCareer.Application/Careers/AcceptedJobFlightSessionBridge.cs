@@ -83,28 +83,10 @@ public sealed class AcceptedJobFlightSessionBridge
 
             if (current is not null)
             {
-                if (current.IsTerminal)
-                {
-                    throw new InvalidOperationException(
-                        "The previous terminal FlightSession must complete its owning terminal workflow before another job flight can start.");
-                }
-
-                if (current.ContractId
-                    != contractId)
-                {
-                    throw new InvalidOperationException(
-                        "A different active FlightSession already owns the simulator operation.");
-                }
-
-                if (current.Plan?.ExpectedCanonicalAircraftId is { } retainedIdentity
-                    && !string.Equals(
-                        retainedIdentity,
-                        expectedCanonicalAircraftId,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new InvalidOperationException(
-                        "The active FlightSession aircraft identity does not match the retained reservation.");
-                }
+                ValidateRetainedFlightSession(
+                    current,
+                    authoritative.Contract,
+                    expectedCanonicalAircraftId);
             }
 
             PersistedJobContract started =
@@ -182,6 +164,55 @@ public sealed class AcceptedJobFlightSessionBridge
         }
 
         return canonicalAircraftId.Trim();
+    }
+
+    private static void ValidateRetainedFlightSession(
+        FlightSession current,
+        JobContract authoritativeContract,
+        string expectedCanonicalAircraftId)
+    {
+        if (current.IsTerminal)
+        {
+            throw new InvalidOperationException(
+                "The previous terminal FlightSession must complete its owning terminal workflow before another job flight can start.");
+        }
+
+        if (current.ContractId
+            != authoritativeContract.ContractId)
+        {
+            throw new InvalidOperationException(
+                "A different active FlightSession already owns the simulator operation.");
+        }
+
+        if (current.Plan?.ExpectedCanonicalAircraftId is { } retainedIdentity
+            && !string.Equals(
+                retainedIdentity,
+                expectedCanonicalAircraftId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The active FlightSession aircraft identity does not match the retained reservation.");
+        }
+
+        if (current.Plan?.PlannedOrigin is { } retainedOrigin
+            && !string.Equals(
+                retainedOrigin,
+                authoritativeContract.OriginIcao,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The active FlightSession origin does not match the authoritative job contract.");
+        }
+
+        if (current.Plan?.PlannedDestination is { } retainedDestination
+            && !string.Equals(
+                retainedDestination,
+                authoritativeContract.DestinationIcao,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The active FlightSession destination does not match the authoritative job contract.");
+        }
     }
 
     public static Guid GetFlightSessionId(
