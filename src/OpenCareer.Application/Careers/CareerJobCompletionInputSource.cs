@@ -113,7 +113,8 @@ public enum CareerJobCompletionInputState
     MissionEvidenceUnavailable = 6,
     MissionConditionsNotVerified = 7,
     SettlementCostsUnavailable = 8,
-    Ready = 9
+    Ready = 9,
+    FlightSessionChanged = 10
 }
 
 public sealed record CareerJobCompletionInputSnapshot(
@@ -177,7 +178,15 @@ public sealed class CareerJobCompletionInputSource
     }
 
     public async Task<CareerJobCompletionInputSnapshot> ReadCurrentAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await ReadCurrentCoreAsync(
+                retryAfterSessionChange: true,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+    private async Task<CareerJobCompletionInputSnapshot> ReadCurrentCoreAsync(
+        bool retryAfterSessionChange,
+        CancellationToken cancellationToken)
     {
         FlightSession? session =
             _flightSessions.Current;
@@ -245,6 +254,14 @@ public sealed class CareerJobCompletionInputSource
                     cancellationToken)
                 .ConfigureAwait(false);
 
+        if (HasSessionChanged(session))
+        {
+            return await ReprojectAfterSessionChangeAsync(
+                    retryAfterSessionChange,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         if (ownership is null)
         {
             return Blocked(
@@ -272,6 +289,14 @@ public sealed class CareerJobCompletionInputSource
                     cancellationToken)
                 .ConfigureAwait(false);
 
+        if (HasSessionChanged(session))
+        {
+            return await ReprojectAfterSessionChangeAsync(
+                    retryAfterSessionChange,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         string? displayName =
             aircraft?.CapabilityValues.DisplayName;
 
@@ -292,6 +317,14 @@ public sealed class CareerJobCompletionInputSource
                     session,
                     cancellationToken)
                 .ConfigureAwait(false);
+
+        if (HasSessionChanged(session))
+        {
+            return await ReprojectAfterSessionChangeAsync(
+                    retryAfterSessionChange,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         if (mission is null)
         {
@@ -326,6 +359,14 @@ public sealed class CareerJobCompletionInputSource
                     session,
                     cancellationToken)
                 .ConfigureAwait(false);
+
+        if (HasSessionChanged(session))
+        {
+            return await ReprojectAfterSessionChangeAsync(
+                    retryAfterSessionChange,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         if (costs is null)
         {
@@ -387,6 +428,30 @@ public sealed class CareerJobCompletionInputSource
             session.SessionId,
             request,
             "Authoritative flight, mission, aircraft, settlement-cost, and debrief inputs are ready.");
+    }
+
+    private bool HasSessionChanged(
+        FlightSession reviewedSession) =>
+        _flightSessions.Current?.SessionId
+        != reviewedSession.SessionId;
+
+    private async Task<CareerJobCompletionInputSnapshot> ReprojectAfterSessionChangeAsync(
+        bool retryAfterSessionChange,
+        CancellationToken cancellationToken)
+    {
+        if (retryAfterSessionChange)
+        {
+            return await ReadCurrentCoreAsync(
+                    retryAfterSessionChange: false,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return Blocked(
+            CareerJobCompletionInputState.FlightSessionChanged,
+            contractId: null,
+            flightSessionId: null,
+            "The current FlightSession changed while career completion evidence was loading. Reopen Current Flight before completing it.");
     }
 
     private static string BuildFlightEvidenceIncompleteDetail(

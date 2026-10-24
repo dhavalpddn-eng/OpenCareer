@@ -202,10 +202,92 @@ public sealed class CareerJobCompletionInputSourceTests
             () => fixture.Source.ReadCurrentAsync());
     }
 
+    [Fact]
+    public async Task SessionReplacementDuringRegistryReadProjectsReplacementInsteadOfStaleReadyState()
+    {
+        var readStarted =
+            new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        var release =
+            new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        var registry =
+            new FakeAircraftRegistrySource(
+                async cancellationToken =>
+                {
+                    readStarted.TrySetResult();
+                    await release.Task.WaitAsync(cancellationToken);
+                });
+        TestFixture fixture =
+            CreateFixture(
+                missionSources: [new FixedMissionSource()],
+                costSources: [new FixedCostsSource()],
+                aircraftRegistry: registry);
+
+        Task<CareerJobCompletionInputSnapshot> read =
+            fixture.Source.ReadCurrentAsync();
+        await readStarted.Task;
+
+        FlightSession replacement =
+            ReplaceWithContractlessActiveSession(
+                fixture.Sessions);
+        release.TrySetResult();
+
+        CareerJobCompletionInputSnapshot snapshot =
+            await read;
+
+        Assert.Equal(
+            CareerJobCompletionInputState.NoCareerFlight,
+            snapshot.State);
+        Assert.Equal(
+            replacement.SessionId,
+            snapshot.FlightSessionId);
+        Assert.False(snapshot.IsReady);
+        Assert.Null(snapshot.Request);
+        Assert.Equal(1, registry.ReadCount);
+    }
+
+    [Fact]
+    public async Task RepeatedSessionReplacementDuringRegistryReadFailsClosedAfterOneRetry()
+    {
+        TestFixture? fixture = null;
+        var registry =
+            new FakeAircraftRegistrySource(
+                _ =>
+                {
+                    ReplaceWithShutdownCareerSession(
+                        fixture!.Sessions,
+                        fixture.Contract.Contract.ContractId);
+                    return Task.CompletedTask;
+                });
+        fixture =
+            CreateFixture(
+                missionSources: [new FixedMissionSource()],
+                costSources: [new FixedCostsSource()],
+                aircraftRegistry: registry);
+
+        CareerJobCompletionInputSnapshot snapshot =
+            await fixture.Source.ReadCurrentAsync();
+
+        Assert.Equal(
+            CareerJobCompletionInputState.FlightSessionChanged,
+            snapshot.State);
+        Assert.False(snapshot.IsReady);
+        Assert.Null(snapshot.ContractId);
+        Assert.Null(snapshot.FlightSessionId);
+        Assert.Null(snapshot.Request);
+        Assert.Contains(
+            "Reopen Current Flight",
+            snapshot.Detail,
+            StringComparison.Ordinal);
+        Assert.Equal(2, registry.ReadCount);
+    }
+
     private static TestFixture CreateFixture(
         IReadOnlyList<ICareerJobMissionCompletionSource> missionSources,
         IReadOnlyList<ICareerJobSettlementCostsSource> costSources,
-        FlightSession? sessionOverride = null)
+        FlightSession? sessionOverride = null,
+        IAircraftRegistrySource? aircraftRegistry = null)
     {
         Guid contractId =
             Guid.Parse(
@@ -245,14 +327,51 @@ public sealed class CareerJobCompletionInputSourceTests
                     new AircraftReservationOwnership(
                         "canonical-aircraft",
                         reservationId)),
-                new FakeAircraftRegistrySource(),
+                aircraftRegistry
+                    ?? new FakeAircraftRegistrySource(),
                 missionSources,
                 costSources);
 
         return new(
             source,
             contract,
-            session);
+            session,
+            sessions);
+    }
+
+    private static FlightSession ReplaceWithContractlessActiveSession(
+        FlightSessionCoordinator sessions)
+    {
+        RetireCurrentSession(sessions);
+        return sessions.Start(Epoch.AddHours(1));
+    }
+
+    private static FlightSession ReplaceWithShutdownCareerSession(
+        FlightSessionCoordinator sessions,
+        Guid contractId)
+    {
+        RetireCurrentSession(sessions);
+        FlightSession replacement =
+            ShutdownSession(
+                contractId,
+                Guid.NewGuid());
+        sessions.Restore(replacement);
+        return replacement;
+    }
+
+    private static void RetireCurrentSession(
+        FlightSessionCoordinator sessions)
+    {
+        FlightSession current =
+            Assert.IsType<FlightSession>(
+                sessions.Current);
+        sessions.CommitPersisted(
+            current with
+            {
+                UpdatedAt = current.UpdatedAt.AddSeconds(1),
+                Status = FlightSessionStatus.Cancelled
+            });
+        sessions.ClearTerminalSession();
     }
 
     private static PersistedJobContract InProgressContract(
@@ -311,14 +430,15 @@ public sealed class CareerJobCompletionInputSourceTests
     }
 
     private static FlightSession ShutdownSession(
-        Guid contractId)
+        Guid contractId,
+        Guid? sessionId = null)
     {
         FlightSession session =
             FlightSession.Start(
                 Epoch,
                 contractId,
                 sessionId:
-                    contractId);
+                    sessionId ?? contractId);
 
         session =
             Advance(
@@ -416,7 +536,8 @@ public sealed class CareerJobCompletionInputSourceTests
     private sealed record TestFixture(
         CareerJobCompletionInputSource Source,
         PersistedJobContract Contract,
-        FlightSession Session);
+        FlightSession Session,
+        FlightSessionCoordinator Sessions);
 
     private sealed class FixedMissionSource(
         bool verified = true,
@@ -536,55 +657,45 @@ public sealed class CareerJobCompletionInputSourceTests
         }
     }
 
-    private sealed class FakeAircraftRegistrySource
+    private sealed class FakeAircraftRegistrySource(
+        Func<CancellationToken, Task>? beforeReturnAsync = null)
         : IAircraftRegistrySource
     {
-        public Task<AircraftRegistryResolution?> FindAircraftAsync(
+        public int ReadCount { get; private set; }
+
+        public async Task<AircraftRegistryResolution?> FindAircraftAsync(
             string aircraftId,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            ReadCount++;
+            if (beforeReturnAsync is not null)
+                await beforeReturnAsync(cancellationToken);
 
-            AircraftRegistryResolution resolution =
-                AircraftRegistryResolver.Resolve(
-                [
-                    new AircraftRegistryObservation(
-                        CanonicalAircraftId:
-                            aircraftId,
-                        ProviderId:
-                            "fixture",
-                        ProviderRecordId:
-                            "fixture-aircraft",
-                        Confidence:
-                            AircraftDataConfidence.Verified,
-                        IsInstalled:
-                            true,
-                        DisplayName:
-                            "Fixture Aircraft",
-                        Capabilities:
-                            AircraftCapability.Cargo,
-                        Access:
-                            AircraftAccess.Civilian,
-                        MaximumPayloadPounds:
-                            2_000,
-                        MaximumRangeNauticalMiles:
-                            800,
-                        TypicalCruiseKnots:
-                            140,
-                        Seats:
-                            4,
-                        EngineCount:
-                            1,
-                        IfrCapable:
-                            true,
-                        Pressurized:
-                            false,
-                        RetractableGear:
-                            false)
-                ]);
-
-            return Task.FromResult<AircraftRegistryResolution?>(
-                resolution);
+            return ResolveAircraft(aircraftId);
         }
     }
+
+    private static AircraftRegistryResolution ResolveAircraft(
+        string aircraftId) =>
+        AircraftRegistryResolver.Resolve(
+        [
+            new AircraftRegistryObservation(
+                CanonicalAircraftId: aircraftId,
+                ProviderId: "fixture",
+                ProviderRecordId: "fixture-aircraft",
+                Confidence: AircraftDataConfidence.Verified,
+                IsInstalled: true,
+                DisplayName: "Fixture Aircraft",
+                Capabilities: AircraftCapability.Cargo,
+                Access: AircraftAccess.Civilian,
+                MaximumPayloadPounds: 2_000,
+                MaximumRangeNauticalMiles: 800,
+                TypicalCruiseKnots: 140,
+                Seats: 4,
+                EngineCount: 1,
+                IfrCapable: true,
+                Pressurized: false,
+                RetractableGear: false)
+        ]);
 }
