@@ -139,6 +139,8 @@ public sealed class JobAcceptanceFleetBridge
 
             try
             {
+                EnsureNoFlightSessionOwnsThePlayableLoop();
+
                 PersistedJobContract accepted =
                     await _acceptanceService
                         .AcceptOfferAsync(

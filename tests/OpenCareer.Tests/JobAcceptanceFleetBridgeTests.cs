@@ -83,6 +83,42 @@ public sealed class JobAcceptanceFleetBridgeTests
     }
 
     [Fact]
+    public async Task FlightSessionAppearingDuringReservationReleasesAcquireBeforeAcceptance()
+    {
+        JobContractCreationRequest request = Request();
+        var sessions = new FlightSessionCoordinator();
+        var contractStore = new FakeContractStore();
+        var reservationStore = new StatefulReservationStore
+        {
+            AfterNextAcquire =
+                () => sessions.Start(
+                    request.AcceptanceTime,
+                    Guid.Parse(
+                        "96000000-0000-0000-0000-000000000096"))
+        };
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => CreateBridge(
+                        contractStore,
+                        new FakeBoardStore(BoardWithOffer(request.Offer)),
+                        reservationStore,
+                        sessions)
+                    .AcceptAndReserveAsync(
+                        request,
+                        DispatchContext(request.AcceptanceTime)));
+
+        Assert.Contains("FlightSession", error.Message);
+        Assert.Equal(1, reservationStore.AcquiredCount);
+        Assert.Equal(1, reservationStore.ReleaseCount);
+        Assert.True(reservationStore.State?.IsAvailable);
+        Assert.Null(reservationStore.State?.ReservationId);
+        Assert.Equal(0, contractStore.CreateCount);
+        Assert.Equal(0, contractStore.UpdateCount);
+        Assert.NotNull(sessions.Current);
+    }
+
+    [Fact]
     public async Task ReplayAfterBridgeRecreationReusesReservationWithoutDuplicateAcquire()
     {
         JobContractCreationRequest request = Request();
@@ -719,6 +755,7 @@ public sealed class JobAcceptanceFleetBridgeTests
         public int TryReserveCount { get; private set; }
         public int AcquiredCount { get; private set; }
         public int ReleaseCount { get; private set; }
+        public Action? AfterNextAcquire { get; set; }
 
         public Task<AircraftAvailabilityState?> FindAsync(
             string canonicalAircraftId,
@@ -764,6 +801,11 @@ public sealed class JobAcceptanceFleetBridgeTests
                         AircraftAvailabilityStatus.Unavailable,
                         reservationId);
                 AcquiredCount++;
+
+                Action? afterAcquire = AfterNextAcquire;
+                AfterNextAcquire = null;
+                afterAcquire?.Invoke();
+
                 return Task.FromResult(
                     AircraftReservationAcquireResult.Acquired);
             }
