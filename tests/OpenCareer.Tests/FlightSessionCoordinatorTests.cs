@@ -23,6 +23,31 @@ public sealed class FlightSessionCoordinatorTests
     }
 
     [Fact]
+    public void StartingOverTerminalSessionIsRejectedUntilExplicitlyCleared()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        coordinator.Start(Epoch);
+
+        FlightSession terminal =
+            coordinator.Advance(
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(1),
+                        Connected: true),
+                    CancelRequested: true));
+
+        InvalidOperationException error =
+            Assert.Throws<InvalidOperationException>(
+                () => coordinator.Start(
+                    Epoch.AddSeconds(2)));
+
+        Assert.Contains("cleared", error.Message);
+        Assert.Equal(terminal, coordinator.Current);
+    }
+
+    [Fact]
     public void CoordinatorPublishesStateChanges()
     {
         var coordinator =

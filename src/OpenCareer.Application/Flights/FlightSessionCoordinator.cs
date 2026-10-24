@@ -13,10 +13,10 @@ public sealed class FlightSessionCoordinator
         Guid? contractId = null,
         Guid? sessionId = null)
     {
-        if (Current is { IsTerminal: false })
+        if (Current is not null)
         {
             throw new InvalidOperationException(
-                "An active flight session already exists.");
+                "The current flight session must be cleared before a new session can start.");
         }
 
         Current =

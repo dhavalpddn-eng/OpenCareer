@@ -209,6 +209,7 @@ public sealed class AcceptedJobFlightSessionBridgeTests
                             CancelRequested: true));
 
                 coordinator.CommitPersisted(cancelled);
+                coordinator.ClearTerminalSession();
                 coordinator.Start(
                     OfferedAt.AddMinutes(22),
                     contractId:
