@@ -51,7 +51,7 @@ public sealed class AcceptedJobCancellationService(
             if (persisted.Contract.Status == ContractStatus.Accepted)
             {
                 persisted = await lifecycle
-                    .CancelAsync(contractId, cancellationToken)
+                    .CancelAcceptedAsync(contractId, cancellationToken)
                     .ConfigureAwait(false);
             }
             else if (persisted.Contract.Status != ContractStatus.Cancelled)

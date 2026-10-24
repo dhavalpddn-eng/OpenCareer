@@ -342,6 +342,79 @@ public sealed class JobContractLifecycleServiceTests
     }
 
     [Fact]
+    public async Task AcceptedOnlyCancellationCannotCancelStartedContract()
+    {
+        JobContract accepted =
+            BaseContract() with
+            {
+                Status = ContractStatus.Accepted,
+                AcceptedAt = OfferedAt.AddMinutes(5)
+            };
+
+        var store =
+            new FakeStore(
+                new PersistedJobContract(
+                    accepted,
+                    Version: 1));
+        var service =
+            new JobContractLifecycleService(store);
+
+        PersistedJobContract started =
+            await service.StartAsync(
+                accepted.ContractId,
+                DispatchContext(
+                    OfferedAt.AddMinutes(15)));
+
+        InvalidOperationException exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.CancelAcceptedAsync(
+                    accepted.ContractId));
+
+        Assert.Contains(
+            "accepted preflight job",
+            exception.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ContractStatus.InProgress, started.Contract.Status);
+        Assert.Equal(1, store.UpdateCount);
+        PersistedJobContract authoritative =
+            Assert.IsType<PersistedJobContract>(
+                await store.ReadJobContractAsync(
+                    accepted.ContractId));
+        Assert.Equal(
+            ContractStatus.InProgress,
+            authoritative.Contract.Status);
+        Assert.Equal(2, authoritative.Version);
+    }
+
+    [Fact]
+    public async Task AcceptedOnlyCancellationCancelsAcceptedContract()
+    {
+        JobContract accepted =
+            BaseContract() with
+            {
+                Status = ContractStatus.Accepted,
+                AcceptedAt = OfferedAt.AddMinutes(5)
+            };
+
+        var store =
+            new FakeStore(
+                new PersistedJobContract(
+                    accepted,
+                    Version: 1));
+
+        PersistedJobContract cancelled =
+            await new JobContractLifecycleService(store)
+                .CancelAcceptedAsync(
+                    accepted.ContractId);
+
+        Assert.Equal(
+            ContractStatus.Cancelled,
+            cancelled.Contract.Status);
+        Assert.Equal(2, cancelled.Version);
+        Assert.Equal(1, store.UpdateCount);
+    }
+
+    [Fact]
     public async Task OptimisticConcurrencyFailureIsNotHidden()
     {
         JobContract offered =

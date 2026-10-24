@@ -125,6 +125,23 @@ public sealed class JobContractLifecycleService
             contract => contract.Cancel(),
             cancellationToken);
 
+    public Task<PersistedJobContract> CancelAcceptedAsync(
+        Guid contractId,
+        CancellationToken cancellationToken = default) =>
+        TransitionAsync(
+            contractId,
+            contract =>
+            {
+                if (contract.Status != ContractStatus.Accepted)
+                {
+                    throw new InvalidOperationException(
+                        $"Only an accepted preflight job can be cancelled here; current state is {contract.Status}.");
+                }
+
+                return contract.Cancel();
+            },
+            cancellationToken);
+
     public Task<PersistedJobContract> ExpireAsync(
         Guid contractId,
         DateTimeOffset time,
