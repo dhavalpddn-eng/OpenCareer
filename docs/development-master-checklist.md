@@ -359,6 +359,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
   - [x] Wire authoritative career settlement -> SQLite Logbook commit.
   - [x] Wire manual free/practice **Log Flight / Discard** UI flow with authoritative readiness and retry-safe orchestration.
   - [x] Expose confirmed no-credit recovery for contractless practice/training sessions: active state is first persisted as cancelled, and active or terminal checkpoints can then be discarded without Logbook, experience, qualification or other progression credit; keep contract-linked sessions protected.
+  - [x] Bind manual Log/Discard to the exact FlightSession identity reviewed by the caller so stale readiness cannot log, cancel or clear a replacement session.
 - [x] Atomically settle money once.
 - [ ] Atomically settle reputation/relationships once.
 - [x] Atomically settle travel/location once.
