@@ -114,105 +114,152 @@ public sealed class CareerFlightAbandonCoordinator
 
         try
         {
-            FlightSession? session =
-                _flightSessions.Current;
-
-            if (session is null)
-            {
-                return Unavailable(
-                    "No current career FlightSession is available to abandon.");
-            }
-
-            if (session.ContractId is not { } contractId)
-            {
-                return Unavailable(
-                    "The current FlightSession is not linked to a career contract.");
-            }
-
-            if (!IsAbandonableSession(session))
-            {
-                return Unavailable(
-                    session.Status == FlightSessionStatus.Completed
-                        ? "A completed career flight cannot be abandoned."
-                        : "This terminal FlightSession cannot be abandoned.");
-            }
-
-            PersistedJobContract? persisted =
-                await _contractStore
-                    .ReadJobContractAsync(
-                        contractId,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-            if (persisted is null
-                || persisted.Contract.ContractId != contractId)
-            {
-                return Unavailable(
-                    "The matching authoritative career contract could not be verified.");
-            }
-
-            persisted.Validate();
-
-            if (persisted.Contract.Status is not
-                (ContractStatus.InProgress
-                or ContractStatus.Cancelled))
-            {
-                return Unavailable(
-                    $"The matching career contract is {persisted.Contract.Status} and cannot use flight abandonment.");
-            }
-
-            string reservationId =
-                JobAcceptanceFleetBridge.GetReservationId(
-                    contractId);
-
-            AircraftReservationOwnership? ownership =
-                await _reservationLookup
-                    .FindByReservationIdAsync(
-                        reservationId,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-            if (ownership is not null)
-            {
-                ValidateReservationOwnership(
-                    ownership,
-                    reservationId);
-            }
-            else if (session.Status is not
-                    (FlightSessionStatus.Cancelled
-                    or FlightSessionStatus.Interrupted)
-                && persisted.Contract.Status != ContractStatus.Cancelled)
-            {
-                return Unavailable(
-                    "The active contract's Fleet reservation could not be verified.");
-            }
-
-            bool cleanupPending =
-                session.Status is FlightSessionStatus.Cancelled
-                    or FlightSessionStatus.Interrupted
-                || persisted.Contract.Status == ContractStatus.Cancelled
-                || ownership is null;
-
-            string detail =
-                session.Status == FlightSessionStatus.Interrupted
-                    ? "This interrupted flight will be discarded. Its contract, aircraft reservation, and saved session will be cleaned up with no settlement, logbook completion, pay, or career credit."
-                    : cleanupPending
-                        ? "Cancellation cleanup is pending. Retry to reconcile the contract, Fleet reservation, and saved FlightSession."
-                        : "Abandoning cancels this flight and contract, releases its aircraft, and grants no completion rewards.";
-
-            return new(
-                CanAbandon: true,
-                cleanupPending
-                    ? CareerFlightAbandonAvailabilityState.CleanupPending
-                    : CareerFlightAbandonAvailabilityState.Ready,
-                session.SessionId,
-                contractId,
-                detail);
+            return await ReadAvailabilityCoreAsync(
+                    retryAfterSessionChange: true,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    private async Task<CareerFlightAbandonAvailability> ReadAvailabilityCoreAsync(
+        bool retryAfterSessionChange,
+        CancellationToken cancellationToken)
+    {
+        FlightSession? session =
+            _flightSessions.Current;
+
+        if (session is null)
+        {
+            return Unavailable(
+                "No current career FlightSession is available to abandon.");
+        }
+
+        if (session.ContractId is not { } contractId)
+        {
+            return Unavailable(
+                "The current FlightSession is not linked to a career contract.");
+        }
+
+        if (!IsAbandonableSession(session))
+        {
+            return Unavailable(
+                session.Status == FlightSessionStatus.Completed
+                    ? "A completed career flight cannot be abandoned."
+                    : "This terminal FlightSession cannot be abandoned.");
+        }
+
+        PersistedJobContract? persisted =
+            await _contractStore
+                .ReadJobContractAsync(
+                    contractId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (HasSessionChanged(session))
+        {
+            return await ReprojectAvailabilityAfterSessionChangeAsync(
+                    retryAfterSessionChange,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (persisted is null
+            || persisted.Contract.ContractId != contractId)
+        {
+            return Unavailable(
+                "The matching authoritative career contract could not be verified.");
+        }
+
+        persisted.Validate();
+
+        if (persisted.Contract.Status is not
+            (ContractStatus.InProgress
+            or ContractStatus.Cancelled))
+        {
+            return Unavailable(
+                $"The matching career contract is {persisted.Contract.Status} and cannot use flight abandonment.");
+        }
+
+        string reservationId =
+            JobAcceptanceFleetBridge.GetReservationId(
+                contractId);
+
+        AircraftReservationOwnership? ownership =
+            await _reservationLookup
+                .FindByReservationIdAsync(
+                    reservationId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (HasSessionChanged(session))
+        {
+            return await ReprojectAvailabilityAfterSessionChangeAsync(
+                    retryAfterSessionChange,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (ownership is not null)
+        {
+            ValidateReservationOwnership(
+                ownership,
+                reservationId);
+        }
+        else if (session.Status is not
+                (FlightSessionStatus.Cancelled
+                or FlightSessionStatus.Interrupted)
+            && persisted.Contract.Status != ContractStatus.Cancelled)
+        {
+            return Unavailable(
+                "The active contract's Fleet reservation could not be verified.");
+        }
+
+        bool cleanupPending =
+            session.Status is FlightSessionStatus.Cancelled
+                or FlightSessionStatus.Interrupted
+            || persisted.Contract.Status == ContractStatus.Cancelled
+            || ownership is null;
+
+        string detail =
+            session.Status == FlightSessionStatus.Interrupted
+                ? "This interrupted flight will be discarded. Its contract, aircraft reservation, and saved session will be cleaned up with no settlement, logbook completion, pay, or career credit."
+                : cleanupPending
+                    ? "Cancellation cleanup is pending. Retry to reconcile the contract, Fleet reservation, and saved FlightSession."
+                    : "Abandoning cancels this flight and contract, releases its aircraft, and grants no completion rewards.";
+
+        return new(
+            CanAbandon: true,
+            cleanupPending
+                ? CareerFlightAbandonAvailabilityState.CleanupPending
+                : CareerFlightAbandonAvailabilityState.Ready,
+            session.SessionId,
+            contractId,
+            detail);
+    }
+
+    private bool HasSessionChanged(
+        FlightSession reviewedSession) =>
+        _flightSessions.Current?.SessionId
+        != reviewedSession.SessionId;
+
+    private async Task<CareerFlightAbandonAvailability> ReprojectAvailabilityAfterSessionChangeAsync(
+        bool retryAfterSessionChange,
+        CancellationToken cancellationToken)
+    {
+        if (retryAfterSessionChange)
+        {
+            return await ReadAvailabilityCoreAsync(
+                    retryAfterSessionChange: false,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return Unavailable(
+            "The current FlightSession changed while abandonment readiness was loading. Reopen Current Flight before abandoning it.");
     }
 
     public async Task<CareerFlightAbandonResult> AbandonAsync(

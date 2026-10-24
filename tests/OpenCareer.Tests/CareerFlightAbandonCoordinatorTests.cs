@@ -87,6 +87,70 @@ public sealed class CareerFlightAbandonCoordinatorTests
     }
 
     [Fact]
+    public async Task SessionReplacementDuringContractReadProjectsReplacementInsteadOfStaleAction()
+    {
+        Fixture fixture =
+            await Fixture.CreateAsync();
+        var readStarted =
+            new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        var release =
+            new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Contracts.BeforeReadAsync =
+            async cancellationToken =>
+            {
+                readStarted.TrySetResult();
+                await release.Task.WaitAsync(cancellationToken);
+            };
+
+        Task<CareerFlightAbandonAvailability> read =
+            fixture.Action.ReadAvailabilityAsync();
+        await readStarted.Task;
+
+        FlightSession replacement =
+            await fixture.ReplaceWithContractlessActiveSessionAsync();
+        release.TrySetResult();
+
+        CareerFlightAbandonAvailability availability =
+            await read;
+
+        Assert.False(availability.CanAbandon);
+        Assert.Null(availability.SessionId);
+        Assert.Null(availability.ContractId);
+        Assert.Contains(
+            "not linked",
+            availability.Detail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(replacement.SessionId, fixture.Sessions.Current!.SessionId);
+        Assert.Equal(1, fixture.Contracts.ReadCount);
+    }
+
+    [Fact]
+    public async Task RepeatedSessionReplacementDuringContractReadFailsClosedAfterOneRetry()
+    {
+        Fixture fixture =
+            await Fixture.CreateAsync();
+        fixture.Contracts.BeforeReadAsync =
+            async _ =>
+            {
+                await fixture.ReplaceWithActiveCareerSessionAsync();
+            };
+
+        CareerFlightAbandonAvailability availability =
+            await fixture.Action.ReadAvailabilityAsync();
+
+        Assert.False(availability.CanAbandon);
+        Assert.Null(availability.SessionId);
+        Assert.Null(availability.ContractId);
+        Assert.Contains(
+            "Reopen Current Flight",
+            availability.Detail,
+            StringComparison.Ordinal);
+        Assert.Equal(2, fixture.Contracts.ReadCount);
+    }
+
+    [Fact]
     public async Task ReplayAfterSuccessfulCleanupMakesNoFurtherMutation()
     {
         Fixture fixture =
@@ -755,6 +819,31 @@ public sealed class CareerFlightAbandonCoordinatorTests
             Sessions.CommitPersisted(terminal);
             Checkpoints.Checkpoint = terminal;
         }
+
+        public async Task<FlightSession> ReplaceWithContractlessActiveSessionAsync()
+        {
+            await RetireCurrentSessionAsync();
+            return Sessions.Start(
+                Epoch.AddHours(1));
+        }
+
+        public async Task<FlightSession> ReplaceWithActiveCareerSessionAsync()
+        {
+            await RetireCurrentSessionAsync();
+            return Sessions.Start(
+                Epoch.AddHours(1),
+                ContractId);
+        }
+
+        private async Task RetireCurrentSessionAsync()
+        {
+            Guid sessionId =
+                Sessions.Current!.SessionId;
+            SetSessionCancelled();
+            await Persistence.ClearTerminalAsync(
+                sessionId,
+                ContractId);
+        }
     }
 
     private sealed class FakePreparedPlanStore(
@@ -908,16 +997,22 @@ public sealed class CareerFlightAbandonCoordinatorTests
     {
         public PersistedJobContract Current { get; private set; } = current;
         public int UpdateCount { get; private set; }
+        public int ReadCount { get; private set; }
+        public Func<CancellationToken, Task>? BeforeReadAsync { get; set; }
 
         public void SetCurrent(PersistedJobContract persisted) =>
             Current = persisted;
 
-        public Task<PersistedJobContract?> ReadJobContractAsync(
+        public async Task<PersistedJobContract?> ReadJobContractAsync(
             Guid contractId,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult<PersistedJobContract?>(Current);
+            ReadCount++;
+            if (BeforeReadAsync is not null)
+                await BeforeReadAsync(cancellationToken);
+
+            return Current;
         }
 
         public Task<JobContractSaveResult> CreateJobContractAsync(
