@@ -358,7 +358,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
   - [x] Implement persistent versioned SQLite ILogbookSource / ILogbookWriter with indexed filters, immutable payload storage and idempotency.
   - [x] Wire authoritative career settlement -> SQLite Logbook commit.
   - [x] Wire manual free/practice **Log Flight / Discard** UI flow with authoritative readiness and retry-safe orchestration.
-  - [x] Expose confirmed discard-only recovery for unsuccessful or aircraft-evidence-blocked contractless terminal sessions without granting Logbook/progression credit; keep active and contract-linked sessions protected.
+  - [x] Expose confirmed no-credit recovery for contractless practice/training sessions: active state is first persisted as cancelled, and active or terminal checkpoints can then be discarded without Logbook, experience, qualification or other progression credit; keep contract-linked sessions protected.
 - [x] Atomically settle money once.
 - [ ] Atomically settle reputation/relationships once.
 - [x] Atomically settle travel/location once.
