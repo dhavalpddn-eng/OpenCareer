@@ -17,7 +17,8 @@ public enum ManualFlightPostflightInputState
     FlightNotLoggable,
     AircraftIdentityUnavailable,
     AircraftIdentityConflict,
-    AircraftDebriefUnavailable
+    AircraftDebriefUnavailable,
+    FlightSessionChanged
 }
 
 public sealed record ManualFlightPostflightInputSnapshot(
@@ -59,7 +60,17 @@ public sealed class ManualFlightPostflightInputSource
 
     public async Task<ManualFlightPostflightInputSnapshot> ReadCurrentAsync(
         DateTimeOffset requestedAt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await ReadCurrentCoreAsync(
+                requestedAt,
+                retryAfterSessionChange: true,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+    private async Task<ManualFlightPostflightInputSnapshot> ReadCurrentCoreAsync(
+        DateTimeOffset requestedAt,
+        bool retryAfterSessionChange,
+        CancellationToken cancellationToken)
     {
         if (requestedAt == default)
             throw new ArgumentOutOfRangeException(nameof(requestedAt));
@@ -108,6 +119,24 @@ public sealed class ManualFlightPostflightInputSource
         AircraftRegistryResolution? aircraft = await _aircraftRegistry
             .FindAircraftAsync(canonicalAircraftId, cancellationToken)
             .ConfigureAwait(false);
+
+        if (_sessions.Current?.SessionId != session.SessionId)
+        {
+            if (retryAfterSessionChange)
+            {
+                return await ReadCurrentCoreAsync(
+                        requestedAt,
+                        retryAfterSessionChange: false,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            return Blocked(
+                ManualFlightPostflightInputState.FlightSessionChanged,
+                sessionId: null,
+                "The current FlightSession changed while postflight evidence was loading. Reopen Current Flight before logging or discarding.");
+        }
+
         string? displayName = aircraft?.CapabilityValues.DisplayName;
         if (aircraft is null
             || aircraft.InstallationStatus != AircraftInstallationStatus.Installed

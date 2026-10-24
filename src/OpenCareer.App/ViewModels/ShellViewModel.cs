@@ -1034,7 +1034,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ManualFlightPostflightInputState.FlightNotLoggable or
             ManualFlightPostflightInputState.AircraftIdentityUnavailable or
             ManualFlightPostflightInputState.AircraftIdentityConflict or
-            ManualFlightPostflightInputState.AircraftDebriefUnavailable;
+            ManualFlightPostflightInputState.AircraftDebriefUnavailable or
+            ManualFlightPostflightInputState.FlightSessionChanged;
 
         SetBoolean(ref _isManualPostflightVisible, visible, nameof(IsManualPostflightVisible));
         SetManualPostflightState(

@@ -541,6 +541,27 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task ChangedManualFlightSessionKeepsRecoveryNoticeVisibleWithoutStaleActions()
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = new(
+                ManualFlightPostflightInputState.FlightSessionChanged,
+                SessionId: null,
+                Request: null,
+                "Reopen Current Flight before logging or discarding.")
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.True(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+        Assert.False(viewModel.CanDiscardManualFlight);
+        Assert.Contains("Reopen Current Flight", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ManualLogUsesExactReadyRequestOnceAndClearsUi()
     {
         Guid sessionId = Guid.NewGuid();

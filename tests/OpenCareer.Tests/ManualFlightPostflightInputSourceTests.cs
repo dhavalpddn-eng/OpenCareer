@@ -141,6 +141,64 @@ public sealed class ManualFlightPostflightInputSourceTests
         Assert.Null(snapshot.Request);
     }
 
+    [Fact]
+    public async Task SessionReplacementDuringRegistryReadProjectsReplacementInsteadOfStaleReadyState()
+    {
+        var sessions = new FlightSessionCoordinator();
+        FlightSession reviewed = CompletedSession();
+        sessions.Restore(reviewed);
+        var registry = new BlockingRegistry(Resolution("Test Aircraft"));
+        var source = new ManualFlightPostflightInputSource(
+            sessions,
+            new FakeLoadedAircraft(Identified()),
+            registry);
+
+        Task<ManualFlightPostflightInputSnapshot> read = source.ReadCurrentAsync(Epoch.AddHours(2));
+        await registry.WaitForReadAsync();
+
+        sessions.ClearTerminalSession();
+        FlightSession replacement = sessions.Start(Epoch.AddHours(2));
+        registry.Release();
+
+        ManualFlightPostflightInputSnapshot snapshot = await read;
+
+        Assert.Equal(ManualFlightPostflightInputState.FlightNotCompleted, snapshot.State);
+        Assert.Equal(replacement.SessionId, snapshot.SessionId);
+        Assert.False(snapshot.IsReady);
+        Assert.True(snapshot.CanDiscard);
+        Assert.Null(snapshot.Request);
+        Assert.Equal(1, registry.ReadCount);
+    }
+
+    [Fact]
+    public async Task RepeatedSessionReplacementDuringRegistryReadFailsClosedAfterOneRetry()
+    {
+        var sessions = new FlightSessionCoordinator();
+        sessions.Restore(CompletedSession());
+        var registry = new ReplacingRegistry(
+            Resolution("Test Aircraft"),
+            () =>
+            {
+                sessions.ClearTerminalSession();
+                sessions.Restore(CompletedSession());
+            });
+        var source = new ManualFlightPostflightInputSource(
+            sessions,
+            new FakeLoadedAircraft(Identified()),
+            registry);
+
+        ManualFlightPostflightInputSnapshot snapshot =
+            await source.ReadCurrentAsync(Epoch.AddHours(2));
+
+        Assert.Equal(ManualFlightPostflightInputState.FlightSessionChanged, snapshot.State);
+        Assert.False(snapshot.IsReady);
+        Assert.False(snapshot.CanDiscard);
+        Assert.Null(snapshot.SessionId);
+        Assert.Null(snapshot.Request);
+        Assert.Contains("Reopen Current Flight", snapshot.Detail, StringComparison.Ordinal);
+        Assert.Equal(2, registry.ReadCount);
+    }
+
     private static ManualFlightPostflightInputSource CreateSource(
         FlightSession session,
         CurrentLoadedAircraftIdentitySnapshot identity,
@@ -197,6 +255,49 @@ public sealed class ManualFlightPostflightInputSourceTests
             CancellationToken cancellationToken = default)
         {
             ReadCount++;
+            return Task.FromResult(resolution);
+        }
+    }
+
+    private sealed class BlockingRegistry(AircraftRegistryResolution? resolution)
+        : IAircraftRegistrySource
+    {
+        private readonly TaskCompletionSource _readStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int ReadCount { get; private set; }
+
+        public async Task<AircraftRegistryResolution?> FindAircraftAsync(
+            string aircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            _readStarted.TrySetResult();
+            await _release.Task.WaitAsync(cancellationToken);
+            return resolution;
+        }
+
+        public Task WaitForReadAsync() =>
+            _readStarted.Task;
+
+        public void Release() =>
+            _release.TrySetResult();
+    }
+
+    private sealed class ReplacingRegistry(
+        AircraftRegistryResolution? resolution,
+        Action replaceSession) : IAircraftRegistrySource
+    {
+        public int ReadCount { get; private set; }
+
+        public Task<AircraftRegistryResolution?> FindAircraftAsync(
+            string aircraftId,
+            CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            replaceSession();
             return Task.FromResult(resolution);
         }
     }
