@@ -337,6 +337,54 @@ public sealed class CareerFlightAbandonCoordinatorTests
     }
 
     [Fact]
+    public async Task InterruptedSessionReplacementDuringReservationReadIsRejectedBeforeCleanupMutation()
+    {
+        Fixture fixture =
+            await Fixture.CreateAsync();
+        fixture.SetSessionInterrupted();
+        var readStarted =
+            new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        var release =
+            new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Fleet.BeforeFindAsync =
+            async cancellationToken =>
+            {
+                readStarted.TrySetResult();
+                await release.Task.WaitAsync(cancellationToken);
+            };
+
+        Task<CareerFlightAbandonResult> abandon =
+            fixture.Action.AbandonAsync(
+                fixture.SessionId,
+                fixture.ContractId);
+        await readStarted.Task;
+
+        FlightSession replacement =
+            await fixture.ReplaceWithContractlessActiveSessionAsync();
+        int checkpointClears =
+            fixture.Checkpoints.ClearCount;
+        release.TrySetResult();
+
+        InvalidOperationException exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => abandon);
+
+        Assert.Contains(
+            "identity changed",
+            exception.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fixture.Contracts.UpdateCount);
+        Assert.Equal(0, fixture.Fleet.ReleaseCount);
+        Assert.Equal(checkpointClears, fixture.Checkpoints.ClearCount);
+        Assert.True(fixture.PreparedPlans.HasPlan);
+        Assert.Equal(0, fixture.PreparedPlans.ClearCount);
+        Assert.Equal(replacement.SessionId, fixture.Sessions.Current!.SessionId);
+        Assert.Equal(FlightSessionStatus.Active, fixture.Sessions.Current.Status);
+    }
+
+    [Fact]
     public async Task InterruptedFlightIsDiscardedWithoutRewritingTerminalState()
     {
         Fixture fixture =
@@ -838,9 +886,13 @@ public sealed class CareerFlightAbandonCoordinatorTests
 
         private async Task RetireCurrentSessionAsync()
         {
+            FlightSession current =
+                Sessions.Current!;
             Guid sessionId =
-                Sessions.Current!.SessionId;
-            SetSessionCancelled();
+                current.SessionId;
+            if (!current.IsTerminal)
+                SetSessionCancelled();
+
             await Persistence.ClearTerminalAsync(
                 sessionId,
                 ContractId);
@@ -1063,6 +1115,8 @@ public sealed class CareerFlightAbandonCoordinatorTests
 
         public int ReleaseCount { get; private set; }
 
+        public Func<CancellationToken, Task>? BeforeFindAsync { get; set; }
+
         public void Add(
             string aircraftId,
             string reservationId) =>
@@ -1074,15 +1128,18 @@ public sealed class CareerFlightAbandonCoordinatorTests
         public void Remove(string reservationId) =>
             _byReservation.Remove(reservationId);
 
-        public Task<AircraftReservationOwnership?> FindByReservationIdAsync(
+        public async Task<AircraftReservationOwnership?> FindByReservationIdAsync(
             string reservationId,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (BeforeFindAsync is not null)
+                await BeforeFindAsync(cancellationToken);
+
             _byReservation.TryGetValue(
                 reservationId,
                 out AircraftReservationOwnership? ownership);
-            return Task.FromResult(ownership);
+            return ownership;
         }
 
         public Task<AircraftReservationAcquireResult> TryReserveAsync(

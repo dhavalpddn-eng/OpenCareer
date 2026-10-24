@@ -309,6 +309,9 @@ public sealed class CareerFlightAbandonCoordinator
                         cancellationToken)
                     .ConfigureAwait(false);
 
+            session = RequireExpectedCurrentSession(
+                expectedSessionId,
+                expectedContractId);
             ValidateContractState(contract);
 
             string reservationId =
@@ -321,6 +324,10 @@ public sealed class CareerFlightAbandonCoordinator
                         reservationId,
                         cancellationToken)
                     .ConfigureAwait(false);
+
+            session = RequireExpectedCurrentSession(
+                expectedSessionId,
+                expectedContractId);
 
             if (ownership is not null)
             {
@@ -546,6 +553,23 @@ public sealed class CareerFlightAbandonCoordinator
             throw new InvalidOperationException(
                 "Interrupted FlightSession tracking state is inconsistent.");
         }
+    }
+
+    private FlightSession RequireExpectedCurrentSession(
+        Guid expectedSessionId,
+        Guid expectedContractId)
+    {
+        FlightSession current =
+            _flightSessions.Current
+            ?? throw new InvalidOperationException(
+                "Current FlightSession disappeared before abandonment could begin mutation.");
+
+        ValidateSession(
+            current,
+            expectedSessionId,
+            expectedContractId);
+
+        return current;
     }
 
     private static bool IsAbandonableSession(
