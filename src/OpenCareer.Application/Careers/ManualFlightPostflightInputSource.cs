@@ -29,6 +29,15 @@ public sealed record ManualFlightPostflightInputSnapshot(
     public bool IsReady =>
         State == ManualFlightPostflightInputState.Ready
         && Request is not null;
+
+    public bool CanDiscard =>
+        SessionId is not null
+        && State is (
+            ManualFlightPostflightInputState.Ready
+            or ManualFlightPostflightInputState.FlightNotLoggable
+            or ManualFlightPostflightInputState.AircraftIdentityUnavailable
+            or ManualFlightPostflightInputState.AircraftIdentityConflict
+            or ManualFlightPostflightInputState.AircraftDebriefUnavailable);
 }
 
 public sealed class ManualFlightPostflightInputSource
@@ -69,7 +78,7 @@ public sealed class ManualFlightPostflightInputSource
             || session.Tracking.State != FlightTrackingState.Complete
             || session.Tracking.CrashReported)
         {
-            return Blocked(ManualFlightPostflightInputState.FlightNotLoggable, session.SessionId, "Crashed, interrupted, cancelled, or otherwise unsuccessful FlightSessions cannot be manually logged.");
+            return Blocked(ManualFlightPostflightInputState.FlightNotLoggable, session.SessionId, "This unsuccessful terminal FlightSession cannot be logged, but it can be discarded without credit so another flight can start.");
         }
 
         DateTimeOffset endedAt = session.Milestones.CompletedAt ?? session.UpdatedAt;

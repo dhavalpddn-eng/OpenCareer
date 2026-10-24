@@ -67,7 +67,7 @@ public sealed class ManualFlightPostflightInputSourceTests
     [InlineData(FlightSessionStatus.Interrupted, FlightOperationState.Failed, FlightTrackingState.Interrupted, false)]
     [InlineData(FlightSessionStatus.Cancelled, FlightOperationState.Cancelled, FlightTrackingState.Complete, false)]
     [InlineData(FlightSessionStatus.Completed, FlightOperationState.Complete, FlightTrackingState.Complete, true)]
-    public async Task UnsuccessfulTerminalSessionIsBlocked(
+    public async Task UnsuccessfulTerminalSessionCanBeDiscardedWithoutRegistryRead(
         FlightSessionStatus status,
         FlightOperationState operation,
         FlightTrackingState tracking,
@@ -85,6 +85,9 @@ public sealed class ManualFlightPostflightInputSourceTests
         ManualFlightPostflightInputSnapshot snapshot = await source.ReadCurrentAsync(Epoch.AddHours(2));
 
         Assert.Equal(ManualFlightPostflightInputState.FlightNotLoggable, snapshot.State);
+        Assert.False(snapshot.IsReady);
+        Assert.True(snapshot.CanDiscard);
+        Assert.Contains("can be discarded", snapshot.Detail, StringComparison.Ordinal);
         Assert.Equal(0, registry.ReadCount);
     }
 
@@ -100,6 +103,7 @@ public sealed class ManualFlightPostflightInputSourceTests
         ManualFlightPostflightInputSnapshot snapshot = await source.ReadCurrentAsync(Epoch.AddHours(2));
 
         Assert.Equal(ManualFlightPostflightInputState.AircraftIdentityUnavailable, snapshot.State);
+        Assert.True(snapshot.CanDiscard);
         Assert.Equal(0, registry.ReadCount);
     }
 
@@ -116,6 +120,7 @@ public sealed class ManualFlightPostflightInputSourceTests
         ManualFlightPostflightInputSnapshot snapshot = await source.ReadCurrentAsync(Epoch.AddHours(2));
 
         Assert.Equal(ManualFlightPostflightInputState.AircraftIdentityConflict, snapshot.State);
+        Assert.True(snapshot.CanDiscard);
         Assert.Equal(0, registry.ReadCount);
     }
 
@@ -130,6 +135,7 @@ public sealed class ManualFlightPostflightInputSourceTests
         ManualFlightPostflightInputSnapshot snapshot = await source.ReadCurrentAsync(Epoch.AddHours(2));
 
         Assert.Equal(ManualFlightPostflightInputState.AircraftDebriefUnavailable, snapshot.State);
+        Assert.True(snapshot.CanDiscard);
         Assert.Null(snapshot.Request);
     }
 

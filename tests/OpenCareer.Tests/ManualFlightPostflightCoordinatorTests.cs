@@ -78,6 +78,21 @@ public sealed class ManualFlightPostflightCoordinatorTests
     }
 
     [Fact]
+    public async Task UnsuccessfulTerminalManualSessionCanBeDiscarded()
+    {
+        Fixture fixture = Fixture.Create(interrupted: true);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.Subject.LogAsync(Request()));
+        await fixture.Subject.DiscardAsync();
+
+        Assert.Equal(0, fixture.Logbook.AppendCount);
+        Assert.Equal(0, fixture.Profiles.SaveCount);
+        Assert.Null(fixture.Sessions.Current);
+        Assert.Equal(1, fixture.Checkpoints.ClearCount);
+    }
+
+    [Fact]
     public async Task ContractLinkedAndActiveSessionsFailClosed()
     {
         Fixture contract = Fixture.Create(contractId: Guid.NewGuid());
@@ -146,10 +161,22 @@ public sealed class ManualFlightPostflightCoordinatorTests
             return new(subject, sessions, Checkpoints, Logbook, Profiles);
         }
 
-        public static Fixture Create(Guid? contractId = null, bool completed = true)
+        public static Fixture Create(
+            Guid? contractId = null,
+            bool completed = true,
+            bool interrupted = false)
         {
             FlightSession session = FlightSession.Start(Epoch, contractId, plan: new("KORD", "KMSN"));
-            if (completed)
+            if (interrupted)
+            {
+                DateTimeOffset ended = Epoch.AddMinutes(30);
+                session = session with
+                {
+                    UpdatedAt = ended,
+                    Status = FlightSessionStatus.Interrupted
+                };
+            }
+            else if (completed)
             {
                 DateTimeOffset ended = Epoch.AddHours(1);
                 session = session with

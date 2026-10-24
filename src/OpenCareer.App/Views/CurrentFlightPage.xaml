@@ -195,7 +195,7 @@
                 <StackPanel Spacing="10">
                     <TextBlock Text="MANUAL POSTFLIGHT"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
-                    <TextBlock Text="Log or discard this completed flight"
+                    <TextBlock Text="Review or discard this terminal flight"
                                Style="{StaticResource OpenCareerPaperTitleStyle}" />
                     <TextBlock Text="{Binding ManualPostflightDetail}"
                                TextWrapping="Wrap"

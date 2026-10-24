@@ -273,8 +273,8 @@ public sealed partial class CurrentFlightPage : Page
         var confirmation = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = "Discard Completed Flight?",
-            Content = "This removes the completed flight checkpoint without creating a Logbook entry or applying experience. This cannot be undone.",
+            Title = "Discard Terminal Flight?",
+            Content = "This removes the terminal flight checkpoint without creating a Logbook entry or applying experience. This cannot be undone.",
             PrimaryButtonText = "Discard Flight",
             CloseButtonText = "Keep Flight",
             DefaultButton = ContentDialogButton.Close

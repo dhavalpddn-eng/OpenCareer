@@ -506,6 +506,31 @@ public sealed class ShellViewModelTests
         Assert.Equal(0, action.LogCount + action.DiscardCount);
     }
 
+    [Theory]
+    [InlineData(ManualFlightPostflightInputState.FlightNotLoggable)]
+    [InlineData(ManualFlightPostflightInputState.AircraftIdentityUnavailable)]
+    [InlineData(ManualFlightPostflightInputState.AircraftIdentityConflict)]
+    [InlineData(ManualFlightPostflightInputState.AircraftDebriefUnavailable)]
+    public async Task TerminalManualFlightWithoutLogEvidenceExposesDiscardOnly(
+        ManualFlightPostflightInputState state)
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = BlockedManualSnapshot(state)
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.True(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+        Assert.True(viewModel.CanDiscardManualFlight);
+
+        Assert.True(await viewModel.DiscardManualFlightAsync());
+        Assert.Equal(1, action.DiscardCount);
+        Assert.False(viewModel.IsManualPostflightVisible);
+    }
+
     [Fact]
     public async Task ManualLogUsesExactReadyRequestOnceAndClearsUi()
     {

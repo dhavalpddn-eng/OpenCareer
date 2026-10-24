@@ -99,7 +99,7 @@ public sealed class ManualFlightPostflightCoordinator
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            FlightSession session = RequireCompletedManualSession();
+            FlightSession session = RequireTerminalManualSession();
             await _persistence.ClearTerminalAsync(
                     session.SessionId,
                     expectedContractId: null,
@@ -114,11 +114,7 @@ public sealed class ManualFlightPostflightCoordinator
 
     private FlightSession RequireCompletedManualSession()
     {
-        FlightSession session = _sessions.Current
-            ?? throw new InvalidOperationException("No FlightSession exists for manual postflight processing.");
-
-        if (session.ContractId is not null)
-            throw new InvalidOperationException("Contract-linked FlightSessions cannot use manual postflight processing.");
+        FlightSession session = RequireTerminalManualSession();
 
         if (session.Status != FlightSessionStatus.Completed
             || session.OperationState != FlightOperationState.Complete
@@ -127,6 +123,20 @@ public sealed class ManualFlightPostflightCoordinator
         {
             throw new InvalidOperationException("Manual postflight processing requires a successfully completed FlightSession.");
         }
+
+        return session;
+    }
+
+    private FlightSession RequireTerminalManualSession()
+    {
+        FlightSession session = _sessions.Current
+            ?? throw new InvalidOperationException("No FlightSession exists for manual postflight processing.");
+
+        if (session.ContractId is not null)
+            throw new InvalidOperationException("Contract-linked FlightSessions cannot use manual postflight processing.");
+
+        if (!session.IsTerminal)
+            throw new InvalidOperationException("Manual flight discard requires a terminal FlightSession.");
 
         return session;
     }

@@ -1027,6 +1027,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         bool visible = snapshot.State is
             ManualFlightPostflightInputState.Ready or
+            ManualFlightPostflightInputState.FlightNotLoggable or
             ManualFlightPostflightInputState.AircraftIdentityUnavailable or
             ManualFlightPostflightInputState.AircraftIdentityConflict or
             ManualFlightPostflightInputState.AircraftDebriefUnavailable;
@@ -1034,7 +1035,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         SetBoolean(ref _isManualPostflightVisible, visible, nameof(IsManualPostflightVisible));
         SetManualPostflightState(
             snapshot.IsReady,
-            snapshot.IsReady,
+            snapshot.CanDiscard,
             snapshot.Request,
             snapshot.Detail);
     }
