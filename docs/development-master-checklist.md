@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-24 through validated checkpoint `40213aa3` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-24 through validated checkpoint `44bb2df1` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -53,7 +53,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P28 foundations<br/>CI COMPLETE"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P29 foundations<br/>CI COMPLETE"]
     B --> C["Ordinary compensated job<br/>live certification"]
     C --> D["Broader aircraft/evidence<br/>live calibration"]
     D --> E["Registry / jobs breadth<br/>career progression"]
@@ -346,6 +346,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Restrict accepted-job preflight cancellation to an atomic persisted `Accepted` transition so stale Jobs or Dispatch state cannot cancel a contract after flight start.
 - [x] Recheck FlightSession ownership across automatic accepted/in-progress recovery authority reads; stop without contract or checkpoint mutation if another operation appears.
 - [x] Recheck FlightSession ownership across asynchronous career-job acceptance readiness reads; stop without producing an acceptance request if another operation appears.
+- [x] Recheck FlightSession ownership at the acceptance mutation boundary around the authoritative contract read; stop before aircraft reservation or contract mutation if another operation appears during handoff.
 - [x] Reject retained same-contract FlightSessions whose explicit planned origin or destination contradicts the authoritative accepted job before contract/session mutation.
 - [x] Reject retained same-contract FlightSessions whose creation time contradicts the accepted start context or authoritative in-progress contract start time before contract/session mutation.
 - [x] Reject retained same-contract FlightSessions whose explicit source provider/reference is incomplete or contradicts the authoritative job contract while preserving fully absent legacy provenance.
