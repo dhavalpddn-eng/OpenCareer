@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-24 through validated checkpoint `6931cb17` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-24 through validated checkpoint `81d62d2d` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -53,7 +53,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P33 foundations<br/>CI COMPLETE"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P34 foundations<br/>CI COMPLETE"]
     B --> C["Ordinary compensated job<br/>live certification"]
     C --> D["Broader aircraft/evidence<br/>live calibration"]
     D --> E["Registry / jobs breadth<br/>career progression"]
@@ -211,6 +211,7 @@ Chapter status: **DURABLE MULTI-LEG CORE IMPLEMENTED / BROADER LIVE CALIBRATION 
 - [x] Add transactional processor-state rollback so a failed checkpoint retry emits identical evidence exactly once.
 - [x] Persist and recover one authoritative FlightSession through versioned SQLite checkpoints.
 - [x] Require explicit terminal-session cleanup before persistent start so a new operation cannot overwrite a recoverable terminal checkpoint.
+- [x] Enforce the same explicit terminal-session cleanup invariant at the in-memory coordinator boundary so direct starts cannot replace recoverable terminal authority.
 - [x] Persist decimated route statistics and landing-episode summaries in the checkpoint.
 
 ## Remaining
