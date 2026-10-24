@@ -15,6 +15,7 @@
             IsSettingsVisible="False"
             IsPaneToggleButtonVisible="True"
             SelectionChanged="NavView_SelectionChanged"
+            HorizontalContentAlignment="Stretch"
             Background="{StaticResource OpenCareerShellBackgroundBrush}"
             Foreground="{StaticResource OpenCareerShellTextBrush}">
 
@@ -30,6 +31,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <StackPanel>
@@ -37,7 +39,30 @@
                         <TextBlock Text="Career, dispatch and live flight management" Style="{StaticResource OpenCareerShellBodyStyle}" />
                     </StackPanel>
 
-                    <Border Grid.Column="1"
+                    <Border x:Name="DevelopmentProfileBanner"
+                            Grid.Column="1"
+                            Visibility="{x:Bind DevelopmentProfileBannerVisibility}"
+                            Background="{StaticResource OpenCareerBrassBrush}"
+                            BorderBrush="{StaticResource OpenCareerShellTextBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="14,7"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Development test profile active; KJFK isolated data">
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="DEVELOPMENT / TEST"
+                                       Foreground="{StaticResource OpenCareerNavyBrush}"
+                                       FontSize="12"
+                                       FontWeight="Bold"
+                                       CharacterSpacing="80" />
+                            <TextBlock Text="KJFK · ISOLATED DATA"
+                                       Foreground="{StaticResource OpenCareerNavyBrush}"
+                                       FontSize="10"
+                                       FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="2"
                             Style="{StaticResource OpenCareerMetalCardStyle}"
                             Padding="14,8">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -52,24 +77,27 @@
             </NavigationView.Header>
 
             <NavigationView.MenuItems>
+                <NavigationViewItemHeader Content="FLIGHT DESK" />
                 <NavigationViewItem x:Name="DashboardItem" Content="Dashboard" Tag="dashboard" />
-                <NavigationViewItem Content="Dispatch" Tag="dispatch" />
                 <NavigationViewItem Content="Jobs" Tag="jobs" />
                 <NavigationViewItem Content="Current Flight" Tag="current-flight" />
-                <NavigationViewItem Content="Map / World" Tag="world" />
+                <NavigationViewItem Content="Advanced Dispatch" Tag="dispatch" />
+
+                <NavigationViewItemHeader Content="CAREER" />
+                <NavigationViewItem Content="Pilot Profile / Career" Tag="career" />
                 <NavigationViewItem Content="Aircraft" Tag="aircraft" />
-                <NavigationViewItem Content="Hangar / Bases" Tag="bases" />
-                <NavigationViewItem Content="Maintenance" Tag="maintenance" />
-                <NavigationViewItem Content="Company" Tag="company" />
-                <NavigationViewItem Content="Finances" Tag="finances" />
-                <NavigationViewItem Content="Markets" Tag="markets" />
-                <NavigationViewItem Content="Military / Government" Tag="military" />
                 <NavigationViewItem Content="Logbook" Tag="logbook" />
-                <NavigationViewItem Content="Career" Tag="career" />
+
+                <NavigationViewItemHeader Content="SPECIAL OPERATIONS" />
+                <NavigationViewItem Content="Military / Government" Tag="military" />
+
+                <NavigationViewItemHeader Content="SYSTEM" />
                 <NavigationViewItem Content="Settings" Tag="settings" />
             </NavigationView.MenuItems>
 
-            <Frame x:Name="ContentFrame" />
+            <Frame x:Name="ContentFrame"
+                   HorizontalAlignment="Stretch"
+                   HorizontalContentAlignment="Stretch" />
         </NavigationView>
 
         <Grid x:Name="TutorialLayer"
@@ -200,8 +228,7 @@
                             <Button x:Name="TutorialNextButton"
                                     Grid.Column="3"
                                     Content="{x:Bind Tutorial.NextButtonText, Mode=OneWay}"
-                                    Background="{StaticResource AppNavyBrush}"
-                                    Foreground="White"
+                                    Style="{StaticResource OpenCareerPrimaryButtonStyle}"
                                     Click="NextTutorial_Click" />
                         </Grid>
                     </Border>

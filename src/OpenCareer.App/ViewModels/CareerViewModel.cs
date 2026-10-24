@@ -1,0 +1,568 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using OpenCareer.Application.Careers;
+using OpenCareer.Domain.Careers;
+
+namespace OpenCareer.App.ViewModels;
+
+public sealed class CareerViewModel : INotifyPropertyChanged
+{
+    private readonly PlayerCareerOnboardingCoordinator _onboarding;
+    private readonly PlayerCareerRuntimeState _runtime;
+    private readonly ICareerQualificationRoadmapSource _qualificationRoadmap;
+    private readonly IStudentTrainingOperationReadinessSource _studentTrainingReadiness;
+    private readonly IStudentTrainingOperationStartAction _studentTrainingStart;
+    private readonly TimeProvider _timeProvider;
+
+    private string _homeAirportIcao = string.Empty;
+    private string _statusText =
+        "Choose the airport where your civilian career will begin.";
+    private string _locationText =
+        "No career profile exists yet.";
+    private bool _hasCareer;
+    private bool _isCreating;
+    private string _currentLicenseText = "No career profile exists yet.";
+    private string _earnedRatingsText = "None";
+    private string _nextQualificationsText = "Complete onboarding to view the qualification roadmap.";
+    private string _qualificationPolicyText = "Qualifications are awarded only from authoritative completion evidence.";
+    private IReadOnlyList<CareerQualificationItemViewModel> _qualificationRoadmapItems =
+        Array.Empty<CareerQualificationItemViewModel>();
+    private StudentTrainingOperationReadiness _studentTraining =
+        new(
+            StudentTrainingOperationReadinessState.NoCareer,
+            "Complete career onboarding before starting Student training.");
+    private string _studentTrainingStatusText =
+        "Complete career onboarding before starting Student training.";
+    private string _studentTrainingRouteText =
+        "LOCAL CIRCUIT · airport unavailable";
+    private string _studentTrainingAircraftText =
+        "Training aircraft: unavailable";
+    private bool _isStartingStudentTraining;
+
+    public CareerViewModel(
+        PlayerCareerOnboardingCoordinator onboarding,
+        PlayerCareerRuntimeState runtime,
+        TimeProvider timeProvider)
+        : this(
+            onboarding,
+            runtime,
+            timeProvider,
+            new CareerQualificationRoadmapSource(runtime),
+            UnavailableStudentTrainingAccess.Instance,
+            UnavailableStudentTrainingAccess.Instance)
+    {
+    }
+
+    public CareerViewModel(
+        PlayerCareerOnboardingCoordinator onboarding,
+        PlayerCareerRuntimeState runtime,
+        TimeProvider timeProvider,
+        ICareerQualificationRoadmapSource qualificationRoadmap)
+        : this(
+            onboarding,
+            runtime,
+            timeProvider,
+            qualificationRoadmap,
+            UnavailableStudentTrainingAccess.Instance,
+            UnavailableStudentTrainingAccess.Instance)
+    {
+    }
+
+    public CareerViewModel(
+        PlayerCareerOnboardingCoordinator onboarding,
+        PlayerCareerRuntimeState runtime,
+        TimeProvider timeProvider,
+        ICareerQualificationRoadmapSource qualificationRoadmap,
+        IStudentTrainingOperationReadinessSource studentTrainingReadiness,
+        IStudentTrainingOperationStartAction studentTrainingStart)
+    {
+        _onboarding =
+            onboarding
+            ?? throw new ArgumentNullException(nameof(onboarding));
+        _runtime =
+            runtime
+            ?? throw new ArgumentNullException(nameof(runtime));
+        _timeProvider =
+            timeProvider
+            ?? throw new ArgumentNullException(nameof(timeProvider));
+        _qualificationRoadmap = qualificationRoadmap
+            ?? throw new ArgumentNullException(nameof(qualificationRoadmap));
+        _studentTrainingReadiness = studentTrainingReadiness
+            ?? throw new ArgumentNullException(nameof(studentTrainingReadiness));
+        _studentTrainingStart = studentTrainingStart
+            ?? throw new ArgumentNullException(nameof(studentTrainingStart));
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string HomeAirportIcao
+    {
+        get => _homeAirportIcao;
+        set
+        {
+            if (SetField(
+                    ref _homeAirportIcao,
+                    value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(CanStartCareer));
+            }
+        }
+    }
+
+    public string StatusText => _statusText;
+
+    public string LocationText => _locationText;
+
+    public bool HasCareer => _hasCareer;
+
+    public bool IsCreating => _isCreating;
+
+    public string CurrentLicenseText => _currentLicenseText;
+
+    public string EarnedRatingsText => _earnedRatingsText;
+
+    public string NextQualificationsText => _nextQualificationsText;
+
+    public string QualificationPolicyText => _qualificationPolicyText;
+
+    public IReadOnlyList<CareerQualificationItemViewModel> QualificationRoadmapItems =>
+        _qualificationRoadmapItems;
+
+    public string StudentTrainingStatusText => _studentTrainingStatusText;
+
+    public string StudentTrainingRouteText => _studentTrainingRouteText;
+
+    public string StudentTrainingAircraftText => _studentTrainingAircraftText;
+
+    public bool IsStartingStudentTraining => _isStartingStudentTraining;
+
+    public bool CanStartStudentTraining =>
+        !_isStartingStudentTraining
+        && _studentTraining.CanStart;
+
+    public string StudentTrainingButtonText =>
+        _isStartingStudentTraining
+            ? "Starting Training…"
+            : "Start Student Training";
+
+    public bool CanStartCareer =>
+        !_hasCareer
+        && !_isCreating
+        && IsValidAirportIcao(_homeAirportIcao);
+
+    public bool CanEditHomeAirport =>
+        !_hasCareer
+        && !_isCreating;
+
+    public string StartButtonText =>
+        _isCreating
+            ? "Starting Career…"
+            : "Start Career";
+
+    public void ReportInitializationFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        SetField(
+            ref _statusText,
+            $"Career profile could not load: {exception.Message} Reopen Career to retry.",
+            nameof(StatusText));
+    }
+
+    public async Task InitializeAsync(
+        CancellationToken cancellationToken = default)
+    {
+        PlayerCareerProfileStoreRecord? current =
+            await _runtime
+                .InitializeAsync(cancellationToken)
+                .ConfigureAwait(true);
+
+        if (current is null)
+        {
+            SetCareerState(
+                hasCareer:
+                    false,
+                status:
+                    "Choose your starting airport where your civilian career will begin.",
+                location:
+                    "No career profile exists yet.");
+            ApplyRoadmap(null);
+            ApplyStudentTraining(
+                new(
+                    StudentTrainingOperationReadinessState.NoCareer,
+                    "Complete career onboarding before starting Student training."));
+            return;
+        }
+
+        ApplyCurrent(current);
+        await RefreshRoadmapAsync(cancellationToken);
+        await RefreshStudentTrainingAsync(cancellationToken);
+    }
+
+    public async Task StartCareerAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_isCreating)
+            return;
+
+        PlayerCareerProfileStoreRecord? current =
+            _runtime.Current;
+
+        if (current is not null)
+        {
+            ApplyCurrent(current);
+            return;
+        }
+
+        string homeAirportIcao =
+            _homeAirportIcao
+                .Trim()
+                .ToUpperInvariant();
+
+        if (!IsValidAirportIcao(homeAirportIcao))
+        {
+            SetField(
+                ref _statusText,
+                "Enter a four-letter airport ICAO such as KDFW.",
+                nameof(StatusText));
+            return;
+        }
+
+        SetCreating(true);
+
+        try
+        {
+            PlayerCareerProfileStoreRecord created =
+                await _onboarding
+                    .CreateAsync(
+                        Guid.NewGuid(),
+                        homeAirportIcao,
+                        _timeProvider.GetUtcNow(),
+                        cancellationToken)
+                    .ConfigureAwait(true);
+
+            ApplyCurrent(created);
+            await RefreshRoadmapAsync(cancellationToken);
+            await RefreshStudentTrainingAsync(cancellationToken);
+
+            SetField(
+                ref _statusText,
+                $"Career started at {created.Profile.Location.CurrentAirportIcao}. Open Jobs to load the local job board.",
+                nameof(StatusText));
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            SetField(
+                ref _statusText,
+                $"Career could not be started: {ex.Message}",
+                nameof(StatusText));
+        }
+        catch (InvalidOperationException ex)
+        {
+            SetField(
+                ref _statusText,
+                $"Career could not be started: {ex.Message}",
+                nameof(StatusText));
+        }
+        finally
+        {
+            SetCreating(false);
+        }
+    }
+
+    public async Task StartStudentTrainingAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_isStartingStudentTraining
+            || !_studentTraining.CanStart)
+        {
+            return;
+        }
+
+        SetStartingStudentTraining(true);
+        try
+        {
+            await _studentTrainingStart
+                .StartAsync(cancellationToken)
+                .ConfigureAwait(true);
+
+            await RefreshStudentTrainingAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            await RefreshStudentTrainingAsync(cancellationToken);
+            SetField(
+                ref _studentTrainingStatusText,
+                $"Student training could not start: {ex.Message}",
+                nameof(StudentTrainingStatusText));
+        }
+        catch (InvalidOperationException ex)
+        {
+            await RefreshStudentTrainingAsync(cancellationToken);
+            SetField(
+                ref _studentTrainingStatusText,
+                $"Student training could not start: {ex.Message}",
+                nameof(StudentTrainingStatusText));
+        }
+        finally
+        {
+            SetStartingStudentTraining(false);
+        }
+    }
+
+    private void ApplyCurrent(
+        PlayerCareerProfileStoreRecord current)
+    {
+        string home =
+            current.Profile.Location.HomeAirportIcao;
+        string location =
+            current.Profile.Location.CurrentAirportIcao;
+
+        SetField(
+            ref _homeAirportIcao,
+            home,
+            nameof(HomeAirportIcao));
+
+        SetCareerState(
+            hasCareer:
+                true,
+            status:
+                "Career onboarding is complete.",
+            location:
+                $"HOME {home} · CURRENT {location}");
+    }
+
+    private async Task RefreshRoadmapAsync(
+        CancellationToken cancellationToken)
+    {
+        CareerQualificationRoadmap? roadmap =
+            await _qualificationRoadmap
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(true);
+
+        ApplyRoadmap(roadmap);
+    }
+
+    private async Task RefreshStudentTrainingAsync(
+        CancellationToken cancellationToken)
+    {
+        StudentTrainingOperationReadiness readiness =
+            await _studentTrainingReadiness
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(true);
+
+        ApplyStudentTraining(readiness);
+    }
+
+    private void ApplyStudentTraining(
+        StudentTrainingOperationReadiness readiness)
+    {
+        ArgumentNullException.ThrowIfNull(readiness);
+
+        _studentTraining = readiness;
+        SetField(
+            ref _studentTrainingStatusText,
+            readiness.Detail,
+            nameof(StudentTrainingStatusText));
+        SetField(
+            ref _studentTrainingRouteText,
+            string.IsNullOrWhiteSpace(readiness.AirportIcao)
+                ? "LOCAL CIRCUIT · airport unavailable"
+                : $"{readiness.AirportIcao} → {readiness.AirportIcao} · LOCAL CIRCUIT",
+            nameof(StudentTrainingRouteText));
+        SetField(
+            ref _studentTrainingAircraftText,
+            string.IsNullOrWhiteSpace(readiness.AircraftDisplayName)
+                ? "Training aircraft: unavailable"
+                : $"Training aircraft: {readiness.AircraftDisplayName}",
+            nameof(StudentTrainingAircraftText));
+        OnPropertyChanged(nameof(CanStartStudentTraining));
+    }
+
+    private void ApplyRoadmap(
+        CareerQualificationRoadmap? roadmap)
+    {
+        if (roadmap is null)
+        {
+            SetField(ref _currentLicenseText, "No career profile exists yet.", nameof(CurrentLicenseText));
+            SetField(ref _earnedRatingsText, "None", nameof(EarnedRatingsText));
+            SetField(ref _nextQualificationsText, "Complete onboarding to view the qualification roadmap.", nameof(NextQualificationsText));
+            SetField(ref _qualificationPolicyText, "Qualifications are awarded only from authoritative completion evidence.", nameof(QualificationPolicyText));
+            SetField(ref _qualificationRoadmapItems, Array.Empty<CareerQualificationItemViewModel>(), nameof(QualificationRoadmapItems));
+            return;
+        }
+
+        string currentLicense = roadmap.EarnedQualifications.License switch
+        {
+            PilotLicenseLevel.None => "No civilian license",
+            PilotLicenseLevel.Student => "Student pilot",
+            PilotLicenseLevel.Private => "Private pilot",
+            PilotLicenseLevel.Commercial => "Commercial pilot",
+            PilotLicenseLevel.AirlineTransport => "Airline transport pilot",
+            _ => throw new ArgumentOutOfRangeException(nameof(roadmap))
+        };
+        string[] earnedRatings = roadmap.Items
+            .Where(static item =>
+                item.Identity.Kind == CareerQualificationKind.Rating
+                && item.Status == CareerQualificationRoadmapStatus.Earned)
+            .Select(static item => item.Title)
+            .ToArray();
+        string[] available = roadmap.Items
+            .Where(static item => item.Status == CareerQualificationRoadmapStatus.Available)
+            .Select(static item => item.Title)
+            .ToArray();
+        CareerQualificationItemViewModel[] items = roadmap.Items
+            .OrderBy(static item => item.Sequence)
+            .Select(static item => new CareerQualificationItemViewModel(
+                item.Title,
+                item.Identity.Kind == CareerQualificationKind.License ? "LICENSE" : "RATING",
+                item.Status.ToString().ToUpperInvariant(),
+                item.Description,
+                FormatPrerequisites(item.Prerequisites)))
+            .ToArray();
+
+        SetField(ref _currentLicenseText, currentLicense, nameof(CurrentLicenseText));
+        SetField(ref _earnedRatingsText, earnedRatings.Length == 0 ? "None" : string.Join(" · ", earnedRatings), nameof(EarnedRatingsText));
+        SetField(ref _nextQualificationsText, available.Length == 0 ? "No next qualification is currently available." : string.Join(" · ", available), nameof(NextQualificationsText));
+        SetField(ref _qualificationPolicyText, roadmap.TrainingPolicyDetail, nameof(QualificationPolicyText));
+        SetField(ref _qualificationRoadmapItems, items, nameof(QualificationRoadmapItems));
+    }
+
+    private static string FormatPrerequisites(
+        IEnumerable<CareerQualificationPrerequisite> prerequisites)
+    {
+        CareerQualificationPrerequisite[] values = prerequisites.ToArray();
+        if (values.Length == 0)
+            return "Prerequisites: none";
+
+        return "Prerequisites: " + string.Join(
+            " · ",
+            values.Select(static prerequisite =>
+                $"{prerequisite.Title} ({(prerequisite.IsMet ? "met" : "unmet")})"));
+    }
+
+    private void SetCareerState(
+        bool hasCareer,
+        string status,
+        string location)
+    {
+        if (_hasCareer != hasCareer)
+        {
+            _hasCareer = hasCareer;
+            OnPropertyChanged(nameof(HasCareer));
+        }
+
+        SetField(
+            ref _statusText,
+            status,
+            nameof(StatusText));
+
+        SetField(
+            ref _locationText,
+            location,
+            nameof(LocationText));
+
+        OnPropertyChanged(nameof(CanStartCareer));
+        OnPropertyChanged(nameof(CanEditHomeAirport));
+    }
+
+    private void SetCreating(bool value)
+    {
+        if (_isCreating == value)
+            return;
+
+        _isCreating = value;
+        OnPropertyChanged(nameof(IsCreating));
+        OnPropertyChanged(nameof(CanStartCareer));
+        OnPropertyChanged(nameof(CanEditHomeAirport));
+        OnPropertyChanged(nameof(StartButtonText));
+    }
+
+    private void SetStartingStudentTraining(bool value)
+    {
+        if (_isStartingStudentTraining == value)
+            return;
+
+        _isStartingStudentTraining = value;
+        OnPropertyChanged(nameof(IsStartingStudentTraining));
+        OnPropertyChanged(nameof(CanStartStudentTraining));
+        OnPropertyChanged(nameof(StudentTrainingButtonText));
+    }
+
+    private static bool IsValidAirportIcao(
+        string value)
+    {
+        string normalized =
+            value.Trim();
+
+        return normalized.Length == 4
+            && normalized.All(
+                static c =>
+                    c is >= 'A' and <= 'Z'
+                    or >= 'a' and <= 'z');
+    }
+
+    private bool SetField<T>(
+        ref T field,
+        T value,
+        [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(
+                field,
+                value))
+        {
+            return false;
+        }
+
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    private void OnPropertyChanged(
+        [CallerMemberName] string? propertyName = null) =>
+        PropertyChanged?.Invoke(
+            this,
+            new PropertyChangedEventArgs(propertyName));
+
+    private sealed class UnavailableStudentTrainingAccess
+        : IStudentTrainingOperationReadinessSource,
+          IStudentTrainingOperationStartAction
+    {
+        public static UnavailableStudentTrainingAccess Instance { get; } = new();
+
+        public Task<StudentTrainingOperationReadiness> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                new StudentTrainingOperationReadiness(
+                    StudentTrainingOperationReadinessState.AuthorityUnavailable,
+                    "Student training is unavailable in this application context."));
+        }
+
+        public Task<StudentTrainingOperationStartResult> StartAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException(
+                "Student training is unavailable in this application context.");
+        }
+    }
+}
+
+public sealed record CareerQualificationItemViewModel(
+    string Title,
+    string Kind,
+    string Status,
+    string Description,
+    string Prerequisites);

@@ -76,7 +76,7 @@ The Dashboard is not a static summary. It can direct the player to the correct s
 Examples:
 
 - active operation -> Current Flight,
-- accepted job requiring preparation -> Dispatch,
+- optional advanced planning/recovery -> Dispatch,
 - aircraft blocked by maintenance -> Maintenance,
 - no accepted work + strong opportunities -> Jobs,
 - company probation/suspension/review -> Company,
@@ -195,7 +195,7 @@ Purpose: find and evaluate work.
 - Route summary.
 - Named cargo/passenger manifest where applicable.
 - Relationship/reputation impact.
-- Accept -> Dispatch flow.
+- Accept & Start runs automatic authoritative preflight; Dispatch is not required for normal jobs.
 
 ### Rules
 

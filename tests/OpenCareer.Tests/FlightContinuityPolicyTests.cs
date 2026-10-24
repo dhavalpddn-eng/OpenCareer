@@ -43,7 +43,7 @@ public sealed class FlightContinuityPolicyTests
     }
 
     [Fact]
-    public void GroundRecoveryDoesNotAcceptAirborneAircraftWithoutPriorTakeoff()
+    public void GroundRecoveryDoesNotAcceptNearbyAirborneAircraftWithoutPriorTakeoff()
     {
         var policy =
             new FlightContinuityPolicy();
@@ -61,7 +61,154 @@ public sealed class FlightContinuityPolicyTests
                     Epoch.AddMinutes(5),
                     32.01,
                     -97.0,
-                    2_000,
+                    675,
+                    onGround: false)));
+    }
+
+    [Fact]
+    public void GroundAnchorAllowsBriefAirborneBounceDuringApproach()
+    {
+        var policy =
+            new FlightContinuityPolicy();
+
+        FlightSession session =
+            ApproachSessionWithGroundAnchor(
+                32.0,
+                -97.0,
+                650);
+
+        Assert.True(
+            policy.IsPlausible(
+                session,
+                Telemetry(
+                    Epoch.AddSeconds(7),
+                    32.0005,
+                    -97.0005,
+                    675,
+                    onGround: false)));
+    }
+
+    [Fact]
+    public void LandingEpisodeAllowsRepeatedPlausibleBounceTransitions()
+    {
+        var policy =
+            new FlightContinuityPolicy();
+
+        FlightSession session =
+            LandingEpisodeSessionWithGroundAnchor(
+                32.0,
+                -97.0,
+                650);
+
+        Assert.True(
+            policy.IsPlausible(
+                session,
+                Telemetry(
+                    Epoch.AddSeconds(7),
+                    32.0005,
+                    -97.0005,
+                    675,
+                    onGround: false)));
+
+        var secondContact =
+            new FlightContinuityAnchor(
+                Epoch.AddSeconds(8),
+                32.001,
+                -97.001,
+                650,
+                OnGround: true);
+
+        session =
+            FlightSessionEngine.Advance(
+                session,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(8),
+                        Connected: true,
+                        ContinuityPlausible: true,
+                        BounceRecontact: true),
+                    ContinuityAnchor:
+                        secondContact));
+
+        Assert.Equal(
+            FlightTrackingState.LandingEpisode,
+            session.Tracking.State);
+        Assert.Equal(1, session.Tracking.BounceCount);
+
+        Assert.True(
+            policy.IsPlausible(
+                session,
+                Telemetry(
+                    Epoch.AddSeconds(9),
+                    32.0015,
+                    -97.0015,
+                    670,
+                    onGround: false)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LandingEpisodeAllowsTouchAndGoOrGoAroundContinuation(
+        bool touchAndGo)
+    {
+        var policy =
+            new FlightContinuityPolicy();
+
+        FlightSession session =
+            LandingEpisodeSessionWithGroundAnchor(
+                32.0,
+                -97.0,
+                650);
+
+        session =
+            FlightSessionEngine.Advance(
+                session,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(7),
+                        Connected: true,
+                        ContinuityPlausible: true,
+                        TouchAndGoConfirmed:
+                            touchAndGo,
+                        GoAroundConfirmed:
+                            !touchAndGo)));
+
+        Assert.Equal(
+            FlightTrackingState.Airborne,
+            session.Tracking.State);
+
+        Assert.True(
+            policy.IsPlausible(
+                session,
+                Telemetry(
+                    Epoch.AddSeconds(8),
+                    32.0005,
+                    -97.0005,
+                    675,
+                    onGround: false)));
+    }
+
+    [Fact]
+    public void LandingEpisodeRejectsDistantAirborneReposition()
+    {
+        var policy =
+            new FlightContinuityPolicy();
+
+        FlightSession session =
+            LandingEpisodeSessionWithGroundAnchor(
+                32.0,
+                -97.0,
+                650);
+
+        Assert.False(
+            policy.IsPlausible(
+                session,
+                Telemetry(
+                    Epoch.AddSeconds(7),
+                    33.0,
+                    -96.0,
+                    675,
                     onGround: false)));
     }
 
@@ -216,6 +363,62 @@ public sealed class FlightContinuityPolicyTests
                     altitude,
                     OnGround: false)
         };
+    }
+
+    private static FlightSession ApproachSessionWithGroundAnchor(
+        double latitude,
+        double longitude,
+        double altitude)
+    {
+        FlightSession session =
+            AirborneSessionWithAnchor(
+                latitude,
+                longitude,
+                altitude);
+
+        return FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(5),
+                    Connected: true,
+                    ContinuityPlausible: true,
+                    ApproachConfirmed: true),
+                ContinuityAnchor:
+                    new FlightContinuityAnchor(
+                        Epoch.AddSeconds(5),
+                        latitude,
+                        longitude,
+                        altitude,
+                        OnGround: true)));
+    }
+
+    private static FlightSession LandingEpisodeSessionWithGroundAnchor(
+        double latitude,
+        double longitude,
+        double altitude)
+    {
+        FlightSession session =
+            ApproachSessionWithGroundAnchor(
+                latitude,
+                longitude,
+                altitude);
+
+        return FlightSessionEngine.Advance(
+            session,
+            new FlightSessionAdvance(
+                new FlightStateEvidence(
+                    Epoch.AddSeconds(6),
+                    Connected: true,
+                    ContinuityPlausible: true,
+                    TouchdownConfirmed: true),
+                ContinuityAnchor:
+                    new FlightContinuityAnchor(
+                        Epoch.AddSeconds(6),
+                        latitude,
+                        longitude,
+                        altitude,
+                        OnGround: true)));
     }
 
     private static AircraftTelemetrySnapshot Telemetry(

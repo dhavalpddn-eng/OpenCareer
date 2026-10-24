@@ -13,6 +13,7 @@ namespace OpenCareer.App.Views;
 public sealed partial class LogbookPage : Page
 {
     private LogbookViewModel? _viewModel;
+    private CancellationTokenSource? _navigationCts;
     private CancellationTokenSource? _filterCancellation;
 
     public LogbookPage()
@@ -27,21 +28,48 @@ public sealed partial class LogbookPage : Page
         if (e.Parameter is not LogbookViewModel viewModel)
             return;
 
+        _navigationCts?.Cancel();
+        _navigationCts?.Dispose();
+        var navigationCts = new CancellationTokenSource();
+        _navigationCts = navigationCts;
+
         _viewModel = viewModel;
         DataContext = viewModel;
-        await viewModel.RefreshAsync();
 
-        if (viewModel.SelectedEntry is not null)
-            EntryList.SelectedItem = viewModel.SelectedEntry;
+        try
+        {
+            await viewModel.RefreshAsync(navigationCts.Token);
 
-        RenderRouteTrack();
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (viewModel.SelectedEntry is not null)
+                EntryList.SelectedItem = viewModel.SelectedEntry;
+
+            RenderRouteTrack();
+        }
+        catch (OperationCanceledException)
+            when (navigationCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            viewModel.ReportRefreshFailure(ex);
+        }
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
+        _navigationCts?.Cancel();
+        _navigationCts?.Dispose();
+        _navigationCts = null;
         _filterCancellation?.Cancel();
         _filterCancellation?.Dispose();
         _filterCancellation = null;
+        _viewModel = null;
         base.OnNavigatedFrom(e);
     }
 
@@ -56,8 +84,14 @@ public sealed partial class LogbookPage : Page
 
     private async void FilterControl_Changed(object sender, object e)
     {
-        if (_viewModel is null)
+        LogbookViewModel? viewModel = _viewModel;
+        CancellationTokenSource? navigationCts = _navigationCts;
+        if (viewModel is null
+            || navigationCts is null
+            || navigationCts.IsCancellationRequested)
+        {
             return;
+        }
 
         _filterCancellation?.Cancel();
         _filterCancellation?.Dispose();
@@ -68,18 +102,35 @@ public sealed partial class LogbookPage : Page
         {
             await Task.Delay(TimeSpan.FromMilliseconds(250), token);
 
-            _viewModel.SetFilters(
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            viewModel.SetFilters(
                 SearchBox.Text,
                 ParseEnum<LogbookEntryKind>(KindFilter),
                 ParseEnum<FlightSafetyOutcome>(SafetyFilter));
 
-            await _viewModel.RefreshAsync(token);
-            EntryList.SelectedItem = _viewModel.SelectedEntry;
+            await viewModel.RefreshAsync(token);
+
+            if (!ReferenceEquals(_navigationCts, navigationCts)
+                || navigationCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            EntryList.SelectedItem = viewModel.SelectedEntry;
             RenderRouteTrack();
         }
         catch (OperationCanceledException)
         {
             // A newer filter change or navigation replaced this request.
+        }
+        catch (Exception ex)
+        {
+            viewModel.ReportRefreshFailure(ex);
         }
     }
 
