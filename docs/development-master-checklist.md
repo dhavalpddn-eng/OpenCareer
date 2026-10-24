@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-24 through validated checkpoint `f669980d` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-24 through validated checkpoint `6404384b` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -343,6 +343,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Keep the Jobs recovery panel visible for every current FlightSession, including contractless practice/training and terminal-pending state, while preserving contract-specific readiness detail when available.
 - [x] Reject overlapping Jobs mutations instead of queueing stale accept/start, calibration or accepted-job cancellation actions; publish one shared busy state and disable the corresponding controls.
 - [x] Keep the Jobs aircraft selection immutable for the duration of each action-bound operation; reject concurrent selection changes and disable refresh/development-position inputs until the operation releases its gate.
+- [x] Restrict accepted-job preflight cancellation to an atomic persisted `Accepted` transition so stale Jobs or Dispatch state cannot cancel a contract after flight start.
 - [x] Reject overlapping Current Flight completion and abandonment attempts instead of queueing duplicate or cross-action terminal commands that can overwrite a successful result with stale follow-up state.
 - [x] Bind career completion to the exact ready FlightSession and contract identities reviewed by Current Flight; reject a changed flight before settlement, Logbook or terminal mutation and preserve authoritative retry recovery.
 - [x] Recheck career-completion input identity after asynchronous authority reads; reproject one replacement and suppress actions with visible reopen guidance if sessions continue changing.
