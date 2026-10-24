@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-24 through validated checkpoint `cb565209` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-24 through validated checkpoint `f669980d` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -347,6 +347,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Bind career completion to the exact ready FlightSession and contract identities reviewed by Current Flight; reject a changed flight before settlement, Logbook or terminal mutation and preserve authoritative retry recovery.
 - [x] Recheck career-completion input identity after asynchronous authority reads; reproject one replacement and suppress actions with visible reopen guidance if sessions continue changing.
 - [x] Recheck career-abandonment availability identity after asynchronous contract and Fleet reads; reproject one replacement and suppress stale recovery actions if sessions continue changing.
+- [x] Revalidate career-abandonment execution identity after asynchronous contract and Fleet reads and before cleanup mutation, preserving a replacement session and preventing stale contract/reservation cleanup.
 - [x] Bind supported mission evidence to FlightSession.
 - [x] Implement mission-specific validation for the supported standard point-to-point path.
 - [x] Require parking/shutdown and mission/post-flight verification beyond landing.
