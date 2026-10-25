@@ -28,7 +28,12 @@ public sealed class SqliteFlightSessionCheckpointStore :
     private sealed record PreviousCheckpointRow(
         string SuccessorSessionId,
         string? SuccessorContractId,
+        long? SuccessorUpdatedAtUtcTicks,
         CheckpointRow Checkpoint);
+
+    private sealed record MatchingPreviousCheckpoint(
+        FlightSession Session,
+        long? SuccessorUpdatedAtUtcTicks);
 
     private static readonly JsonSerializerOptions JsonOptions =
         new()
@@ -173,7 +178,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
             }
             else
             {
-                FlightSession? previous =
+                MatchingPreviousCheckpoint? previous =
                     await TryReadMatchingPreviousAsync(
                             connection,
                             transaction,
@@ -210,10 +215,21 @@ public sealed class SqliteFlightSessionCheckpointStore :
                             cancellationToken)
                         .ConfigureAwait(false);
                 }
-                else if (session.UpdatedAt < previous.UpdatedAt)
+                else
                 {
-                    transaction.Commit();
-                    return;
+                    bool currentRecencyIsTrusted =
+                        previous.SuccessorUpdatedAtUtcTicks is null
+                        || previous.SuccessorUpdatedAtUtcTicks
+                            == currentRow.UpdatedAtUtcTicks;
+
+                    if ((currentRecencyIsTrusted
+                            && session.UpdatedAt.UtcTicks
+                                < currentRow.UpdatedAtUtcTicks)
+                        || session.UpdatedAt < previous.Session.UpdatedAt)
+                    {
+                        transaction.Commit();
+                        return;
+                    }
                 }
             }
 
@@ -484,6 +500,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
             SELECT
                 successor_session_id,
                 successor_contract_id,
+                successor_updated_at_utc_ticks,
                 session_id,
                 payload_schema_version,
                 status,
@@ -505,13 +522,14 @@ public sealed class SqliteFlightSessionCheckpointStore :
         return new PreviousCheckpointRow(
             reader.GetString(0),
             reader.IsDBNull(1) ? null : reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetInt64(2),
             new CheckpointRow(
-                reader.GetString(2),
-                reader.GetInt32(3),
+                reader.GetString(3),
                 reader.GetInt32(4),
-                reader.GetInt64(5),
+                reader.GetInt32(5),
+                reader.GetInt64(6),
                 AuthorityJson: null,
-                reader.GetString(6)));
+                reader.GetString(7)));
     }
 
     private static async Task SavePreviousRowAsync(
@@ -529,6 +547,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 slot_id,
                 successor_session_id,
                 successor_contract_id,
+                successor_updated_at_utc_ticks,
                 session_id,
                 payload_schema_version,
                 status,
@@ -538,6 +557,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 $slotId,
                 $successorSessionId,
                 $successorContractId,
+                $successorUpdatedAtUtcTicks,
                 $sessionId,
                 $schemaVersion,
                 $status,
@@ -547,6 +567,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
             ON CONFLICT(slot_id) DO UPDATE SET
                 successor_session_id = excluded.successor_session_id,
                 successor_contract_id = excluded.successor_contract_id,
+                successor_updated_at_utc_ticks = excluded.successor_updated_at_utc_ticks,
                 session_id = excluded.session_id,
                 payload_schema_version = excluded.payload_schema_version,
                 status = excluded.status,
@@ -562,6 +583,9 @@ public sealed class SqliteFlightSessionCheckpointStore :
             successor.ContractId is { } contractId
                 ? contractId.ToString("D")
                 : DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$successorUpdatedAtUtcTicks",
+            successor.UpdatedAt.UtcTicks);
         command.Parameters.AddWithValue("$sessionId", previous.SessionId);
         command.Parameters.AddWithValue("$schemaVersion", previous.SchemaVersion);
         command.Parameters.AddWithValue("$status", previous.Status);
@@ -628,7 +652,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task<FlightSession?> TryReadMatchingPreviousAsync(
+    private static async Task<MatchingPreviousCheckpoint?> TryReadMatchingPreviousAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         CheckpointRow invalidCurrent,
@@ -668,7 +692,9 @@ public sealed class SqliteFlightSessionCheckpointStore :
                     "Flight-session checkpoint terminal authority cannot change within a session.");
             }
 
-            return fallback;
+            return new MatchingPreviousCheckpoint(
+                fallback,
+                previous.SuccessorUpdatedAtUtcTicks);
         }
         catch (Exception exception)
             when (IsInvalidCheckpointException(exception))

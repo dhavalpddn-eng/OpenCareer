@@ -27,7 +27,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                17);
+                18);
 
             await AssertTablesExistAsync(
                 path,
@@ -71,7 +71,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                17);
+                18);
 
             await AssertTablesExistAsync(
                 path,
@@ -144,7 +144,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                17);
+                18);
 
             await AssertTablesExistAsync(
                 path,
@@ -211,7 +211,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                17);
+                18);
 
             await using SqliteConnection connection =
                 await OpenReadOnlyAsync(path);
@@ -321,7 +321,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                17);
+                18);
 
             await using SqliteConnection verification =
                 await OpenReadOnlyAsync(path);
@@ -392,7 +392,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                17);
+                18);
 
             await using SqliteConnection verification =
                 await OpenReadOnlyAsync(path);
@@ -411,6 +411,22 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 1L,
                 Convert.ToInt64(
                     await column.ExecuteScalarAsync(),
+                    System.Globalization.CultureInfo.InvariantCulture));
+
+            await using SqliteCommand previousColumn =
+                verification.CreateCommand();
+
+            previousColumn.CommandText =
+                """
+                SELECT COUNT(*)
+                FROM pragma_table_info('flight_session_checkpoint_previous')
+                WHERE name = 'successor_updated_at_utc_ticks';
+                """;
+
+            Assert.Equal(
+                1L,
+                Convert.ToInt64(
+                    await previousColumn.ExecuteScalarAsync(),
                     System.Globalization.CultureInfo.InvariantCulture));
         }
         finally
