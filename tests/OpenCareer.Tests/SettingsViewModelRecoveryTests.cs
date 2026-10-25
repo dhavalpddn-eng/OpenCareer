@@ -29,6 +29,32 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task FailedRecoveryWarnsThatPersistedCheckpointWasNotReplaced()
+    {
+        var sessions = new FlightSessionCoordinator();
+        var persistence =
+            new FlightSessionPersistenceService(
+                sessions,
+                new FailingCheckpointStore());
+
+        await Assert.ThrowsAsync<IOException>(
+            () => persistence.RecoverAsync());
+
+        TestContext context = Create(
+            sessions: sessions,
+            flightPersistence: persistence);
+
+        Assert.Contains("RECOVERY ATTENTION", context.ViewModel.CareerRecoveryStatus);
+        Assert.Contains("did not complete", context.ViewModel.CareerRecoveryStatus);
+        Assert.Contains("did not clear or replace", context.ViewModel.CareerRecoveryStatus);
+        Assert.Contains("retry recovery", context.ViewModel.CareerRecoveryStatus);
+        Assert.DoesNotContain(
+            "No flight session is currently loaded",
+            context.ViewModel.CareerRecoveryStatus);
+        Assert.Equal(0, context.Settings.WriteCount);
+    }
+
+    [Fact]
     public void NormalCareerClearlyDisablesCleanTestReset()
     {
         TestContext context = Create();
@@ -118,13 +144,19 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     private TestContext Create(
-        IInputBindingDiscoverySource? inputBindings = null)
+        IInputBindingDiscoverySource? inputBindings = null,
+        FlightSessionCoordinator? sessions = null,
+        FlightSessionPersistenceService? flightPersistence = null)
     {
         var paths = new OpenCareerDataPaths(_root);
         var settings = new FakeSettings();
         var connection = new FakeConnection();
         var telemetry = new FakeTelemetrySource();
-        var sessions = new FlightSessionCoordinator();
+        sessions ??= new FlightSessionCoordinator();
+        flightPersistence ??=
+            new FlightSessionPersistenceService(
+                sessions,
+                new EmptyCheckpointStore());
         var diagnostics = new DiagnosticBundleService(
             paths,
             settings,
@@ -147,6 +179,7 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
             shell,
             paths,
             sessions,
+            flightPersistence,
             inputBindings);
 
         return new TestContext(
@@ -236,6 +269,36 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     private sealed class FakeTelemetrySource : ISimulatorTelemetrySource
     {
         public AircraftTelemetrySnapshot? Latest => null;
+    }
+
+    private sealed class EmptyCheckpointStore : IFlightSessionCheckpointStore
+    {
+        public Task SaveAsync(
+            FlightSession session,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<FlightSession?> LoadAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<FlightSession?>(null);
+
+        public Task ClearAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class FailingCheckpointStore : IFlightSessionCheckpointStore
+    {
+        public Task SaveAsync(
+            FlightSession session,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<FlightSession?> LoadAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new IOException("Synthetic checkpoint read failure.");
+
+        public Task ClearAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
 }

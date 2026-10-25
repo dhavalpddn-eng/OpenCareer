@@ -20,6 +20,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private readonly ShellOpenService _shell;
     private readonly OpenCareerDataPaths _paths;
     private readonly FlightSessionCoordinator _flightSessions;
+    private readonly FlightSessionPersistenceService _flightPersistence;
     private readonly IInputBindingDiscoverySource? _inputBindings;
 
     private string _actionStatus = "Ready.";
@@ -46,6 +47,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         ShellOpenService shell,
         OpenCareerDataPaths paths,
         FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService flightPersistence,
         IInputBindingDiscoverySource? inputBindings = null)
     {
         _settings = settings;
@@ -58,9 +60,14 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _flightSessions =
             flightSessions
             ?? throw new ArgumentNullException(nameof(flightSessions));
+        _flightPersistence =
+            flightPersistence
+            ?? throw new ArgumentNullException(nameof(flightPersistence));
         _inputBindings = inputBindings;
         _careerRecoveryStatus =
-            FormatCareerRecoveryStatus(_flightSessions.Current);
+            FormatCareerRecoveryStatus(
+                _flightSessions.Current,
+                _flightPersistence.LastRecoveryFailureMessage);
         _developmentProfileResetScheduled =
             _paths.IsDevelopmentLiveTest
             && OpenCareerDevelopmentDataProfile.IsResetRequested(_paths);
@@ -158,6 +165,13 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public void RefreshDiagnostics()
     {
+        SetField(
+            ref _careerRecoveryStatus,
+            FormatCareerRecoveryStatus(
+                _flightSessions.Current,
+                _flightPersistence.LastRecoveryFailureMessage),
+            nameof(CareerRecoveryStatus));
+
         InputBindingDiscoverySnapshot? bindingSnapshot =
             _inputBindings?.Read(Array.Empty<InputBindingActionIdentity>());
         SetField(
@@ -388,13 +402,18 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         FlightSessionChangedEventArgs e) =>
         SetField(
             ref _careerRecoveryStatus,
-            FormatCareerRecoveryStatus(e.Session),
+            FormatCareerRecoveryStatus(
+                e.Session,
+                _flightPersistence.LastRecoveryFailureMessage),
             nameof(CareerRecoveryStatus));
 
     private static string FormatCareerRecoveryStatus(
-        FlightSession? session) =>
+        FlightSession? session,
+        string? recoveryFailureMessage) =>
         session?.Status switch
         {
+            null when !string.IsNullOrWhiteSpace(recoveryFailureMessage) =>
+                $"RECOVERY ATTENTION · Flight checkpoint recovery did not complete: {recoveryFailureMessage} The app did not clear or replace the persisted checkpoint. Review diagnostics and retry recovery before starting another flight.",
             null =>
                 "SQLite-backed FlightSession checkpoint recovery, including previous-valid fallback, is enabled. No flight session is currently loaded.",
             FlightSessionStatus.Active =>

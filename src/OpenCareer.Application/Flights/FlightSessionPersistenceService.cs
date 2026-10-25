@@ -14,6 +14,8 @@ public sealed class FlightSessionPersistenceService
 
     public Guid? LastRecoveredSessionId { get; private set; }
 
+    public string? LastRecoveryFailureMessage { get; private set; }
+
     public FlightSessionPersistenceService(
         FlightSessionCoordinator coordinator,
         IFlightSessionCheckpointStore store,
@@ -463,7 +465,10 @@ public sealed class FlightSessionPersistenceService
                     .ConfigureAwait(false);
 
             if (checkpoint is null)
+            {
+                LastRecoveryFailureMessage = null;
                 return null;
+            }
 
             if (!checkpoint.IsTerminal
                 && checkpoint.Status == FlightSessionStatus.Active)
@@ -486,8 +491,14 @@ public sealed class FlightSessionPersistenceService
             LastRecoveredSessionId = checkpoint.SessionId;
 
             _coordinator.Restore(checkpoint);
+            LastRecoveryFailureMessage = null;
 
             return checkpoint;
+        }
+        catch (Exception ex)
+        {
+            LastRecoveryFailureMessage = ex.Message;
+            throw;
         }
         finally
         {

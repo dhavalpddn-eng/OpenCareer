@@ -661,6 +661,50 @@ public sealed class FlightSessionPersistenceServiceTests
     }
 
     [Fact]
+    public async Task RecoverFailureRemainsVisibleUntilSuccessfulRetry()
+    {
+        FlightSession checkpoint =
+            FlightSession.Start(
+                Epoch,
+                sessionId:
+                    Guid.Parse(
+                        "46464646-4646-4646-4646-464646464646"));
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = checkpoint,
+                FailReads = true
+            };
+        var coordinator = new FlightSessionCoordinator();
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        IOException error =
+            await Assert.ThrowsAsync<IOException>(
+                () => service.RecoverAsync());
+
+        Assert.Equal("Synthetic checkpoint read failure.", error.Message);
+        Assert.True(service.RecoveryAttempted);
+        Assert.Equal(error.Message, service.LastRecoveryFailureMessage);
+        Assert.Null(service.LastRecoveredSessionId);
+        Assert.Null(coordinator.Current);
+        Assert.Equal(checkpoint, store.Checkpoint);
+        Assert.Equal(0, store.SaveCount);
+
+        store.FailReads = false;
+        FlightSession recovered =
+            Assert.IsType<FlightSession>(
+                await service.RecoverAsync());
+
+        Assert.Null(service.LastRecoveryFailureMessage);
+        Assert.Equal(checkpoint.SessionId, service.LastRecoveredSessionId);
+        Assert.Equal(FlightSessionStatus.Suspended, recovered.Status);
+        Assert.Equal(recovered, coordinator.Current);
+    }
+
+    [Fact]
     public async Task RecoverPreservesTerminalSessionUntilExplicitCleanup()
     {
         var coordinator = new FlightSessionCoordinator();
@@ -1103,6 +1147,8 @@ public sealed class FlightSessionPersistenceServiceTests
 
         public bool FailWrites { get; set; }
 
+        public bool FailReads { get; set; }
+
         public bool PauseNextClear { get; set; }
 
         public TaskCompletionSource ClearStarted { get; } =
@@ -1133,6 +1179,12 @@ public sealed class FlightSessionPersistenceServiceTests
         public Task<FlightSession?> LoadAsync(
             CancellationToken cancellationToken = default)
         {
+            if (FailReads)
+            {
+                throw new IOException(
+                    "Synthetic checkpoint read failure.");
+            }
+
             LoadCount++;
             return Task.FromResult(Checkpoint);
         }
