@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-25 through validated checkpoint `3f327585` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-25 through validated checkpoint `f7326aad` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -53,7 +53,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P52 foundations<br/>CI COMPLETE"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P53 foundations<br/>CI COMPLETE"]
     B --> C["Ordinary compensated job<br/>live certification"]
     C --> D["Broader aircraft/evidence<br/>live calibration"]
     D --> E["Registry / jobs breadth<br/>career progression"]
@@ -230,6 +230,7 @@ Chapter status: **DURABLE MULTI-LEG CORE IMPLEMENTED / BROADER LIVE CALIBRATION 
 - [x] Preserve terminal FlightSession authority from corrupt-current status metadata when no previous-valid fallback exists; reject active resurrection or a divergent terminal outcome while allowing a matching terminal write to repair the checkpoint.
 - [x] Preserve monotonic FlightSession progress from corrupt-current timestamp metadata; ignore older same-session writes even without a previous-valid fallback while allowing a newer matching write to repair the checkpoint.
 - [x] Rotate a previous-valid SQLite checkpoint for equal-timestamp state changes such as restart suspension, while keeping exact duplicate saves idempotent and allowing corrupt successors to recover the prior state.
+- [x] Persist the immutable FlightSession contract association, creation time and initial plan as independent SQLite metadata; after payload corruption, reject conflicting same-session repair even without a previous-valid row, and migrate legacy databases additively to schema v17.
 - [x] Persist decimated route statistics and landing-episode summaries in the checkpoint.
 
 ## Remaining
