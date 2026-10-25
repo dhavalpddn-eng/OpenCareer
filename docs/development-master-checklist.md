@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-25 through validated checkpoint `d13921b0` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-25 through validated checkpoint `b91ec039` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -53,7 +53,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P49 foundations<br/>CI COMPLETE"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P50 foundations<br/>CI COMPLETE"]
     B --> C["Ordinary compensated job<br/>live certification"]
     C --> D["Broader aircraft/evidence<br/>live calibration"]
     D --> E["Registry / jobs breadth<br/>career progression"]
@@ -227,6 +227,7 @@ Chapter status: **DURABLE MULTI-LEG CORE IMPLEMENTED / BROADER LIVE CALIBRATION 
 - [x] Preserve immutable FlightSession authority when the current SQLite payload is corrupt; reject same-session contract, creation-time or initial-plan rewrites and retain the previous-valid fallback across reopen.
 - [x] Preserve terminal FlightSession authority when the current SQLite payload is corrupt; reject same-session active resurrection or divergent terminal-outcome rewrites and retain the previous-valid fallback across reopen.
 - [x] Preserve monotonic FlightSession progress when the current SQLite payload is corrupt; ignore same-session checkpoints older than the previous-valid fallback and retain that fallback across reopen.
+- [x] Preserve terminal FlightSession authority from corrupt-current status metadata when no previous-valid fallback exists; reject active resurrection or a divergent terminal outcome while allowing a matching terminal write to repair the checkpoint.
 - [x] Persist decimated route statistics and landing-episode summaries in the checkpoint.
 
 ## Remaining
