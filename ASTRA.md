@@ -4,12 +4,12 @@
 
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/playable-loop-integration`
-**Validated code baseline:** `2e3c6a153f6f14f2495f0b9f6a4965404eca06da`; keep `main` stable.
+**Validated code baseline:** `3f3275857350e0567f0575e3b17713d4ac64b3aa`; keep `main` stable.
 **Master build list:** `docs/master-build-list.md` — active unfinished major systems sorted low-to-high by estimated remaining engineering effort; stable `MBL-xx` IDs remain unchanged; remove items only when fully implemented, integrated, tested and accepted.  
 **Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
 **Parallel military branch:** `feature/military-conflict-system`, draft PR #10 -> `feature/m1-simulation-core`; campaign core is complete. Deterministic ground/air conflict, current military mission families, authorization, fictional theater generation, SQLite campaign/mission recovery, strategic phase/momentum/objectives, persisted threat outcomes, dispatch authorization, Military/Government UI projection, production mission-service consequence wiring, phase-driven faction-posture evolution and the operation-resolution/consequence engine are implemented. Consequences persist in SQLite schema v5 with restart-safe duplicate protection, rollback/retry safety and reconnect replay protection. Verified head `16cda14981bc6284e4f33833e88aa8289ff46149` is green in exact-head Linux PR CI and exact-head Windows CI, including the bounded 96-step deterministic campaign stress test. No next standalone campaign slice: remaining MBL-19 work is blocked on MBL-13, MBL-08/09, MBL-10/14 and MBL-06/07 + local MSFS validation.
 **CI policy:** repo is public; standard Linux/Windows hosted runners are active. Feature pushes do not duplicate PR CI; docs-only updates are excluded from full builds; changed-file gates prevent cumulative PR diffs from forcing irrelevant validation. Relevant WinUI changes get Windows validation during the draft PR.  
-**Exact-head verification:** Linux build #1165 and Windows `winui-build` #1098 passed on the first attempt at `2e3c6a15`. Exact-PC validation remains the C172/KJFK SimConnect identity path, takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, terminal settlement/finalization, contained facility failures, Jobs picker stability and shared button readability. The ordinary Passenger and accepted named-cargo authority paths are CI-certified but not yet live-certified in MSFS.
+**Exact-head verification:** Linux build #1167 and Windows `winui-build` #1100 passed on the first attempt at `3f327585`. Exact-PC validation remains the C172/KJFK SimConnect identity path, takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, terminal settlement/finalization, contained facility failures, Jobs picker stability and shared button readability. The ordinary Passenger and accepted named-cargo authority paths are CI-certified but not yet live-certified in MSFS.
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
 
@@ -272,6 +272,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `2e3c6a153f6f14f2495f0b9f6a4965404eca06da`.
 - A corrupt current SQLite checkpoint now preserves recency from its independent timestamp metadata. Older same-session writes are ignored even when no previous-valid fallback exists; newer matching writes can still repair the checkpoint normally.
 - Verification: exact-head Linux build #1165 and Windows `winui-build` #1098 passed on the first attempt, including WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite. Local test execution was unavailable because this runner had no .NET CLI.
+- Code checkpoint: `3f3275857350e0567f0575e3b17713d4ac64b3aa`.
+- SQLite now rotates a previous-valid checkpoint when the state changes at the same timestamp, including the production restart recovery transition from active to suspended. Byte-identical duplicate saves still avoid unnecessary rotation, and a corrupt equal-time successor can fall back to the prior valid state.
+- Verification: exact-head Linux build #1167 and Windows `winui-build` #1100 passed on the first attempt, including WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite. Local test execution was unavailable because this runner had no .NET CLI.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
