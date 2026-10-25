@@ -196,14 +196,14 @@ public sealed class SqliteFlightSessionCheckpointStore :
                         session);
                 }
 
-                if (session.UpdatedAt.UtcTicks < currentRow.UpdatedAtUtcTicks)
-                {
-                    transaction.Commit();
-                    return;
-                }
-
                 if (previous is null)
                 {
+                    if (session.UpdatedAt.UtcTicks < currentRow.UpdatedAtUtcTicks)
+                    {
+                        transaction.Commit();
+                        return;
+                    }
+
                     await DeletePreviousRowAsync(
                             connection,
                             transaction,
