@@ -29,7 +29,7 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
-    public async Task FailedRecoveryWarnsThatPersistedCheckpointWasNotReplaced()
+    public async Task FailedRecoveryWarnsBeforeAnotherFlightStarts()
     {
         var sessions = new FlightSessionCoordinator();
         var persistence =
@@ -46,7 +46,7 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
 
         Assert.Contains("RECOVERY ATTENTION", context.ViewModel.CareerRecoveryStatus);
         Assert.Contains("did not complete", context.ViewModel.CareerRecoveryStatus);
-        Assert.Contains("did not clear or replace", context.ViewModel.CareerRecoveryStatus);
+        Assert.Contains("did not clear", context.ViewModel.CareerRecoveryStatus);
         Assert.Contains("retry recovery", context.ViewModel.CareerRecoveryStatus);
         Assert.DoesNotContain(
             "No flight session is currently loaded",

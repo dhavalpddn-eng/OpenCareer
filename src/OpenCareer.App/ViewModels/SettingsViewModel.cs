@@ -413,7 +413,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         session?.Status switch
         {
             null when !string.IsNullOrWhiteSpace(recoveryFailureMessage) =>
-                $"RECOVERY ATTENTION · Flight checkpoint recovery did not complete: {recoveryFailureMessage} The app did not clear or replace the persisted checkpoint. Review diagnostics and retry recovery before starting another flight.",
+                $"RECOVERY ATTENTION · Flight checkpoint recovery did not complete: {recoveryFailureMessage} The app did not clear the stored checkpoint during recovery. Review diagnostics and retry recovery before starting another flight.",
             null =>
                 "SQLite-backed FlightSession checkpoint recovery, including previous-valid fallback, is enabled. No flight session is currently loaded.",
             FlightSessionStatus.Active =>
