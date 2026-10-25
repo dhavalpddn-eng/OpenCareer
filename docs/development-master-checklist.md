@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-25 through validated checkpoint `226299e2` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-25 through validated checkpoint `8c705624` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -53,7 +53,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P44 foundations<br/>CI COMPLETE"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P45 foundations<br/>CI COMPLETE"]
     B --> C["Ordinary compensated job<br/>live certification"]
     C --> D["Broader aircraft/evidence<br/>live calibration"]
     D --> E["Registry / jobs breadth<br/>career progression"]
@@ -222,6 +222,7 @@ Chapter status: **DURABLE MULTI-LEG CORE IMPLEMENTED / BROADER LIVE CALIBRATION 
 - [x] Preserve terminal authority before SQLite checkpoint replacement; reject same-session resurrection or terminal-outcome rewrites and retain the prior recovery checkpoint across reopen.
 - [x] Preserve the initial FlightSession plan across persisted coordinator commits and SQLite replacement; reject same-session route, provenance or expected-aircraft rewrites without publishing or rotating recovery state.
 - [x] Require persistent start to inspect storage first; after restart, refuse to overwrite an unrecovered active or terminal checkpoint and leave it available for recovery or explicit cleanup.
+- [x] Require explicit SQLite checkpoint clearing before a different FlightSession identity can be saved; preserve valid and corrupt-current recovery state across rejected direct-store replacement.
 - [x] Persist decimated route statistics and landing-episode summaries in the checkpoint.
 
 ## Remaining
