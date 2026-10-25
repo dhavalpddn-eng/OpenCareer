@@ -173,10 +173,6 @@ public sealed class SqliteFlightSessionCheckpointStore :
             }
             else
             {
-                ValidateStoredAuthority(
-                    currentRow.AuthorityJson,
-                    session);
-
                 if (IsTerminalStatus(currentRow.Status)
                     && session.Status != (FlightSessionStatus)currentRow.Status)
                 {
@@ -192,6 +188,13 @@ public sealed class SqliteFlightSessionCheckpointStore :
                             session,
                             cancellationToken)
                         .ConfigureAwait(false);
+
+                if (previous is null)
+                {
+                    ValidateStoredAuthority(
+                        currentRow.AuthorityJson,
+                        session);
+                }
 
                 if (session.UpdatedAt.UtcTicks < currentRow.UpdatedAtUtcTicks)
                 {
