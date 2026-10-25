@@ -86,6 +86,65 @@ public sealed class FlightSessionPersistenceServiceTests
         Assert.Equal(saveCount, store.SaveCount);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartAfterRestartPreservesUnrecoveredCheckpoint(
+        bool terminal)
+    {
+        Guid contractId =
+            Guid.Parse(
+                "22222222-2222-2222-2222-222222222222");
+
+        FlightSession checkpoint =
+            FlightSession.Start(
+                Epoch,
+                contractId,
+                Guid.Parse(
+                    "33333333-3333-3333-3333-333333333333"));
+
+        if (terminal)
+        {
+            checkpoint =
+                FlightSessionEngine.Advance(
+                    checkpoint,
+                    new FlightSessionAdvance(
+                        new FlightStateEvidence(
+                            Epoch.AddSeconds(1),
+                            Connected: true),
+                        CancelRequested: true));
+        }
+
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = checkpoint
+            };
+
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.StartAsync(
+                    Epoch.AddMinutes(1),
+                    Guid.Parse(
+                        "44444444-4444-4444-4444-444444444444"),
+                    Guid.Parse(
+                        "55555555-5555-5555-5555-555555555555")));
+
+        Assert.Contains("recovered or cleared", error.Message);
+        Assert.Same(checkpoint, store.Checkpoint);
+        Assert.Null(coordinator.Current);
+        Assert.Equal(1, store.LoadCount);
+        Assert.Equal(0, store.SaveCount);
+    }
+
     [Fact]
     public async Task FailedCheckpointWriteDoesNotAdvanceInMemorySession()
     {

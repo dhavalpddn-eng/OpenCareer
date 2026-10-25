@@ -53,6 +53,17 @@ public sealed class FlightSessionPersistenceService
                     "The current flight session must be cleared before a new session can start.");
             }
 
+            FlightSession? checkpoint =
+                await _store
+                    .LoadAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (checkpoint is not null)
+            {
+                throw new InvalidOperationException(
+                    "The persisted flight session must be recovered or cleared before a new session can start.");
+            }
+
             FlightSession session =
                 FlightSession.Start(
                     timestamp,
