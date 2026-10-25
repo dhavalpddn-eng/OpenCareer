@@ -160,6 +160,13 @@ public sealed class SqliteFlightSessionCheckpointStore :
             }
             else
             {
+                if (IsTerminalStatus(currentRow.Status)
+                    && session.Status != (FlightSessionStatus)currentRow.Status)
+                {
+                    throw new InvalidOperationException(
+                        "Flight-session checkpoint terminal authority cannot change within a session.");
+                }
+
                 FlightSession? previous =
                     await TryReadMatchingPreviousAsync(
                             connection,
@@ -650,6 +657,11 @@ public sealed class SqliteFlightSessionCheckpointStore :
             return null;
         }
     }
+
+    private static bool IsTerminalStatus(int status) =>
+        status is (int)FlightSessionStatus.Interrupted
+            or (int)FlightSessionStatus.Completed
+            or (int)FlightSessionStatus.Cancelled;
 
     private static FlightSession ReadValidCheckpoint(CheckpointRow row)
     {
