@@ -176,6 +176,12 @@ public sealed class SqliteFlightSessionCheckpointStore :
                             cancellationToken)
                         .ConfigureAwait(false);
 
+                if (session.UpdatedAt.UtcTicks < currentRow.UpdatedAtUtcTicks)
+                {
+                    transaction.Commit();
+                    return;
+                }
+
                 if (previous is null)
                 {
                     await DeletePreviousRowAsync(

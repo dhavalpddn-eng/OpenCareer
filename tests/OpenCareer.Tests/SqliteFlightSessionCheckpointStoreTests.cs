@@ -945,7 +945,7 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Fact]
-    public async Task CorruptCurrentOlderCheckpointPreservesPrevious()
+    public async Task CorruptCurrentOlderThanMetadataPreservesPrevious()
     {
         string databasePath =
             Path.Combine(_directory, "career.db");
@@ -983,9 +983,9 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
             "UPDATE flight_session_checkpoint SET payload_json = '{';");
 
         FlightSession stale =
-            initial with
+            previous with
             {
-                UpdatedAt = initial.UpdatedAt.AddSeconds(1)
+                UpdatedAt = previous.UpdatedAt.AddMilliseconds(500)
             };
 
         await store.SaveAsync(stale);
@@ -999,6 +999,59 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
             FlightOperationState.ReadyForStart,
             loaded.OperationState);
         AssertSessionEquivalent(previous, loaded);
+    }
+
+    [Fact]
+    public async Task CorruptOnlyCurrentOlderThanMetadataIsIgnoredAndNewerWriteRepairs()
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+        var store =
+            new SqliteFlightSessionCheckpointStore(databasePath);
+
+        FlightSession initial =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 21, 12, 0, 0, TimeSpan.Zero),
+                Guid.Parse(
+                    "22222222-2222-2222-2222-222222222222"),
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"));
+        FlightSession current =
+            initial with
+            {
+                UpdatedAt = initial.UpdatedAt.AddSeconds(2)
+            };
+
+        await store.SaveAsync(current);
+        await ExecuteAsync(
+            databasePath,
+            "UPDATE flight_session_checkpoint SET payload_json = '{';");
+
+        await store.SaveAsync(
+            initial with
+            {
+                UpdatedAt = initial.UpdatedAt.AddSeconds(1)
+            });
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => new SqliteFlightSessionCheckpointStore(databasePath)
+                .LoadAsync());
+
+        FlightSession repaired =
+            current with
+            {
+                UpdatedAt = current.UpdatedAt.AddSeconds(1)
+            };
+
+        await store.SaveAsync(repaired);
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(repaired, loaded);
     }
 
     [Fact]
