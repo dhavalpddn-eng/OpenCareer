@@ -315,7 +315,13 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
             Assert.True(root.Remove("legs"));
 
             await using var update = connection.CreateCommand();
-            update.CommandText = "UPDATE flight_session_checkpoint SET payload_json = $payload WHERE slot_id = 1;";
+            update.CommandText =
+                """
+                UPDATE flight_session_checkpoint
+                SET payload_json = $payload,
+                    authority_json = NULL
+                WHERE slot_id = 1;
+                """;
             update.Parameters.AddWithValue("$payload", root.ToJsonString());
             Assert.Equal(1, await update.ExecuteNonQueryAsync());
         }
