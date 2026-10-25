@@ -139,7 +139,12 @@ public sealed class SqliteFlightSessionCheckpointStore :
                     return;
                 }
 
-                if (session.UpdatedAt > current.UpdatedAt)
+                if (session.UpdatedAt > current.UpdatedAt
+                    || (session.UpdatedAt == current.UpdatedAt
+                        && !string.Equals(
+                            payload,
+                            currentRow!.Payload,
+                            StringComparison.Ordinal)))
                 {
                     await SavePreviousRowAsync(
                             connection,

@@ -701,6 +701,60 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         AssertSessionEquivalent(previous, loaded);
     }
 
+    [Fact]
+    public async Task EqualTimestampStateChangeCreatesPreviousRecoveryCheckpoint()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+        FlightSession active = CreateAirborneSession();
+        FlightSession suspended =
+            FlightSessionEngine.Advance(
+                active,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        active.UpdatedAt,
+                        Connected: false,
+                        ContinuityPlausible: false)));
+
+        Assert.Equal(active.UpdatedAt, suspended.UpdatedAt);
+        Assert.Equal(FlightSessionStatus.Suspended, suspended.Status);
+
+        await store.SaveAsync(active);
+        await store.SaveAsync(suspended);
+        await ExecuteAsync(
+            databasePath,
+            "UPDATE flight_session_checkpoint SET payload_json = '{';");
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(active, loaded);
+    }
+
+    [Fact]
+    public async Task ExactDuplicateSaveDoesNotRotatePreviousCheckpoint()
+    {
+        string databasePath = Path.Combine(_directory, "career.db");
+        var store = new SqliteFlightSessionCheckpointStore(databasePath);
+        FlightSession session = CreateAirborneSession();
+
+        await store.SaveAsync(session);
+        await store.SaveAsync(session);
+
+        await using var connection =
+            new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync();
+        await using SqliteCommand count = connection.CreateCommand();
+        count.CommandText =
+            "SELECT COUNT(*) FROM flight_session_checkpoint_previous;";
+
+        Assert.Equal(
+            0L,
+            Convert.ToInt64(await count.ExecuteScalarAsync()));
+    }
+
     [Theory]
     [InlineData(true, false, false)]
     [InlineData(false, true, false)]
