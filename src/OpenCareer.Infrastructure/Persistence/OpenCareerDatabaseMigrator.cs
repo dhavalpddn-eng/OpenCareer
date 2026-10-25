@@ -7,7 +7,7 @@ internal static class OpenCareerDatabaseMigrator
     // Career and Economy branches independently reused schema versions 1-10.
     // Version 11 was the first shared convergence point; pre-v11 user_version
     // alone cannot be used to infer which subsystem tables already exist.
-    public const int CurrentSchemaVersion = 18;
+    public const int CurrentSchemaVersion = 19;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -54,6 +54,12 @@ internal static class OpenCareerDatabaseMigrator
             .ConfigureAwait(false);
 
         await EnsureFlightSessionPreviousSuccessorTimestampColumnAsync(
+                connection,
+                transaction,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await EnsureFlightSessionPreviousSuccessorPayloadColumnAsync(
                 connection,
                 transaction,
                 cancellationToken)
@@ -126,6 +132,7 @@ internal static class OpenCareerDatabaseMigrator
                     successor_session_id TEXT NOT NULL,
                     successor_contract_id TEXT NULL,
                     successor_updated_at_utc_ticks INTEGER NULL,
+                    successor_payload_json TEXT NULL,
                     session_id TEXT NOT NULL,
                     payload_schema_version INTEGER NOT NULL,
                     status INTEGER NOT NULL,
@@ -433,6 +440,43 @@ internal static class OpenCareerDatabaseMigrator
                 connection,
                 transaction,
                 "ALTER TABLE flight_session_checkpoint_previous ADD COLUMN successor_updated_at_utc_ticks INTEGER NULL;",
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task EnsureFlightSessionPreviousSuccessorPayloadColumnAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText =
+                "PRAGMA table_info(flight_session_checkpoint_previous);";
+            await using SqliteDataReader reader =
+                await command.ExecuteReaderAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (string.Equals(
+                        reader.GetString(1),
+                        "successor_payload_json",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        // Existing previous rows remain valid older fallbacks. The exact current
+        // successor is mirrored on their next rotation without synthesizing it
+        // from a possibly corrupt current payload.
+        await ExecuteAsync(
+                connection,
+                transaction,
+                "ALTER TABLE flight_session_checkpoint_previous ADD COLUMN successor_payload_json TEXT NULL;",
                 cancellationToken)
             .ConfigureAwait(false);
     }

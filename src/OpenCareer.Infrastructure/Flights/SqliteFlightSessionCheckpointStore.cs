@@ -29,11 +29,13 @@ public sealed class SqliteFlightSessionCheckpointStore :
         string SuccessorSessionId,
         string? SuccessorContractId,
         long? SuccessorUpdatedAtUtcTicks,
+        string? SuccessorPayload,
         CheckpointRow Checkpoint);
 
     private sealed record MatchingPreviousCheckpoint(
         FlightSession Session,
-        long? SuccessorUpdatedAtUtcTicks);
+        long? SuccessorUpdatedAtUtcTicks,
+        bool MirrorsCurrent);
 
     private static readonly JsonSerializerOptions JsonOptions =
         new()
@@ -164,6 +166,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                             transaction,
                             currentRow!,
                             session,
+                            payload,
                             cancellationToken)
                         .ConfigureAwait(false);
                 }
@@ -217,15 +220,17 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 }
                 else
                 {
-                    bool currentRecencyIsTrusted =
-                        previous.SuccessorUpdatedAtUtcTicks is null
-                        || previous.SuccessorUpdatedAtUtcTicks
-                            == currentRow.UpdatedAtUtcTicks;
+                    bool isOlderThanRecoveryAuthority =
+                        previous.MirrorsCurrent
+                            ? session.UpdatedAt < previous.Session.UpdatedAt
+                            : ((previous.SuccessorUpdatedAtUtcTicks is null
+                                        || previous.SuccessorUpdatedAtUtcTicks
+                                            == currentRow.UpdatedAtUtcTicks)
+                                    && session.UpdatedAt.UtcTicks
+                                        < currentRow.UpdatedAtUtcTicks)
+                                || session.UpdatedAt < previous.Session.UpdatedAt;
 
-                    if ((currentRecencyIsTrusted
-                            && session.UpdatedAt.UtcTicks
-                                < currentRow.UpdatedAtUtcTicks)
-                        || session.UpdatedAt < previous.Session.UpdatedAt)
+                    if (isOlderThanRecoveryAuthority)
                     {
                         transaction.Commit();
                         return;
@@ -301,6 +306,14 @@ public sealed class SqliteFlightSessionCheckpointStore :
 
             try
             {
+                FlightSession? mirroredSuccessor =
+                    TryReadMirroredSuccessor(
+                        current,
+                        previous);
+
+                if (mirroredSuccessor is not null)
+                    return mirroredSuccessor;
+
                 FlightSession fallback =
                     ReadValidCheckpoint(previous.Checkpoint);
 
@@ -501,6 +514,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 successor_session_id,
                 successor_contract_id,
                 successor_updated_at_utc_ticks,
+                successor_payload_json,
                 session_id,
                 payload_schema_version,
                 status,
@@ -523,13 +537,14 @@ public sealed class SqliteFlightSessionCheckpointStore :
             reader.GetString(0),
             reader.IsDBNull(1) ? null : reader.GetString(1),
             reader.IsDBNull(2) ? null : reader.GetInt64(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3),
             new CheckpointRow(
-                reader.GetString(3),
-                reader.GetInt32(4),
+                reader.GetString(4),
                 reader.GetInt32(5),
-                reader.GetInt64(6),
+                reader.GetInt32(6),
+                reader.GetInt64(7),
                 AuthorityJson: null,
-                reader.GetString(7)));
+                reader.GetString(8)));
     }
 
     private static async Task SavePreviousRowAsync(
@@ -537,6 +552,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
         SqliteTransaction transaction,
         CheckpointRow previous,
         FlightSession successor,
+        string successorPayload,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -548,6 +564,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 successor_session_id,
                 successor_contract_id,
                 successor_updated_at_utc_ticks,
+                successor_payload_json,
                 session_id,
                 payload_schema_version,
                 status,
@@ -558,6 +575,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 $successorSessionId,
                 $successorContractId,
                 $successorUpdatedAtUtcTicks,
+                $successorPayloadJson,
                 $sessionId,
                 $schemaVersion,
                 $status,
@@ -568,6 +586,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 successor_session_id = excluded.successor_session_id,
                 successor_contract_id = excluded.successor_contract_id,
                 successor_updated_at_utc_ticks = excluded.successor_updated_at_utc_ticks,
+                successor_payload_json = excluded.successor_payload_json,
                 session_id = excluded.session_id,
                 payload_schema_version = excluded.payload_schema_version,
                 status = excluded.status,
@@ -586,6 +605,9 @@ public sealed class SqliteFlightSessionCheckpointStore :
         command.Parameters.AddWithValue(
             "$successorUpdatedAtUtcTicks",
             successor.UpdatedAt.UtcTicks);
+        command.Parameters.AddWithValue(
+            "$successorPayloadJson",
+            successorPayload);
         command.Parameters.AddWithValue("$sessionId", previous.SessionId);
         command.Parameters.AddWithValue("$schemaVersion", previous.SchemaVersion);
         command.Parameters.AddWithValue("$status", previous.Status);
@@ -669,6 +691,23 @@ public sealed class SqliteFlightSessionCheckpointStore :
         if (previous is null)
             return null;
 
+        FlightSession? mirroredSuccessor =
+            TryReadMirroredSuccessor(
+                invalidCurrent,
+                previous);
+
+        if (mirroredSuccessor is not null)
+        {
+            ValidateRecoveryAuthority(
+                mirroredSuccessor,
+                incoming);
+
+            return new MatchingPreviousCheckpoint(
+                mirroredSuccessor,
+                previous.SuccessorUpdatedAtUtcTicks,
+                MirrorsCurrent: true);
+        }
+
         try
         {
             FlightSession fallback = ReadValidCheckpoint(previous.Checkpoint);
@@ -677,29 +716,69 @@ public sealed class SqliteFlightSessionCheckpointStore :
             if (fallback.SessionId != incoming.SessionId)
                 return null;
 
-            if (fallback.ContractId != incoming.ContractId
-                || fallback.CreatedAt != incoming.CreatedAt
-                || fallback.Plan != incoming.Plan)
-            {
-                throw new InvalidOperationException(
-                    "Flight-session checkpoint immutable authority cannot change within a session.");
-            }
-
-            if (fallback.IsTerminal
-                && incoming.Status != fallback.Status)
-            {
-                throw new InvalidOperationException(
-                    "Flight-session checkpoint terminal authority cannot change within a session.");
-            }
+            ValidateRecoveryAuthority(
+                fallback,
+                incoming);
 
             return new MatchingPreviousCheckpoint(
                 fallback,
-                previous.SuccessorUpdatedAtUtcTicks);
+                previous.SuccessorUpdatedAtUtcTicks,
+                MirrorsCurrent: false);
         }
         catch (Exception exception)
             when (IsInvalidCheckpointException(exception))
         {
             return null;
+        }
+    }
+
+    private static FlightSession? TryReadMirroredSuccessor(
+        CheckpointRow invalidCurrent,
+        PreviousCheckpointRow previous)
+    {
+        if (previous.SuccessorPayload is null)
+            return null;
+
+        try
+        {
+            FlightSession mirroredSuccessor =
+                ReadValidCheckpoint(
+                    invalidCurrent with
+                    {
+                        Payload = previous.SuccessorPayload
+                    });
+
+            ValidateFallbackIdentity(
+                invalidCurrent,
+                previous,
+                mirroredSuccessor);
+
+            return mirroredSuccessor;
+        }
+        catch (Exception exception)
+            when (IsInvalidCheckpointException(exception))
+        {
+            return null;
+        }
+    }
+
+    private static void ValidateRecoveryAuthority(
+        FlightSession recovered,
+        FlightSession incoming)
+    {
+        if (recovered.ContractId != incoming.ContractId
+            || recovered.CreatedAt != incoming.CreatedAt
+            || recovered.Plan != incoming.Plan)
+        {
+            throw new InvalidOperationException(
+                "Flight-session checkpoint immutable authority cannot change within a session.");
+        }
+
+        if (recovered.IsTerminal
+            && incoming.Status != recovered.Status)
+        {
+            throw new InvalidOperationException(
+                "Flight-session checkpoint terminal authority cannot change within a session.");
         }
     }
 

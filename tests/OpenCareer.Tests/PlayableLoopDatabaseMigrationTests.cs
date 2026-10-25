@@ -27,7 +27,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                18);
+                19);
 
             await AssertTablesExistAsync(
                 path,
@@ -71,7 +71,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                18);
+                19);
 
             await AssertTablesExistAsync(
                 path,
@@ -144,7 +144,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                18);
+                19);
 
             await AssertTablesExistAsync(
                 path,
@@ -211,7 +211,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                18);
+                19);
 
             await using SqliteConnection connection =
                 await OpenReadOnlyAsync(path);
@@ -321,7 +321,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                18);
+                19);
 
             await using SqliteConnection verification =
                 await OpenReadOnlyAsync(path);
@@ -392,7 +392,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                18);
+                19);
 
             await using SqliteConnection verification =
                 await OpenReadOnlyAsync(path);
@@ -427,6 +427,22 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 1L,
                 Convert.ToInt64(
                     await previousColumn.ExecuteScalarAsync(),
+                    System.Globalization.CultureInfo.InvariantCulture));
+
+            await using SqliteCommand successorPayloadColumn =
+                verification.CreateCommand();
+
+            successorPayloadColumn.CommandText =
+                """
+                SELECT COUNT(*)
+                FROM pragma_table_info('flight_session_checkpoint_previous')
+                WHERE name = 'successor_payload_json';
+                """;
+
+            Assert.Equal(
+                1L,
+                Convert.ToInt64(
+                    await successorPayloadColumn.ExecuteScalarAsync(),
                     System.Globalization.CultureInfo.InvariantCulture));
         }
         finally

@@ -370,7 +370,7 @@ public sealed class OpenCareerDatabaseMigrationReconciliationTests
         version.CommandText = "PRAGMA user_version;";
 
         Assert.Equal(
-            18L,
+            19L,
             Convert.ToInt64(
                 await version.ExecuteScalarAsync(),
                 System.Globalization.CultureInfo.InvariantCulture));
