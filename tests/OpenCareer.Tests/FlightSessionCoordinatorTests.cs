@@ -128,6 +128,40 @@ public sealed class FlightSessionCoordinatorTests
     }
 
     [Fact]
+    public void RestorePreservesTerminalSessionUntilExplicitlyCleared()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        FlightSession terminal =
+            FlightSessionEngine.Advance(
+                FlightSession.Start(Epoch),
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(1),
+                        Connected: true),
+                    CancelRequested: true));
+
+        FlightSession replacement =
+            FlightSession.Start(
+                Epoch.AddSeconds(2));
+
+        coordinator.Restore(terminal);
+
+        InvalidOperationException error =
+            Assert.Throws<InvalidOperationException>(
+                () => coordinator.Restore(replacement));
+
+        Assert.Contains("cleared", error.Message);
+        Assert.Equal(terminal, coordinator.Current);
+
+        coordinator.ClearTerminalSession();
+        coordinator.Restore(replacement);
+
+        Assert.Equal(replacement, coordinator.Current);
+    }
+
+    [Fact]
     public void ActiveSessionCannotBeCleared()
     {
         var coordinator =

@@ -52,10 +52,10 @@ public sealed class FlightSessionCoordinator
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        if (Current is { IsTerminal: false })
+        if (Current is not null)
         {
             throw new InvalidOperationException(
-                "Cannot restore over an active flight session.");
+                "The current flight session must be cleared before another session can be restored.");
         }
 
         Current = session;
