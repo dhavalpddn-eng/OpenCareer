@@ -868,6 +868,63 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Fact]
+    public async Task CorruptCurrentOlderCheckpointPreservesPrevious()
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+        var store =
+            new SqliteFlightSessionCheckpointStore(databasePath);
+
+        FlightSession initial =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 21, 12, 0, 0, TimeSpan.Zero),
+                Guid.Parse(
+                    "22222222-2222-2222-2222-222222222222"),
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"));
+        FlightSession previous =
+            FlightSessionEngine.Advance(
+                initial,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        initial.UpdatedAt.AddSeconds(2),
+                        Connected: true,
+                        StableTelemetry: true,
+                        ValidLoadedAircraft: true,
+                        ContinuityPlausible: true)));
+        FlightSession current =
+            previous with
+            {
+                UpdatedAt = previous.UpdatedAt.AddSeconds(1)
+            };
+
+        await store.SaveAsync(previous);
+        await store.SaveAsync(current);
+        await ExecuteAsync(
+            databasePath,
+            "UPDATE flight_session_checkpoint SET payload_json = '{';");
+
+        FlightSession stale =
+            initial with
+            {
+                UpdatedAt = initial.UpdatedAt.AddSeconds(1)
+            };
+
+        await store.SaveAsync(stale);
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        Assert.Equal(
+            FlightOperationState.ReadyForStart,
+            loaded.OperationState);
+        AssertSessionEquivalent(previous, loaded);
+    }
+
+    [Fact]
     public async Task CorruptCurrentAndCorruptOrMissingPreviousFailClosed()
     {
         string corruptDatabasePath = Path.Combine(_directory, "corrupt.db");

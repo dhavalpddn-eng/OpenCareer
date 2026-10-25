@@ -150,20 +150,38 @@ public sealed class SqliteFlightSessionCheckpointStore :
                         .ConfigureAwait(false);
                 }
             }
-            else if (currentRow is null
-                || !await PreviousMatchesIncomingAsync(
-                        connection,
-                        transaction,
-                        currentRow,
-                        session,
-                        cancellationToken)
-                    .ConfigureAwait(false))
+            else if (currentRow is null)
             {
                 await DeletePreviousRowAsync(
                         connection,
                         transaction,
                         cancellationToken)
                     .ConfigureAwait(false);
+            }
+            else
+            {
+                FlightSession? previous =
+                    await TryReadMatchingPreviousAsync(
+                            connection,
+                            transaction,
+                            currentRow,
+                            session,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                if (previous is null)
+                {
+                    await DeletePreviousRowAsync(
+                            connection,
+                            transaction,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                else if (session.UpdatedAt < previous.UpdatedAt)
+                {
+                    transaction.Commit();
+                    return;
+                }
             }
 
             await SaveCurrentRowAsync(
@@ -568,7 +586,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task<bool> PreviousMatchesIncomingAsync(
+    private static async Task<FlightSession?> TryReadMatchingPreviousAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         CheckpointRow invalidCurrent,
@@ -583,7 +601,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 .ConfigureAwait(false);
 
         if (previous is null)
-            return false;
+            return null;
 
         try
         {
@@ -591,7 +609,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
             ValidateFallbackIdentity(invalidCurrent, previous, fallback);
 
             if (fallback.SessionId != incoming.SessionId)
-                return false;
+                return null;
 
             if (fallback.ContractId != incoming.ContractId
                 || fallback.CreatedAt != incoming.CreatedAt
@@ -608,12 +626,12 @@ public sealed class SqliteFlightSessionCheckpointStore :
                     "Flight-session checkpoint terminal authority cannot change within a session.");
             }
 
-            return true;
+            return fallback;
         }
         catch (Exception exception)
             when (IsInvalidCheckpointException(exception))
         {
-            return false;
+            return null;
         }
     }
 
