@@ -320,7 +320,26 @@ public sealed class StudentTrainingOperationServiceTests
                 Legs = [leg with { Plan = plan }]
             };
 
-            Sessions.CommitPersisted(completed);
+            if (sourceProvider is null)
+            {
+                Sessions.CommitPersisted(completed);
+            }
+            else
+            {
+                FlightSession cancelled =
+                    FlightSessionEngine.Advance(
+                        session,
+                        new FlightSessionAdvance(
+                            new FlightStateEvidence(
+                                session.UpdatedAt.AddTicks(1),
+                                Connected: true),
+                            CancelRequested: true));
+
+                Sessions.CommitPersisted(cancelled);
+                Sessions.ClearTerminalSession();
+                Sessions.Restore(completed);
+            }
+
             Checkpoints.SaveAsync(completed).GetAwaiter().GetResult();
         }
     }
