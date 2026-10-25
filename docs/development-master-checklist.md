@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-25 through validated checkpoint `b3a02d72` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-25 through validated checkpoint `f419a395` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -53,7 +53,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P55 foundations<br/>CI COMPLETE"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P56 foundations<br/>CI COMPLETE"]
     B --> C["Ordinary compensated job<br/>live certification"]
     C --> D["Broader aircraft/evidence<br/>live calibration"]
     D --> E["Registry / jobs breadth<br/>career progression"]
@@ -233,6 +233,7 @@ Chapter status: **DURABLE MULTI-LEG CORE IMPLEMENTED / BROADER LIVE CALIBRATION 
 - [x] Persist the immutable FlightSession contract association, creation time and initial plan as independent SQLite metadata; after payload corruption, reject conflicting same-session repair even without a previous-valid row, and migrate legacy databases additively to schema v17.
 - [x] Prefer a valid matching previous SQLite checkpoint over corrupt current immutable-authority metadata when authorizing a newer same-session repair; without that fallback, retain the independent metadata fail-closed boundary.
 - [x] Prefer a valid matching previous SQLite checkpoint over conflicting corrupt-current terminal status metadata when authorizing a newer same-session repair; without that fallback, retain the independent status fail-closed boundary.
+- [x] Authenticate current-row checkpoint recency against the previous row's expected successor timestamp; preserve authentic rollback protection, allow valid-fallback repair after timestamp corruption, and migrate legacy databases additively to schema v18.
 - [x] Persist decimated route statistics and landing-episode summaries in the checkpoint.
 
 ## Remaining
