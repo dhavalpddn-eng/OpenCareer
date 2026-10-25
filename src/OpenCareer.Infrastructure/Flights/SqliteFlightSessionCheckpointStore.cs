@@ -17,7 +17,13 @@ public sealed class SqliteFlightSessionCheckpointStore :
         int SchemaVersion,
         int Status,
         long UpdatedAtUtcTicks,
+        string? AuthorityJson,
         string Payload);
+
+    private sealed record CheckpointAuthority(
+        Guid? ContractId,
+        DateTimeOffset CreatedAt,
+        FlightSessionPlan? Plan);
 
     private sealed record PreviousCheckpointRow(
         string SuccessorSessionId,
@@ -71,6 +77,8 @@ public sealed class SqliteFlightSessionCheckpointStore :
             JsonSerializer.Serialize(
                 session,
                 JsonOptions);
+        string authorityJson =
+            SerializeAuthority(session);
 
         await _writeGate
             .WaitAsync(cancellationToken)
@@ -165,6 +173,10 @@ public sealed class SqliteFlightSessionCheckpointStore :
             }
             else
             {
+                ValidateStoredAuthority(
+                    currentRow.AuthorityJson,
+                    session);
+
                 if (IsTerminalStatus(currentRow.Status)
                     && session.Status != (FlightSessionStatus)currentRow.Status)
                 {
@@ -207,6 +219,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                     transaction,
                     session,
                     payload,
+                    authorityJson,
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -432,6 +445,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 payload_schema_version,
                 status,
                 updated_at_utc_ticks,
+                authority_json,
                 payload_json
             FROM flight_session_checkpoint
             WHERE slot_id = $slotId
@@ -451,7 +465,8 @@ public sealed class SqliteFlightSessionCheckpointStore :
             reader.GetInt32(1),
             reader.GetInt32(2),
             reader.GetInt64(3),
-            reader.GetString(4));
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.GetString(5));
     }
 
     private static async Task<PreviousCheckpointRow?> ReadPreviousRowAsync(
@@ -492,6 +507,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 reader.GetInt32(3),
                 reader.GetInt32(4),
                 reader.GetInt64(5),
+                AuthorityJson: null,
                 reader.GetString(6)));
     }
 
@@ -556,6 +572,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
         SqliteTransaction transaction,
         FlightSession session,
         string payload,
+        string authorityJson,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -568,6 +585,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 payload_schema_version,
                 status,
                 updated_at_utc_ticks,
+                authority_json,
                 payload_json
             ) VALUES (
                 $slotId,
@@ -575,6 +593,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 $schemaVersion,
                 $status,
                 $updatedAtUtcTicks,
+                $authorityJson,
                 $payloadJson
             )
             ON CONFLICT(slot_id) DO UPDATE SET
@@ -582,6 +601,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 payload_schema_version = excluded.payload_schema_version,
                 status = excluded.status,
                 updated_at_utc_ticks = excluded.updated_at_utc_ticks,
+                authority_json = excluded.authority_json,
                 payload_json = excluded.payload_json;
             """;
         command.Parameters.AddWithValue("$slotId", CurrentSlotId);
@@ -589,6 +609,7 @@ public sealed class SqliteFlightSessionCheckpointStore :
         command.Parameters.AddWithValue("$schemaVersion", session.SchemaVersion);
         command.Parameters.AddWithValue("$status", (int)session.Status);
         command.Parameters.AddWithValue("$updatedAtUtcTicks", session.UpdatedAt.UtcTicks);
+        command.Parameters.AddWithValue("$authorityJson", authorityJson);
         command.Parameters.AddWithValue("$payloadJson", payload);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -697,8 +718,60 @@ public sealed class SqliteFlightSessionCheckpointStore :
             row.SchemaVersion,
             row.Status,
             row.UpdatedAtUtcTicks);
+        ValidateStoredAuthority(
+            row.AuthorityJson,
+            session,
+            invalidDataOnMismatch: true);
 
         return session;
+    }
+
+    private static string SerializeAuthority(FlightSession session) =>
+        JsonSerializer.Serialize(
+            new CheckpointAuthority(
+                session.ContractId,
+                session.CreatedAt,
+                session.Plan),
+            JsonOptions);
+
+    private static void ValidateStoredAuthority(
+        string? authorityJson,
+        FlightSession session,
+        bool invalidDataOnMismatch = false)
+    {
+        if (authorityJson is null)
+            return;
+
+        CheckpointAuthority authority;
+
+        try
+        {
+            authority =
+                JsonSerializer.Deserialize<CheckpointAuthority>(
+                    authorityJson,
+                    JsonOptions)
+                ?? throw new InvalidDataException(
+                    "Flight-session checkpoint authority metadata is empty.");
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException(
+                "Flight-session checkpoint authority metadata is invalid.",
+                exception);
+        }
+
+        if (authority.ContractId != session.ContractId
+            || authority.CreatedAt != session.CreatedAt
+            || authority.Plan != session.Plan)
+        {
+            const string message =
+                "Flight-session checkpoint immutable authority cannot change within a session.";
+
+            if (invalidDataOnMismatch)
+                throw new InvalidDataException(message);
+
+            throw new InvalidOperationException(message);
+        }
     }
 
     private static void ValidateFallbackIdentity(

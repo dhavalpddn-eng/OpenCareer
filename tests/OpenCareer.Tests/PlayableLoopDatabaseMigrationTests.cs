@@ -27,7 +27,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                16);
+                17);
 
             await AssertTablesExistAsync(
                 path,
@@ -71,7 +71,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                16);
+                17);
 
             await AssertTablesExistAsync(
                 path,
@@ -144,7 +144,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                16);
+                17);
 
             await AssertTablesExistAsync(
                 path,
@@ -211,7 +211,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                16);
+                17);
 
             await using SqliteConnection connection =
                 await OpenReadOnlyAsync(path);
@@ -321,7 +321,7 @@ public sealed class PlayableLoopDatabaseMigrationTests
 
             await AssertSchemaVersionAsync(
                 path,
-                16);
+                17);
 
             await using SqliteConnection verification =
                 await OpenReadOnlyAsync(path);
@@ -334,6 +334,77 @@ public sealed class PlayableLoopDatabaseMigrationTests
                 SELECT COUNT(*)
                 FROM pragma_table_info('aircraft_availability')
                 WHERE name = 'reservation_id';
+                """;
+
+            Assert.Equal(
+                1L,
+                Convert.ToInt64(
+                    await column.ExecuteScalarAsync(),
+                    System.Globalization.CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
+    public async Task LegacyFlightCheckpointTableGainsAuthorityColumn()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            string path =
+                Path.Combine(
+                    directory,
+                    "opencareer.db");
+
+            await using (SqliteConnection connection =
+                await OpenReadWriteAsync(path))
+            {
+                await using SqliteCommand command =
+                    connection.CreateCommand();
+
+                command.CommandText =
+                    """
+                    CREATE TABLE flight_session_checkpoint (
+                        slot_id INTEGER NOT NULL PRIMARY KEY,
+                        session_id TEXT NOT NULL,
+                        payload_schema_version INTEGER NOT NULL,
+                        status INTEGER NOT NULL,
+                        updated_at_utc_ticks INTEGER NOT NULL,
+                        payload_json TEXT NOT NULL,
+                        CHECK (slot_id = 1)
+                    );
+
+                    PRAGMA user_version = 16;
+                    """;
+
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var store =
+                new OpenCareer.Infrastructure.Flights.SqliteFlightSessionCheckpointStore(
+                    path);
+
+            Assert.Null(await store.LoadAsync());
+
+            await AssertSchemaVersionAsync(
+                path,
+                17);
+
+            await using SqliteConnection verification =
+                await OpenReadOnlyAsync(path);
+
+            await using SqliteCommand column =
+                verification.CreateCommand();
+
+            column.CommandText =
+                """
+                SELECT COUNT(*)
+                FROM pragma_table_info('flight_session_checkpoint')
+                WHERE name = 'authority_json';
                 """;
 
             Assert.Equal(

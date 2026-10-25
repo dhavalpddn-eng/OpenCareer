@@ -7,7 +7,7 @@ internal static class OpenCareerDatabaseMigrator
     // Career and Economy branches independently reused schema versions 1-10.
     // Version 11 was the first shared convergence point; pre-v11 user_version
     // alone cannot be used to infer which subsystem tables already exist.
-    public const int CurrentSchemaVersion = 16;
+    public const int CurrentSchemaVersion = 17;
 
     public static async Task MigrateAsync(
         SqliteConnection connection,
@@ -42,6 +42,12 @@ internal static class OpenCareerDatabaseMigrator
             .ConfigureAwait(false);
 
         await EnsureAircraftAvailabilityReservationColumnAsync(
+                connection,
+                transaction,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await EnsureFlightSessionCheckpointAuthorityColumnAsync(
                 connection,
                 transaction,
                 cancellationToken)
@@ -104,6 +110,7 @@ internal static class OpenCareerDatabaseMigrator
                     payload_schema_version INTEGER NOT NULL,
                     status INTEGER NOT NULL,
                     updated_at_utc_ticks INTEGER NOT NULL,
+                    authority_json TEXT NULL,
                     payload_json TEXT NOT NULL,
                     CHECK (slot_id = 1)
                 );
@@ -350,6 +357,41 @@ internal static class OpenCareerDatabaseMigrator
         await ExecuteAsync(connection, transaction,
             "ALTER TABLE player_career_profile ADD COLUMN saved_at_utc_ticks INTEGER NULL;",
             cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task EnsureFlightSessionCheckpointAuthorityColumnAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = "PRAGMA table_info(flight_session_checkpoint);";
+            await using SqliteDataReader reader =
+                await command.ExecuteReaderAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (string.Equals(
+                        reader.GetString(1),
+                        "authority_json",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        // Existing payloads remain readable. Their authority is populated on the
+        // next successful save instead of being reconstructed from untrusted JSON.
+        await ExecuteAsync(
+                connection,
+                transaction,
+                "ALTER TABLE flight_session_checkpoint ADD COLUMN authority_json TEXT NULL;",
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static async Task EnsureAircraftAvailabilityReservationColumnAsync(

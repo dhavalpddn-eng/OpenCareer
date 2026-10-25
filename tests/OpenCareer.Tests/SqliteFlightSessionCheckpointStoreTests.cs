@@ -999,6 +999,95 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Fact]
+    public async Task CorruptOnlyCheckpointPreservesImmutableAuthorityMetadata()
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+        var store =
+            new SqliteFlightSessionCheckpointStore(databasePath);
+
+        Guid contractId =
+            Guid.Parse(
+                "22222222-2222-2222-2222-222222222222");
+        FlightSession original =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 21, 12, 0, 0, TimeSpan.Zero),
+                contractId,
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"),
+                new FlightSessionPlan(
+                    "KJFK",
+                    "KBOS",
+                    SourceProvider: "job-contract",
+                    SourceReference: contractId.ToString("D"),
+                    ExpectedCanonicalAircraftId: "asobo-c172sp-as1000"));
+
+        await store.SaveAsync(original);
+        await ExecuteAsync(
+            databasePath,
+            "UPDATE flight_session_checkpoint SET payload_json = '{';");
+
+        foreach (FlightSession conflicting in new[]
+        {
+            original with
+            {
+                ContractId = Guid.NewGuid(),
+                UpdatedAt = original.UpdatedAt.AddSeconds(1)
+            },
+            original with
+            {
+                CreatedAt = original.CreatedAt.AddMinutes(1),
+                UpdatedAt = original.UpdatedAt.AddMinutes(1),
+                Legs =
+                [
+                    original.EffectiveLegs[0] with
+                    {
+                        StartedAt = original.CreatedAt.AddMinutes(1)
+                    }
+                ]
+            },
+            original with
+            {
+                Plan = original.Plan! with { PlannedDestination = "KPHL" },
+                UpdatedAt = original.UpdatedAt.AddSeconds(1),
+                Legs =
+                [
+                    original.EffectiveLegs[0] with
+                    {
+                        Plan = original.Plan! with
+                        {
+                            PlannedDestination = "KPHL"
+                        }
+                    }
+                ]
+            }
+        })
+        {
+            InvalidOperationException error =
+                await Assert.ThrowsAsync<InvalidOperationException>(
+                    () => store.SaveAsync(conflicting));
+
+            Assert.Contains("immutable authority", error.Message);
+        }
+
+        FlightSession repaired =
+            original with
+            {
+                UpdatedAt = original.UpdatedAt.AddSeconds(2)
+            };
+
+        await store.SaveAsync(repaired);
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(repaired, loaded);
+    }
+
+    [Fact]
     public async Task CorruptCurrentOlderThanMetadataPreservesPrevious()
     {
         string databasePath =
