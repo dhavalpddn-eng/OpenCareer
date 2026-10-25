@@ -589,8 +589,19 @@ public sealed class SqliteFlightSessionCheckpointStore :
         {
             FlightSession fallback = ReadValidCheckpoint(previous.Checkpoint);
             ValidateFallbackIdentity(invalidCurrent, previous, fallback);
-            return fallback.SessionId == incoming.SessionId
-                && fallback.ContractId == incoming.ContractId;
+
+            if (fallback.SessionId != incoming.SessionId)
+                return false;
+
+            if (fallback.ContractId != incoming.ContractId
+                || fallback.CreatedAt != incoming.CreatedAt
+                || fallback.Plan != incoming.Plan)
+            {
+                throw new InvalidOperationException(
+                    "Flight-session checkpoint immutable authority cannot change within a session.");
+            }
+
+            return true;
         }
         catch (Exception exception)
             when (IsInvalidCheckpointException(exception))

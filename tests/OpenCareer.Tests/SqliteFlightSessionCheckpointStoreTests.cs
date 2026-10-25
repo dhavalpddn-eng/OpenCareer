@@ -701,6 +701,95 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         AssertSessionEquivalent(previous, loaded);
     }
 
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task CorruptCurrentImmutableAuthorityRewritePreservesPrevious(
+        bool changeContract,
+        bool changeCreatedAt,
+        bool changePlan)
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+        var store =
+            new SqliteFlightSessionCheckpointStore(databasePath);
+
+        var initialPlan =
+            new FlightSessionPlan(
+                "KJFK",
+                "KBOS",
+                SourceProvider: "career-contract",
+                SourceReference:
+                    "contract:22222222-2222-2222-2222-222222222222",
+                ExpectedCanonicalAircraftId: "cessna-172");
+        FlightSession previous =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 21, 12, 0, 0, TimeSpan.Zero),
+                Guid.Parse(
+                    "22222222-2222-2222-2222-222222222222"),
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"),
+                initialPlan);
+        FlightSession current =
+            previous with
+            {
+                UpdatedAt = previous.UpdatedAt.AddSeconds(1)
+            };
+
+        await store.SaveAsync(previous);
+        await store.SaveAsync(current);
+        await ExecuteAsync(
+            databasePath,
+            "UPDATE flight_session_checkpoint SET payload_json = '{';");
+
+        DateTimeOffset conflictingCreatedAt =
+            changeCreatedAt
+                ? current.CreatedAt.AddSeconds(1)
+                : current.CreatedAt;
+        FlightSessionPlan conflictingPlan =
+            changePlan
+                ? initialPlan with
+                {
+                    PlannedDestination = "KPHL"
+                }
+                : initialPlan;
+        FlightSession conflicting =
+            current with
+            {
+                ContractId =
+                    changeContract
+                        ? Guid.Parse(
+                            "33333333-3333-3333-3333-333333333333")
+                        : current.ContractId,
+                CreatedAt = conflictingCreatedAt,
+                UpdatedAt = current.UpdatedAt.AddSeconds(1),
+                Plan = conflictingPlan,
+                Legs =
+                [
+                    current.EffectiveLegs[0] with
+                    {
+                        StartedAt = conflictingCreatedAt,
+                        Plan = conflictingPlan
+                    }
+                ]
+            };
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => store.SaveAsync(conflicting));
+
+        Assert.Contains("immutable authority", error.Message);
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(previous, loaded);
+    }
+
     [Fact]
     public async Task CorruptCurrentAndCorruptOrMissingPreviousFailClosed()
     {
