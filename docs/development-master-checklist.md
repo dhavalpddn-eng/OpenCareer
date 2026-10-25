@@ -53,7 +53,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P56 foundations<br/>CI COMPLETE"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P57 foundations<br/>CI COMPLETE"]
     B --> C["Ordinary compensated job<br/>live certification"]
     C --> D["Broader aircraft/evidence<br/>live calibration"]
     D --> E["Registry / jobs breadth<br/>career progression"]
@@ -234,6 +234,7 @@ Chapter status: **DURABLE MULTI-LEG CORE IMPLEMENTED / BROADER LIVE CALIBRATION 
 - [x] Prefer a valid matching previous SQLite checkpoint over corrupt current immutable-authority metadata when authorizing a newer same-session repair; without that fallback, retain the independent metadata fail-closed boundary.
 - [x] Prefer a valid matching previous SQLite checkpoint over conflicting corrupt-current terminal status metadata when authorizing a newer same-session repair; without that fallback, retain the independent status fail-closed boundary.
 - [x] Authenticate current-row checkpoint recency against the previous row's expected successor timestamp; preserve authentic rollback protection, allow valid-fallback repair after timestamp corruption, and migrate legacy databases additively to schema v18.
+- [x] Mirror the exact current successor payload inside the previous-valid SQLite row; recover newest terminal/progress state after isolated current-payload corruption, retain the older fallback when the mirror or metadata is invalid, and migrate legacy databases additively to schema v19.
 - [x] Persist decimated route statistics and landing-episode summaries in the checkpoint.
 
 ## Remaining
