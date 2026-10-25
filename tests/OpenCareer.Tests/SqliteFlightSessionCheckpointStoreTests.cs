@@ -513,6 +513,80 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task DifferentSessionRewritePreservesCheckpoint(
+        bool terminal,
+        bool corruptCurrent)
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+
+        var store =
+            new SqliteFlightSessionCheckpointStore(
+                databasePath);
+
+        FlightSession first =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 19, 12, 0, 0, TimeSpan.Zero),
+                Guid.Parse(
+                    "22222222-2222-2222-2222-222222222222"),
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"));
+
+        if (terminal)
+        {
+            first =
+                FlightSessionEngine.Advance(
+                    first,
+                    new FlightSessionAdvance(
+                        new FlightStateEvidence(
+                            first.UpdatedAt.AddSeconds(1),
+                            Connected: true),
+                        CancelRequested: true));
+        }
+
+        await store.SaveAsync(first);
+
+        if (corruptCurrent)
+        {
+            await store.SaveAsync(
+                first with
+                {
+                    UpdatedAt = first.UpdatedAt.AddSeconds(1)
+                });
+
+            await ExecuteAsync(
+                databasePath,
+                "UPDATE flight_session_checkpoint SET payload_json = '{';");
+        }
+
+        FlightSession replacement =
+            FlightSession.Start(
+                first.UpdatedAt.AddSeconds(2),
+                Guid.Parse(
+                    "44444444-4444-4444-4444-444444444444"),
+                Guid.Parse(
+                    "33333333-3333-3333-3333-333333333333"));
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => store.SaveAsync(replacement));
+
+        Assert.Contains("cleared", error.Message);
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(first, loaded);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task SameSessionTerminalAuthorityRewritePreservesCheckpoint(

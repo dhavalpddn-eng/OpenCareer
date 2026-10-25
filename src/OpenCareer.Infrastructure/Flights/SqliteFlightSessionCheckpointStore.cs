@@ -103,51 +103,49 @@ public sealed class SqliteFlightSessionCheckpointStore :
                         cancellationToken)
                     .ConfigureAwait(false);
 
+            if (currentRow is not null
+                && !string.Equals(
+                    currentRow.SessionId,
+                    session.SessionId.ToString("D"),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The persisted flight session must be cleared before another session can be saved.");
+            }
+
             FlightSession? current =
                 TryReadValidCheckpoint(currentRow);
 
             if (current is not null)
             {
-                if (current.SessionId == session.SessionId
-                    && (current.ContractId != session.ContractId
-                        || current.CreatedAt != session.CreatedAt
-                        || current.Plan != session.Plan))
+                if (current.ContractId != session.ContractId
+                    || current.CreatedAt != session.CreatedAt
+                    || current.Plan != session.Plan)
                 {
                     throw new InvalidOperationException(
                         "Flight-session checkpoint immutable authority cannot change within a session.");
                 }
 
-                if (current.SessionId == session.SessionId
-                    && current.IsTerminal
+                if (current.IsTerminal
                     && session.Status != current.Status)
                 {
                     throw new InvalidOperationException(
                         "Flight-session checkpoint terminal authority cannot change within a session.");
                 }
 
-                if (current.SessionId == session.SessionId
-                    && session.UpdatedAt < current.UpdatedAt)
+                if (session.UpdatedAt < current.UpdatedAt)
                 {
                     transaction.Commit();
                     return;
                 }
 
-                if (current.SessionId == session.SessionId
-                    && session.UpdatedAt > current.UpdatedAt)
+                if (session.UpdatedAt > current.UpdatedAt)
                 {
                     await SavePreviousRowAsync(
                             connection,
                             transaction,
                             currentRow!,
                             session,
-                            cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                else if (current.SessionId != session.SessionId)
-                {
-                    await DeletePreviousRowAsync(
-                            connection,
-                            transaction,
                             cancellationToken)
                         .ConfigureAwait(false);
                 }
