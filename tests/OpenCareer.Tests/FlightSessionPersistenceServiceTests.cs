@@ -602,6 +602,59 @@ public sealed class FlightSessionPersistenceServiceTests
     }
 
     [Fact]
+    public async Task RecoverPreservesTerminalSessionUntilExplicitCleanup()
+    {
+        var coordinator = new FlightSessionCoordinator();
+        FlightSession terminal =
+            FlightSessionEngine.Advance(
+                FlightSession.Start(Epoch),
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(1),
+                        Connected: true),
+                    CancelRequested: true));
+        coordinator.Restore(terminal);
+
+        FlightSession checkpoint =
+            FlightSession.Start(
+                Epoch.AddSeconds(2),
+                sessionId:
+                    Guid.Parse(
+                        "55555555-5555-5555-5555-555555555555"));
+        var store =
+            new MemoryStore
+            {
+                Checkpoint = checkpoint
+            };
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.RecoverAsync());
+
+        Assert.Contains("cleared", error.Message);
+        Assert.Equal(terminal, coordinator.Current);
+        Assert.Equal(checkpoint, store.Checkpoint);
+        Assert.Equal(0, store.LoadCount);
+        Assert.Equal(0, store.SaveCount);
+        Assert.Null(service.LastRecoveredSessionId);
+
+        coordinator.ClearTerminalSession();
+        FlightSession recovered =
+            Assert.IsType<FlightSession>(
+                await service.RecoverAsync());
+
+        Assert.Equal(checkpoint.SessionId, recovered.SessionId);
+        Assert.Equal(FlightSessionStatus.Suspended, recovered.Status);
+        Assert.Equal(1, store.LoadCount);
+        Assert.Equal(1, store.SaveCount);
+        Assert.Equal(recovered, coordinator.Current);
+    }
+
+    [Fact]
     public async Task FlushWritesLatestInMemorySessionEvenBeforeCadenceExpires()
     {
         var coordinator =
@@ -931,6 +984,8 @@ public sealed class FlightSessionPersistenceServiceTests
 
         public int SaveCount { get; private set; }
 
+        public int LoadCount { get; private set; }
+
         public Task SaveAsync(
             FlightSession session,
             CancellationToken cancellationToken = default)
@@ -947,8 +1002,11 @@ public sealed class FlightSessionPersistenceServiceTests
         }
 
         public Task<FlightSession?> LoadAsync(
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(Checkpoint);
+            CancellationToken cancellationToken = default)
+        {
+            LoadCount++;
+            return Task.FromResult(Checkpoint);
+        }
 
         public Task ClearAsync(
             CancellationToken cancellationToken = default)

@@ -438,12 +438,13 @@ public sealed class FlightSessionPersistenceService
         try
         {
             RecoveryAttempted = true;
-            LastRecoveredSessionId = null;
-            if (_coordinator.Current is { IsTerminal: false })
+            if (_coordinator.Current is not null)
             {
                 throw new InvalidOperationException(
-                    "Cannot recover a checkpoint over an active flight session.");
+                    "The current flight session must be cleared before a checkpoint can be recovered.");
             }
+
+            LastRecoveredSessionId = null;
 
             FlightSession? checkpoint =
                 await _store
@@ -473,14 +474,7 @@ public sealed class FlightSessionPersistenceService
             _lastPersisted = checkpoint;
             LastRecoveredSessionId = checkpoint.SessionId;
 
-            if (_coordinator.Current is null)
-            {
-                _coordinator.Restore(checkpoint);
-            }
-            else
-            {
-                _coordinator.CommitPersisted(checkpoint);
-            }
+            _coordinator.Restore(checkpoint);
 
             return checkpoint;
         }
