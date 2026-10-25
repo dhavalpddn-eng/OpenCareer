@@ -162,6 +162,45 @@ public sealed class FlightSessionCoordinatorTests
     }
 
     [Fact]
+    public void NewerNonterminalCheckpointCannotResurrectTerminalSession()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        FlightSession active =
+            coordinator.Start(Epoch);
+
+        FlightSession terminal =
+            coordinator.Advance(
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(1),
+                        Connected: true),
+                    CancelRequested: true));
+
+        FlightSession staleActive =
+            active with
+            {
+                UpdatedAt = Epoch.AddSeconds(2)
+            };
+
+        var observed =
+            new List<FlightSession?>();
+
+        coordinator.SessionChanged +=
+            (_, args) =>
+                observed.Add(args.Session);
+
+        InvalidOperationException error =
+            Assert.Throws<InvalidOperationException>(
+                () => coordinator.CommitPersisted(staleActive));
+
+        Assert.Contains("terminal", error.Message);
+        Assert.Equal(terminal, coordinator.Current);
+        Assert.Empty(observed);
+    }
+
+    [Fact]
     public void ActiveSessionCannotBeCleared()
     {
         var coordinator =
