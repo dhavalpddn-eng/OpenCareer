@@ -81,7 +81,8 @@ public sealed class FlightSessionCoordinator
         }
 
         if (Current.ContractId != session.ContractId
-            || Current.CreatedAt != session.CreatedAt)
+            || Current.CreatedAt != session.CreatedAt
+            || Current.Plan != session.Plan)
         {
             throw new InvalidOperationException(
                 "Cannot replace the current flight session with different immutable session authority.");

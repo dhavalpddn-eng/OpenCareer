@@ -252,6 +252,67 @@ public sealed class FlightSessionCoordinatorTests
     }
 
     [Fact]
+    public void PersistedCheckpointCannotChangeInitialPlanAuthority()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var initialPlan =
+            new FlightSessionPlan(
+                "KJFK",
+                "KBOS",
+                SourceProvider: "career-contract",
+                SourceReference: "contract:22222222-2222-2222-2222-222222222222",
+                ExpectedCanonicalAircraftId: "cessna-172");
+
+        FlightSession current =
+            FlightSession.Start(
+                Epoch,
+                Guid.Parse(
+                    "22222222-2222-2222-2222-222222222222"),
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"),
+                initialPlan);
+
+        coordinator.Restore(current);
+
+        FlightSessionPlan conflictingPlan =
+            initialPlan with
+            {
+                PlannedDestination = "KPHL"
+            };
+
+        FlightSession conflicting =
+            current with
+            {
+                Plan = conflictingPlan,
+                UpdatedAt = current.UpdatedAt.AddSeconds(1),
+                Legs =
+                [
+                    current.EffectiveLegs[0] with
+                    {
+                        Plan = conflictingPlan
+                    }
+                ]
+            };
+
+        var observed =
+            new List<FlightSession?>();
+
+        coordinator.SessionChanged +=
+            (_, args) =>
+                observed.Add(args.Session);
+
+        InvalidOperationException error =
+            Assert.Throws<InvalidOperationException>(
+                () => coordinator.CommitPersisted(conflicting));
+
+        Assert.Contains("immutable session authority", error.Message);
+        Assert.Same(current, coordinator.Current);
+        Assert.Empty(observed);
+    }
+
+    [Fact]
     public void NewerTerminalCheckpointCannotRewriteTerminalOutcome()
     {
         var coordinator =

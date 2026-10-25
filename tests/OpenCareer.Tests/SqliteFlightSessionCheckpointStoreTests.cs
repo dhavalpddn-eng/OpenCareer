@@ -448,6 +448,70 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         AssertSessionEquivalent(first, loaded);
     }
 
+    [Fact]
+    public async Task SameSessionInitialPlanRewritePreservesCheckpoint()
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+
+        var store =
+            new SqliteFlightSessionCheckpointStore(
+                databasePath);
+
+        var initialPlan =
+            new FlightSessionPlan(
+                "KJFK",
+                "KBOS",
+                SourceProvider: "career-contract",
+                SourceReference: "contract:22222222-2222-2222-2222-222222222222",
+                ExpectedCanonicalAircraftId: "cessna-172");
+
+        FlightSession first =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 19, 12, 0, 0, TimeSpan.Zero),
+                Guid.Parse(
+                    "22222222-2222-2222-2222-222222222222"),
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"),
+                initialPlan);
+
+        await store.SaveAsync(first);
+
+        FlightSessionPlan conflictingPlan =
+            initialPlan with
+            {
+                PlannedDestination = "KPHL"
+            };
+
+        FlightSession conflicting =
+            first with
+            {
+                Plan = conflictingPlan,
+                UpdatedAt = first.UpdatedAt.AddSeconds(1),
+                Legs =
+                [
+                    first.EffectiveLegs[0] with
+                    {
+                        Plan = conflictingPlan
+                    }
+                ]
+            };
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => store.SaveAsync(conflicting));
+
+        Assert.Contains("immutable authority", error.Message);
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(first, loaded);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

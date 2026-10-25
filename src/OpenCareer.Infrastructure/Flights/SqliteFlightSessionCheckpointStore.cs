@@ -110,7 +110,8 @@ public sealed class SqliteFlightSessionCheckpointStore :
             {
                 if (current.SessionId == session.SessionId
                     && (current.ContractId != session.ContractId
-                        || current.CreatedAt != session.CreatedAt))
+                        || current.CreatedAt != session.CreatedAt
+                        || current.Plan != session.Plan))
                 {
                     throw new InvalidOperationException(
                         "Flight-session checkpoint immutable authority cannot change within a session.");
