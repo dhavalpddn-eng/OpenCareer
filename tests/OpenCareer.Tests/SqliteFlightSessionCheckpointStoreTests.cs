@@ -1181,10 +1181,10 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
         await store.SaveAsync(current);
         await ExecuteAsync(
             databasePath,
-            $"""
+            $$"""
             UPDATE flight_session_checkpoint
-            SET payload_json = '{{',
-                status = {(int)FlightSessionStatus.Cancelled};
+            SET payload_json = '{',
+                status = {{(int)FlightSessionStatus.Cancelled}};
             """);
 
         FlightSession fallback =
