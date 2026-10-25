@@ -80,6 +80,13 @@ public sealed class FlightSessionCoordinator
                 "Cannot replace the current flight session with a different session identity.");
         }
 
+        if (Current.ContractId != session.ContractId
+            || Current.CreatedAt != session.CreatedAt)
+        {
+            throw new InvalidOperationException(
+                "Cannot replace the current flight session with different immutable session authority.");
+        }
+
         if (Current.IsTerminal && !session.IsTerminal)
         {
             throw new InvalidOperationException(

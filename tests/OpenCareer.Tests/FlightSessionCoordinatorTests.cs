@@ -200,6 +200,57 @@ public sealed class FlightSessionCoordinatorTests
         Assert.Empty(observed);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PersistedCheckpointCannotChangeImmutableSessionAuthority(
+        bool changeContract)
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        Guid contractId =
+            Guid.Parse(
+                "22222222-2222-2222-2222-222222222222");
+
+        FlightSession current =
+            coordinator.Start(
+                Epoch,
+                contractId,
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"));
+
+        FlightSession conflicting =
+            current with
+            {
+                ContractId =
+                    changeContract
+                        ? Guid.Parse(
+                            "33333333-3333-3333-3333-333333333333")
+                        : current.ContractId,
+                CreatedAt =
+                    changeContract
+                        ? current.CreatedAt
+                        : current.CreatedAt.AddSeconds(-1),
+                UpdatedAt = current.UpdatedAt.AddSeconds(1)
+            };
+
+        var observed =
+            new List<FlightSession?>();
+
+        coordinator.SessionChanged +=
+            (_, args) =>
+                observed.Add(args.Session);
+
+        InvalidOperationException error =
+            Assert.Throws<InvalidOperationException>(
+                () => coordinator.CommitPersisted(conflicting));
+
+        Assert.Contains("immutable session authority", error.Message);
+        Assert.Same(current, coordinator.Current);
+        Assert.Empty(observed);
+    }
+
     [Fact]
     public void NewerTerminalCheckpointCannotRewriteTerminalOutcome()
     {
