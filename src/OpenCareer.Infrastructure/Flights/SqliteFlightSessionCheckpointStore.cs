@@ -117,6 +117,14 @@ public sealed class SqliteFlightSessionCheckpointStore :
                 }
 
                 if (current.SessionId == session.SessionId
+                    && current.IsTerminal
+                    && session.Status != current.Status)
+                {
+                    throw new InvalidOperationException(
+                        "Flight-session checkpoint terminal authority cannot change within a session.");
+                }
+
+                if (current.SessionId == session.SessionId
                     && session.UpdatedAt < current.UpdatedAt)
                 {
                     transaction.Commit();
