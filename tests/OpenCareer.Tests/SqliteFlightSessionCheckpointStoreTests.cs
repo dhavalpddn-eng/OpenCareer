@@ -844,6 +844,105 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Fact]
+    public async Task ExpectedClearRemovesMatchingRecoverableCheckpoint()
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+
+        var store =
+            new SqliteFlightSessionCheckpointStore(
+                databasePath);
+
+        FlightSession first =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 20, 12, 0, 0, TimeSpan.Zero));
+
+        await store.SaveAsync(first);
+        await store.SaveAsync(
+            first with
+            {
+                UpdatedAt = first.UpdatedAt.AddSeconds(1)
+            });
+
+        await store.ClearAsync(first.SessionId);
+
+        Assert.Null(await store.LoadAsync());
+
+        await using var connection =
+            new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync();
+        await using SqliteCommand count = connection.CreateCommand();
+        count.CommandText =
+            """
+            SELECT
+                (SELECT COUNT(*) FROM flight_session_checkpoint)
+                + (SELECT COUNT(*) FROM flight_session_checkpoint_previous);
+            """;
+        Assert.Equal(
+            0L,
+            Convert.ToInt64(await count.ExecuteScalarAsync()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExpectedClearPreservesDifferentCheckpoint(
+        bool corruptCurrent)
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+
+        var store =
+            new SqliteFlightSessionCheckpointStore(
+                databasePath);
+
+        FlightSession stale =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 20, 12, 0, 0, TimeSpan.Zero),
+                sessionId:
+                    Guid.Parse(
+                        "11111111-1111-1111-1111-111111111111"));
+        await store.SaveAsync(stale);
+        await store.ClearAsync(stale.SessionId);
+
+        FlightSession replacement =
+            FlightSession.Start(
+                stale.UpdatedAt.AddMinutes(1),
+                sessionId:
+                    Guid.Parse(
+                        "22222222-2222-2222-2222-222222222222"));
+        await store.SaveAsync(replacement);
+
+        if (corruptCurrent)
+        {
+            await store.SaveAsync(
+                replacement with
+                {
+                    UpdatedAt = replacement.UpdatedAt.AddSeconds(1)
+                });
+
+            await ExecuteAsync(
+                databasePath,
+                "UPDATE flight_session_checkpoint SET payload_json = '{';");
+        }
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => store.ClearAsync(stale.SessionId));
+
+        Assert.Contains("changed", error.Message);
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(replacement, loaded);
+    }
+
+    [Fact]
     public async Task UnsupportedSchemaIsRejectedBeforeWrite()
     {
         string databasePath =

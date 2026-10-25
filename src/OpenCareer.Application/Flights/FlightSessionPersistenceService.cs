@@ -581,7 +581,9 @@ public sealed class FlightSessionPersistenceService
             }
 
             await _store
-                .ClearAsync(cancellationToken)
+                .ClearAsync(
+                    current.SessionId,
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             try

@@ -298,6 +298,90 @@ public sealed class SqliteFlightSessionCheckpointStore :
         }
     }
 
+    public async Task ClearAsync(
+        Guid expectedSessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (expectedSessionId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Session ID is required.",
+                nameof(expectedSessionId));
+        }
+
+        await _writeGate
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await EnsureInitializedAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            await using var connection =
+                new SqliteConnection(_connectionString);
+
+            await connection
+                .OpenAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            await ConfigureConnectionAsync(
+                    connection,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            using SqliteTransaction transaction =
+                connection.BeginTransaction();
+
+            await using SqliteCommand command =
+                connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText =
+                """
+                DELETE FROM flight_session_checkpoint
+                WHERE slot_id = $slotId
+                    AND session_id = $expectedSessionId;
+                """;
+            command.Parameters.AddWithValue("$slotId", CurrentSlotId);
+            command.Parameters.AddWithValue(
+                "$expectedSessionId",
+                expectedSessionId.ToString("D"));
+
+            int removed =
+                await command
+                    .ExecuteNonQueryAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (removed == 0)
+            {
+                CheckpointRow? current =
+                    await ReadCurrentRowAsync(
+                            connection,
+                            transaction,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                if (current is not null)
+                {
+                    throw new InvalidOperationException(
+                        "The persisted flight session changed before checkpoint cleanup completed.");
+                }
+            }
+
+            await DeletePreviousRowAsync(
+                    connection,
+                    transaction,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            transaction.Commit();
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
     private static async Task<CheckpointRow?> ReadCurrentRowAsync(
         SqliteConnection connection,
         SqliteTransaction? transaction,
