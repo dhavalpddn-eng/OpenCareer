@@ -1156,6 +1156,60 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
     }
 
     [Fact]
+    public async Task ValidPreviousCheckpointCanRepairCorruptCurrentTerminalMetadata()
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+        var store =
+            new SqliteFlightSessionCheckpointStore(databasePath);
+
+        FlightSession previous =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 21, 12, 0, 0, TimeSpan.Zero),
+                Guid.Parse(
+                    "22222222-2222-2222-2222-222222222222"),
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"));
+        FlightSession current =
+            previous with
+            {
+                UpdatedAt = previous.UpdatedAt.AddSeconds(1)
+            };
+
+        await store.SaveAsync(previous);
+        await store.SaveAsync(current);
+        await ExecuteAsync(
+            databasePath,
+            $"""
+            UPDATE flight_session_checkpoint
+            SET payload_json = '{{',
+                status = {(int)FlightSessionStatus.Cancelled};
+            """);
+
+        FlightSession fallback =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+        AssertSessionEquivalent(previous, fallback);
+
+        FlightSession repaired =
+            previous with
+            {
+                UpdatedAt = current.UpdatedAt.AddSeconds(1)
+            };
+
+        await store.SaveAsync(repaired);
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(repaired, loaded);
+    }
+
+    [Fact]
     public async Task CorruptCurrentOlderThanMetadataPreservesPrevious()
     {
         string databasePath =
