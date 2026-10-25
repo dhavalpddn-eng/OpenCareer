@@ -382,6 +382,72 @@ public sealed class SqliteFlightSessionCheckpointStoreTests :
             actual?.UpdatedAt);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SameSessionImmutableAuthorityRewritePreservesCheckpoint(
+        bool changeContract)
+    {
+        string databasePath =
+            Path.Combine(_directory, "career.db");
+
+        var store =
+            new SqliteFlightSessionCheckpointStore(
+                databasePath);
+
+        FlightSession first =
+            FlightSession.Start(
+                new DateTimeOffset(
+                    2026, 9, 19, 12, 0, 0, TimeSpan.Zero),
+                Guid.Parse(
+                    "22222222-2222-2222-2222-222222222222"),
+                Guid.Parse(
+                    "11111111-1111-1111-1111-111111111111"));
+
+        await store.SaveAsync(first);
+
+        DateTimeOffset changedCreatedAt =
+            first.CreatedAt.AddSeconds(1);
+
+        FlightLeg changedFirstLeg =
+            first.EffectiveLegs[0] with
+            {
+                StartedAt = changedCreatedAt
+            };
+
+        FlightSession conflicting =
+            first with
+            {
+                ContractId =
+                    changeContract
+                        ? Guid.Parse(
+                            "33333333-3333-3333-3333-333333333333")
+                        : first.ContractId,
+                CreatedAt =
+                    changeContract
+                        ? first.CreatedAt
+                        : changedCreatedAt,
+                UpdatedAt = first.UpdatedAt.AddSeconds(2),
+                Legs =
+                    changeContract
+                        ? first.Legs
+                        : [changedFirstLeg]
+            };
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => store.SaveAsync(conflicting));
+
+        Assert.Contains("immutable authority", error.Message);
+
+        FlightSession loaded =
+            Assert.IsType<FlightSession>(
+                await new SqliteFlightSessionCheckpointStore(databasePath)
+                    .LoadAsync());
+
+        AssertSessionEquivalent(first, loaded);
+    }
+
     [Fact]
     public async Task ValidCurrentCheckpointWinsEvenWhenPreviousIsCorrupt()
     {
