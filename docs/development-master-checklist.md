@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-25 through validated checkpoint `55bb8927` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-25 through validated checkpoint `51da5d21` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -53,7 +53,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P40 foundations<br/>CI COMPLETE"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P41 foundations<br/>CI COMPLETE"]
     B --> C["Ordinary compensated job<br/>live certification"]
     C --> D["Broader aircraft/evidence<br/>live calibration"]
     D --> E["Registry / jobs breadth<br/>career progression"]
@@ -218,6 +218,7 @@ Chapter status: **DURABLE MULTI-LEG CORE IMPLEMENTED / BROADER LIVE CALIBRATION 
 - [x] Bind terminal checkpoint cleanup to the exact reviewed coordinator instance; refuse a replacement race and restore the replacement checkpoint after storage was cleared.
 - [x] Preserve the first persisted terminal outcome; reject a newer same-identity checkpoint that attempts to rewrite cancelled, interrupted or completed state.
 - [x] Preserve immutable FlightSession authority across persisted commits; reject same-session contract-association or creation-time rewrites without publishing false state changes.
+- [x] Enforce immutable FlightSession authority before SQLite checkpoint replacement; rejected contract-association or creation-time rewrites leave the prior recovery checkpoint intact across reopen.
 - [x] Persist decimated route statistics and landing-episode summaries in the checkpoint.
 
 ## Remaining

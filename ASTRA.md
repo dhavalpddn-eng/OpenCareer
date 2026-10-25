@@ -4,12 +4,12 @@
 
 **Repo:** `dhavalpddn-eng/OpenCareer`  
 **Branch:** `feature/playable-loop-integration`
-**Validated code baseline:** `55bb8927fb39ff251b46e547d2e777377e8ca1d7`; keep `main` stable.
+**Validated code baseline:** `51da5d218cadd19e74971e9e7d0deeabf7cf1470`; keep `main` stable.
 **Master build list:** `docs/master-build-list.md` — active unfinished major systems sorted low-to-high by estimated remaining engineering effort; stable `MBL-xx` IDs remain unchanged; remove items only when fully implemented, integrated, tested and accepted.  
 **Detailed tracker:** `docs/development-master-checklist.md` — implementation history and subsystem checkboxes.  
 **Parallel military branch:** `feature/military-conflict-system`, draft PR #10 -> `feature/m1-simulation-core`; campaign core is complete. Deterministic ground/air conflict, current military mission families, authorization, fictional theater generation, SQLite campaign/mission recovery, strategic phase/momentum/objectives, persisted threat outcomes, dispatch authorization, Military/Government UI projection, production mission-service consequence wiring, phase-driven faction-posture evolution and the operation-resolution/consequence engine are implemented. Consequences persist in SQLite schema v5 with restart-safe duplicate protection, rollback/retry safety and reconnect replay protection. Verified head `16cda14981bc6284e4f33833e88aa8289ff46149` is green in exact-head Linux PR CI and exact-head Windows CI, including the bounded 96-step deterministic campaign stress test. No next standalone campaign slice: remaining MBL-19 work is blocked on MBL-13, MBL-08/09, MBL-10/14 and MBL-06/07 + local MSFS validation.
 **CI policy:** repo is public; standard Linux/Windows hosted runners are active. Feature pushes do not duplicate PR CI; docs-only updates are excluded from full builds; changed-file gates prevent cumulative PR diffs from forcing irrelevant validation. Relevant WinUI changes get Windows validation during the draft PR.  
-**Exact-head verification:** Linux build #1142 and Windows `winui-build` #1075 passed on the first attempt at `55bb8927`. Exact-PC validation remains the C172/KJFK SimConnect identity path, takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, terminal settlement/finalization, contained facility failures, Jobs picker stability and shared button readability. The ordinary Passenger and accepted named-cargo authority paths are CI-certified but not yet live-certified in MSFS.
+**Exact-head verification:** Linux build #1144 and Windows `winui-build` #1077 passed on the first attempt at `51da5d21`. Exact-PC validation remains the C172/KJFK SimConnect identity path, takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, terminal settlement/finalization, contained facility failures, Jobs picker stability and shared button readability. The ordinary Passenger and accepted named-cargo authority paths are CI-certified but not yet live-certified in MSFS.
 
 **Stack:** C# / .NET 10 / WinUI 3 / Windows x64 / SimConnect / SQLite / xUnit. Offline-first. AI/cloud never authoritative for money, ownership, mission completion, flight hours, scoring, or settlement.
 
@@ -239,6 +239,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `55bb8927fb39ff251b46e547d2e777377e8ca1d7`.
 - Persisted coordinator commits now preserve the immutable FlightSession authority tuple. A same-session checkpoint cannot change its contract association or creation time; rejection preserves the exact published session and emits no state-change notification.
 - Verification: exact-head Linux build #1142 and Windows `winui-build` #1075 passed on the first attempt, including WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite. Local test execution was unavailable because this runner had no .NET CLI.
+- Code checkpoint: `51da5d218cadd19e74971e9e7d0deeabf7cf1470`.
+- SQLite checkpoint writes now enforce the same immutable authority tuple before rotating or replacing persisted recovery state. A same-session contract or creation-time rewrite is rejected, and reopening the store recovers the original checkpoint unchanged.
+- Verification: exact-head Linux build #1144 and Windows `winui-build` #1077 passed on the first attempt, including WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite. Local test execution was unavailable because this runner had no .NET CLI.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
