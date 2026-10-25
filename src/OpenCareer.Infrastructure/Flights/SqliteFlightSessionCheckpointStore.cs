@@ -601,6 +601,13 @@ public sealed class SqliteFlightSessionCheckpointStore :
                     "Flight-session checkpoint immutable authority cannot change within a session.");
             }
 
+            if (fallback.IsTerminal
+                && incoming.Status != fallback.Status)
+            {
+                throw new InvalidOperationException(
+                    "Flight-session checkpoint terminal authority cannot change within a session.");
+            }
+
             return true;
         }
         catch (Exception exception)
