@@ -201,6 +201,60 @@ public sealed class FlightSessionCoordinatorTests
     }
 
     [Fact]
+    public void NewerTerminalCheckpointCannotRewriteTerminalOutcome()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        FlightSession active =
+            FlightSession.Start(Epoch);
+
+        FlightSession cancelled =
+            FlightSessionEngine.Advance(
+                active,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(1),
+                        Connected: true),
+                    CancelRequested: true));
+
+        FlightSession suspended =
+            FlightSessionEngine.Advance(
+                active,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(1),
+                        Connected: false)));
+
+        FlightSession interrupted =
+            FlightSessionEngine.Advance(
+                suspended,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(2),
+                        Connected: true,
+                        StableTelemetry: true,
+                        ContinuityPlausible: false)));
+
+        coordinator.Restore(cancelled);
+
+        var observed =
+            new List<FlightSession?>();
+
+        coordinator.SessionChanged +=
+            (_, args) =>
+                observed.Add(args.Session);
+
+        InvalidOperationException error =
+            Assert.Throws<InvalidOperationException>(
+                () => coordinator.CommitPersisted(interrupted));
+
+        Assert.Contains("terminal outcome", error.Message);
+        Assert.Equal(cancelled, coordinator.Current);
+        Assert.Empty(observed);
+    }
+
+    [Fact]
     public void ActiveSessionCannotBeCleared()
     {
         var coordinator =

@@ -86,6 +86,13 @@ public sealed class FlightSessionCoordinator
                 "Cannot replace a terminal flight session with a nonterminal checkpoint.");
         }
 
+        if (Current.IsTerminal
+            && session.Status != Current.Status)
+        {
+            throw new InvalidOperationException(
+                "Cannot replace a terminal flight session with a different terminal outcome.");
+        }
+
         if (session.UpdatedAt < Current.UpdatedAt)
         {
             throw new InvalidOperationException(
