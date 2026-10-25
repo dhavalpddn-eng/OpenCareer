@@ -111,6 +111,23 @@ public sealed class FlightSessionCoordinator
         Publish();
     }
 
+    public void ClearTerminalSession(
+        FlightSession expectedSession)
+    {
+        ArgumentNullException.ThrowIfNull(expectedSession);
+
+        if (Current is null)
+            return;
+
+        if (!ReferenceEquals(Current, expectedSession))
+        {
+            throw new InvalidOperationException(
+                "The current flight session changed before terminal cleanup completed.");
+        }
+
+        ClearTerminalSession();
+    }
+
     private void Publish()
     {
         SessionChanged?.Invoke(

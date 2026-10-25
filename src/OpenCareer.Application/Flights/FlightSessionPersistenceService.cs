@@ -573,9 +573,25 @@ public sealed class FlightSessionPersistenceService
                 .ClearAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            try
+            {
+                _coordinator.ClearTerminalSession(current);
+            }
+            catch (InvalidOperationException)
+                when (_coordinator.Current is { } replacement)
+            {
+                await _store
+                    .SaveAsync(
+                        replacement,
+                        CancellationToken.None)
+                    .ConfigureAwait(false);
+
+                _lastPersisted = replacement;
+                throw;
+            }
+
             _lastPersisted = null;
             LastRecoveredSessionId = null;
-            _coordinator.ClearTerminalSession();
         }
         finally
         {

@@ -869,6 +869,68 @@ public sealed class FlightSessionPersistenceServiceTests
     }
 
     [Fact]
+    public async Task TerminalClearRestoresReplacementCheckpointBeforeRefusingStaleCleanup()
+    {
+        var coordinator =
+            new FlightSessionCoordinator();
+
+        var store =
+            new MemoryStore
+            {
+                PauseNextClear = true
+            };
+
+        var service =
+            new FlightSessionPersistenceService(
+                coordinator,
+                store);
+
+        await service.StartAsync(Epoch);
+
+        FlightSession terminal =
+            await service.AdvanceAsync(
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(1),
+                        Connected: true),
+                    CancelRequested: true));
+
+        Task clear =
+            service.ClearTerminalAsync(
+                terminal.SessionId,
+                terminal.ContractId);
+
+        await store.ClearStarted.Task;
+
+        coordinator.ClearTerminalSession();
+
+        FlightSession replacement =
+            FlightSessionEngine.Advance(
+                FlightSession.Start(
+                    Epoch.AddMinutes(1),
+                    sessionId:
+                        Guid.Parse(
+                            "77777777-7777-7777-7777-777777777777")),
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddMinutes(1).AddSeconds(1),
+                        Connected: true),
+                    CancelRequested: true));
+
+        coordinator.Restore(replacement);
+        store.AllowClear.TrySetResult();
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => clear);
+
+        Assert.Contains("changed", error.Message);
+        Assert.Equal(replacement, coordinator.Current);
+        Assert.Equal(replacement, store.Checkpoint);
+        Assert.Equal(3, store.SaveCount);
+    }
+
+    [Fact]
     public async Task AuthoritativeCancellationValidatesIdentityBeforeWriting()
     {
         Guid sessionId = Guid.NewGuid();
@@ -982,6 +1044,14 @@ public sealed class FlightSessionPersistenceServiceTests
 
         public bool FailWrites { get; set; }
 
+        public bool PauseNextClear { get; set; }
+
+        public TaskCompletionSource ClearStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource AllowClear { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public int SaveCount { get; private set; }
 
         public int LoadCount { get; private set; }
@@ -1008,11 +1078,19 @@ public sealed class FlightSessionPersistenceServiceTests
             return Task.FromResult(Checkpoint);
         }
 
-        public Task ClearAsync(
+        public async Task ClearAsync(
             CancellationToken cancellationToken = default)
         {
             Checkpoint = null;
-            return Task.CompletedTask;
+
+            if (!PauseNextClear)
+                return;
+
+            PauseNextClear = false;
+            ClearStarted.TrySetResult();
+
+            await AllowClear.Task
+                .WaitAsync(cancellationToken);
         }
     }
 }
