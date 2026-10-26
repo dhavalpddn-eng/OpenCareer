@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-26 through validated checkpoint `d63d4f68` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-26 through validated checkpoint `f9075206` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -355,6 +355,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Expose the Student operation through a bounded Career briefing/readiness/start surface with automatic evidence-driven completion and restart finalization; UI actions cannot directly complete training or grant qualifications.
 - [x] Recover safely from failed Student training start: reproject an authoritative created session, preserve retry only when readiness remains eligible, fail closed if refresh also fails, and keep technical exception text out of the player UI.
 - [x] Reconcile failed career onboarding against authoritative runtime profile state: retain a saved profile through projection failure, keep pre-save failure retryable, prevent duplicate creation and keep technical exception text out of the player UI.
+- [x] Fail closed when Career initialization authority cannot refresh: preserve an authoritative loaded profile, disable stale profile/training actions until a successful reload, and keep technical exception text out of the player UI.
 - [ ] Add later qualification missions with distinct authoritative definitions and completion requirements.
 - [x] Home-airport selection foundation.
 - [x] Persist player location/home base.
