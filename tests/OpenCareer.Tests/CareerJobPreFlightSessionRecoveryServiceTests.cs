@@ -233,6 +233,48 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
             context.Checkpoints.SaveCount);
     }
 
+    [Fact]
+    public async Task MultipleAcceptedContractsRemainAvailableForJobsCancellation()
+    {
+        TestContext context = CreateContext(
+            Persisted(ContractStatus.Accepted),
+            hasReservation: true,
+            now: StartedAt);
+        await context.Runtime.InitializeAsync();
+        await context.Runtime.PublishAuthoritativeAsync(
+            Persisted(
+                ContractStatus.Accepted,
+                contractId:
+                    Guid.Parse(
+                        "c1000000-0000-0000-0000-000000000002")));
+
+        CareerJobPreFlightSessionRecoveryResult result =
+            await context.Recovery.RecoverAsync();
+
+        Assert.Equal(
+            CareerJobPreFlightSessionRecoveryState.MultipleAcceptedContracts,
+            result.State);
+        Assert.Null(result.ContractId);
+        Assert.Contains(
+            "use Jobs to cancel",
+            result.Detail,
+            StringComparison.Ordinal);
+        Assert.Collection(
+            context.Runtime.Current,
+            static persisted =>
+                Assert.Equal(
+                    ContractStatus.Accepted,
+                    persisted.Contract.Status),
+            static persisted =>
+                Assert.Equal(
+                    ContractStatus.Accepted,
+                    persisted.Contract.Status));
+        Assert.Null(context.Sessions.Current);
+        Assert.Null(context.Checkpoints.Checkpoint);
+        Assert.Equal(0, context.Contracts.UpdateCount);
+        Assert.Equal(0, context.Reservations.FindCount);
+    }
+
     [Theory]
     [InlineData(ContractStatus.Accepted)]
     [InlineData(ContractStatus.InProgress)]
@@ -490,6 +532,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
         return new(
             service,
             contracts,
+            runtime,
             reservations,
             sessions,
             checkpoints,
@@ -546,7 +589,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
         ContractStatus status,
         ContractKind kind = ContractKind.Ferry,
         bool includeCargoManifest = true,
-        bool includePassengerManifest = true)
+        bool includePassengerManifest = true,
+        Guid? contractId = null)
     {
         bool passenger = kind == ContractKind.Passenger;
         bool cargo = kind is
@@ -567,7 +611,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
         var contract =
             new JobContract(
                 ContractId:
-                    Guid.Parse(
+                    contractId
+                    ?? Guid.Parse(
                         "c1000000-0000-0000-0000-000000000001"),
                 EmployerId:
                     null,
@@ -690,6 +735,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     private sealed record TestContext(
         CareerJobPreFlightSessionRecoveryService Recovery,
         FakeContractStore Contracts,
+        JobContractRuntimeState Runtime,
         FakeReservationLookup Reservations,
         FlightSessionCoordinator Sessions,
         MemoryCheckpointStore Checkpoints,
@@ -800,11 +846,14 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     {
         public Func<CancellationToken, Task>? BeforeFindAsync { get; set; }
 
+        public int FindCount { get; private set; }
+
         public async Task<AircraftReservationOwnership?> FindByReservationIdAsync(
             string reservationId,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            FindCount++;
 
             if (BeforeFindAsync is not null)
                 await BeforeFindAsync(cancellationToken);

@@ -19,7 +19,8 @@ public enum CareerJobPreFlightSessionRecoveryState
     WaitingForDispatch = 5,
     ContractStartBlocked = 6,
     Recovered = 7,
-    WaitingForPreparedDispatch = 8
+    WaitingForPreparedDispatch = 8,
+    MultipleAcceptedContracts = 9
 }
 
 public sealed record CareerJobPreFlightSessionRecoveryResult(
@@ -115,7 +116,19 @@ public sealed class CareerJobPreFlightSessionRecoveryService
                 return activeSession;
 
             PersistedJobContract? candidate =
-                SelectRecoveryCandidate(recovered);
+                SelectRecoveryCandidate(
+                    recovered,
+                    out int supportedAcceptedCount);
+
+            if (supportedAcceptedCount > 1)
+            {
+                return Result(
+                    CareerJobPreFlightSessionRecoveryState.MultipleAcceptedContracts,
+                    contractId:
+                        null,
+                    $"{supportedAcceptedCount} supported accepted jobs are waiting. "
+                    + "Automatic recovery will not choose between them; use Jobs to cancel the unwanted accepted jobs.");
+            }
 
             if (candidate is null)
             {
@@ -411,9 +424,11 @@ public sealed class CareerJobPreFlightSessionRecoveryService
     }
 
     private static PersistedJobContract? SelectRecoveryCandidate(
-        IReadOnlyList<PersistedJobContract> recovered)
+        IReadOnlyList<PersistedJobContract> recovered,
+        out int supportedAcceptedCount)
     {
         ArgumentNullException.ThrowIfNull(recovered);
+        supportedAcceptedCount = 0;
 
         PersistedJobContract[] inProgress =
             recovered
@@ -442,13 +457,11 @@ public sealed class CareerJobPreFlightSessionRecoveryService
                         && Supports(item.Contract))
                 .ToArray();
 
-        if (accepted.Length > 1)
-        {
-            throw new InvalidOperationException(
-                "Multiple supported accepted job contracts require explicit operation selection before recovery.");
-        }
+        supportedAcceptedCount = accepted.Length;
 
-        return accepted.SingleOrDefault();
+        return accepted.Length == 1
+            ? accepted[0]
+            : null;
     }
 
     private static bool Supports(
