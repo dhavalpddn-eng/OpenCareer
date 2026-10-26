@@ -535,6 +535,7 @@ public sealed class JobsViewModelTests
         await viewModel.RefreshAsync();
 
         Assert.True(viewModel.HasCurrentFlightSession);
+        Assert.False(viewModel.CanStartJobActions);
         Assert.Equal("CAREER FLIGHT IN PROGRESS", viewModel.CurrentFlightSessionStatus);
         Assert.Contains("Accepted", viewModel.CurrentFlightSessionDetail, StringComparison.Ordinal);
 
@@ -781,6 +782,7 @@ public sealed class JobsViewModelTests
         await viewModel.RefreshAsync();
 
         Assert.True(viewModel.HasCurrentFlightSession);
+        Assert.False(viewModel.CanStartJobActions);
         Assert.Equal("FLIGHT SESSION · ACTIVE", viewModel.CurrentFlightSessionStatus);
         Assert.Contains(
             "before accepting another job",
@@ -792,6 +794,80 @@ public sealed class JobsViewModelTests
         Assert.Equal(
             new[] { JobsNavigationTarget.CurrentFlight },
             navigationTargets);
+    }
+
+    [Fact]
+    public async Task CurrentFlightSessionRejectsStaleStartInvocationAtViewModelBoundary()
+    {
+        JobMarketOfferDraft offer =
+            Offer(
+                "KRME",
+                "KSYR",
+                locked:
+                    false);
+        var action =
+            new FakeStartAction();
+        var sessions =
+            new FlightSessionCoordinator();
+        Guid acceptedContractId =
+            Guid.Parse(
+                "c1000000-0000-0000-0000-000000000074");
+        var acceptedContext =
+            new MutableAcceptedContext(
+                acceptedContractId);
+        var cancellation =
+            new RecordingAcceptedCancellation(
+                acceptedContext);
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        offer)),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                new CareerJobAircraftSelectionSource(
+                    new FakeDiscovery()),
+                action,
+                logger:
+                    null,
+                acceptedContext:
+                    acceptedContext,
+                acceptedCancellation:
+                    cancellation,
+                flightSessions:
+                    sessions);
+
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+
+        sessions.Start(
+            Now,
+            contractId:
+                null,
+            sessionId:
+                Guid.Parse(
+                    "a7000000-0000-0000-0000-000000000003"));
+
+        await viewModel.StartOfferAsync(offer.OfferId);
+
+        Assert.True(viewModel.HasCurrentFlightSession);
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.Equal(0, action.AcceptCount);
+        Assert.Equal(0, action.StartCount);
+        Assert.Contains(
+            "Open Current Flight",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+
+        await viewModel.CancelAcceptedJobsAsync();
+
+        Assert.Equal(
+            new[] { acceptedContractId },
+            cancellation.CancelledContractIds);
+        Assert.True(viewModel.HasCurrentFlightSession);
+        Assert.False(viewModel.CanStartJobActions);
     }
 
     [Fact]

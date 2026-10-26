@@ -157,7 +157,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public bool CanRunJobActions => !_isJobActionBusy;
     public bool CanStartJobActions =>
         CanRunJobActions
-        && !HasJobRecoveryAttention;
+        && !HasJobRecoveryAttention
+        && !HasCurrentFlightSession;
     public bool HasCurrentFlightSession => _hasCurrentFlightSession;
     public string CurrentFlightSessionStatus => _currentFlightSessionStatus;
     public string CurrentFlightSessionDetail => _currentFlightSessionDetail;
@@ -197,7 +198,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
-            if (BlockNewFlightActionForRecovery())
+            if (BlockNewFlightAction())
                 return;
 
             if (_developmentFlights is null)
@@ -456,7 +457,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
-            if (BlockNewFlightActionForRecovery())
+            if (BlockNewFlightAction())
                 return;
 
             await _refreshGate
@@ -465,7 +466,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
             try
             {
-                if (BlockNewFlightActionForRecovery())
+                if (BlockNewFlightAction())
                     return;
 
                 string? normalized =
@@ -544,7 +545,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
-            if (BlockNewFlightActionForRecovery())
+            if (BlockNewFlightAction())
                 return;
 
             string aircraftId =
@@ -560,7 +561,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(true);
             try
             {
-                if (BlockNewFlightActionForRecovery())
+                if (BlockNewFlightAction())
                     return;
 
                 await RefreshAircraftLockedAsync(cancellationToken);
@@ -812,6 +813,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         {
             _hasCurrentFlightSession = hasCurrentFlightSession;
             OnPropertyChanged(nameof(HasCurrentFlightSession));
+            OnPropertyChanged(nameof(CanStartJobActions));
         }
 
         SetField(
@@ -885,14 +887,27 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             nameof(JobRecoveryDetail));
     }
 
-    private bool BlockNewFlightActionForRecovery()
+    private bool BlockNewFlightAction()
     {
-        if (!HasJobRecoveryAttention)
+        // Re-read the synchronous authority projections so a stale UI invocation cannot
+        // race a FlightSession that appeared after the last Jobs refresh.
+        RefreshCurrentFlightSession();
+
+        if (HasJobRecoveryAttention)
+        {
+            SetField(
+                ref _acceptanceStatus,
+                "Resolve the job recovery attention above before starting or creating another flight. Refresh Jobs to retry recovery; accepted preflight jobs can still be cancelled below.",
+                nameof(AcceptanceStatus));
+            return true;
+        }
+
+        if (!HasCurrentFlightSession)
             return false;
 
         SetField(
             ref _acceptanceStatus,
-            "Resolve the job recovery attention above before starting or creating another flight. Refresh Jobs to retry recovery; accepted preflight jobs can still be cancelled below.",
+            "Open Current Flight and finish, recover, log, discard, or abandon the existing FlightSession before starting or creating another flight. Accepted preflight jobs can still be cancelled below.",
             nameof(AcceptanceStatus));
         return true;
     }
