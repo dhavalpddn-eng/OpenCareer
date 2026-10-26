@@ -48,7 +48,7 @@ public sealed partial class DispatchPage : Page
         }
         catch (Exception ex)
         {
-            viewModel.ReportInitializationFailure(ex);
+            await viewModel.ReportInitializationFailureAsync(ex);
         }
     }
 

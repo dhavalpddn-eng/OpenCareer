@@ -89,6 +89,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         "A complete accepted job and its exact Fleet reservation are required before a feasible plan can be persisted.";
     private string _preparationSummary = "Persisted plan —";
     private bool _isBusy;
+    private bool _initializationAuthorityUnavailable;
     private DispatchBusyOperation _busyOperation;
 
     public DispatchViewModel(
@@ -141,10 +142,12 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     public bool IsBusy => _isBusy;
     public bool CanEvaluate =>
         !_isBusy
+        && !_initializationAuthorityUnavailable
         && _selectedAircraftId is not null
         && _selectedCruiseProfileIndex is not null;
     public bool CanPrepare =>
         !_isBusy
+        && !_initializationAuthorityUnavailable
         && _preparation is not null
         && _acceptedContractId is not null
         && _acceptedReservationId is not null
@@ -178,12 +181,40 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             ? $"All {_acceptedContractIds.Count} accepted preflight contracts will be cancelled and their aircraft reservations released. No flights will be started."
             : "The contract will be cancelled and its aircraft reservation released. The flight has not started, so no logbook entry or pay will be created.";
 
-    public void ReportInitializationFailure(Exception exception)
+    public async Task ReportInitializationFailureAsync(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        _logger?.LogError(exception, "Advanced Dispatch initialization failed.");
+        SetInitializationAuthorityUnavailable(true);
+        ClearPlanningAuthority();
+
+        bool acceptedContextRecovered = false;
+        try
+        {
+            AcceptedDispatchPlanningContext accepted = await _acceptedContext
+                .ReadAsync(CancellationToken.None)
+                .ConfigureAwait(true);
+            ApplyAcceptedContext(accepted);
+            acceptedContextRecovered = true;
+        }
+        catch (Exception recoveryException)
+        {
+            _logger?.LogError(
+                recoveryException,
+                "Accepted-job context could not be recovered after Advanced Dispatch initialization failed.");
+            ApplyAcceptedContext(
+                new(
+                    AcceptedDispatchPlanningContextStatus.ContractsUnavailable,
+                    "Accepted-job context is unavailable."));
+        }
+
         SetField(
             ref _acceptedContextText,
-            $"Dispatch could not load: {exception.Message} Reopen Dispatch to retry.",
+            _acceptedContractIds.Count > 0
+                ? "Dispatch could not finish loading. Accepted-job cleanup was refreshed and remains available below. Reopen Dispatch before evaluating or preparing a plan. If this repeats, create a diagnostic bundle in Settings."
+                : acceptedContextRecovered
+                    ? "Dispatch could not finish loading. Accepted-job context was refreshed, but planning remains unavailable. Reopen Dispatch before evaluating or preparing a plan. If this repeats, create a diagnostic bundle in Settings."
+                    : "Dispatch could not finish loading, and accepted-job context could not be refreshed. Reopen Dispatch or use Jobs to review and cancel accepted work. If this repeats, create a diagnostic bundle in Settings.",
             nameof(AcceptedContextText));
     }
 
@@ -230,6 +261,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 nameof(AcceptedContextText));
             _acceptedReservationId = null;
         }
+
+        SetInitializationAuthorityUnavailable(false);
     }
 
     public async Task SetSelectedAircraftAsync(
@@ -349,6 +382,17 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         ArgumentNullException.ThrowIfNull(input);
         if (_isBusy)
             return;
+
+        if (_initializationAuthorityUnavailable)
+        {
+            SetResult(
+                "AUTHORITY UNAVAILABLE",
+                "Reopen Dispatch before evaluating another plan. If this repeats, create a diagnostic bundle in Settings.",
+                "Fuel plan —",
+                "Runway selection —",
+                []);
+            return;
+        }
 
         if (_selectedAircraftId is null)
         {
@@ -471,6 +515,15 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         ArgumentNullException.ThrowIfNull(input);
         if (_isBusy)
             return;
+
+        if (_initializationAuthorityUnavailable)
+        {
+            SetPreparation(
+                "AUTHORITY UNAVAILABLE",
+                "Reopen Dispatch before preparing another plan. If this repeats, create a diagnostic bundle in Settings.",
+                "Persisted plan —");
+            return;
+        }
 
         if (_preparation is not { } preparation)
         {
@@ -1040,6 +1093,39 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(EvaluateButtonText));
         OnPropertyChanged(nameof(PrepareButtonText));
         OnPropertyChanged(nameof(CancelAcceptedJobButtonText));
+    }
+
+    private void SetInitializationAuthorityUnavailable(bool value)
+    {
+        if (_initializationAuthorityUnavailable == value)
+            return;
+
+        _initializationAuthorityUnavailable = value;
+        OnPropertyChanged(nameof(CanEvaluate));
+        OnPropertyChanged(nameof(CanPrepare));
+    }
+
+    private void ClearPlanningAuthority()
+    {
+        SetField(ref _aircraftOptions, Array.Empty<DispatchAircraftOptionViewModel>(), nameof(AircraftOptions));
+        SetField(ref _selectedAircraftId, null, nameof(SelectedAircraftId));
+        SetField(ref _cruiseProfileOptions, Array.Empty<DispatchCruiseProfileOptionViewModel>(), nameof(CruiseProfileOptions));
+        SetField(ref _selectedCruiseProfileIndex, null, nameof(SelectedCruiseProfileIndex));
+        SetField(ref _selectedCruiseProfileEvidence, "No cruise profile selected.", nameof(SelectedCruiseProfileEvidence));
+        SetField(ref _inventoryStatus, "Installed-aircraft authority could not be loaded.", nameof(InventoryStatus));
+        SetField(ref _cruiseProfileStatus, "Cruise-profile authority is unavailable until Dispatch reloads.", nameof(CruiseProfileStatus));
+        SetResult(
+            "AUTHORITY UNAVAILABLE",
+            "Dispatch planning authority could not be loaded. No plan was evaluated.",
+            "Fuel plan —",
+            "Runway selection —",
+            []);
+        SetPreparation(
+            "AUTHORITY UNAVAILABLE",
+            "Dispatch planning authority could not be loaded. No plan was persisted.",
+            "Persisted plan —");
+        OnPropertyChanged(nameof(CanEvaluate));
+        OnPropertyChanged(nameof(CanPrepare));
     }
 
     private bool SetField<T>(ref T field, T value, string propertyName)

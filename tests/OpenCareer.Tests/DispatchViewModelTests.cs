@@ -412,6 +412,88 @@ public sealed class DispatchViewModelTests
     }
 
     [Fact]
+    public async Task FailedInitializationKeepsRefreshedAcceptedCancellationButBlocksStalePlanning()
+    {
+        Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var inventory = new ControllableInventory(new(
+            InstalledAircraftInventoryStatus.Ready,
+            "1 installed aircraft record(s).",
+            [Item("aircraft-a", "Alpha")]));
+        var accepted = new ControllableAcceptedContext(
+            ReadyAcceptedContextValue(contractId));
+        var planning = new StubPlanning();
+        var preparation = new StubPreparation(
+            PrepareDispatchPlanStatus.Prepared,
+            "Should not be reached.");
+        var cancellation = new StubAcceptedJobCancellation();
+        var viewModel = new DispatchViewModel(
+            inventory,
+            Profiles(),
+            planning,
+            accepted,
+            preparation,
+            cancellation);
+
+        await InitializeReadyAsync(viewModel);
+        Assert.True(viewModel.CanPrepare);
+        Assert.True(viewModel.CanCancelAcceptedJob);
+
+        inventory.NextReadFailure = new IOException("Sensitive inventory path C:\\Users\\pilot\\Packages.");
+        IOException failure = await Assert.ThrowsAsync<IOException>(
+            () => viewModel.InitializeAsync());
+        await viewModel.ReportInitializationFailureAsync(failure);
+
+        Assert.False(viewModel.CanEvaluate);
+        Assert.False(viewModel.CanPrepare);
+        Assert.True(viewModel.CanCancelAcceptedJob);
+        Assert.Empty(viewModel.AircraftOptions);
+        Assert.Contains("cleanup was refreshed", viewModel.AcceptedContextText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("diagnostic bundle", viewModel.AcceptedContextText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Packages", viewModel.AcceptedContextText, StringComparison.Ordinal);
+
+        await viewModel.EvaluateAsync(ValidInput());
+        await viewModel.PrepareAsync(ValidInput());
+
+        Assert.Equal(0, planning.CallCount);
+        Assert.Equal(0, preparation.CallCount);
+        Assert.Equal("AUTHORITY UNAVAILABLE", viewModel.ResultStatus);
+        Assert.Equal("AUTHORITY UNAVAILABLE", viewModel.PreparationStatus);
+    }
+
+    [Fact]
+    public async Task FailedInitializationAndAcceptedContextRecoveryUseJobsGuidanceWithoutStaleTargets()
+    {
+        Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var inventory = new ControllableInventory(new(
+            InstalledAircraftInventoryStatus.Ready,
+            "1 installed aircraft record(s).",
+            [Item("aircraft-a", "Alpha")]));
+        var accepted = new ControllableAcceptedContext(
+            ReadyAcceptedContextValue(contractId));
+        var viewModel = new DispatchViewModel(
+            inventory,
+            Profiles(),
+            new StubPlanning(),
+            accepted,
+            cancellation: new StubAcceptedJobCancellation());
+
+        await viewModel.InitializeAsync();
+        Assert.True(viewModel.CanCancelAcceptedJob);
+
+        inventory.NextReadFailure = new IOException("Sensitive inventory failure.");
+        accepted.NextReadFailure = new IOException("Sensitive contract database failure.");
+        IOException failure = await Assert.ThrowsAsync<IOException>(
+            () => viewModel.InitializeAsync());
+        await viewModel.ReportInitializationFailureAsync(failure);
+
+        Assert.False(viewModel.CanCancelAcceptedJob);
+        Assert.Contains("use Jobs", viewModel.AcceptedContextText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("diagnostic bundle", viewModel.AcceptedContextText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Sensitive inventory failure", viewModel.AcceptedContextText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sensitive contract database failure", viewModel.AcceptedContextText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExplicitWeatherLimitsReachCompositePlannerWithoutDefaults()
     {
         var planning = new StubPlanning();
@@ -718,7 +800,11 @@ public sealed class DispatchViewModelTests
 
     private static IAcceptedDispatchPlanningContextSource ReadyAcceptedContext(
         Guid contractId) =>
-        new StubAcceptedContext(new(
+        new StubAcceptedContext(ReadyAcceptedContextValue(contractId));
+
+    private static AcceptedDispatchPlanningContext ReadyAcceptedContextValue(
+        Guid contractId) =>
+        new(
             AcceptedDispatchPlanningContextStatus.Ready,
             "Accepted job loaded.",
             contractId,
@@ -728,7 +814,7 @@ public sealed class DispatchViewModelTests
             "aircraft-a",
             "contract:fixture:aircraft-v1",
             RouteDistanceNauticalMiles: 300,
-            PayloadPounds: 250));
+            PayloadPounds: 250);
 
     private static PreparedDispatchPlan PreparedPlan(Guid contractId)
     {
@@ -813,6 +899,44 @@ public sealed class DispatchViewModelTests
         public Task<AcceptedDispatchPlanningContext> ReadAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult(context);
+    }
+
+    private sealed class ControllableInventory(InstalledAircraftInventorySnapshot snapshot)
+        : IInstalledAircraftInventorySource
+    {
+        public Exception? NextReadFailure { get; set; }
+
+        public Task<InstalledAircraftInventorySnapshot> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (NextReadFailure is { } failure)
+            {
+                NextReadFailure = null;
+                return Task.FromException<InstalledAircraftInventorySnapshot>(failure);
+            }
+
+            return Task.FromResult(snapshot);
+        }
+    }
+
+    private sealed class ControllableAcceptedContext(AcceptedDispatchPlanningContext context)
+        : IAcceptedDispatchPlanningContextSource
+    {
+        public Exception? NextReadFailure { get; set; }
+
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (NextReadFailure is { } failure)
+            {
+                NextReadFailure = null;
+                return Task.FromException<AcceptedDispatchPlanningContext>(failure);
+            }
+
+            return Task.FromResult(context);
+        }
     }
 
     private sealed class SequenceAcceptedContext(
