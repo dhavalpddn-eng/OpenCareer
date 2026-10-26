@@ -292,6 +292,9 @@
                                                Style="{StaticResource OpenCareerPaperBodyStyle}" />
                                     <TextBlock Text="{Binding ScenarioText}"
                                                Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                    <TextBlock Text="{Binding AssignmentText}"
+                                               Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                               TextWrapping="Wrap" />
                                     <Border Style="{StaticResource OpenCareerPaperInsetStyle}"
                                             Margin="0,4,0,0"
                                             Padding="12,8">

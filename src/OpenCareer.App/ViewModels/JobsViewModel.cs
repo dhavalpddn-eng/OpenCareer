@@ -1258,6 +1258,9 @@ public sealed class JobOfferItemViewModel
         Friendly(
             Offer.Scenario);
 
+    public string AssignmentText =>
+        CreateAssignmentText();
+
     public string CompensationText
     {
         get
@@ -1339,8 +1342,63 @@ public sealed class JobOfferItemViewModel
                 terms.EstimatedPlayerOperatingCosts));
     }
 
+    private string CreateAssignmentText()
+    {
+        if (DevelopmentFlight.IsDevelopment(Offer))
+            return "ASSIGNMENT · Calibration circuit · no revenue payload";
+
+        JobMarketContractTermsEnvelope? terms =
+            Offer.ContractTerms;
+
+        if (terms is null)
+            return "ASSIGNMENT · Details unavailable";
+
+        if (Offer.Kind == ContractKind.Passenger)
+        {
+            int passengerCount =
+                terms.AircraftRequirements.MinimumPassengerCapacity;
+
+            return passengerCount > 0
+                ? $"MANIFEST · {passengerCount} {(passengerCount == 1 ? "passenger" : "passengers")} · {FormatWeight(terms.PayloadPounds)} incl. baggage"
+                : terms.PayloadPounds > 0
+                    ? $"PASSENGER LOAD · {FormatWeight(terms.PayloadPounds)} · count not specified"
+                    : "PASSENGER LOAD · Manifest details unavailable";
+        }
+
+        if (Offer.Kind is ContractKind.Cargo
+            or ContractKind.ExpressCargo
+            or ContractKind.AogPartsDelivery)
+        {
+            var cargoLots =
+                terms.EffectiveCargoLots;
+
+            if (!cargoLots.IsEmpty)
+            {
+                string commodityNames =
+                    string.Join(
+                        ", ",
+                        cargoLots
+                            .Select(static lot => lot.CommodityName)
+                            .Distinct(StringComparer.Ordinal));
+
+                return $"CARGO · {commodityNames} · {FormatWeight(cargoLots.Sum(static lot => lot.MassPounds))}";
+            }
+
+            return terms.PayloadPounds > 0
+                ? $"CARGO · {FormatWeight(terms.PayloadPounds)} · commodity not specified"
+                : "CARGO · Manifest details unavailable";
+        }
+
+        return terms.PayloadPounds > 0
+            ? $"PAYLOAD · {FormatWeight(terms.PayloadPounds)}"
+            : "ASSIGNMENT · No assigned payload";
+    }
+
     private static string FormatCurrency(decimal value) =>
         $"${value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}";
+
+    private static string FormatWeight(double pounds) =>
+        $"{pounds.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} lb";
 
     private static string Friendly<T>(
         T value)

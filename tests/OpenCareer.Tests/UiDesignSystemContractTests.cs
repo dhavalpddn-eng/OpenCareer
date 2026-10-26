@@ -289,6 +289,13 @@ public sealed class UiDesignSystemContractTests
                     element.Attribute("Text")?.Value,
                     "{Binding JobRecoveryDetail}",
                     StringComparison.Ordinal));
+        Assert.Contains(
+            page.Descendants(),
+            static element =>
+                string.Equals(
+                    element.Attribute("Text")?.Value,
+                    "{Binding AssignmentText}",
+                    StringComparison.Ordinal));
         Assert.Equal(
             4,
             page.Descendants()

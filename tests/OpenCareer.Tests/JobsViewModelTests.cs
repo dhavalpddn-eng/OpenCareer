@@ -5,6 +5,7 @@ using OpenCareer.Application.Flights;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
 
 namespace OpenCareer.Tests;
@@ -116,6 +117,149 @@ public sealed class JobsViewModelTests
         Assert.Equal(
             "$0 PROGRESSION",
             projected.ProgressionText);
+    }
+
+    [Fact]
+    public void PassengerOfferCardShowsImmutableCountAndPayloadTerms()
+    {
+        JobMarketOfferDraft offer =
+            Offer(
+                "KRME",
+                "KSYR",
+                locked:
+                    false) with
+            {
+                Kind = ContractKind.Passenger,
+                ContractTerms = Terms(
+                    new AircraftMissionRequirements(
+                        RequiredCapabilities:
+                            AircraftCapability.Passenger,
+                        MinimumPayloadPounds:
+                            510,
+                        MinimumRangeNauticalMiles:
+                            100,
+                        MinimumSeats:
+                            4,
+                        MinimumPassengerCapacity:
+                            3),
+                    payloadPounds:
+                        510)
+            };
+
+        var projected =
+            new JobOfferItemViewModel(
+                offer,
+                Now);
+
+        Assert.Equal(
+            "MANIFEST · 3 passengers · 510 lb incl. baggage",
+            projected.AssignmentText);
+    }
+
+    [Fact]
+    public void NamedCargoOfferCardShowsAuthoritativeCommodityAndLotMass()
+    {
+        var lot =
+            new AcceptedCargoLot(
+                LotId:
+                    Guid.Parse(
+                    "c2000000-0000-0000-0000-000000000001"),
+                CommodityId:
+                    "coffee.roasted",
+                CommodityName:
+                    "Roasted Coffee",
+                Category:
+                    CargoCommodityCategory.GeneralFreight,
+                Quantity:
+                    12m,
+                Unit:
+                    CargoUnitOfTrade.Case,
+                MassPounds:
+                    840,
+                VolumeCubicFeet:
+                    96,
+                OriginIcao:
+                    "KRME",
+                DestinationIcao:
+                    "KSYR",
+                Shipper:
+                    "Mohawk Valley Roasters",
+                Consignee:
+                    "Syracuse Hospitality Supply",
+                DeclaredValue:
+                    7200m,
+                OriginMarketUnitValue:
+                    500m,
+                DestinationMarketUnitValue:
+                    650m,
+                HandlingRequirements:
+                    CargoHandlingRequirement.None);
+        JobMarketOfferDraft offer =
+            Offer(
+                "KRME",
+                "KSYR",
+                locked:
+                    false) with
+            {
+                Kind = ContractKind.Cargo,
+                ContractTerms = Terms(
+                    new AircraftMissionRequirements(
+                        RequiredCapabilities:
+                            AircraftCapability.Cargo,
+                        MinimumPayloadPounds:
+                            840,
+                        MinimumRangeNauticalMiles:
+                            100),
+                    payloadPounds:
+                        840) with
+                {
+                    CargoLots =
+                        ImmutableArray.Create(
+                            lot)
+                }
+            };
+
+        var projected =
+            new JobOfferItemViewModel(
+                offer,
+                Now);
+
+        Assert.Equal(
+            "CARGO · Roasted Coffee · 840 lb",
+            projected.AssignmentText);
+    }
+
+    [Fact]
+    public void LegacyCargoOfferCardDoesNotInventACommodity()
+    {
+        JobMarketOfferDraft offer =
+            Offer(
+                "KRME",
+                "KSYR",
+                locked:
+                    false) with
+            {
+                Kind = ContractKind.Cargo,
+                ContractTerms = Terms(
+                    new AircraftMissionRequirements(
+                        RequiredCapabilities:
+                            AircraftCapability.Cargo,
+                        MinimumPayloadPounds:
+                            840,
+                        MinimumRangeNauticalMiles:
+                            100),
+                    payloadPounds:
+                        840)
+            };
+
+        var projected =
+            new JobOfferItemViewModel(
+                offer,
+                Now);
+
+        Assert.Equal(
+            "CARGO · 840 lb · commodity not specified",
+            projected.AssignmentText);
     }
 
     [Fact]
@@ -1423,6 +1567,25 @@ public sealed class JobsViewModelTests
                 0.5,
             MarketSelectionWeight:
                 1);
+
+    private static JobMarketContractTermsEnvelope Terms(
+        AircraftMissionRequirements requirements,
+        double payloadPounds) =>
+        new(
+            AuthorityId:
+                "tests:jobs-card-assignment:v1",
+            AircraftRequirements:
+                requirements,
+            EstimatedFlightHours:
+                1,
+            PayloadPounds:
+                payloadPounds,
+            DemandAttractiveness:
+                1,
+            Urgency:
+                0,
+            Difficulty:
+                0);
 
     private sealed class FakeBoardRefill(
         JobBoardState board)
