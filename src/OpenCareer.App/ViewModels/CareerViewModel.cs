@@ -258,18 +258,26 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         {
             throw;
         }
-        catch (ArgumentException ex)
+        catch (Exception ex)
         {
+            _logger?.LogError(ex, "Career onboarding failed.");
+
+            PlayerCareerProfileStoreRecord? authoritative =
+                _runtime.Current;
+
+            if (authoritative is not null)
+            {
+                ApplyCurrent(authoritative);
+                SetField(
+                    ref _statusText,
+                    $"Career profile is saved at {authoritative.Profile.Location.CurrentAirportIcao}, but its qualification or training details could not finish loading. Reopen Career to refresh them. If this repeats, create a diagnostic bundle in Settings.",
+                    nameof(StatusText));
+                return;
+            }
+
             SetField(
                 ref _statusText,
-                $"Career could not be started: {ex.Message}",
-                nameof(StatusText));
-        }
-        catch (InvalidOperationException ex)
-        {
-            SetField(
-                ref _statusText,
-                $"Career could not be started: {ex.Message}",
+                "Career did not start. Retry Start Career. If this repeats, create a diagnostic bundle in Settings.",
                 nameof(StatusText));
         }
         finally

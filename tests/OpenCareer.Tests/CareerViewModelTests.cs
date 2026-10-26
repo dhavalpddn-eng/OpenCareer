@@ -97,6 +97,72 @@ public sealed class CareerViewModelTests
     }
 
     [Fact]
+    public async Task FailedCareerCreateRemainsRetryableWithoutTechnicalDetails()
+    {
+        var store = new FakeProfileStore
+        {
+            NextSaveFailure = new IOException("Sensitive profile persistence failure.")
+        };
+        var runtime = new PlayerCareerRuntimeState(store);
+        CareerViewModel viewModel = ViewModel(store, runtime);
+
+        await viewModel.InitializeAsync();
+        viewModel.HomeAirportIcao = "KDFW";
+
+        await viewModel.StartCareerAsync();
+
+        Assert.False(viewModel.HasCareer);
+        Assert.True(viewModel.CanStartCareer);
+        Assert.Null(runtime.Current);
+        Assert.Contains("Retry Start Career", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Sensitive profile persistence failure", viewModel.StatusText, StringComparison.Ordinal);
+
+        await viewModel.StartCareerAsync();
+
+        Assert.True(viewModel.HasCareer);
+        Assert.False(viewModel.CanStartCareer);
+        Assert.Equal(1, store.SaveCount);
+    }
+
+    [Fact]
+    public async Task FailedPostCreateProjectionKeepsSavedCareerRecoverableWithoutTechnicalDetails()
+    {
+        var store = new FakeProfileStore();
+        var runtime = new PlayerCareerRuntimeState(store);
+        var roadmap = new FakeQualificationRoadmapSource(
+            new IOException("Sensitive qualification projection failure."));
+        var viewModel = new CareerViewModel(
+            new PlayerCareerOnboardingCoordinator(store, runtime),
+            runtime,
+            new FixedTimeProvider(Now),
+            roadmap,
+            new FakeStudentTrainingAccess(
+                new(
+                    StudentTrainingOperationReadinessState.NoCareer,
+                    "Complete career onboarding before starting Student training.")),
+            new FakeStudentTrainingAccess(
+                new(
+                    StudentTrainingOperationReadinessState.NoCareer,
+                    "Complete career onboarding before starting Student training.")));
+
+        await viewModel.InitializeAsync();
+        viewModel.HomeAirportIcao = "KDFW";
+
+        await viewModel.StartCareerAsync();
+
+        PlayerCareerProfileStoreRecord current =
+            Assert.IsType<PlayerCareerProfileStoreRecord>(runtime.Current);
+        Assert.True(viewModel.HasCareer);
+        Assert.False(viewModel.CanStartCareer);
+        Assert.Equal("KDFW", current.Profile.Location.CurrentAirportIcao);
+        Assert.Contains("profile is saved", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Reopen Career", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Sensitive qualification projection failure", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExistingCareerCannotBeCreatedAgain()
     {
         PlayerCareerProfile existing =
@@ -346,6 +412,17 @@ public sealed class CareerViewModelTests
             now;
     }
 
+    private sealed class FakeQualificationRoadmapSource(
+        Exception failure) : ICareerQualificationRoadmapSource
+    {
+        public Task<CareerQualificationRoadmap?> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromException<CareerQualificationRoadmap?>(failure);
+        }
+    }
+
     private sealed class FakeStudentTrainingAccess(
         StudentTrainingOperationReadiness readiness)
         : IStudentTrainingOperationReadinessSource,
@@ -431,6 +508,7 @@ public sealed class CareerViewModelTests
         }
 
         public int SaveCount { get; private set; }
+        public Exception? NextSaveFailure { get; set; }
 
         public Task<PlayerCareerProfileStoreRecord?> LoadAsync(
             CancellationToken cancellationToken = default)
@@ -446,6 +524,12 @@ public sealed class CareerViewModelTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (NextSaveFailure is { } failure)
+            {
+                NextSaveFailure = null;
+                return Task.FromException<PlayerCareerProfileStoreRecord>(failure);
+            }
 
             if (_record is not null
                 || expectedRevision is not null)
