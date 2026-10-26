@@ -748,7 +748,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
             SetField(
                 ref _acceptanceStatus,
-                $"Accepted job cancellation failed: {ex.Message}",
+                CreateCancellationFailureText(),
                 nameof(AcceptanceStatus));
         }
         finally
@@ -794,6 +794,17 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         SetAcceptedContractIds(contractIds);
     }
+
+    private string CreateCancellationFailureText() =>
+        _acceptedContractIds.Count switch
+        {
+            0 =>
+                "No accepted preflight job remains, but Jobs could not refresh completely. Select Refresh to reload the board. If the issue returns, create a diagnostic bundle from Settings.",
+            1 =>
+                "Accepted job cancellation did not finish. The job remains available to retry below. If it fails again, create a diagnostic bundle from Settings.",
+            _ =>
+                $"Accepted job cancellation did not finish. All {_acceptedContractIds.Count} listed jobs remain available to retry below. If it fails again, create a diagnostic bundle from Settings."
+        };
 
     private void RefreshCurrentFlightSession()
     {

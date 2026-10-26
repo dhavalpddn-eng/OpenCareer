@@ -657,6 +657,62 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task FailedAcceptedJobCancellationRemainsRetryableWithoutRawErrorText()
+    {
+        Guid contractId =
+            Guid.Parse(
+                "c3000000-0000-0000-0000-000000000001");
+        var acceptedContext =
+            new MutableAcceptedContext(
+                contractId);
+        var cancellation =
+            new FailingAcceptedCancellation();
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        Offer(
+                            "KRME",
+                            "KSYR",
+                            locked:
+                                false))),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection:
+                    null,
+                startAction:
+                    null,
+                logger:
+                    null,
+                acceptedContext:
+                    acceptedContext,
+                acceptedCancellation:
+                    cancellation);
+
+        await viewModel.RefreshAsync();
+        await viewModel.CancelAcceptedJobsAsync();
+
+        Assert.Equal(1, cancellation.CallCount);
+        Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.Equal(
+            "Cancel Accepted Job",
+            viewModel.CancelAcceptedJobsButtonText);
+        Assert.Contains(
+            "remains available to retry",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.AcceptanceStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            FailingAcceptedCancellation.TechnicalMessage,
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ActiveCareerFlightCanBeOpenedDirectlyFromJobs()
     {
         Guid contractId = Guid.Parse(
@@ -1817,6 +1873,27 @@ public sealed class JobsViewModelTests
                     contractId,
                     $"job:{contractId:N}",
                     ReservationWasAlreadyReleased: false));
+        }
+    }
+
+    private sealed class FailingAcceptedCancellation
+        : IAcceptedJobCancellationService
+    {
+        public const string TechnicalMessage =
+            "INTERNAL reservation-store failure details";
+
+        public int CallCount { get; private set; }
+
+        public Task<AcceptedJobCancellationResult> CancelAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+
+            return Task.FromException<AcceptedJobCancellationResult>(
+                new IOException(
+                    TechnicalMessage));
         }
     }
 
