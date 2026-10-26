@@ -471,12 +471,19 @@ public sealed class CareerJobPreFlightSessionRecoveryService
         if (contract.Kind is
                 ContractKind.Cargo
                 or ContractKind.ExpressCargo
-                or ContractKind.AogPartsDelivery
-            && contract.PlanningTerms is { } planningTerms
-            && !planningTerms.EffectiveCargoLots.IsEmpty)
+                or ContractKind.AogPartsDelivery)
         {
-            _ = AcceptedCargoManifest.Create(contract);
-            supportedKind = true;
+            if (contract.PlanningTerms is { } planningTerms
+                && !planningTerms.EffectiveCargoLots.IsEmpty)
+            {
+                _ = AcceptedCargoManifest.Create(contract);
+                supportedKind = true;
+            }
+            else
+            {
+                supportedKind =
+                    contract.Status == ContractStatus.InProgress;
+            }
         }
 
         return contract.ServiceTrack

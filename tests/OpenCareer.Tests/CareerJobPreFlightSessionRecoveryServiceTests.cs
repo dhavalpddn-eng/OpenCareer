@@ -294,7 +294,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     }
 
     [Fact]
-    public async Task CargoContractWithoutNamedManifestIsNotRecovered()
+    public async Task AcceptedCargoContractWithoutNamedManifestIsNotRecovered()
     {
         TestContext context = CreateContext(
             Persisted(
@@ -315,6 +315,34 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
             context.Contracts.Current.Contract.Status);
         Assert.Null(context.Sessions.Current);
         Assert.Equal(0, context.Contracts.UpdateCount);
+    }
+
+    [Theory]
+    [InlineData(ContractKind.Cargo)]
+    [InlineData(ContractKind.ExpressCargo)]
+    [InlineData(ContractKind.AogPartsDelivery)]
+    public async Task InProgressLegacyCargoRecoversWithoutInventingManifest(
+        ContractKind kind)
+    {
+        TestContext context = CreateContext(
+            Persisted(
+                ContractStatus.InProgress,
+                kind,
+                includeCargoManifest: false),
+            hasReservation: true,
+            now: StartedAt.AddMinutes(1));
+
+        CareerJobPreFlightSessionRecoveryResult result =
+            await context.Recovery.RecoverAsync();
+
+        Assert.True(result.Recovered, result.Detail);
+        Assert.Equal(0, context.Contracts.UpdateCount);
+        Assert.Equal(
+            context.Contracts.Current.Contract.ContractId,
+            context.Sessions.Current?.ContractId);
+        Assert.Throws<InvalidOperationException>(
+            () => AcceptedCargoManifest.Create(
+                context.Contracts.Current.Contract));
     }
 
     private static TestContext CreateContext(
