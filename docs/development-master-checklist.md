@@ -367,6 +367,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Fail closed before accepting or reserving another job whenever any current/recovered FlightSession exists, including terminal state awaiting cleanup; direct recovery through Current Flight.
 - [x] Keep the Jobs recovery panel visible for every current FlightSession, including contractless practice/training and terminal-pending state, while preserving contract-specific readiness detail when available.
 - [x] Surface automatic pre-FlightSession job-recovery blockers directly on Jobs, clear the attention state after a successful retry, and replace unexpected exception text with safe non-mutating retry/cancellation/diagnostic guidance.
+- [x] Interlock Jobs aircraft selection, paid starts and zero-pay flight creation while recovery attention remains unresolved, including a stale direct-action guard, while preserving Refresh and accepted-job cancellation as recovery paths.
 - [x] Reject overlapping Jobs mutations instead of queueing stale accept/start, calibration or accepted-job cancellation actions; publish one shared busy state and disable the corresponding controls.
 - [x] Keep the Jobs aircraft selection immutable for the duration of each action-bound operation; reject concurrent selection changes and disable refresh/development-position inputs until the operation releases its gate.
 - [x] Restrict accepted-job preflight cancellation to an atomic persisted `Accepted` transition so stale Jobs or Dispatch state cannot cancel a contract after flight start.
