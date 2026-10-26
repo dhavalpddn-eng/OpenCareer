@@ -629,11 +629,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 ex,
                 "Career flight completion failed.");
 
-            SetField(
-                ref _careerCompletionActionDetail,
-                $"Career flight completion failed: {ex.Message}",
-                nameof(CareerCompletionActionDetail));
-
             try
             {
                 CareerJobCompletionActionAvailability availability =
@@ -656,12 +651,32 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                         && _completionSessionId is not null
                         && _completionContractId is not null,
                     nameof(CanCompleteCareerFlight));
+
+                SetField(
+                    ref _careerCompletionActionDetail,
+                    CanCompleteCareerFlight
+                        ? "Career flight completion did not finish. The flight is still eligible to complete; retry Complete Career Flight, or use Abandon Current Flight to exit without rewards. If this repeats, create a diagnostic bundle in Settings."
+                        : "Career flight completion did not finish. Authoritative Current Flight state was refreshed; use any available completion or abandonment action. If no recovery action appears, reopen Current Flight. If this repeats, create a diagnostic bundle in Settings.",
+                    nameof(CareerCompletionActionDetail));
             }
             catch (Exception refreshEx)
             {
                 _logger?.LogWarning(
                     refreshEx,
                     "Career completion readiness could not be refreshed after a failed completion attempt.");
+
+                _completionSessionId = null;
+                _completionContractId = null;
+
+                SetBoolean(
+                    ref _canCompleteCareerFlight,
+                    false,
+                    nameof(CanCompleteCareerFlight));
+
+                SetField(
+                    ref _careerCompletionActionDetail,
+                    "Career flight completion did not finish, and recovery readiness could not be refreshed. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings.",
+                    nameof(CareerCompletionActionDetail));
             }
         }
         finally

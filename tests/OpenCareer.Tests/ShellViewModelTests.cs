@@ -411,6 +411,118 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task FailedCareerCompletionRemainsRetryableWithoutRawErrorText()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string sensitiveFailure =
+            "SQLite failed at C:\\Users\\pilot\\AppData\\Local\\OpenCareer\\career.db";
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete: true,
+                        CareerJobCompletionInputState.Ready,
+                        "Authoritative completion inputs are ready.",
+                        sessionId,
+                        contractId),
+                NextCompletionFailure =
+                    new IOException(sensitiveFailure)
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                action,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Assert.False(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(1, action.CompleteCount);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "retry Complete Career Flight",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Abandon Current Flight",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            sensitiveFailure,
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+
+        Assert.True(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(2, action.CompleteCount);
+    }
+
+    [Fact]
+    public async Task FailedCareerCompletionFailsClosedWhenRecoveryRefreshAlsoFails()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string completionFailure = "Sensitive settlement failure.";
+        const string refreshFailure = "Sensitive readiness failure.";
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete: true,
+                        CareerJobCompletionInputState.Ready,
+                        "Authoritative completion inputs are ready.",
+                        sessionId,
+                        contractId)
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                action,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        action.NextCompletionFailure = new IOException(completionFailure);
+        action.NextReadFailure = new IOException(refreshFailure);
+
+        Assert.False(await viewModel.CompleteCareerFlightAsync());
+        Assert.False(viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "Reopen Current Flight",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            completionFailure,
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            refreshFailure,
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ConcurrentCareerCompletionAttemptIsRejectedInsteadOfQueued()
     {
         var action = new BlockingCareerCompletionExecutionAction();
@@ -862,11 +974,19 @@ public sealed class ShellViewModelTests
         public int CompleteCount { get; private set; }
         public Guid? LastFlightSessionId { get; private set; }
         public Guid? LastContractId { get; private set; }
+        public Exception? NextCompletionFailure { get; set; }
+        public Exception? NextReadFailure { get; set; }
 
         public Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (NextReadFailure is { } failure)
+            {
+                NextReadFailure = null;
+                return Task.FromException<CareerJobCompletionActionAvailability>(failure);
+            }
 
             return Task.FromResult(
                 Availability);
@@ -881,6 +1001,12 @@ public sealed class ShellViewModelTests
             CompleteCount++;
             LastFlightSessionId = expectedFlightSessionId;
             LastContractId = expectedContractId;
+
+            if (NextCompletionFailure is { } failure)
+            {
+                NextCompletionFailure = null;
+                return Task.FromException<CareerJobCompletionReceipt>(failure);
+            }
 
             return Task.FromResult(
                 new CareerJobCompletionReceipt(
