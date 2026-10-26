@@ -405,7 +405,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         }
     }
 
-    public void ReportRefreshFailure(Exception exception)
+    public async Task ReportRefreshFailureAsync(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
 
@@ -413,9 +413,22 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             exception,
             "Jobs view refresh failed.");
 
+        RefreshJobRecoveryAttention(
+            result:
+                null,
+            recoveryFailed:
+                true);
+        RefreshCurrentFlightSession();
+        await RefreshAcceptedJobsAsync(CancellationToken.None)
+            .ConfigureAwait(true);
+
         SetField(
             ref _statusText,
-            $"Jobs could not refresh: {exception.Message} Click Refresh Jobs to retry.",
+            HasCurrentFlightSession
+                ? "Jobs could not refresh. Open Current Flight to recover the existing operation, then select Refresh Jobs to retry. If the issue returns, create a diagnostic bundle from Settings."
+                : _acceptedContractIds.Count > 0
+                    ? "Jobs could not refresh. Accepted preflight jobs remain available to cancel below. Select Refresh Jobs to retry; if the issue returns, create a diagnostic bundle from Settings."
+                    : "Jobs could not refresh. Select Refresh Jobs to retry. If the issue returns, create a diagnostic bundle from Settings.",
             nameof(StatusText));
     }
 

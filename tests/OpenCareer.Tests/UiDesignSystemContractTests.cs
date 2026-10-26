@@ -741,7 +741,7 @@ public sealed class UiDesignSystemContractTests
             Path.Combine(directory, "JobsPage.xaml.cs"));
 
         Assert.Matches(
-            @"catch \(Exception ex\)\s*\{\s*StopAircraftRefreshTimer\(\);\s*viewModel\.ReportRefreshFailure\(ex\);",
+            @"catch \(Exception ex\)\s*\{\s*StopAircraftRefreshTimer\(\);\s*await viewModel\.ReportRefreshFailureAsync\(ex\);",
             page);
     }
 

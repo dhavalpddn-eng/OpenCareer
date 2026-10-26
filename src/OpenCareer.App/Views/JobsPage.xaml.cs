@@ -58,7 +58,7 @@ public sealed partial class JobsPage : Page
         }
         catch (Exception ex)
         {
-            viewModel.ReportRefreshFailure(ex);
+            await viewModel.ReportRefreshFailureAsync(ex);
         }
     }
 
@@ -122,7 +122,7 @@ public sealed partial class JobsPage : Page
                 catch (Exception ex)
                 {
                     StopAircraftRefreshTimer();
-                    viewModel.ReportRefreshFailure(ex);
+                    await viewModel.ReportRefreshFailureAsync(ex);
                 }
                 finally
                 {
@@ -244,7 +244,7 @@ public sealed partial class JobsPage : Page
         }
         catch (Exception ex)
         {
-            viewModel.ReportRefreshFailure(ex);
+            await viewModel.ReportRefreshFailureAsync(ex);
         }
     }
 

@@ -790,6 +790,86 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task RefreshFailureRestoresRecoveryExitsAndSuppressesRawErrorText()
+    {
+        Guid contractId =
+            Guid.Parse(
+                "c3000000-0000-0000-0000-000000000002");
+        var acceptedContext =
+            new MutableAcceptedContext(
+                contractId);
+        var cancellation =
+            new RecordingAcceptedCancellation(
+                acceptedContext);
+        var sessions =
+            new FlightSessionCoordinator();
+        sessions.Start(
+            Now,
+            sessionId:
+                Guid.Parse(
+                    "a7000000-0000-0000-0000-000000000004"));
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        Offer(
+                            "KRME",
+                            "KSYR",
+                            locked:
+                                false))),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection:
+                    null,
+                startAction:
+                    null,
+                logger:
+                    null,
+                acceptedContext:
+                    acceptedContext,
+                acceptedCancellation:
+                    cancellation,
+                flightSessions:
+                    sessions);
+
+        await viewModel.ReportRefreshFailureAsync(
+            new InvalidOperationException(
+                "sqlite path C:\\Users\\pilot\\OpenCareer.db"));
+
+        Assert.Equal(1, acceptedContext.ReadCount);
+        Assert.True(viewModel.HasJobRecoveryAttention);
+        Assert.True(viewModel.HasCurrentFlightSession);
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.Contains(
+            "Open Current Flight",
+            viewModel.StatusText,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.StatusText,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "sqlite",
+            viewModel.StatusText,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "OpenCareer.db",
+            viewModel.StatusText,
+            StringComparison.Ordinal);
+
+        await viewModel.CancelAcceptedJobsAsync();
+
+        Assert.Equal(
+            new[] { contractId },
+            cancellation.CancelledContractIds);
+        Assert.False(viewModel.CanCancelAcceptedJobs);
+        Assert.True(viewModel.HasCurrentFlightSession);
+        Assert.False(viewModel.CanStartJobActions);
+    }
+
+    [Fact]
     public async Task ActiveCareerFlightCanBeOpenedDirectlyFromJobs()
     {
         Guid contractId = Guid.Parse(
@@ -1910,6 +1990,8 @@ public sealed class JobsViewModelTests
     {
         private readonly List<Guid> _contractIds = contractIds.ToList();
 
+        public int ReadCount { get; private set; }
+
         public void Remove(Guid contractId) =>
             _contractIds.Remove(contractId);
 
@@ -1917,6 +1999,7 @@ public sealed class JobsViewModelTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            ReadCount++;
 
             return Task.FromResult(
                 _contractIds.Count switch
