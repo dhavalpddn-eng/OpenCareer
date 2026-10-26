@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-26 through validated checkpoint `f62bff9f` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-26 through validated checkpoint `3dd644d6` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -710,6 +710,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Project up to four authoritative eligible local offers in deterministic source order with route, duration/distance and qualifying-aircraft evidence.
 - [x] Keep unknown opportunity tier, fit, gross/net pay and ranking genuinely unknown; remove copy that claims unproven ranking.
 - [x] Project authoritative eligible-local count/status and hide unsupported social content; keep Company/employment and unsupported World/Fleet fields unavailable.
+- [x] Fail closed on Dashboard initial and timer refresh errors: clear stale projections, preserve a Jobs/Current Flight recovery route, suppress technical exception text and restore guidance only after an authoritative retry.
 - [ ] Add ranked ordering, offer compensation and later Company/World/Fleet fields only when their authoritative upstream sources exist.
 - [ ] Verify production Dashboard adaptive layout, keyboard navigation and visual hierarchy on Windows.
 - [x] Implement initial Current Flight telemetry page.
