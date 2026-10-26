@@ -353,6 +353,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Preserve generic/historical Training entries without qualification metadata as valid history that cannot award a qualification.
 - [x] Implement the first authoritative Student local-circuit operation: persist career/operation/aircraft authority in FlightSession, require registry-proven training capability, and create no-settlement qualifying evidence only after takeoff, full-stop landing, parking, shutdown and successful completion.
 - [x] Expose the Student operation through a bounded Career briefing/readiness/start surface with automatic evidence-driven completion and restart finalization; UI actions cannot directly complete training or grant qualifications.
+- [x] Recover safely from failed Student training start: reproject an authoritative created session, preserve retry only when readiness remains eligible, fail closed if refresh also fails, and keep technical exception text out of the player UI.
 - [ ] Add later qualification missions with distinct authoritative definitions and completion requirements.
 - [x] Home-airport selection foundation.
 - [x] Persist player location/home base.
