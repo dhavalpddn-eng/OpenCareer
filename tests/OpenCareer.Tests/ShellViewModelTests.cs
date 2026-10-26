@@ -974,9 +974,35 @@ public sealed class ShellViewModelTests
 
         Assert.Equal(1, action.LogCount);
         Assert.True(viewModel.CanLogManualFlight);
-        Assert.Contains("failed", viewModel.ManualPostflightDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("retry Log Flight", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.ManualPostflightDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Synthetic manual Logbook failure", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
         Assert.True(await viewModel.LogManualFlightAsync());
         Assert.Equal(2, action.LogCount);
+    }
+
+    [Fact]
+    public async Task FailedManualDiscardAndReadinessRefreshFailClosedWithoutTechnicalDetails()
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = ReadyManualSnapshot(ManualRequest())
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+        await viewModel.RefreshManualPostflightAsync();
+        action.FailNextDiscard = true;
+        action.FailNextRead = true;
+
+        Assert.False(await viewModel.DiscardManualFlightAsync());
+
+        Assert.Equal(1, action.DiscardCount);
+        Assert.True(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+        Assert.False(viewModel.CanDiscardManualFlight);
+        Assert.Contains("Reopen Current Flight", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.ManualPostflightDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Synthetic manual discard failure", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("Synthetic manual readiness failure", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
     }
 
     private static ShellViewModel ManualViewModel(IManualFlightPostflightAction action) =>
@@ -1324,12 +1350,22 @@ public sealed class ShellViewModelTests
         public int LogCount { get; private set; }
         public int DiscardCount { get; private set; }
         public bool FailNextLog { get; set; }
+        public bool FailNextDiscard { get; set; }
+        public bool FailNextRead { get; set; }
         public Guid? LastSessionId { get; private set; }
         public ManualFlightPostflightLogRequest? LastRequest { get; private set; }
 
         public Task<ManualFlightPostflightInputSnapshot> ReadAsync(
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(Snapshot);
+            CancellationToken cancellationToken = default)
+        {
+            if (FailNextRead)
+            {
+                FailNextRead = false;
+                throw new IOException("Synthetic manual readiness failure.");
+            }
+
+            return Task.FromResult(Snapshot);
+        }
 
         public Task LogAsync(
             Guid expectedSessionId,
@@ -1355,6 +1391,12 @@ public sealed class ShellViewModelTests
         {
             DiscardCount++;
             LastSessionId = expectedSessionId;
+            if (FailNextDiscard)
+            {
+                FailNextDiscard = false;
+                throw new IOException("Synthetic manual discard failure.");
+            }
+
             Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.NoFlightSession);
             return Task.CompletedTask;
         }

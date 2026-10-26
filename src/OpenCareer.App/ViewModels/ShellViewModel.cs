@@ -1069,22 +1069,36 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
         catch (Exception ex)
         {
+            string actionName = logFlight ? "Log Flight" : "Discard";
             _logger?.LogError(ex, logFlight ? "Manual flight logging failed." : "Manual flight discard failed.");
 
             try
             {
                 await RefreshManualPostflightLockedAsync(cancellationToken);
+
+                bool canRetry = logFlight
+                    ? _canLogManualFlight
+                    : _canDiscardManualFlight;
+                string recoveryDetail = canRetry
+                    ? $"{actionName} did not confirm success. Authoritative recovery state was refreshed; retry {actionName}. If this repeats, create a diagnostic bundle in Settings."
+                    : _canLogManualFlight || _canDiscardManualFlight
+                        ? $"{actionName} did not confirm success. Authoritative recovery state was refreshed; use the available recovery action. If this repeats, create a diagnostic bundle in Settings."
+                        : $"{actionName} did not confirm success. Reopen Current Flight to reload authoritative recovery state. If this repeats, create a diagnostic bundle in Settings.";
+                SetField(
+                    ref _manualPostflightDetail,
+                    recoveryDetail,
+                    nameof(ManualPostflightDetail));
             }
             catch (Exception refreshEx)
             {
                 _logger?.LogWarning(refreshEx, "Manual postflight readiness could not be refreshed after a failed action.");
-                SetManualPostflightState(false, false, null, null, "Manual postflight readiness could not be verified after the failed action.");
+                SetManualPostflightState(
+                    false,
+                    false,
+                    null,
+                    null,
+                    $"{actionName} did not confirm success, and recovery readiness could not be refreshed. Reopen Current Flight before another action. If this repeats, create a diagnostic bundle in Settings.");
             }
-
-            SetField(
-                ref _manualPostflightDetail,
-                $"{(logFlight ? "Log Flight" : "Discard")} failed: {ex.Message}",
-                nameof(ManualPostflightDetail));
             return false;
         }
         finally
