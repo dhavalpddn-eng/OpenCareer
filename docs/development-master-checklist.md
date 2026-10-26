@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-26 through validated checkpoint `3dd644d6` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-26 through validated checkpoint `443aae93` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -758,6 +758,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.
 - [ ] Implement Map / World screen against real world state.
 - [x] Implement read-only Aircraft screen against installed discovery, registry enrichment and authoritative Fleet availability/reservation state, with explicit unknown capability/access state and no ownership inference.
+- [x] Fail Aircraft refresh closed: clear stale availability/reservation projections, suppress technical exception text, retain explicit retry/diagnostic guidance and restore authority only from a successful inventory read.
 - [x] Project registry-proven payload/range, seats, IFR capability, pressurization and landing-gear facts individually on Aircraft; preserve each missing value as explicit unknown.
 - [x] Require per-field registry provenance before Aircraft displays a capability fact, show provider/confidence evidence, and fail unproven values closed to unknown.
 - [x] Project explicit MSFS cabin passenger capacity separately from crew-inclusive total seats; do not use it as passenger-job authority without the remaining seat/access requirements.
