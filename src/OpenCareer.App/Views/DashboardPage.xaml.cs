@@ -49,6 +49,10 @@ public sealed partial class DashboardPage : Page
         {
             // Navigation away cancels an in-flight refresh.
         }
+        catch (Exception ex)
+        {
+            viewModel.ReportRefreshFailure(ex);
+        }
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -74,6 +78,10 @@ public sealed partial class DashboardPage : Page
         catch (OperationCanceledException)
         {
             // Normal when the user leaves Home during a refresh.
+        }
+        catch (Exception ex)
+        {
+            _viewModel.ReportRefreshFailure(ex);
         }
     }
 

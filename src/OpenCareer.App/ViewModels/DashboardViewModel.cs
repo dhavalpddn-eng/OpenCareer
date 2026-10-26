@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using OpenCareer.App.Services;
 using OpenCareer.Application.Dashboard;
 
@@ -10,6 +11,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     private readonly ShellViewModel _shell;
     private readonly IDashboardSnapshotSource _snapshotSource;
     private readonly DashboardGuidanceEngine _guidanceEngine;
+    private readonly ILogger<DashboardViewModel>? _logger;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     private DashboardSnapshot _snapshot = DashboardSnapshot.Empty;
@@ -25,16 +27,19 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     private string _primaryActionDetail =
         "No authoritative career action currently requires attention.";
     private DashboardActionTarget _primaryActionTarget = DashboardActionTarget.None;
+    private bool _refreshUnavailable;
 
     public DashboardViewModel(
         ShellViewModel shell,
         IDashboardSnapshotSource snapshotSource,
         DashboardGuidanceEngine guidanceEngine,
-        OpenCareerDataPaths dataPaths)
+        OpenCareerDataPaths dataPaths,
+        ILogger<DashboardViewModel>? logger = null)
     {
         _shell = shell;
         _snapshotSource = snapshotSource;
         _guidanceEngine = guidanceEngine;
+        _logger = logger;
         IsDevelopmentLiveTest = dataPaths.IsDevelopmentLiveTest;
         _shell.PropertyChanged += OnShellPropertyChanged;
     }
@@ -252,6 +257,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
             cancellationToken.ThrowIfCancellationRequested();
             _snapshot = snapshot;
+            _refreshUnavailable = false;
 
             _topOpportunities = DashboardOpportunitySelector
                 .SelectTopAvailable(_snapshot.Opportunities)
@@ -272,6 +278,27 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
         {
             _refreshGate.Release();
         }
+    }
+
+    public void ReportRefreshFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        _logger?.LogError(exception, "Dashboard refresh failed.");
+
+        _snapshot = DashboardSnapshot.Empty;
+        _refreshUnavailable = true;
+        _topOpportunities = Array.Empty<DashboardOpportunityItemViewModel>();
+        _recentActivity = Array.Empty<DashboardActivityItemViewModel>();
+        _socialFeed = Array.Empty<DashboardSocialItemViewModel>();
+        _primaryActionTitle = "Dashboard unavailable";
+        _primaryActionDetail =
+            "Dashboard could not refresh. Open Jobs to recover accepted work or continue to Current Flight from its recovery panel. Reopen Home to retry; if this repeats, create a diagnostic bundle in Settings.";
+        _primaryActionTarget = DashboardActionTarget.Jobs;
+
+        RaiseAll();
+        OnPropertyChanged(nameof(PrimaryActionTitle));
+        OnPropertyChanged(nameof(PrimaryActionDetail));
+        OnPropertyChanged(nameof(HasPrimaryAction));
     }
 
     public void SetSocialSearch(string value)
@@ -388,7 +415,8 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
         if (e.PropertyName is nameof(ShellViewModel.IsSimulatorConnected) or
             nameof(ShellViewModel.HasTelemetry))
         {
-            RefreshGuidance();
+            if (!_refreshUnavailable)
+                RefreshGuidance();
         }
 
         if (e.PropertyName is nameof(ShellViewModel.PositionSummary) or
