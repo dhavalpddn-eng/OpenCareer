@@ -3,6 +3,7 @@ using OpenCareer.Application.Flights;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Events;
 using OpenCareer.Domain.Flights;
 
@@ -465,6 +466,17 @@ public sealed class CareerJobPreFlightSessionRecoveryService
             supportedKind = AcceptedPassengerManifest.TryCreate(
                 contract,
                 out _);
+        }
+
+        if (contract.Kind is
+                ContractKind.Cargo
+                or ContractKind.ExpressCargo
+                or ContractKind.AogPartsDelivery
+            && contract.PlanningTerms is { } planningTerms
+            && !planningTerms.EffectiveCargoLots.IsEmpty)
+        {
+            _ = AcceptedCargoManifest.Create(contract);
+            supportedKind = true;
         }
 
         return contract.ServiceTrack

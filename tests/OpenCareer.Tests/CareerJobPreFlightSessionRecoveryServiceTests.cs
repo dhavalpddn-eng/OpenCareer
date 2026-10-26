@@ -5,6 +5,7 @@ using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
 using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Planning;
 
@@ -259,6 +260,63 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
         Assert.Equal(540, manifest.PassengerAndBaggageWeightPounds);
     }
 
+    [Theory]
+    [InlineData(ContractKind.Cargo, ContractStatus.Accepted)]
+    [InlineData(ContractKind.Cargo, ContractStatus.InProgress)]
+    [InlineData(ContractKind.ExpressCargo, ContractStatus.Accepted)]
+    [InlineData(ContractKind.ExpressCargo, ContractStatus.InProgress)]
+    [InlineData(ContractKind.AogPartsDelivery, ContractStatus.Accepted)]
+    [InlineData(ContractKind.AogPartsDelivery, ContractStatus.InProgress)]
+    public async Task NamedCargoContractRetainsManifestAuthorityAcrossRecovery(
+        ContractKind kind,
+        ContractStatus status)
+    {
+        TestContext context = CreateContext(
+            Persisted(status, kind),
+            hasReservation: true,
+            now: StartedAt.AddMinutes(1));
+
+        CareerJobPreFlightSessionRecoveryResult result =
+            await context.Recovery.RecoverAsync();
+
+        Assert.True(result.Recovered, result.Detail);
+        Assert.Equal(
+            ContractStatus.InProgress,
+            context.Contracts.Current.Contract.Status);
+
+        AcceptedCargoManifest manifest =
+            AcceptedCargoManifest.Create(
+                context.Contracts.Current.Contract);
+
+        AcceptedCargoLot lot = Assert.Single(manifest.Lots);
+        Assert.Equal("coffee.roasted", lot.CommodityId);
+        Assert.Equal(500, manifest.TotalMassPounds);
+    }
+
+    [Fact]
+    public async Task CargoContractWithoutNamedManifestIsNotRecovered()
+    {
+        TestContext context = CreateContext(
+            Persisted(
+                ContractStatus.Accepted,
+                ContractKind.Cargo,
+                includeCargoManifest: false),
+            hasReservation: true,
+            now: StartedAt);
+
+        CareerJobPreFlightSessionRecoveryResult result =
+            await context.Recovery.RecoverAsync();
+
+        Assert.Equal(
+            CareerJobPreFlightSessionRecoveryState.NothingToRecover,
+            result.State);
+        Assert.Equal(
+            ContractStatus.Accepted,
+            context.Contracts.Current.Contract.Status);
+        Assert.Null(context.Sessions.Current);
+        Assert.Equal(0, context.Contracts.UpdateCount);
+    }
+
     private static TestContext CreateContext(
         PersistedJobContract persisted,
         bool hasReservation,
@@ -409,9 +467,24 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
 
     private static PersistedJobContract Persisted(
         ContractStatus status,
-        ContractKind kind = ContractKind.Ferry)
+        ContractKind kind = ContractKind.Ferry,
+        bool includeCargoManifest = true)
     {
         bool passenger = kind == ContractKind.Passenger;
+        bool cargo = kind is
+            ContractKind.Cargo
+            or ContractKind.ExpressCargo
+            or ContractKind.AogPartsDelivery;
+        double payload =
+            passenger
+                ? 540
+                : cargo ? 500 : 0;
+        AircraftCapability requiredCapabilities =
+            passenger
+                ? AircraftCapability.Passenger
+                : cargo
+                    ? AircraftCapability.Cargo
+                    : AircraftCapability.None;
 
         var contract =
             new JobContract(
@@ -450,13 +523,11 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                 AircraftRequirements:
                     new AircraftMissionRequirements(
                         RequiredCapabilities:
-                            passenger
-                                ? AircraftCapability.Passenger
-                                : AircraftCapability.None,
+                            requiredCapabilities,
                         AllowedAccess:
                             AircraftAccess.Civilian,
                         MinimumPayloadPounds:
-                            passenger ? 540 : 0,
+                            payload,
                         MinimumRangeNauticalMiles:
                             120,
                         MinimumSeats:
@@ -474,7 +545,12 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                 PlanningTerms:
                     new JobContractPlanningTerms(
                         RouteDistanceNauticalMiles: 120,
-                        PayloadPounds: passenger ? 540 : 0));
+                        PayloadPounds:
+                            payload,
+                        CargoLots:
+                            cargo && includeCargoManifest
+                                ? [CargoLot()]
+                                : default));
 
         contract.Validate();
 
@@ -485,6 +561,32 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                     ? 3
                     : 2);
     }
+
+    private static AcceptedCargoLot CargoLot() =>
+        new(
+            Guid.Parse(
+                "c1000000-0000-0000-0000-000000000010"),
+            "coffee.roasted",
+            "Roasted coffee",
+            CargoCommodityCategory.GeneralFreight,
+            Quantity:
+                500m,
+            CargoUnitOfTrade.Pound,
+            MassPounds:
+                500,
+            VolumeCubicFeet:
+                null,
+            "KRME",
+            "KSYR",
+            "Mohawk Valley Roasters",
+            "Syracuse Coffee Supply",
+            DeclaredValue:
+                3_700m,
+            OriginMarketUnitValue:
+                7.40m,
+            DestinationMarketUnitValue:
+                8.05m,
+            CargoHandlingRequirement.None);
 
     private static AirportRecord Airport(
         string icao,
@@ -670,7 +772,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                         DisplayName:
                             "Fixture Aircraft",
                         Capabilities:
-                            AircraftCapability.Passenger,
+                            AircraftCapability.Passenger
+                            | AircraftCapability.Cargo,
                         Access:
                             AircraftAccess.Civilian,
                         MaximumPayloadPounds:
