@@ -743,6 +743,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Expose accepted-preflight cancellation directly on Jobs, including one confirmed cancel-all path for multiple recovered Accepted contracts, so start failures can clear runtime state, prepared plans and exact Fleet reservations without visiting Dispatch.
 - [x] Keep failed Jobs cancellation safely retryable: refresh remaining accepted targets, re-enable their cancellation action and show generic retry/diagnostic guidance while retaining technical exception details only in structured logs.
 - [x] Navigate Jobs to Current Flight only after the start authority creates/reuses the persistent FlightSession; failed starts remain on Jobs.
+- [x] Reconcile start-path exceptions against current FlightSession authority: if a session was created before a later refresh failure, project and open Current Flight recovery while blocking new starts; otherwise keep accepted preflight work retryable/cancellable and hide technical exception text.
 - [ ] Persist or derive authoritative cruise/fuel/reserve/safety-margin planning inputs.
 - [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.
 - [ ] Implement Map / World screen against real world state.
