@@ -340,7 +340,7 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
         Assert.Equal(
             context.Contracts.Current.Contract.ContractId,
             context.Sessions.Current?.ContractId);
-        Assert.Throws<InvalidOperationException>(
+        Assert.Throws<ArgumentException>(
             () => AcceptedCargoManifest.Create(
                 context.Contracts.Current.Contract));
     }
