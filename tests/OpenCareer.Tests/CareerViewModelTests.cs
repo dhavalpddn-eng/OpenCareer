@@ -163,6 +163,89 @@ public sealed class CareerViewModelTests
     }
 
     [Fact]
+    public async Task FailedProfileLoadBlocksOnboardingUntilAuthorityReloadSucceeds()
+    {
+        var store = new FakeProfileStore
+        {
+            NextLoadFailure = new IOException("Sensitive profile load failure.")
+        };
+        var runtime = new PlayerCareerRuntimeState(store);
+        CareerViewModel viewModel = ViewModel(store, runtime);
+        viewModel.HomeAirportIcao = "KDFW";
+
+        IOException failure =
+            await Assert.ThrowsAsync<IOException>(
+                () => viewModel.InitializeAsync());
+        viewModel.ReportInitializationFailure(failure);
+
+        Assert.False(viewModel.HasCareer);
+        Assert.False(viewModel.CanStartCareer);
+        Assert.False(viewModel.CanEditHomeAirport);
+        Assert.Contains("Reopen Career", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Sensitive profile load failure", viewModel.StatusText, StringComparison.Ordinal);
+
+        await viewModel.StartCareerAsync();
+
+        Assert.Equal(0, store.SaveCount);
+        Assert.Contains("authority is unavailable", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+
+        await viewModel.InitializeAsync();
+
+        Assert.True(viewModel.CanStartCareer);
+        Assert.True(viewModel.CanEditHomeAirport);
+    }
+
+    [Fact]
+    public async Task FailedCareerRefreshClearsStaleTrainingStartAndRetainsProfileRecovery()
+    {
+        PlayerCareerProfile existing =
+            PlayerCareerProfile.Start(
+                Guid.Parse("b8100000-0000-0000-0000-000000000005"),
+                "KAFW",
+                Now.AddHours(-1));
+        var store = new FakeProfileStore(
+            new PlayerCareerProfileStoreRecord(1, existing, Now));
+        var runtime = new PlayerCareerRuntimeState(store);
+        var training = new FakeStudentTrainingAccess(
+            new(
+                StudentTrainingOperationReadinessState.Ready,
+                "Ready for verified Student training.",
+                AirportIcao: "KAFW",
+                AircraftDisplayName: "Cessna 172"));
+        var viewModel = new CareerViewModel(
+            new PlayerCareerOnboardingCoordinator(store, runtime),
+            runtime,
+            new FixedTimeProvider(Now),
+            new CareerQualificationRoadmapSource(runtime),
+            training,
+            training);
+
+        await viewModel.InitializeAsync();
+        Assert.True(viewModel.CanStartStudentTraining);
+
+        training.NextReadFailure = new IOException("Sensitive readiness refresh failure.");
+        IOException failure =
+            await Assert.ThrowsAsync<IOException>(
+                () => viewModel.InitializeAsync());
+        viewModel.ReportInitializationFailure(failure);
+
+        Assert.True(viewModel.HasCareer);
+        Assert.False(viewModel.CanStartCareer);
+        Assert.False(viewModel.CanEditHomeAirport);
+        Assert.False(viewModel.CanStartStudentTraining);
+        Assert.Contains("CURRENT KAFW", viewModel.LocationText, StringComparison.Ordinal);
+        Assert.Contains("profile at KAFW is active", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Reopen Career", viewModel.StudentTrainingStatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sensitive readiness refresh failure", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sensitive readiness refresh failure", viewModel.StudentTrainingStatusText, StringComparison.Ordinal);
+
+        await viewModel.StartStudentTrainingAsync();
+
+        Assert.Equal(0, training.StartCount);
+    }
+
+    [Fact]
     public async Task ExistingCareerCannotBeCreatedAgain()
     {
         PlayerCareerProfile existing =
@@ -508,12 +591,20 @@ public sealed class CareerViewModelTests
         }
 
         public int SaveCount { get; private set; }
+        public Exception? NextLoadFailure { get; set; }
         public Exception? NextSaveFailure { get; set; }
 
         public Task<PlayerCareerProfileStoreRecord?> LoadAsync(
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (NextLoadFailure is { } failure)
+            {
+                NextLoadFailure = null;
+                return Task.FromException<PlayerCareerProfileStoreRecord?>(failure);
+            }
+
             return Task.FromResult(_record);
         }
 

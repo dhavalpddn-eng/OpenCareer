@@ -17,6 +17,7 @@ public sealed class CareerViewModel : INotifyPropertyChanged
     private readonly ILogger<CareerViewModel>? _logger;
 
     private string _homeAirportIcao = string.Empty;
+    private bool _careerAuthorityUnavailable;
     private string _statusText =
         "Choose the airport where your civilian career will begin.";
     private string _locationText =
@@ -152,11 +153,13 @@ public sealed class CareerViewModel : INotifyPropertyChanged
     public bool CanStartCareer =>
         !_hasCareer
         && !_isCreating
+        && !_careerAuthorityUnavailable
         && IsValidAirportIcao(_homeAirportIcao);
 
     public bool CanEditHomeAirport =>
         !_hasCareer
-        && !_isCreating;
+        && !_isCreating
+        && !_careerAuthorityUnavailable;
 
     public string StartButtonText =>
         _isCreating
@@ -166,10 +169,37 @@ public sealed class CareerViewModel : INotifyPropertyChanged
     public void ReportInitializationFailure(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        SetField(
-            ref _statusText,
-            $"Career profile could not load: {exception.Message} Reopen Career to retry.",
-            nameof(StatusText));
+        _logger?.LogError(exception, "Career initialization failed.");
+        SetCareerAuthorityUnavailable(true);
+
+        PlayerCareerProfileStoreRecord? authoritative =
+            _runtime.Current;
+
+        if (authoritative is not null)
+        {
+            ApplyCurrent(authoritative);
+            ApplyStudentTraining(
+                new(
+                    StudentTrainingOperationReadinessState.AuthorityUnavailable,
+                    "Student training readiness could not be refreshed. Reopen Career before another training start. If this repeats, create a diagnostic bundle in Settings.",
+                    AirportIcao: authoritative.Profile.Location.CurrentAirportIcao,
+                    AircraftDisplayName: _studentTraining.AircraftDisplayName));
+            SetField(
+                ref _statusText,
+                $"Career profile at {authoritative.Profile.Location.CurrentAirportIcao} is active, but its qualification or training details could not be refreshed. Reopen Career before continuing. If this repeats, create a diagnostic bundle in Settings.",
+                nameof(StatusText));
+            return;
+        }
+
+        SetCareerState(
+            hasCareer: false,
+            status: "Career profile authority could not be loaded. Reopen Career before starting or changing a profile. If this repeats, create a diagnostic bundle in Settings.",
+            location: "Career profile authority unavailable.");
+        ApplyRoadmap(null);
+        ApplyStudentTraining(
+            new(
+                StudentTrainingOperationReadinessState.AuthorityUnavailable,
+                "Student training is unavailable until Career profile authority loads successfully."));
     }
 
     public async Task InitializeAsync(
@@ -194,12 +224,14 @@ public sealed class CareerViewModel : INotifyPropertyChanged
                 new(
                     StudentTrainingOperationReadinessState.NoCareer,
                     "Complete career onboarding before starting Student training."));
+            SetCareerAuthorityUnavailable(false);
             return;
         }
 
         ApplyCurrent(current);
         await RefreshRoadmapAsync(cancellationToken);
         await RefreshStudentTrainingAsync(cancellationToken);
+        SetCareerAuthorityUnavailable(false);
     }
 
     public async Task StartCareerAsync(
@@ -207,6 +239,15 @@ public sealed class CareerViewModel : INotifyPropertyChanged
     {
         if (_isCreating)
             return;
+
+        if (_careerAuthorityUnavailable)
+        {
+            SetField(
+                ref _statusText,
+                "Career profile authority is unavailable. Reopen Career before another start attempt. If this repeats, create a diagnostic bundle in Settings.",
+                nameof(StatusText));
+            return;
+        }
 
         PlayerCareerProfileStoreRecord? current =
             _runtime.Current;
@@ -525,6 +566,16 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanStartCareer));
         OnPropertyChanged(nameof(CanEditHomeAirport));
         OnPropertyChanged(nameof(StartButtonText));
+    }
+
+    private void SetCareerAuthorityUnavailable(bool value)
+    {
+        if (_careerAuthorityUnavailable == value)
+            return;
+
+        _careerAuthorityUnavailable = value;
+        OnPropertyChanged(nameof(CanStartCareer));
+        OnPropertyChanged(nameof(CanEditHomeAirport));
     }
 
     private void SetStartingStudentTraining(bool value)
