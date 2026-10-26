@@ -67,7 +67,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _careerRecoveryStatus =
             FormatCareerRecoveryStatus(
                 _flightSessions.Current,
-                _flightPersistence.LastRecoveryFailureMessage);
+                _flightPersistence.RecoveryFailed);
         _developmentProfileResetScheduled =
             _paths.IsDevelopmentLiveTest
             && OpenCareerDevelopmentDataProfile.IsResetRequested(_paths);
@@ -169,7 +169,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             ref _careerRecoveryStatus,
             FormatCareerRecoveryStatus(
                 _flightSessions.Current,
-                _flightPersistence.LastRecoveryFailureMessage),
+                _flightPersistence.RecoveryFailed),
             nameof(CareerRecoveryStatus));
 
         InputBindingDiscoverySnapshot? bindingSnapshot =
@@ -404,16 +404,16 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             ref _careerRecoveryStatus,
             FormatCareerRecoveryStatus(
                 e.Session,
-                _flightPersistence.LastRecoveryFailureMessage),
+                _flightPersistence.RecoveryFailed),
             nameof(CareerRecoveryStatus));
 
     private static string FormatCareerRecoveryStatus(
         FlightSession? session,
-        string? recoveryFailureMessage) =>
+        bool recoveryFailed) =>
         session?.Status switch
         {
-            null when !string.IsNullOrWhiteSpace(recoveryFailureMessage) =>
-                $"RECOVERY ATTENTION · Flight checkpoint recovery did not complete: {recoveryFailureMessage} The app did not clear the stored checkpoint during recovery. Review diagnostics and retry recovery before starting another flight.",
+            null when recoveryFailed =>
+                "RECOVERY ATTENTION · Flight checkpoint recovery did not complete. The app did not clear the stored checkpoint during recovery. Close and reopen OpenCareer to retry before starting another flight. If this warning returns, create a diagnostic bundle before making any reset or restore change.",
             null =>
                 "SQLite-backed FlightSession checkpoint recovery, including previous-valid fallback, is enabled. No flight session is currently loaded.",
             FlightSessionStatus.Active =>

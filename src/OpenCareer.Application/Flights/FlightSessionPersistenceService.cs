@@ -14,7 +14,7 @@ public sealed class FlightSessionPersistenceService
 
     public Guid? LastRecoveredSessionId { get; private set; }
 
-    public string? LastRecoveryFailureMessage { get; private set; }
+    public bool RecoveryFailed { get; private set; }
 
     public FlightSessionPersistenceService(
         FlightSessionCoordinator coordinator,
@@ -466,7 +466,7 @@ public sealed class FlightSessionPersistenceService
 
             if (checkpoint is null)
             {
-                LastRecoveryFailureMessage = null;
+                RecoveryFailed = false;
                 return null;
             }
 
@@ -491,13 +491,13 @@ public sealed class FlightSessionPersistenceService
             LastRecoveredSessionId = checkpoint.SessionId;
 
             _coordinator.Restore(checkpoint);
-            LastRecoveryFailureMessage = null;
+            RecoveryFailed = false;
 
             return checkpoint;
         }
-        catch (Exception ex)
+        catch
         {
-            LastRecoveryFailureMessage = ex.Message;
+            RecoveryFailed = true;
             throw;
         }
         finally

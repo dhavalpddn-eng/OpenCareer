@@ -687,7 +687,7 @@ public sealed class FlightSessionPersistenceServiceTests
 
         Assert.Equal("Synthetic checkpoint read failure.", error.Message);
         Assert.True(service.RecoveryAttempted);
-        Assert.Equal(error.Message, service.LastRecoveryFailureMessage);
+        Assert.True(service.RecoveryFailed);
         Assert.Null(service.LastRecoveredSessionId);
         Assert.Null(coordinator.Current);
         Assert.Equal(checkpoint, store.Checkpoint);
@@ -698,7 +698,7 @@ public sealed class FlightSessionPersistenceServiceTests
             Assert.IsType<FlightSession>(
                 await service.RecoverAsync());
 
-        Assert.Null(service.LastRecoveryFailureMessage);
+        Assert.False(service.RecoveryFailed);
         Assert.Equal(checkpoint.SessionId, service.LastRecoveredSessionId);
         Assert.Equal(FlightSessionStatus.Suspended, recovered.Status);
         Assert.Equal(recovered, coordinator.Current);

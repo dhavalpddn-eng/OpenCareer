@@ -47,7 +47,11 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         Assert.Contains("RECOVERY ATTENTION", context.ViewModel.CareerRecoveryStatus);
         Assert.Contains("did not complete", context.ViewModel.CareerRecoveryStatus);
         Assert.Contains("did not clear", context.ViewModel.CareerRecoveryStatus);
-        Assert.Contains("retry recovery", context.ViewModel.CareerRecoveryStatus);
+        Assert.Contains("Close and reopen OpenCareer", context.ViewModel.CareerRecoveryStatus);
+        Assert.Contains("diagnostic bundle", context.ViewModel.CareerRecoveryStatus);
+        Assert.DoesNotContain(
+            "Synthetic checkpoint read failure",
+            context.ViewModel.CareerRecoveryStatus);
         Assert.DoesNotContain(
             "No flight session is currently loaded",
             context.ViewModel.CareerRecoveryStatus);
