@@ -595,7 +595,84 @@ public sealed class JobsViewModelTests
 
         Assert.Equal(1, action.AcceptCount);
         Assert.Empty(navigationTargets);
-        Assert.Contains("Job action failed", viewModel.AcceptanceStatus, StringComparison.Ordinal);
+        Assert.Contains(
+            "did not finish",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            FakeStartAction.AcceptanceFailureMessage,
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StartFailureAfterSessionCreationOpensCurrentFlightRecovery()
+    {
+        JobMarketOfferDraft offer =
+            Offer(
+                "KRME",
+                "KSYR",
+                locked:
+                    false);
+        var sessions =
+            new FlightSessionCoordinator();
+        var action =
+            new FakeStartAction
+            {
+                BeforeStart = () =>
+                {
+                    sessions.Start(
+                        Now,
+                        contractId:
+                            null,
+                        sessionId:
+                            Guid.Parse(
+                                "a7000000-0000-0000-0000-000000000003"));
+                    return Task.CompletedTask;
+                }
+            };
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        offer)),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                new CareerJobAircraftSelectionSource(
+                    new FakeDiscovery()),
+                action,
+                logger:
+                    null,
+                flightSessions:
+                    sessions);
+        var navigationTargets =
+            new List<JobsNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
+
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync(
+            Assert.Single(viewModel.AircraftOptions).AircraftId);
+        await viewModel.StartOfferAsync(
+            Assert.Single(viewModel.Offers).OfferId);
+
+        Assert.True(viewModel.HasCurrentFlightSession);
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.Equal(
+            "FLIGHT SESSION · ACTIVE",
+            viewModel.CurrentFlightSessionStatus);
+        Assert.Contains(
+            "Opening Current Flight for recovery",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            FakeStartAction.StartFailureMessage,
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.Equal(
+            new[] { JobsNavigationTarget.CurrentFlight },
+            navigationTargets);
     }
 
     [Fact]
@@ -1719,6 +1796,11 @@ public sealed class JobsViewModelTests
     private sealed class FakeStartAction
         : ICareerJobStartAction
     {
+        public const string AcceptanceFailureMessage =
+            "Synthetic acceptance failure.";
+        public const string StartFailureMessage =
+            "Synthetic start result intentionally stops after delegation.";
+
         public int AvailabilityCount { get; private set; }
         public int StartCount { get; private set; }
         public int AcceptCount { get; private set; }
@@ -1760,7 +1842,8 @@ public sealed class JobsViewModelTests
             LastAircraftId = aircraftId;
 
             if (FailAcceptance)
-                throw new IOException("Synthetic acceptance failure.");
+                throw new IOException(
+                    AcceptanceFailureMessage);
 
             return Task.FromResult<JobAcceptanceFleetResult>(null!);
         }
@@ -1786,7 +1869,7 @@ public sealed class JobsViewModelTests
             }
 
             throw new InvalidOperationException(
-                "Synthetic start result intentionally stops after delegation.");
+                StartFailureMessage);
         }
     }
 

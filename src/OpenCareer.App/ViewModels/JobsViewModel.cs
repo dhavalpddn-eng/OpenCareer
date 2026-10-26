@@ -664,6 +664,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
                 await RefreshAcceptedJobsAsync(
                     cancellationToken);
+
+                RefreshCurrentFlightSession();
             }
             finally
             {
@@ -672,8 +674,16 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
             SetField(
                 ref _acceptanceStatus,
-                $"Job action failed: {ex.Message}",
+                CreateStartFailureText(),
                 nameof(AcceptanceStatus));
+
+            if (HasCurrentFlightSession)
+            {
+                NavigationRequested?.Invoke(
+                    this,
+                    new JobsNavigationRequestedEventArgs(
+                        JobsNavigationTarget.CurrentFlight));
+            }
         }
         finally
         {
@@ -805,6 +815,24 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             _ =>
                 $"Accepted job cancellation did not finish. All {_acceptedContractIds.Count} listed jobs remain available to retry below. If it fails again, create a diagnostic bundle from Settings."
         };
+
+    private string CreateStartFailureText()
+    {
+        if (HasCurrentFlightSession)
+        {
+            return "A FlightSession exists even though Jobs could not finish the start refresh. Opening Current Flight for recovery; do not start another job.";
+        }
+
+        return _acceptedContractIds.Count switch
+        {
+            0 =>
+                "The job action did not finish. Review the current offer readiness and retry. If it fails again, create a diagnostic bundle from Settings.",
+            1 =>
+                "The job did not start. Its accepted preflight state remains available to retry or cancel below. If it fails again, create a diagnostic bundle from Settings.",
+            _ =>
+                $"The job did not start. All {_acceptedContractIds.Count} listed accepted jobs remain available to retry or cancel below. If it fails again, create a diagnostic bundle from Settings."
+        };
+    }
 
     private void RefreshCurrentFlightSession()
     {
