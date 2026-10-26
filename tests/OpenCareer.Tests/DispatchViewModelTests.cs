@@ -368,6 +368,50 @@ public sealed class DispatchViewModelTests
     }
 
     [Fact]
+    public async Task FailedCancellationRefreshesRemainingTargetsAndStaysRetryableWithoutTechnicalDetails()
+    {
+        Guid first = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        Guid second = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var acceptedContext = new SequenceAcceptedContext(
+            new(
+                AcceptedDispatchPlanningContextStatus.MultipleAcceptedContracts,
+                "2 accepted jobs are blocking Dispatch.",
+                AcceptedContractIds: [first, second]),
+            new(
+                AcceptedDispatchPlanningContextStatus.ReservationUnavailable,
+                "1 accepted job remains available for cancellation.",
+                ContractId: second,
+                AcceptedContractIds: [second]));
+        var cancellation = new PartialFailureAcceptedJobCancellation(
+            second,
+            "sqlite path C:\\Users\\pilot\\OpenCareer.db");
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            acceptedContext,
+            cancellation: cancellation);
+
+        await viewModel.InitializeAsync();
+        await viewModel.CancelAcceptedJobAsync();
+
+        Assert.Equal(new[] { first, second }, cancellation.ContractIds);
+        Assert.Equal(2, acceptedContext.ReadCount);
+        Assert.True(viewModel.CanCancelAcceptedJob);
+        Assert.Equal("Cancel Accepted Job", viewModel.CancelAcceptedJobButtonText);
+        Assert.Contains("Retry the remaining cancellation", viewModel.AcceptedContextText, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.AcceptedContextText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sqlite", viewModel.AcceptedContextText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("OpenCareer.db", viewModel.AcceptedContextText, StringComparison.Ordinal);
+
+        await viewModel.CancelAcceptedJobAsync();
+
+        Assert.Equal(new[] { first, second, second }, cancellation.ContractIds);
+        Assert.False(viewModel.CanCancelAcceptedJob);
+        Assert.Contains("Accepted job cancelled", viewModel.AcceptedContextText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExplicitWeatherLimitsReachCompositePlannerWithoutDefaults()
     {
         var planning = new StubPlanning();
@@ -771,6 +815,22 @@ public sealed class DispatchViewModelTests
             Task.FromResult(context);
     }
 
+    private sealed class SequenceAcceptedContext(
+        params AcceptedDispatchPlanningContext[] contexts)
+        : IAcceptedDispatchPlanningContextSource
+    {
+        public int ReadCount { get; private set; }
+
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int index = Math.Min(ReadCount, contexts.Length - 1);
+            ReadCount++;
+            return Task.FromResult(contexts[index]);
+        }
+    }
+
     private sealed class StubAcceptedJobCancellation : IAcceptedJobCancellationService
     {
         public List<Guid> ContractIds { get; } = [];
@@ -781,6 +841,34 @@ public sealed class DispatchViewModelTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             ContractIds.Add(contractId);
+            return Task.FromResult(new AcceptedJobCancellationResult(
+                contractId,
+                JobAcceptanceFleetBridge.GetReservationId(contractId),
+                ReservationWasAlreadyReleased: false));
+        }
+    }
+
+    private sealed class PartialFailureAcceptedJobCancellation(
+        Guid failingContractId,
+        string failureMessage)
+        : IAcceptedJobCancellationService
+    {
+        private bool _failureRaised;
+
+        public List<Guid> ContractIds { get; } = [];
+
+        public Task<AcceptedJobCancellationResult> CancelAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ContractIds.Add(contractId);
+            if (contractId == failingContractId && !_failureRaised)
+            {
+                _failureRaised = true;
+                throw new InvalidOperationException(failureMessage);
+            }
+
             return Task.FromResult(new AcceptedJobCancellationResult(
                 contractId,
                 JobAcceptanceFleetBridge.GetReservationId(contractId),

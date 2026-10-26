@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Planning;
@@ -52,6 +53,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     private readonly IAcceptedDispatchPlanningContextSource _acceptedContext;
     private readonly IPreparedDispatchPlanService? _preparation;
     private readonly IAcceptedJobCancellationService? _cancellation;
+    private readonly ILogger<DispatchViewModel>? _logger;
     private IReadOnlyList<DispatchAircraftOptionViewModel> _aircraftOptions =
         Array.Empty<DispatchAircraftOptionViewModel>();
     private string? _selectedAircraftId;
@@ -95,7 +97,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         ICompositeDispatchPlanningService planning,
         IAcceptedDispatchPlanningContextSource acceptedContext,
         IPreparedDispatchPlanService? preparation = null,
-        IAcceptedJobCancellationService? cancellation = null)
+        IAcceptedJobCancellationService? cancellation = null,
+        ILogger<DispatchViewModel>? logger = null)
     {
         _aircraftInventory = aircraftInventory
             ?? throw new ArgumentNullException(nameof(aircraftInventory));
@@ -107,6 +110,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(acceptedContext));
         _preparation = preparation;
         _cancellation = cancellation;
+        _logger = logger;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -612,9 +616,30 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            _logger?.LogError(
+                ex,
+                "Accepted-job cancellation failed in Advanced Dispatch.");
+
+            try
+            {
+                AcceptedDispatchPlanningContext refreshed = await _acceptedContext
+                    .ReadAsync(CancellationToken.None)
+                    .ConfigureAwait(true);
+                ApplyAcceptedContext(refreshed);
+            }
+            catch (Exception refreshException)
+                when (refreshException is not OperationCanceledException)
+            {
+                _logger?.LogError(
+                    refreshException,
+                    "Accepted-job cancellation recovery refresh failed in Advanced Dispatch.");
+            }
+
             SetField(
                 ref _acceptedContextText,
-                $"Accepted job cancellation failed: {ex.Message}",
+                _acceptedContractIds.Count > 0
+                    ? "Accepted job cancellation did not finish. Retry the remaining cancellation. If it fails again, create a diagnostic bundle in Settings before changing recovery data."
+                    : "Dispatch could not confirm the cancellation result. Reopen Dispatch before starting another flight. If the warning returns, create a diagnostic bundle in Settings before changing recovery data.",
                 nameof(AcceptedContextText));
         }
         finally
