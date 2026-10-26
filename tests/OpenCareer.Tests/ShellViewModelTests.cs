@@ -647,6 +647,116 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task FailedCareerAbandonmentRemainsRetryableWithoutRawErrorText()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string sensitiveFailure =
+            "SQLite failed at C:\\Users\\pilot\\AppData\\Local\\OpenCareer\\career.db";
+        var action =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned."),
+                NextAbandonFailure =
+                    new IOException(sensitiveFailure)
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: null,
+                careerAbandonAction: action,
+                logger: null);
+
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(1, action.AbandonCount);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.Contains(
+            "retry Abandon Current Flight",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            sensitiveFailure,
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+
+        Assert.True(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(2, action.AbandonCount);
+    }
+
+    [Fact]
+    public async Task FailedCareerAbandonmentFailsClosedWhenRecoveryRefreshAlsoFails()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string abandonFailure = "Sensitive abandonment failure.";
+        const string refreshFailure = "Sensitive readiness failure.";
+        var action =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned.")
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: null,
+                careerAbandonAction: action,
+                logger: null);
+
+        await viewModel.RefreshCareerAbandonActionAsync();
+        action.NextAbandonFailure = new IOException(abandonFailure);
+        action.NextReadFailure = new IOException(refreshFailure);
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+        Assert.False(viewModel.CanAbandonCurrentFlight);
+        Assert.Contains(
+            "Reopen Current Flight",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            abandonFailure,
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            refreshFailure,
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ConcurrentCareerAbandonAttemptIsRejectedInsteadOfQueued()
     {
         Guid sessionId = Guid.NewGuid();
@@ -1117,11 +1227,20 @@ public sealed class ShellViewModelTests
         public int AbandonCount { get; private set; }
         public Guid? LastSessionId { get; private set; }
         public Guid? LastContractId { get; private set; }
+        public Exception? NextAbandonFailure { get; set; }
+        public Exception? NextReadFailure { get; set; }
 
         public Task<CareerFlightAbandonAvailability> ReadAvailabilityAsync(
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (NextReadFailure is { } failure)
+            {
+                NextReadFailure = null;
+                return Task.FromException<CareerFlightAbandonAvailability>(failure);
+            }
+
             return Task.FromResult(Availability);
         }
 
@@ -1134,6 +1253,12 @@ public sealed class ShellViewModelTests
             AbandonCount++;
             LastSessionId = expectedSessionId;
             LastContractId = expectedContractId;
+
+            if (NextAbandonFailure is { } failure)
+            {
+                NextAbandonFailure = null;
+                return Task.FromException<CareerFlightAbandonResult>(failure);
+            }
 
             return Task.FromResult(
                 new CareerFlightAbandonResult(

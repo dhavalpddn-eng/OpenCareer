@@ -881,11 +881,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 sessionId,
                 contractId);
 
-            SetField(
-                ref _careerAbandonActionDetail,
-                $"Flight abandonment failed: {ex.Message}",
-                nameof(CareerAbandonActionDetail));
-
             try
             {
                 CareerFlightAbandonAvailability availability =
@@ -893,17 +888,31 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                         .ReadAvailabilityAsync(
                             cancellationToken);
 
+                bool canRetry =
+                    availability.CanAbandon
+                    && availability.SessionId is not null
+                    && availability.ContractId is not null;
+
                 SetAbandonAvailability(
-                    availability.CanAbandon,
+                    canRetry,
                     availability.SessionId,
                     availability.ContractId,
-                    _careerAbandonActionDetail);
+                    canRetry
+                        ? "Flight abandonment did not finish. The current flight is still eligible to abandon; retry Abandon Current Flight. If this repeats, create a diagnostic bundle in Settings."
+                        : "Flight abandonment did not finish. Authoritative Current Flight state was refreshed; use any available recovery action. If no recovery action appears, reopen Current Flight. If this repeats, create a diagnostic bundle in Settings.");
             }
             catch (Exception refreshEx)
             {
                 _logger?.LogWarning(
                     refreshEx,
                     "Flight abandonment readiness could not be refreshed after a failed attempt.");
+
+                SetAbandonAvailability(
+                    canAbandon: false,
+                    sessionId: null,
+                    contractId: null,
+                    detail:
+                        "Flight abandonment did not finish, and recovery readiness could not be refreshed. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings.");
             }
 
             return false;
