@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Careers;
 using OpenCareer.Domain.Careers;
 
@@ -13,6 +14,7 @@ public sealed class CareerViewModel : INotifyPropertyChanged
     private readonly IStudentTrainingOperationReadinessSource _studentTrainingReadiness;
     private readonly IStudentTrainingOperationStartAction _studentTrainingStart;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<CareerViewModel>? _logger;
 
     private string _homeAirportIcao = string.Empty;
     private string _statusText =
@@ -74,7 +76,8 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         TimeProvider timeProvider,
         ICareerQualificationRoadmapSource qualificationRoadmap,
         IStudentTrainingOperationReadinessSource studentTrainingReadiness,
-        IStudentTrainingOperationStartAction studentTrainingStart)
+        IStudentTrainingOperationStartAction studentTrainingStart,
+        ILogger<CareerViewModel>? logger = null)
     {
         _onboarding =
             onboarding
@@ -91,6 +94,7 @@ public sealed class CareerViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(studentTrainingReadiness));
         _studentTrainingStart = studentTrainingStart
             ?? throw new ArgumentNullException(nameof(studentTrainingStart));
+        _logger = logger;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -297,21 +301,49 @@ public sealed class CareerViewModel : INotifyPropertyChanged
         {
             throw;
         }
-        catch (ArgumentException ex)
+        catch (Exception ex)
         {
-            await RefreshStudentTrainingAsync(cancellationToken);
-            SetField(
-                ref _studentTrainingStatusText,
-                $"Student training could not start: {ex.Message}",
-                nameof(StudentTrainingStatusText));
-        }
-        catch (InvalidOperationException ex)
-        {
-            await RefreshStudentTrainingAsync(cancellationToken);
-            SetField(
-                ref _studentTrainingStatusText,
-                $"Student training could not start: {ex.Message}",
-                nameof(StudentTrainingStatusText));
+            _logger?.LogError(ex, "Student training start failed.");
+
+            try
+            {
+                await RefreshStudentTrainingAsync(cancellationToken);
+
+                string recoveryDetail = _studentTraining.State switch
+                {
+                    StudentTrainingOperationReadinessState.Active =>
+                        "Student training start did not confirm success, but an authoritative training flight is active. Open Current Flight to continue or recover it. If this repeats, create a diagnostic bundle in Settings.",
+                    StudentTrainingOperationReadinessState.CompletedAwaitingFinalization =>
+                        "Student training start did not confirm success, but the authoritative training flight is awaiting finalization. Open Current Flight to recover it. If this repeats, create a diagnostic bundle in Settings.",
+                    StudentTrainingOperationReadinessState.Ready =>
+                        "Student training did not start. Authoritative readiness was refreshed; retry Start Student Training. If this repeats, create a diagnostic bundle in Settings.",
+                    StudentTrainingOperationReadinessState.OtherFlightActive =>
+                        "Student training did not start. Open Current Flight to finish or clear the authoritative flight before retrying. If this repeats, create a diagnostic bundle in Settings.",
+                    _ =>
+                        $"{_studentTraining.Detail} Student training did not start; follow the refreshed readiness guidance before retrying. If this repeats, create a diagnostic bundle in Settings."
+                };
+                SetField(
+                    ref _studentTrainingStatusText,
+                    recoveryDetail,
+                    nameof(StudentTrainingStatusText));
+            }
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception refreshException)
+            {
+                _logger?.LogWarning(
+                    refreshException,
+                    "Student training readiness could not be refreshed after a failed start.");
+                ApplyStudentTraining(
+                    new(
+                        StudentTrainingOperationReadinessState.AuthorityUnavailable,
+                        "Student training did not confirm success, and recovery readiness could not be refreshed. Reopen Career before another start attempt. If this repeats, create a diagnostic bundle in Settings.",
+                        AirportIcao: _studentTraining.AirportIcao,
+                        AircraftDisplayName: _studentTraining.AircraftDisplayName));
+            }
         }
         finally
         {

@@ -246,6 +246,89 @@ public sealed class CareerViewModelTests
         Assert.Equal(0, store.SaveCount);
     }
 
+    [Fact]
+    public async Task FailedStudentTrainingStartReprojectsCreatedSessionWithoutTechnicalDetails()
+    {
+        (CareerViewModel viewModel, FakeStudentTrainingAccess training) =
+            await ReadyStudentTrainingViewModelAsync();
+        training.BecomeActiveBeforeStartFailure = true;
+        training.NextStartFailure = new IOException("Sensitive training persistence failure.");
+
+        await viewModel.StartStudentTrainingAsync();
+
+        Assert.Equal(1, training.StartCount);
+        Assert.False(viewModel.CanStartStudentTraining);
+        Assert.Contains("authoritative training flight is active", viewModel.StudentTrainingStatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Open Current Flight", viewModel.StudentTrainingStatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sensitive training persistence failure", viewModel.StudentTrainingStatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FailedStudentTrainingStartRemainsRetryableWhenAuthorityIsReady()
+    {
+        (CareerViewModel viewModel, FakeStudentTrainingAccess training) =
+            await ReadyStudentTrainingViewModelAsync();
+        training.NextStartFailure = new IOException("Sensitive training start failure.");
+
+        await viewModel.StartStudentTrainingAsync();
+
+        Assert.True(viewModel.CanStartStudentTraining);
+        Assert.Contains("retry Start Student Training", viewModel.StudentTrainingStatusText, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.StudentTrainingStatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Sensitive training start failure", viewModel.StudentTrainingStatusText, StringComparison.Ordinal);
+
+        await viewModel.StartStudentTrainingAsync();
+        Assert.Equal(2, training.StartCount);
+        Assert.False(viewModel.CanStartStudentTraining);
+    }
+
+    [Fact]
+    public async Task FailedStudentTrainingStartAndReadinessRefreshFailClosed()
+    {
+        (CareerViewModel viewModel, FakeStudentTrainingAccess training) =
+            await ReadyStudentTrainingViewModelAsync();
+        training.NextStartFailure = new IOException("Sensitive training start failure.");
+        training.NextReadFailure = new IOException("Sensitive training readiness failure.");
+
+        await viewModel.StartStudentTrainingAsync();
+
+        Assert.Equal(1, training.StartCount);
+        Assert.False(viewModel.CanStartStudentTraining);
+        Assert.Contains("Reopen Career", viewModel.StudentTrainingStatusText, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.StudentTrainingStatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Sensitive training start failure", viewModel.StudentTrainingStatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sensitive training readiness failure", viewModel.StudentTrainingStatusText, StringComparison.Ordinal);
+    }
+
+    private static async Task<(CareerViewModel ViewModel, FakeStudentTrainingAccess Training)>
+        ReadyStudentTrainingViewModelAsync()
+    {
+        PlayerCareerProfile existing =
+            PlayerCareerProfile.Start(
+                Guid.Parse("b8100000-0000-0000-0000-000000000004"),
+                "KAFW",
+                Now.AddHours(-1));
+        var store = new FakeProfileStore(
+            new PlayerCareerProfileStoreRecord(1, existing, Now));
+        var runtime = new PlayerCareerRuntimeState(store);
+        var training = new FakeStudentTrainingAccess(
+            new(
+                StudentTrainingOperationReadinessState.Ready,
+                "Ready for verified Student training.",
+                AirportIcao: "KAFW",
+                AircraftDisplayName: "Cessna 172"));
+        var viewModel = new CareerViewModel(
+            new PlayerCareerOnboardingCoordinator(store, runtime),
+            runtime,
+            new FixedTimeProvider(Now),
+            new CareerQualificationRoadmapSource(runtime),
+            training,
+            training);
+
+        await viewModel.InitializeAsync();
+        return (viewModel, training);
+    }
+
     private static CareerViewModel ViewModel(
         FakeProfileStore store,
         PlayerCareerRuntimeState runtime) =>
@@ -271,11 +354,20 @@ public sealed class CareerViewModelTests
         private StudentTrainingOperationReadiness _readiness = readiness;
 
         public int StartCount { get; private set; }
+        public bool BecomeActiveBeforeStartFailure { get; set; }
+        public Exception? NextStartFailure { get; set; }
+        public Exception? NextReadFailure { get; set; }
 
         public Task<StudentTrainingOperationReadiness> ReadAsync(
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (NextReadFailure is { } failure)
+            {
+                NextReadFailure = null;
+                return Task.FromException<StudentTrainingOperationReadiness>(failure);
+            }
+
             return Task.FromResult(_readiness);
         }
 
@@ -298,12 +390,18 @@ public sealed class CareerViewModelTests
                 Now,
                 sessionId: operationId,
                 plan: plan);
-            _readiness = new(
-                StudentTrainingOperationReadinessState.Active,
-                "Student training is active.",
-                operationId,
-                _readiness.AirportIcao,
-                _readiness.AircraftDisplayName);
+            if (BecomeActiveBeforeStartFailure)
+            {
+                ApplyActiveReadiness(operationId);
+            }
+
+            if (NextStartFailure is { } failure)
+            {
+                NextStartFailure = null;
+                return Task.FromException<StudentTrainingOperationStartResult>(failure);
+            }
+
+            ApplyActiveReadiness(operationId);
 
             return Task.FromResult(
                 new StudentTrainingOperationStartResult(
@@ -311,6 +409,14 @@ public sealed class CareerViewModelTests
                     session,
                     _readiness.AircraftDisplayName ?? "Cessna 172"));
         }
+
+        private void ApplyActiveReadiness(Guid operationId) =>
+            _readiness = new(
+                StudentTrainingOperationReadinessState.Active,
+                "Student training is active.",
+                operationId,
+                _readiness.AirportIcao,
+                _readiness.AircraftDisplayName);
     }
 
     private sealed class FakeProfileStore
