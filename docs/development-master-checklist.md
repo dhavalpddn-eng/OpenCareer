@@ -360,6 +360,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Fail closed through aircraft/runway/qualification readiness before acceptance/start.
 - [x] Filter ordinary Ferry/Reposition destinations before offer generation unless at least one currently discovered installed civilian aircraft satisfies the shared fail-closed static capability projection and provenance-backed endpoint runway compatibility.
 - [x] Filter standard Passenger offers independently by explicit passenger capability, payload/range, total seats, dedicated passenger-capacity provenance and endpoint runway compatibility; persist immutable count/payload terms through restart and completion evidence.
+- [x] Show authoritative assignment detail on Jobs offer cards before acceptance: immutable Passenger count/payload and named Cargo/Express/AOG commodity mass; keep legacy or incomplete terms explicitly unavailable/unspecified without invention.
 - [ ] Add generation-time fuel/weather feasibility and ranking only from authoritative inputs; final start must continue to recheck current evidence.
 - [ ] Build a richer dedicated briefing flow beyond the current Jobs offer/readiness surface.
 - [x] Build dispatch-to-active-mission flow for Ferry/Reposition, standard Passenger and Development/Test.
