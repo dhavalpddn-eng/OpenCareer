@@ -99,6 +99,64 @@ public sealed class AircraftViewModelTests
         Assert.Equal(2, source.ReadCount);
     }
 
+    [Fact]
+    public async Task RefreshFailureClearsStaleAircraftAndSuccessfulRetryRestoresInventory()
+    {
+        var source = new StubInventorySource(new(
+            InstalledAircraftInventoryStatus.Ready,
+            "ready",
+            [
+                new(
+                    "id",
+                    "name",
+                    "INSTALLED",
+                    "type",
+                    "family",
+                    "class",
+                    "engine",
+                    "capability",
+                    "fleet",
+                    "reservation",
+                    "access")
+            ]));
+        var viewModel = new AircraftViewModel(source);
+        await viewModel.RefreshAsync();
+
+        viewModel.ReportRefreshFailure(
+            new IOException("C:\\Users\\pilot\\AppData\\Local\\Packages\\sensitive-path"));
+
+        Assert.False(viewModel.HasAircraft);
+        Assert.Empty(viewModel.Aircraft);
+        Assert.DoesNotContain("sensitive-path", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("Refresh Aircraft", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+
+        source.Current = new(
+            InstalledAircraftInventoryStatus.Ready,
+            "authoritative retry",
+            [
+                new(
+                    "updated-id",
+                    "updated name",
+                    "INSTALLED",
+                    "updated type",
+                    "updated family",
+                    "updated class",
+                    "updated engine",
+                    "updated capability",
+                    "updated fleet",
+                    "updated reservation",
+                    "updated access")
+            ]);
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.HasAircraft);
+        Assert.Equal("updated name", Assert.Single(viewModel.Aircraft).DisplayName);
+        Assert.Equal("authoritative retry", viewModel.StatusText);
+        Assert.Equal(2, source.ReadCount);
+    }
+
     private sealed class StubInventorySource(InstalledAircraftInventorySnapshot current)
         : IInstalledAircraftInventorySource
     {
