@@ -387,6 +387,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Reject overlapping Current Flight completion and abandonment attempts instead of queueing duplicate or cross-action terminal commands that can overwrite a successful result with stale follow-up state.
 - [x] Bind career completion to the exact ready FlightSession and contract identities reviewed by Current Flight; reject a changed flight before settlement, Logbook or terminal mutation and preserve authoritative retry recovery.
 - [x] Recheck career-completion input identity after asynchronous authority reads; reproject one replacement and suppress actions with visible reopen guidance if sessions continue changing.
+- [x] Recover safely from a failed paid-flight completion: refresh authoritative readiness, preserve verified retry and abandonment exits, fail closed when refresh also fails, and keep raw technical errors out of player-facing text.
 - [x] Recheck career-abandonment availability identity after asynchronous contract and Fleet reads; reproject one replacement and suppress stale recovery actions if sessions continue changing.
 - [x] Revalidate career-abandonment execution identity after asynchronous contract and Fleet reads and before cleanup mutation, preserving a replacement session and preventing stale contract/reservation cleanup.
 - [x] Bind supported mission evidence to FlightSession.
