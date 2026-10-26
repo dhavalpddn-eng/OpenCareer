@@ -260,6 +260,55 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
         Assert.Equal(540, manifest.PassengerAndBaggageWeightPounds);
     }
 
+    [Fact]
+    public async Task AcceptedPassengerContractWithoutManifestIsNotRecovered()
+    {
+        TestContext context = CreateContext(
+            Persisted(
+                ContractStatus.Accepted,
+                ContractKind.Passenger,
+                includePassengerManifest: false),
+            hasReservation: true,
+            now: StartedAt);
+
+        CareerJobPreFlightSessionRecoveryResult result =
+            await context.Recovery.RecoverAsync();
+
+        Assert.Equal(
+            CareerJobPreFlightSessionRecoveryState.NothingToRecover,
+            result.State);
+        Assert.Equal(
+            ContractStatus.Accepted,
+            context.Contracts.Current.Contract.Status);
+        Assert.Null(context.Sessions.Current);
+        Assert.Equal(0, context.Contracts.UpdateCount);
+    }
+
+    [Fact]
+    public async Task InProgressLegacyPassengerRecoversWithoutInventingManifest()
+    {
+        TestContext context = CreateContext(
+            Persisted(
+                ContractStatus.InProgress,
+                ContractKind.Passenger,
+                includePassengerManifest: false),
+            hasReservation: true,
+            now: StartedAt.AddMinutes(1));
+
+        CareerJobPreFlightSessionRecoveryResult result =
+            await context.Recovery.RecoverAsync();
+
+        Assert.True(result.Recovered, result.Detail);
+        Assert.Equal(0, context.Contracts.UpdateCount);
+        Assert.Equal(
+            context.Contracts.Current.Contract.ContractId,
+            context.Sessions.Current?.ContractId);
+        Assert.False(
+            AcceptedPassengerManifest.TryCreate(
+                context.Contracts.Current.Contract,
+                out _));
+    }
+
     [Theory]
     [InlineData(ContractKind.Cargo, ContractStatus.Accepted)]
     [InlineData(ContractKind.Cargo, ContractStatus.InProgress)]
@@ -496,7 +545,8 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
     private static PersistedJobContract Persisted(
         ContractStatus status,
         ContractKind kind = ContractKind.Ferry,
-        bool includeCargoManifest = true)
+        bool includeCargoManifest = true,
+        bool includePassengerManifest = true)
     {
         bool passenger = kind == ContractKind.Passenger;
         bool cargo = kind is
@@ -574,7 +624,9 @@ public sealed class CareerJobPreFlightSessionRecoveryServiceTests
                     new JobContractPlanningTerms(
                         RouteDistanceNauticalMiles: 120,
                         PayloadPounds:
-                            payload,
+                            passenger && !includePassengerManifest
+                                ? 0
+                                : payload,
                         CargoLots:
                             cargo && includeCargoManifest
                                 ? [CargoLot()]

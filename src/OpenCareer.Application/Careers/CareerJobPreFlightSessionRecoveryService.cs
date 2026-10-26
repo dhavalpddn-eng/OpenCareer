@@ -463,9 +463,11 @@ public sealed class CareerJobPreFlightSessionRecoveryService
 
         if (contract.Kind == ContractKind.Passenger)
         {
-            supportedKind = AcceptedPassengerManifest.TryCreate(
-                contract,
-                out _);
+            supportedKind =
+                AcceptedPassengerManifest.TryCreate(
+                    contract,
+                    out _)
+                || contract.Status == ContractStatus.InProgress;
         }
 
         if (contract.Kind is
