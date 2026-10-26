@@ -289,6 +289,15 @@ public sealed class UiDesignSystemContractTests
                     element.Attribute("Text")?.Value,
                     "{Binding JobRecoveryDetail}",
                     StringComparison.Ordinal));
+        Assert.Equal(
+            4,
+            page.Descendants()
+                .Count(
+                    static element =>
+                        string.Equals(
+                            element.Attribute("IsEnabled")?.Value,
+                            "{Binding CanStartJobActions}",
+                            StringComparison.Ordinal)));
         Assert.DoesNotContain(page.Descendants(), static element => element.Name.LocalName == "Expander");
 
         XElement testButton = page
@@ -298,14 +307,14 @@ public sealed class UiDesignSystemContractTests
                 string.Equals(element.Attribute("Click")?.Value, "GenerateDevelopmentFlight_Click", StringComparison.Ordinal));
         Assert.Equal("{StaticResource OpenCareerPrimaryButtonStyle}", testButton.Attribute("Style")?.Value);
         Assert.Equal("Stretch", testButton.Attribute("HorizontalAlignment")?.Value);
-        Assert.Equal("{Binding CanRunJobActions}", testButton.Attribute("IsEnabled")?.Value);
+        Assert.Equal("{Binding CanStartJobActions}", testButton.Attribute("IsEnabled")?.Value);
 
         XElement offers = page
             .Descendants()
             .Single(element =>
                 element.Name.LocalName == "ItemsControl" &&
                 string.Equals(element.Attribute("ItemsSource")?.Value, "{Binding Offers}", StringComparison.Ordinal));
-        Assert.Equal("{Binding CanRunJobActions}", offers.Attribute("IsEnabled")?.Value);
+        Assert.Equal("{Binding CanStartJobActions}", offers.Attribute("IsEnabled")?.Value);
 
         XElement refreshButton = page
             .Descendants()
@@ -323,7 +332,7 @@ public sealed class UiDesignSystemContractTests
                 element.Attributes().Any(attribute =>
                     attribute.Name.LocalName == "Name" &&
                     string.Equals(attribute.Value, "AircraftPicker", StringComparison.Ordinal)));
-        Assert.Equal("{Binding CanRunJobActions}", aircraftPicker.Attribute("IsEnabled")?.Value);
+        Assert.Equal("{Binding CanStartJobActions}", aircraftPicker.Attribute("IsEnabled")?.Value);
 
         XElement positionTestPilot = page
             .Descendants()
@@ -332,7 +341,7 @@ public sealed class UiDesignSystemContractTests
                 element.Attributes().Any(attribute =>
                     attribute.Name.LocalName == "Name" &&
                     string.Equals(attribute.Value, "PositionTestPilot", StringComparison.Ordinal)));
-        Assert.Equal("{Binding CanRunJobActions}", positionTestPilot.Attribute("IsEnabled")?.Value);
+        Assert.Equal("{Binding CanStartJobActions}", positionTestPilot.Attribute("IsEnabled")?.Value);
 
         XElement cancelButton = page
             .Descendants()

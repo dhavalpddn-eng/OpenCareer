@@ -181,7 +181,7 @@
                                    Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
                         <ComboBox x:Name="AircraftPicker"
                                   ItemsSource="{Binding AircraftOptions}"
-                                  IsEnabled="{Binding CanRunJobActions}"
+                                  IsEnabled="{Binding CanStartJobActions}"
                                   DisplayMemberPath="DisplayName"
                                   SelectedValuePath="AircraftId"
                                   SelectedValue="{Binding SelectedAircraftId, Mode=OneWay}"
@@ -222,11 +222,11 @@
                                        TextWrapping="Wrap" />
                             <CheckBox x:Name="PositionTestPilot"
                                       Content="Move pilot to KJFK for this test"
-                                      IsEnabled="{Binding CanRunJobActions}"
+                                      IsEnabled="{Binding CanStartJobActions}"
                                       Style="{StaticResource OpenCareerCheckBoxStyle}" />
                             <Button Content="CREATE ZERO-PAY CALIBRATION"
                                     Click="GenerateDevelopmentFlight_Click"
-                                    IsEnabled="{Binding CanRunJobActions}"
+                                    IsEnabled="{Binding CanStartJobActions}"
                                     HorizontalAlignment="Stretch"
                                     Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
                         </StackPanel>
@@ -258,7 +258,7 @@
             </Grid>
 
             <ItemsControl ItemsSource="{Binding Offers}"
-                          IsEnabled="{Binding CanRunJobActions}">
+                          IsEnabled="{Binding CanStartJobActions}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Style="{StaticResource OpenCareerPaperCardStyle}"

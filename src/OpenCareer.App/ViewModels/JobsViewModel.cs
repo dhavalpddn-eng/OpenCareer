@@ -155,6 +155,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public bool IsRefreshing => _isRefreshing;
     public bool IsJobActionBusy => _isJobActionBusy;
     public bool CanRunJobActions => !_isJobActionBusy;
+    public bool CanStartJobActions =>
+        CanRunJobActions
+        && !HasJobRecoveryAttention;
     public bool HasCurrentFlightSession => _hasCurrentFlightSession;
     public string CurrentFlightSessionStatus => _currentFlightSessionStatus;
     public string CurrentFlightSessionDetail => _currentFlightSessionDetail;
@@ -194,6 +197,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
+            if (BlockNewFlightActionForRecovery())
+                return;
+
             if (_developmentFlights is null)
             {
                 throw new InvalidOperationException(
@@ -450,12 +456,18 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
+            if (BlockNewFlightActionForRecovery())
+                return;
+
             await _refreshGate
                 .WaitAsync(cancellationToken)
                 .ConfigureAwait(true);
 
             try
             {
+                if (BlockNewFlightActionForRecovery())
+                    return;
+
                 string? normalized =
                     string.IsNullOrWhiteSpace(aircraftId)
                         ? null
@@ -532,6 +544,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
         try
         {
+            if (BlockNewFlightActionForRecovery())
+                return;
+
             string aircraftId =
                 _selectedAircraftId
                 ?? throw new InvalidOperationException(
@@ -545,6 +560,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(true);
             try
             {
+                if (BlockNewFlightActionForRecovery())
+                    return;
+
                 await RefreshAircraftLockedAsync(cancellationToken);
                 if (!_aircraftDiscoveryAvailable
                     || !string.Equals(aircraftId, _selectedAircraftId, StringComparison.OrdinalIgnoreCase))
@@ -854,6 +872,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             _hasJobRecoveryAttention =
                 hasAttention;
             OnPropertyChanged(nameof(HasJobRecoveryAttention));
+            OnPropertyChanged(nameof(CanStartJobActions));
         }
 
         SetField(
@@ -864,6 +883,18 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             ref _jobRecoveryDetail,
             detail,
             nameof(JobRecoveryDetail));
+    }
+
+    private bool BlockNewFlightActionForRecovery()
+    {
+        if (!HasJobRecoveryAttention)
+            return false;
+
+        SetField(
+            ref _acceptanceStatus,
+            "Resolve the job recovery attention above before starting or creating another flight. Refresh Jobs to retry recovery; accepted preflight jobs can still be cancelled below.",
+            nameof(AcceptanceStatus));
+        return true;
     }
 
     private void SetAcceptedContractIds(
@@ -893,6 +924,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         _isJobActionBusy = value;
         OnPropertyChanged(nameof(IsJobActionBusy));
         OnPropertyChanged(nameof(CanRunJobActions));
+        OnPropertyChanged(nameof(CanStartJobActions));
         OnPropertyChanged(nameof(CanCancelAcceptedJobs));
     }
 

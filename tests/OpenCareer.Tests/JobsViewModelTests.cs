@@ -463,6 +463,18 @@ public sealed class JobsViewModelTests
             firstContractId,
             secondContractId);
         var cancellation = new RecordingAcceptedCancellation(acceptedContext);
+        var recovery =
+            new FakeJobRecovery(
+                new CareerJobPreFlightSessionRecoveryResult(
+                    CareerJobPreFlightSessionRecoveryState.MultipleAcceptedContracts,
+                    ContractId:
+                        null,
+                    "Two accepted jobs require a player choice."),
+                new CareerJobPreFlightSessionRecoveryResult(
+                    CareerJobPreFlightSessionRecoveryState.NothingToRecover,
+                    ContractId:
+                        null,
+                    "No supported job requires recovery."));
         var viewModel = new JobsViewModel(
             new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", locked: false))),
             CareerRuntime("KRME"),
@@ -470,12 +482,15 @@ public sealed class JobsViewModelTests
             aircraftSelection: null,
             startAction: null,
             logger: null,
+            startRecovery: recovery,
             acceptedContext: acceptedContext,
             acceptedCancellation: cancellation);
 
         await viewModel.RefreshAsync();
 
         Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.True(viewModel.HasJobRecoveryAttention);
+        Assert.False(viewModel.CanStartJobActions);
         Assert.Equal(
             "Cancel All 2 Accepted Jobs",
             viewModel.CancelAcceptedJobsButtonText);
@@ -486,6 +501,8 @@ public sealed class JobsViewModelTests
             new[] { firstContractId, secondContractId }.OrderBy(static id => id),
             cancellation.CancelledContractIds);
         Assert.False(viewModel.CanCancelAcceptedJobs);
+        Assert.False(viewModel.HasJobRecoveryAttention);
+        Assert.True(viewModel.CanStartJobActions);
         Assert.Equal(
             "No Accepted Job to Cancel",
             viewModel.CancelAcceptedJobsButtonText);
@@ -589,6 +606,8 @@ public sealed class JobsViewModelTests
         await viewModel.RefreshAsync();
 
         Assert.True(viewModel.HasJobRecoveryAttention);
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.True(viewModel.CanRunJobActions);
         Assert.Equal(
             "JOB RECOVERY · RESERVATION MISSING",
             viewModel.JobRecoveryStatus);
@@ -598,6 +617,64 @@ public sealed class JobsViewModelTests
             StringComparison.Ordinal);
         Assert.Single(viewModel.Offers);
         Assert.Equal(1, recovery.CallCount);
+    }
+
+    [Fact]
+    public async Task RecoveryAttentionRejectsStaleStartInvocationAtViewModelBoundary()
+    {
+        JobMarketOfferDraft offer =
+            Offer(
+                "KRME",
+                "KSYR",
+                locked:
+                    false);
+        var action =
+            new FakeStartAction();
+        var recovery =
+            new FakeJobRecovery(
+                new CareerJobPreFlightSessionRecoveryResult(
+                    CareerJobPreFlightSessionRecoveryState.NothingToRecover,
+                    ContractId:
+                        null,
+                    "No supported job requires recovery."),
+                new CareerJobPreFlightSessionRecoveryResult(
+                    CareerJobPreFlightSessionRecoveryState.WaitingForAircraft,
+                    Guid.Parse(
+                        "c1000000-0000-0000-0000-000000000073"),
+                    "The contract-owned aircraft is unavailable."));
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        offer)),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                new CareerJobAircraftSelectionSource(
+                    new FakeDiscovery()),
+                action,
+                logger:
+                    null,
+                startRecovery:
+                    recovery);
+
+        await viewModel.RefreshAsync();
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        await viewModel.RefreshAsync();
+        int acceptCount =
+            action.AcceptCount;
+        int startCount =
+            action.StartCount;
+
+        await viewModel.StartOfferAsync(offer.OfferId);
+
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.Equal(acceptCount, action.AcceptCount);
+        Assert.Equal(startCount, action.StartCount);
+        Assert.Contains(
+            "Resolve the job recovery attention",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -635,6 +712,7 @@ public sealed class JobsViewModelTests
         await viewModel.RefreshAsync();
 
         Assert.False(viewModel.HasJobRecoveryAttention);
+        Assert.True(viewModel.CanStartJobActions);
         Assert.Equal(
             "JOB RECOVERY · READY",
             viewModel.JobRecoveryStatus);
