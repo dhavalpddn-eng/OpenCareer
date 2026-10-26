@@ -118,6 +118,23 @@
 
             <Border Style="{StaticResource OpenCareerMetalCardStyle}"
                     Padding="18"
+                    Visibility="{Binding HasJobRecoveryAttention, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="JOB RECOVERY NEEDS ATTENTION"
+                               Style="{StaticResource OpenCareerShellSectionTitleStyle}" />
+                    <Border Style="{StaticResource OpenCareerWarningBadgeStyle}"
+                            HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding JobRecoveryStatus}"
+                                   Style="{StaticResource OpenCareerStatusBadgeTextStyle}" />
+                    </Border>
+                    <TextBlock Text="{Binding JobRecoveryDetail}"
+                               Foreground="{StaticResource OpenCareerShellTextBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerMetalCardStyle}"
+                    Padding="18"
                     Visibility="{Binding HasCurrentFlightSession, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid ColumnSpacing="18">
                     <Grid.ColumnDefinitions>

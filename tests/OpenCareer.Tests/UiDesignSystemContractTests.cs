@@ -274,6 +274,21 @@ public sealed class UiDesignSystemContractTests
         Assert.Contains("ZERO-PAY CALIBRATION", visibleText);
         Assert.Contains("$0 PAY · $0 PROGRESSION", visibleText);
         Assert.Contains("CREATE ZERO-PAY CALIBRATION", visibleText);
+        Assert.Contains("JOB RECOVERY NEEDS ATTENTION", visibleText);
+        Assert.Contains(
+            page.Descendants(),
+            static element =>
+                string.Equals(
+                    element.Attribute("Visibility")?.Value,
+                    "{Binding HasJobRecoveryAttention, Converter={StaticResource BooleanToVisibilityConverter}}",
+                    StringComparison.Ordinal));
+        Assert.Contains(
+            page.Descendants(),
+            static element =>
+                string.Equals(
+                    element.Attribute("Text")?.Value,
+                    "{Binding JobRecoveryDetail}",
+                    StringComparison.Ordinal));
         Assert.DoesNotContain(page.Descendants(), static element => element.Name.LocalName == "Expander");
 
         XElement testButton = page

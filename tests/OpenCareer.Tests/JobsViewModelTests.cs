@@ -554,6 +554,131 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task WaitingJobRecoveryIsVisibleWithoutMutatingTheBoardSurface()
+    {
+        Guid contractId =
+            Guid.Parse(
+                "c1000000-0000-0000-0000-000000000071");
+        var recovery =
+            new FakeJobRecovery(
+                new CareerJobPreFlightSessionRecoveryResult(
+                    CareerJobPreFlightSessionRecoveryState.WaitingForReservation,
+                    contractId,
+                    "The recoverable contract does not currently own its deterministic Fleet reservation."));
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        Offer(
+                            "KRME",
+                            "KSYR",
+                            locked:
+                                false))),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection:
+                    null,
+                startAction:
+                    null,
+                logger:
+                    null,
+                startRecovery:
+                    recovery);
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.HasJobRecoveryAttention);
+        Assert.Equal(
+            "JOB RECOVERY · RESERVATION MISSING",
+            viewModel.JobRecoveryStatus);
+        Assert.Contains(
+            "deterministic Fleet reservation",
+            viewModel.JobRecoveryDetail,
+            StringComparison.Ordinal);
+        Assert.Single(viewModel.Offers);
+        Assert.Equal(1, recovery.CallCount);
+    }
+
+    [Fact]
+    public async Task SuccessfulRetryClearsPriorJobRecoveryAttention()
+    {
+        var recovery =
+            new FakeJobRecovery(
+                new CareerJobPreFlightSessionRecoveryResult(
+                    CareerJobPreFlightSessionRecoveryState.WaitingForAircraft,
+                    Guid.Parse(
+                        "c1000000-0000-0000-0000-000000000072"),
+                    "The contract-owned aircraft is unavailable."),
+                new CareerJobPreFlightSessionRecoveryResult(
+                    CareerJobPreFlightSessionRecoveryState.NothingToRecover,
+                    ContractId:
+                        null,
+                    "No supported job requires recovery."));
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection:
+                    null,
+                startAction:
+                    null,
+                logger:
+                    null,
+                startRecovery:
+                    recovery);
+
+        await viewModel.RefreshAsync();
+        Assert.True(viewModel.HasJobRecoveryAttention);
+
+        await viewModel.RefreshAsync();
+
+        Assert.False(viewModel.HasJobRecoveryAttention);
+        Assert.Equal(
+            "JOB RECOVERY · READY",
+            viewModel.JobRecoveryStatus);
+        Assert.Equal(2, recovery.CallCount);
+    }
+
+    [Fact]
+    public async Task RecoveryFailureShowsSafeRetryGuidanceWithoutRawErrorText()
+    {
+        var recovery =
+            new FakeJobRecovery(
+                new InvalidOperationException(
+                    "synthetic technical recovery detail"));
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection:
+                    null,
+                startAction:
+                    null,
+                logger:
+                    null,
+                startRecovery:
+                    recovery);
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.HasJobRecoveryAttention);
+        Assert.Equal(
+            "JOB RECOVERY · RETRY REQUIRED",
+            viewModel.JobRecoveryStatus);
+        Assert.Contains(
+            "No persisted job was cleared",
+            viewModel.JobRecoveryDetail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "synthetic technical recovery detail",
+            viewModel.JobRecoveryDetail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ContractlessFlightSessionCanBeOpenedDirectlyFromJobs()
     {
         var sessions = new FlightSessionCoordinator();
@@ -1289,6 +1414,37 @@ public sealed class JobsViewModelTests
 
             throw new InvalidOperationException(
                 "Synthetic start result intentionally stops after delegation.");
+        }
+    }
+
+    private sealed class FakeJobRecovery
+        : ICareerJobPreFlightSessionRecoveryService
+    {
+        private readonly Queue<object> _outcomes;
+
+        public FakeJobRecovery(params object[] outcomes)
+        {
+            _outcomes =
+                new Queue<object>(outcomes);
+        }
+
+        public int CallCount { get; private set; }
+
+        public Task<CareerJobPreFlightSessionRecoveryResult> RecoverAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+
+            object outcome =
+                _outcomes.Count > 1
+                    ? _outcomes.Dequeue()
+                    : _outcomes.Peek();
+
+            return outcome is Exception exception
+                ? Task.FromException<CareerJobPreFlightSessionRecoveryResult>(exception)
+                : Task.FromResult(
+                    (CareerJobPreFlightSessionRecoveryResult)outcome);
         }
     }
 

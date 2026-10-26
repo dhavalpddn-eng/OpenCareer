@@ -64,6 +64,10 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private string _currentFlightSessionStatus = "NO CURRENT FLIGHT SESSION";
     private string _currentFlightSessionDetail =
         "Accept and start a career job to create a FlightSession.";
+    private bool _hasJobRecoveryAttention;
+    private string _jobRecoveryStatus = "JOB RECOVERY · READY";
+    private string _jobRecoveryDetail =
+        "No accepted or in-progress job requires recovery attention.";
 
     public JobsViewModel(
         IJobBoardStateStore jobBoards,
@@ -154,6 +158,9 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public bool HasCurrentFlightSession => _hasCurrentFlightSession;
     public string CurrentFlightSessionStatus => _currentFlightSessionStatus;
     public string CurrentFlightSessionDetail => _currentFlightSessionDetail;
+    public bool HasJobRecoveryAttention => _hasJobRecoveryAttention;
+    public string JobRecoveryStatus => _jobRecoveryStatus;
+    public string JobRecoveryDetail => _jobRecoveryDetail;
     public bool CanCancelAcceptedJobs =>
         CanRunJobActions
         && !_isCancellingAcceptedJobs
@@ -245,6 +252,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
 
             if (career is null)
             {
+                RefreshJobRecoveryAttention(
+                    result:
+                        null,
+                    recoveryFailed:
+                        false);
                 RefreshCurrentFlightSession();
                 _boardOffers =
                     Array.Empty<JobMarketOfferDraft>();
@@ -261,23 +273,34 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 return;
             }
 
+            CareerJobPreFlightSessionRecoveryResult? recoveryResult =
+                null;
+            bool recoveryFailed =
+                false;
+
             if (_startRecovery is not null)
             {
                 try
                 {
-                    await Task.Run(
+                    recoveryResult =
+                        await Task.Run(
                             () => _startRecovery.RecoverAsync(cancellationToken),
                             cancellationToken)
                         .ConfigureAwait(true);
                 }
                 catch (Exception ex)
                 {
+                    recoveryFailed =
+                        true;
                     _logger?.LogWarning(
                         ex,
                         "Pre-FlightSession career-job recovery failed during Jobs refresh; persisted recovery state was preserved.");
                 }
             }
 
+            RefreshJobRecoveryAttention(
+                recoveryResult,
+                recoveryFailed);
             RefreshCurrentFlightSession();
 
             string currentAirport =
@@ -789,6 +812,58 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                     ? "A current FlightSession already occupies the playable loop. Open Current Flight to resume it or use its available completion, logging, discard, or abandonment recovery action before accepting another job."
                     : "Accept and start a career job to create a FlightSession.",
             nameof(CurrentFlightSessionDetail));
+    }
+
+    private void RefreshJobRecoveryAttention(
+        CareerJobPreFlightSessionRecoveryResult? result,
+        bool recoveryFailed)
+    {
+        string? status =
+            recoveryFailed
+                ? "JOB RECOVERY · RETRY REQUIRED"
+                : result?.State switch
+                {
+                    CareerJobPreFlightSessionRecoveryState.WaitingForReservation =>
+                        "JOB RECOVERY · RESERVATION MISSING",
+                    CareerJobPreFlightSessionRecoveryState.WaitingForCareer =>
+                        "JOB RECOVERY · CAREER STATE REQUIRED",
+                    CareerJobPreFlightSessionRecoveryState.WaitingForAircraft =>
+                        "JOB RECOVERY · AIRCRAFT UNAVAILABLE",
+                    CareerJobPreFlightSessionRecoveryState.WaitingForDispatch
+                        or CareerJobPreFlightSessionRecoveryState.WaitingForPreparedDispatch =>
+                        "JOB RECOVERY · DISPATCH REQUIRED",
+                    CareerJobPreFlightSessionRecoveryState.ContractStartBlocked =>
+                        "JOB RECOVERY · START BLOCKED",
+                    CareerJobPreFlightSessionRecoveryState.MultipleAcceptedContracts =>
+                        "JOB RECOVERY · CHOOSE ACCEPTED JOBS",
+                    _ =>
+                        null
+                };
+
+        string detail =
+            recoveryFailed
+                ? "Automatic job recovery did not complete. No persisted job was cleared. Refresh Jobs to retry; accepted preflight jobs remain available to cancel below. If a flight was already in progress, do not start another flight and create a diagnostic bundle from Settings."
+                : status is not null
+                    ? result!.Detail
+                    : "No accepted or in-progress job requires recovery attention.";
+        bool hasAttention =
+            status is not null;
+
+        if (_hasJobRecoveryAttention != hasAttention)
+        {
+            _hasJobRecoveryAttention =
+                hasAttention;
+            OnPropertyChanged(nameof(HasJobRecoveryAttention));
+        }
+
+        SetField(
+            ref _jobRecoveryStatus,
+            status ?? "JOB RECOVERY · READY",
+            nameof(JobRecoveryStatus));
+        SetField(
+            ref _jobRecoveryDetail,
+            detail,
+            nameof(JobRecoveryDetail));
     }
 
     private void SetAcceptedContractIds(
