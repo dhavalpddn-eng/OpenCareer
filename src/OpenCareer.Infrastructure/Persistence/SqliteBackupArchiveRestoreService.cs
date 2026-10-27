@@ -143,11 +143,12 @@ public sealed class SqliteBackupArchiveRestoreService
 
             try
             {
-                File.Move(stagePath, databasePath, overwrite: true);
-
-                await SqliteDatabaseSnapshotService
-                    .ValidateSnapshotAsync(databasePath, CancellationToken.None)
+                await CopyAndValidateStagedSnapshotAsync(
+                        stagePath,
+                        databasePath)
                     .ConfigureAwait(false);
+
+                File.Delete(stagePath);
             }
             catch
             {
@@ -206,6 +207,20 @@ public sealed class SqliteBackupArchiveRestoreService
     {
         File.Copy(
             rollbackSnapshotPath,
+            databasePath,
+            overwrite: true);
+
+        await SqliteDatabaseSnapshotService
+            .ValidateSnapshotAsync(databasePath, CancellationToken.None)
+            .ConfigureAwait(false);
+    }
+
+    internal static async Task CopyAndValidateStagedSnapshotAsync(
+        string stagedSnapshotPath,
+        string databasePath)
+    {
+        File.Copy(
+            stagedSnapshotPath,
             databasePath,
             overwrite: true);
 

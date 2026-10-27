@@ -347,6 +347,38 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
         }
     }
 
+    [Fact]
+    public async Task FailedPostCopyValidationPreservesStagedSnapshot()
+    {
+        string dir = TempDir();
+
+        try
+        {
+            string stagedPath = Path.Combine(dir, "pending.db");
+            string livePath = Path.Combine(dir, "live.db");
+            byte[] corruptSnapshot = "not-a-sqlite-database"u8.ToArray();
+
+            await File.WriteAllBytesAsync(
+                stagedPath,
+                corruptSnapshot);
+
+            await Assert.ThrowsAnyAsync<Exception>(
+                () => SqliteBackupArchiveRestoreService
+                    .CopyAndValidateStagedSnapshotAsync(
+                        stagedPath,
+                        livePath));
+
+            Assert.True(File.Exists(stagedPath));
+            Assert.Equal(
+                corruptSnapshot,
+                await File.ReadAllBytesAsync(stagedPath));
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
     private static SqliteBackupArchiveRestoreService RestoreService(
         string livePath)
     {
