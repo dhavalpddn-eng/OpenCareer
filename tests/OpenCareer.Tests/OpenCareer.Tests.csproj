@@ -36,6 +36,7 @@
     <Compile Include="../../src/OpenCareer.App/ViewModels/DashboardViewModel.cs" Link="ViewModels/DashboardViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/TutorialViewModel.cs" Link="ViewModels/TutorialViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/AppDataBackupService.cs" Link="Services/AppDataBackupService.cs" />
+    <Compile Include="../../src/OpenCareer.App/Services/AppDataRestoreService.cs" Link="Services/AppDataRestoreService.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/DiagnosticBundleService.cs" Link="Services/DiagnosticBundleService.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/OpenCareerDataPaths.cs" Link="Services/OpenCareerDataPaths.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/JsonAppSettingsService.cs" Link="Services/JsonAppSettingsService.cs" />
