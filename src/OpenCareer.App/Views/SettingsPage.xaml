@@ -241,6 +241,7 @@
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Content="Create backup"
                                 Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                IsEnabled="{Binding CanRunSettingsActions}"
                                 Click="CreateBackup_Click" />
                         <Button Content="Open data folder"
                                 Style="{StaticResource OpenCareerSecondaryButtonStyle}"
@@ -270,6 +271,7 @@
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Content="Export diagnostics"
                                 Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                IsEnabled="{Binding CanRunSettingsActions}"
                                 Click="ExportDiagnostics_Click" />
                         <Button Content="Open logs"
                                 Style="{StaticResource OpenCareerSecondaryButtonStyle}"
@@ -358,6 +360,7 @@
                     <Button Content="Reset preferences to defaults"
                             Style="{StaticResource OpenCareerSecondaryButtonStyle}"
                             HorizontalAlignment="Left"
+                            IsEnabled="{Binding CanRunSettingsActions}"
                             Click="ResetPreferences_Click" />
                 </StackPanel>
             </Border>

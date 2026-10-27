@@ -301,6 +301,44 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task OverlappingSettingsActionsRejectSecondAttemptUntilFirstFinishes()
+    {
+        TestContext context = Create();
+        var resetStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseReset = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        context.Settings.NextResetStarted = resetStarted;
+        context.Settings.NextResetRelease = releaseReset.Task;
+
+        Task firstReset = context.ViewModel.ResetPreferencesAsync();
+        await resetStarted.Task;
+
+        Assert.True(context.ViewModel.IsBusy);
+        Assert.False(context.ViewModel.CanRunSettingsActions);
+
+        Task duplicateReset = context.ViewModel.ResetPreferencesAsync();
+
+        Assert.True(duplicateReset.IsCompletedSuccessfully);
+        Assert.Contains(
+            "already running",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, context.Settings.WriteCount);
+
+        releaseReset.SetResult();
+        await firstReset;
+
+        Assert.False(context.ViewModel.IsBusy);
+        Assert.True(context.ViewModel.CanRunSettingsActions);
+        Assert.Equal(1, context.Settings.WriteCount);
+        Assert.Contains(
+            "reset to defaults",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void BindingStatusUsesReadOnlyDiscoverySourceWithoutClaimingUnbound()
     {
         TestContext context = Create(
@@ -463,6 +501,8 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         public Exception? ResetFailure { get; set; }
         public TaskCompletionSource? NextUpdateStarted { get; set; }
         public Task? NextUpdateRelease { get; set; }
+        public TaskCompletionSource? NextResetStarted { get; set; }
+        public Task? NextResetRelease { get; set; }
 
         public event EventHandler? Changed;
 
@@ -489,15 +529,22 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
             Changed?.Invoke(this, EventArgs.Empty);
         }
 
-        public Task ResetAsync(CancellationToken cancellationToken = default)
+        public async Task ResetAsync(CancellationToken cancellationToken = default)
         {
             if (ResetFailure is not null)
                 throw ResetFailure;
 
+            TaskCompletionSource? resetStarted = NextResetStarted;
+            Task? resetRelease = NextResetRelease;
+            NextResetStarted = null;
+            NextResetRelease = null;
+            resetStarted?.TrySetResult();
+            if (resetRelease is not null)
+                await resetRelease.WaitAsync(cancellationToken);
+
             WriteCount++;
             Current = AppPreferences.Default;
             Changed?.Invoke(this, EventArgs.Empty);
-            return Task.CompletedTask;
         }
     }
 

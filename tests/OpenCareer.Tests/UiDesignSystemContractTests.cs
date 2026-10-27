@@ -789,6 +789,31 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
+    public void SettingsRecoveryActionsDisableWhileAnotherActionOwnsTheGate()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
+        XDocument page = XDocument.Load(
+            Path.Combine(directory, "SettingsPage.xaml"));
+
+        foreach (string clickHandler in new[]
+        {
+            "CreateBackup_Click",
+            "ExportDiagnostics_Click",
+            "ResetPreferences_Click"
+        })
+        {
+            XElement button = Assert.Single(
+                page.Descendants()
+                    .Where(element =>
+                        element.Name.LocalName == "Button" &&
+                        element.Attribute("Click")?.Value == clickHandler));
+            Assert.Equal(
+                "{Binding CanRunSettingsActions}",
+                button.Attribute("IsEnabled")?.Value);
+        }
+    }
+
+    [Fact]
     public void ButtonDesignSystemDoesNotUsePointerHandlers()
     {
         foreach (string path in GetProductionButtonXamlPaths())

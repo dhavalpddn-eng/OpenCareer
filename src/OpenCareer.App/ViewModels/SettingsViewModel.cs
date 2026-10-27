@@ -28,7 +28,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private readonly SemaphoreSlim _preferenceGate = new(1, 1);
 
     private string _actionStatus = "Ready.";
-    private bool _isBusy;
+    private int _settingsActionActive;
 
     private string _connectionState = "Disconnected";
     private string _connectionIssue = "None";
@@ -163,11 +163,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         private set => SetField(ref _actionStatus, value);
     }
 
-    public bool IsBusy
-    {
-        get => _isBusy;
-        private set => SetField(ref _isBusy, value);
-    }
+    public bool IsBusy => Volatile.Read(ref _settingsActionActive) != 0;
+
+    public bool CanRunSettingsActions => !IsBusy;
 
     public void RefreshDiagnostics()
     {
@@ -290,7 +288,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public async Task ResetPreferencesAsync(CancellationToken cancellationToken = default)
     {
-        IsBusy = true;
+        if (!TryBeginSettingsAction())
+            return;
+
         try
         {
             await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
@@ -314,13 +314,15 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
         finally
         {
-            IsBusy = false;
+            EndSettingsAction();
         }
     }
 
     public async Task CreateBackupAsync(CancellationToken cancellationToken = default)
     {
-        IsBusy = true;
+        if (!TryBeginSettingsAction())
+            return;
+
         try
         {
             SettingsActionResult result = await _backup.CreateBackupAsync(cancellationToken)
@@ -329,13 +331,15 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
         finally
         {
-            IsBusy = false;
+            EndSettingsAction();
         }
     }
 
     public async Task ExportDiagnosticsAsync(CancellationToken cancellationToken = default)
     {
-        IsBusy = true;
+        if (!TryBeginSettingsAction())
+            return;
+
         try
         {
             RefreshDiagnostics();
@@ -345,7 +349,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
         finally
         {
-            IsBusy = false;
+            EndSettingsAction();
         }
     }
 
@@ -419,6 +423,27 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         {
             _preferenceGate.Release();
         }
+    }
+
+    private bool TryBeginSettingsAction()
+    {
+        if (Interlocked.CompareExchange(ref _settingsActionActive, 1, 0) != 0)
+        {
+            ActionStatus =
+                "Another Settings action is already running. Wait for it to finish, then retry.";
+            return false;
+        }
+
+        OnPropertyChanged(nameof(IsBusy));
+        OnPropertyChanged(nameof(CanRunSettingsActions));
+        return true;
+    }
+
+    private void EndSettingsAction()
+    {
+        Interlocked.Exchange(ref _settingsActionActive, 0);
+        OnPropertyChanged(nameof(IsBusy));
+        OnPropertyChanged(nameof(CanRunSettingsActions));
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
