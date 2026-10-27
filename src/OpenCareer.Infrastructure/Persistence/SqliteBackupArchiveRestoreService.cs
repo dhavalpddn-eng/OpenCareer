@@ -235,15 +235,23 @@ public sealed class SqliteBackupArchiveRestoreService
             OpenCareerBackupManifest.ManifestEntryName);
 
         OpenCareerBackupManifest manifest;
-        await using (Stream manifestStream = manifestEntry.Open())
+        try
         {
-            manifest =
-                await JsonSerializer.DeserializeAsync<OpenCareerBackupManifest>(
+            await using Stream manifestStream = manifestEntry.Open();
+            manifest = await JsonSerializer
+                .DeserializeAsync<OpenCareerBackupManifest>(
                     manifestStream,
                     _jsonOptions,
-                    cancellationToken).ConfigureAwait(false)
+                    cancellationToken)
+                .ConfigureAwait(false)
                 ?? throw new InvalidDataException(
                     "Backup manifest could not be read.");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException(
+                "Backup manifest could not be read.",
+                ex);
         }
 
         manifest.Validate();

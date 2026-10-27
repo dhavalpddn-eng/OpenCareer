@@ -30,8 +30,14 @@ public sealed record OpenCareerBackupManifest(
                 "Backup archive is not an OpenCareer application-data backup.");
         }
 
-        ArgumentNullException.ThrowIfNull(IncludedFiles);
-        ArgumentNullException.ThrowIfNull(Note);
+        if (IncludedFiles is null)
+        {
+            throw new InvalidDataException(
+                "Backup manifest included-files list is missing.");
+        }
+
+        if (Note is null)
+            throw new InvalidDataException("Backup manifest note is missing.");
 
         if (IncludedFiles.Any(string.IsNullOrWhiteSpace))
             throw new InvalidDataException("Backup manifest contains an invalid file entry.");

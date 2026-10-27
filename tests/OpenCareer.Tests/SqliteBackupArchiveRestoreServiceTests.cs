@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenCareer.App.Services;
 using OpenCareer.Application.Military;
 using OpenCareer.Domain.Conflict;
 using OpenCareer.Domain.Military;
@@ -204,6 +205,82 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
         }
     }
 
+    [Theory]
+    [InlineData("{ malformed manifest detail must stay technical")]
+    [InlineData("{\"schemaVersion\":2,\"createdAt\":\"2026-09-20T03:00:00Z\",\"appDataRoot\":\"OpenCareer\",\"includedFiles\":null,\"sqliteSnapshotIncluded\":true,\"note\":\"test\"}")]
+    [InlineData("{\"schemaVersion\":2,\"createdAt\":\"2026-09-20T03:00:00Z\",\"appDataRoot\":\"OpenCareer\",\"includedFiles\":[\"opencareer.db\"],\"sqliteSnapshotIncluded\":true,\"note\":null}")]
+    public async Task InvalidManifestIsRejectedAsImportedData(
+        string manifestJson)
+    {
+        string dir = TempDir();
+
+        try
+        {
+            string livePath = Path.Combine(dir, "live.db");
+            string archivePath = Path.Combine(dir, "bad-manifest.zip");
+            string stagedPath = Path.Combine(dir, "pending.db");
+
+            await Store(livePath).SaveAsync(
+                Checkpoint("live-campaign"),
+                expectedRevision: null);
+
+            await CreateBackupArchiveWithRawManifestAsync(
+                archivePath,
+                manifestJson);
+
+            InvalidDataException error =
+                await Assert.ThrowsAsync<InvalidDataException>(
+                    () => RestoreService(livePath).StageRestoreAsync(
+                        archivePath,
+                        stagedPath));
+
+            Assert.Contains("manifest", error.Message);
+            Assert.False(File.Exists(stagedPath));
+            Assert.NotNull(
+                await Store(livePath).LoadAsync("live-campaign"));
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
+    [Fact]
+    public async Task MalformedManifestReturnsSafeRestoreActionFailure()
+    {
+        string dir = TempDir();
+
+        try
+        {
+            var paths = new OpenCareerDataPaths(dir);
+            paths.EnsureDirectories();
+            string archivePath = Path.Combine(
+                paths.BackupsFolder,
+                "opencareer-backup-bad-manifest.zip");
+
+            await CreateBackupArchiveWithRawManifestAsync(
+                archivePath,
+                "{ parser detail must not reach player-facing text");
+
+            var restore = new AppDataRestoreService(
+                paths,
+                RestoreService(paths.DatabaseFile),
+                NullLogger<AppDataRestoreService>.Instance);
+
+            SettingsActionResult result =
+                await restore.StageDatabaseRestoreAsync(archivePath);
+
+            Assert.False(result.Success);
+            Assert.Contains("could not be validated", result.Message);
+            Assert.DoesNotContain("parser detail", result.Message);
+            Assert.False(File.Exists(paths.PendingDatabaseRestoreFile));
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
     [Fact]
     public async Task FailedRollbackValidationPreservesRecoverySnapshot()
     {
@@ -322,6 +399,24 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
         await JsonSerializer.SerializeAsync(
             manifestStream,
             manifest);
+    }
+
+    private static async Task CreateBackupArchiveWithRawManifestAsync(
+        string archivePath,
+        string manifestJson)
+    {
+        await using FileStream file = File.Create(archivePath);
+        using var archive = new ZipArchive(
+            file,
+            ZipArchiveMode.Create,
+            leaveOpen: true);
+
+        ZipArchiveEntry manifestEntry = archive.CreateEntry(
+            OpenCareerBackupManifest.ManifestEntryName);
+
+        await using Stream stream = manifestEntry.Open();
+        await using var writer = new StreamWriter(stream);
+        await writer.WriteAsync(manifestJson);
     }
 
     private static ConflictCampaignCheckpoint Checkpoint(
