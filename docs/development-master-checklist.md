@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-27 through validated checkpoint `9857e1eb` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-27 through validated checkpoint `07cd098b` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -357,6 +357,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Reconcile failed career onboarding against authoritative runtime profile state: retain a saved profile through projection failure, keep pre-save failure retryable, prevent duplicate creation and keep technical exception text out of the player UI.
 - [x] Fail closed when Career initialization authority cannot refresh: preserve an authoritative loaded profile, disable stale profile/training actions until a successful reload, and keep technical exception text out of the player UI.
 - [x] Recover safely from Advanced Dispatch initialization failure: invalidate stale planning authority, preserve refreshed accepted-job cancellation, direct unresolved cleanup to Jobs, and keep technical exception text out of the player UI.
+- [x] Recover safely from Advanced Dispatch plan-preparation failure: refresh accepted-job authority, keep idempotent retry and cancellation available when retained, clear stale actions when recovery fails, and suppress technical exception text.
 - [ ] Add later qualification missions with distinct authoritative definitions and completion requirements.
 - [x] Home-airport selection foundation.
 - [x] Persist player location/home base.
@@ -753,6 +754,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Expose accepted-preflight cancellation directly on Jobs, including one confirmed cancel-all path for multiple recovered Accepted contracts, so start failures can clear runtime state, prepared plans and exact Fleet reservations without visiting Dispatch.
 - [x] Keep failed Jobs cancellation safely retryable: refresh remaining accepted targets, re-enable their cancellation action and show generic retry/diagnostic guidance while retaining technical exception details only in structured logs.
 - [x] Keep failed or partial Advanced Dispatch cancellation safely retryable: refresh authoritative remaining targets, suppress raw technical details, retain structured logging and prove a subsequent retry can clear the accepted job.
+- [x] Keep failed Advanced Dispatch preparation safely recoverable: refresh authoritative accepted-job context, retain retry/cancellation exits, prove Already Prepared retry navigation and fail closed if the refresh also fails.
 - [x] Navigate Jobs to Current Flight only after the start authority creates/reuses the persistent FlightSession; failed starts remain on Jobs.
 - [x] Reconcile start-path exceptions against current FlightSession authority: if a session was created before a later refresh failure, project and open Current Flight recovery while blocking new starts; otherwise keep accepted preflight work retryable/cancellable and hide technical exception text.
 - [ ] Persist or derive authoritative cruise/fuel/reserve/safety-margin planning inputs.
