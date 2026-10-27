@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-27 through validated checkpoint `c3b197e9` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-27 through validated checkpoint `10be3cf1` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -788,6 +788,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Contain preference save/reset failures, preserve the prior settings and reset retry path, release busy state, keep cancellation propagating and replace technical exception text with safe storage/retry/diagnostic/Open Logs guidance.
 - [x] Reproject every preference control from authoritative current settings after persistence so a failed write visibly restores the saved value without recursively issuing another update.
 - [x] Serialize Settings preference mutations and resets, deriving each queued change from the latest authoritative record so overlapping control events cannot lose a sibling update.
+- [x] Reject overlapping backup, diagnostic-export and preference-reset actions through one Settings gate; disable their controls while owned and retain authoritative busy state until the owner finishes.
 - [x] Implement Aviation/Metric unit selection and reformat existing telemetry without waiting for a new sample.
 - [x] Implement live simulator/SimConnect/telemetry diagnostics.
 - [x] Implement local application file logging.
