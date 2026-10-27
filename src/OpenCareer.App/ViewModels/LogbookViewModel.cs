@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Logbook;
 using OpenCareer.Domain.Logbook;
 
@@ -8,6 +9,7 @@ namespace OpenCareer.App.ViewModels;
 public sealed class LogbookViewModel : INotifyPropertyChanged
 {
     private readonly ILogbookSource _source;
+    private readonly ILogger<LogbookViewModel>? _logger;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     private IReadOnlyList<LogbookEntryItemViewModel> _entries =
@@ -19,9 +21,12 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
     private FlightSafetyOutcome? _safetyOutcomeFilter;
     private string? _refreshFailureText;
 
-    public LogbookViewModel(ILogbookSource source)
+    public LogbookViewModel(
+        ILogbookSource source,
+        ILogger<LogbookViewModel>? logger = null)
     {
-        _source = source;
+        _source = source ?? throw new ArgumentNullException(nameof(source));
+        _logger = logger;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -160,9 +165,14 @@ public sealed class LogbookViewModel : INotifyPropertyChanged
     public void ReportRefreshFailure(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        _logger?.LogError(exception, "Logbook refresh failed.");
+
+        _entries = Array.Empty<LogbookEntryItemViewModel>();
+        _selectedEntry = null;
+        _statistics = LogbookStatistics.Empty;
         _refreshFailureText =
-            $"Logbook could not refresh: {exception.Message} Reopen Logbook or change a filter to retry.";
-        OnPropertyChanged(nameof(StatusText));
+            "Logbook could not refresh, so previously shown flights and statistics were cleared. Reopen Logbook or change a filter to retry; if this repeats, create a diagnostic bundle in Settings.";
+        RaiseAll();
     }
 
     public void SetFilters(
