@@ -217,6 +217,90 @@ public sealed class TutorialViewModelRecoveryTests : IDisposable
         Assert.False(File.Exists(paths.TutorialPreferencesFile + ".tmp"));
     }
 
+    [Theory]
+    [InlineData("null")]
+    [InlineData("""{"TutorialId":"other","CompletedVersion":0,"SkippedVersion":0}""")]
+    [InlineData("""{"TutorialId":"app-intro","CompletedVersion":-1,"SkippedVersion":0}""")]
+    [InlineData("""{"TutorialId":"app-intro","CompletedVersion":0,"SkippedVersion":-1}""")]
+    public async Task InvalidRequestedProgressCannotBeReadOrOverwritten(
+        string progressJson)
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        Directory.CreateDirectory(_root);
+        string invalidDocument =
+            $$"""
+            {
+              "SchemaVersion": 1,
+              "Tutorials": {
+                "app-intro": {{progressJson}}
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(
+            paths.TutorialPreferencesFile,
+            invalidDocument);
+        var store = new JsonTutorialProgressStore(
+            NullLogger<JsonTutorialProgressStore>.Instance,
+            paths);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => store.GetAsync(AppTutorialCatalog.AppIntroId));
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => store.SaveAsync(
+                new TutorialProgress(AppTutorialCatalog.AppIntroId)));
+
+        Assert.Equal(
+            invalidDocument,
+            await File.ReadAllTextAsync(paths.TutorialPreferencesFile));
+        Assert.False(File.Exists(paths.TutorialPreferencesFile + ".tmp"));
+    }
+
+    [Fact]
+    public async Task InvalidSaveInputCannotCreateProgressFile()
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        var store = new JsonTutorialProgressStore(
+            NullLogger<JsonTutorialProgressStore>.Instance,
+            paths);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => store.SaveAsync(new TutorialProgress(
+                AppTutorialCatalog.AppIntroId,
+                CompletedVersion: -1)));
+
+        Assert.False(File.Exists(paths.TutorialPreferencesFile));
+        Assert.False(File.Exists(paths.TutorialPreferencesFile + ".tmp"));
+    }
+
+    [Fact]
+    public async Task InvalidUnrequestedProgressDoesNotBlockCurrentTutorial()
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        Directory.CreateDirectory(_root);
+        await File.WriteAllTextAsync(
+            paths.TutorialPreferencesFile,
+            """
+            {
+              "SchemaVersion": 1,
+              "Tutorials": {
+                "future-tutorial": null
+              }
+            }
+            """);
+        var store = new JsonTutorialProgressStore(
+            NullLogger<JsonTutorialProgressStore>.Instance,
+            paths);
+
+        TutorialProgress progress =
+            await store.GetAsync(AppTutorialCatalog.AppIntroId);
+        await store.SaveAsync(progress with { LastStepId = "connection" });
+
+        Assert.Equal(AppTutorialCatalog.AppIntroId, progress.TutorialId);
+        Assert.Equal(
+            "connection",
+            (await store.GetAsync(AppTutorialCatalog.AppIntroId)).LastStepId);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))

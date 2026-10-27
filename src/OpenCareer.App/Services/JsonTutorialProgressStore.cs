@@ -31,9 +31,10 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
         try
         {
             PreferencesDocument document = await ReadAsync(cancellationToken).ConfigureAwait(false);
-            return document.Tutorials.TryGetValue(tutorialId, out TutorialProgress? progress)
-                ? progress
-                : new TutorialProgress(tutorialId);
+            if (!document.Tutorials.TryGetValue(tutorialId, out TutorialProgress? progress))
+                return new TutorialProgress(tutorialId);
+
+            return ValidateProgress(progress, tutorialId);
         }
         finally
         {
@@ -48,7 +49,16 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            ValidateProgress(progress, progress.TutorialId);
             PreferencesDocument document = await ReadAsync(cancellationToken).ConfigureAwait(false);
+
+            if (document.Tutorials.TryGetValue(
+                    progress.TutorialId,
+                    out TutorialProgress? existing))
+            {
+                ValidateProgress(existing, progress.TutorialId);
+            }
+
             document.Tutorials[progress.TutorialId] = progress;
             await WriteAsync(document, cancellationToken).ConfigureAwait(false);
         }
@@ -124,6 +134,30 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
         }
 
         return document;
+    }
+
+    private TutorialProgress ValidateProgress(
+        TutorialProgress? progress,
+        string expectedTutorialId)
+    {
+        if (progress is not null &&
+            !string.IsNullOrWhiteSpace(progress.TutorialId) &&
+            string.Equals(
+                progress.TutorialId,
+                expectedTutorialId,
+                StringComparison.Ordinal) &&
+            progress.CompletedVersion >= 0 &&
+            progress.SkippedVersion >= 0)
+        {
+            return progress;
+        }
+
+        _logger.LogWarning(
+            "Tutorial preference entry {TutorialId} is invalid at {Path}.",
+            expectedTutorialId,
+            _paths.TutorialPreferencesFile);
+        throw new InvalidDataException(
+            $"Tutorial preference entry '{expectedTutorialId}' is invalid.");
     }
 
     private async Task WriteAsync(
