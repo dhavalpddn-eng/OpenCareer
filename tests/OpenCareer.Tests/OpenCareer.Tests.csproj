@@ -34,6 +34,7 @@
     <Compile Include="../../src/OpenCareer.App/ViewModels/MilitaryGovernmentViewModel.cs" Link="ViewModels/MilitaryGovernmentViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/SettingsViewModel.cs" Link="ViewModels/SettingsViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/ViewModels/DashboardViewModel.cs" Link="ViewModels/DashboardViewModel.cs" />
+    <Compile Include="../../src/OpenCareer.App/ViewModels/TutorialViewModel.cs" Link="ViewModels/TutorialViewModel.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/AppDataBackupService.cs" Link="Services/AppDataBackupService.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/DiagnosticBundleService.cs" Link="Services/DiagnosticBundleService.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/OpenCareerDataPaths.cs" Link="Services/OpenCareerDataPaths.cs" />
@@ -43,6 +44,7 @@
     <Compile Include="../../src/OpenCareer.App/Services/ShellOpenService.cs" Link="Services/ShellOpenService.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/KjfkLiveTestDiagnosticJournal.cs" Link="Services/KjfkLiveTestDiagnosticJournal.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/KjfkLiveTestDiagnosticsService.cs" Link="Services/KjfkLiveTestDiagnosticsService.cs" />
+    <Compile Include="../../src/OpenCareer.App/Services/JsonTutorialProgressStore.cs" Link="Services/JsonTutorialProgressStore.cs" />
   </ItemGroup>
 
   <ItemGroup>

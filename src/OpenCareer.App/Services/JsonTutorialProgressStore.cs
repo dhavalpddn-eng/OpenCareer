@@ -113,11 +113,13 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
         PreferencesDocument document,
         CancellationToken cancellationToken)
     {
+        string tempPath = _paths.TutorialPreferencesFile + ".tmp";
+        bool committed = false;
+
         try
         {
             _paths.EnsureDirectories();
 
-            string tempPath = _paths.TutorialPreferencesFile + ".tmp";
             await using (FileStream stream = File.Create(tempPath))
             {
                 await JsonSerializer.SerializeAsync(
@@ -129,6 +131,7 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
             }
 
             File.Move(tempPath, _paths.TutorialPreferencesFile, overwrite: true);
+            committed = true;
         }
         catch (IOException ex)
         {
@@ -136,6 +139,7 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Unable to save tutorial preferences: {Path}",
                 _paths.TutorialPreferencesFile);
+            throw;
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -143,6 +147,34 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Tutorial preferences are not writable: {Path}",
                 _paths.TutorialPreferencesFile);
+            throw;
+        }
+        finally
+        {
+            if (!committed)
+                TryDeleteTemporaryFile(tempPath);
+        }
+    }
+
+    private void TryDeleteTemporaryFile(string tempPath)
+    {
+        try
+        {
+            File.Delete(tempPath);
+        }
+        catch (IOException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Unable to clean temporary tutorial preferences: {Path}",
+                tempPath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Temporary tutorial preferences are not writable: {Path}",
+                tempPath);
         }
     }
 

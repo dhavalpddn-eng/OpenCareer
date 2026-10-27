@@ -843,6 +843,59 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
+    public void TutorialActionsDisableWhileProgressPersistenceIsActive()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
+        XDocument mainWindow = XDocument.Load(
+            Path.Combine(directory, "MainWindow.xaml"));
+        XDocument settings = XDocument.Load(
+            Path.Combine(directory, "SettingsPage.xaml"));
+
+        XElement[] overlayButtons = mainWindow
+            .Descendants()
+            .Where(element =>
+                element.Name.LocalName == "Button" &&
+                new[]
+                {
+                    "NextTutorial_Click",
+                    "SkipTutorial_Click"
+                }.Contains(element.Attribute("Click")?.Value, StringComparer.Ordinal))
+            .ToArray();
+        Assert.Equal(2, overlayButtons.Length);
+        Assert.All(
+            overlayButtons,
+            button => Assert.Equal(
+                "{x:Bind Tutorial.CanRunActions, Mode=OneWay}",
+                button.Attribute("IsEnabled")?.Value));
+
+        XElement[] replayButtons = settings
+            .Descendants()
+            .Where(element =>
+                element.Name.LocalName == "Button" &&
+                new[]
+                {
+                    "RestartIntro_Click",
+                    "StartFirstJob_Click",
+                    "PreviewBannerTow_Click",
+                    "PreviewCarrierTakeoff_Click",
+                    "PreviewCarrierLanding_Click"
+                }.Contains(element.Attribute("Click")?.Value, StringComparer.Ordinal))
+            .ToArray();
+        Assert.Equal(5, replayButtons.Length);
+        Assert.All(
+            replayButtons,
+            button => Assert.Equal(
+                "{Binding CanRunActions}",
+                button.Attribute("IsEnabled")?.Value));
+
+        Assert.Contains(
+            settings.Descendants(),
+            element =>
+                element.Name.LocalName == "TextBlock" &&
+                element.Attribute("Text")?.Value == "{Binding ActionStatus}");
+    }
+
+    [Fact]
     public void ButtonDesignSystemDoesNotUsePointerHandlers()
     {
         foreach (string path in GetProductionButtonXamlPaths())

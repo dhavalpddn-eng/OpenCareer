@@ -28,6 +28,7 @@ public sealed partial class SettingsPage : Page
         _tutorial = context.Tutorial;
         _settings = context.Settings;
         DataContext = _settings;
+        TutorialActionsPanel.DataContext = _tutorial;
 
         ApplyPreferenceControls();
         _settings.RefreshDiagnostics();
@@ -46,6 +47,9 @@ public sealed partial class SettingsPage : Page
             _diagnosticTimer.Tick -= OnDiagnosticTimerTick;
             _diagnosticTimer = null;
         }
+
+        TutorialActionsPanel.DataContext = null;
+        _tutorial = null;
 
         base.OnNavigatedFrom(e);
     }

@@ -321,7 +321,9 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource OpenCareerPaperCardStyle}" Padding="22">
+            <Border x:Name="TutorialActionsPanel"
+                    Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="22">
                 <StackPanel Spacing="12">
                     <TextBlock Text="TRAINING &amp; TUTORIALS"
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
@@ -333,9 +335,11 @@
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Content="Restart intro"
                                 Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                IsEnabled="{Binding CanRunActions}"
                                 Click="RestartIntro_Click" />
                         <Button Content="First-job preview"
                                 Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                IsEnabled="{Binding CanRunActions}"
                                 Click="StartFirstJob_Click" />
                     </StackPanel>
 
@@ -344,14 +348,21 @@
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Content="Banner tow"
                                 Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                IsEnabled="{Binding CanRunActions}"
                                 Click="PreviewBannerTow_Click" />
                         <Button Content="Carrier takeoff"
                                 Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                IsEnabled="{Binding CanRunActions}"
                                 Click="PreviewCarrierTakeoff_Click" />
                         <Button Content="Carrier landing"
                                 Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                IsEnabled="{Binding CanRunActions}"
                                 Click="PreviewCarrierLanding_Click" />
                     </StackPanel>
+
+                    <TextBlock Text="{Binding ActionStatus}"
+                               Style="{StaticResource OpenCareerInputHelpStyle}"
+                               TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
 
