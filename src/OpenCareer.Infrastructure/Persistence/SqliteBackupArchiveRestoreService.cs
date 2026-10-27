@@ -119,6 +119,7 @@ public sealed class SqliteBackupArchiveRestoreService
         string rollbackSnapshot =
             databasePath + $".rollback-{Guid.NewGuid():N}.tmp";
         bool liveDatabaseExists = File.Exists(databasePath);
+        bool preserveRollbackSnapshot = false;
 
         try
         {
@@ -155,14 +156,26 @@ public sealed class SqliteBackupArchiveRestoreService
 
                 if (liveDatabaseExists && File.Exists(rollbackSnapshot))
                 {
-                    File.Move(
-                        rollbackSnapshot,
-                        databasePath,
-                        overwrite: true);
+                    preserveRollbackSnapshot = true;
 
-                    await SqliteDatabaseSnapshotService
-                        .ValidateSnapshotAsync(databasePath, CancellationToken.None)
-                        .ConfigureAwait(false);
+                    try
+                    {
+                        await CopyAndValidateRollbackSnapshotAsync(
+                                rollbackSnapshot,
+                                databasePath)
+                            .ConfigureAwait(false);
+
+                        preserveRollbackSnapshot = false;
+                    }
+                    catch (Exception rollbackException)
+                    {
+                        _logger.LogError(
+                            rollbackException,
+                            "OpenCareer database rollback could not be validated. The rollback snapshot was preserved at {RollbackSnapshotPath} for recovery.",
+                            rollbackSnapshot);
+
+                        throw;
+                    }
                 }
                 else
                 {
@@ -180,9 +193,25 @@ public sealed class SqliteBackupArchiveRestoreService
         }
         finally
         {
-            TryDelete(rollbackSnapshot);
+            if (!preserveRollbackSnapshot)
+                TryDelete(rollbackSnapshot);
+
             _gate.Release();
         }
+    }
+
+    internal static async Task CopyAndValidateRollbackSnapshotAsync(
+        string rollbackSnapshotPath,
+        string databasePath)
+    {
+        File.Copy(
+            rollbackSnapshotPath,
+            databasePath,
+            overwrite: true);
+
+        await SqliteDatabaseSnapshotService
+            .ValidateSnapshotAsync(databasePath, CancellationToken.None)
+            .ConfigureAwait(false);
     }
 
     private async Task<OpenCareerBackupManifest> ExtractAndValidateArchiveAsync(

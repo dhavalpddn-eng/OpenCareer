@@ -204,6 +204,38 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
         }
     }
 
+    [Fact]
+    public async Task FailedRollbackValidationPreservesRecoverySnapshot()
+    {
+        string dir = TempDir();
+
+        try
+        {
+            string livePath = Path.Combine(dir, "live.db");
+            string rollbackPath = Path.Combine(dir, "rollback.db");
+            byte[] corruptSnapshot = "not-a-sqlite-database"u8.ToArray();
+
+            await File.WriteAllBytesAsync(
+                rollbackPath,
+                corruptSnapshot);
+
+            await Assert.ThrowsAnyAsync<Exception>(
+                () => SqliteBackupArchiveRestoreService
+                    .CopyAndValidateRollbackSnapshotAsync(
+                        rollbackPath,
+                        livePath));
+
+            Assert.True(File.Exists(rollbackPath));
+            Assert.Equal(
+                corruptSnapshot,
+                await File.ReadAllBytesAsync(rollbackPath));
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
     private static SqliteBackupArchiveRestoreService RestoreService(
         string livePath)
     {
