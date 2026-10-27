@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-27 through validated checkpoint `54e4abeb` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-27 through validated checkpoint `2070256f` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -790,6 +790,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Serialize Settings preference mutations and resets, deriving each queued change from the latest authoritative record so overlapping control events cannot lose a sibling update.
 - [x] Reject overlapping backup, diagnostic-export and preference-reset actions through one Settings gate; disable their controls while owned and retain authoritative busy state until the owner finishes.
 - [x] Serialize backup and diagnostic snapshots against preference persistence; disable every preference control and reject late direct mutations while backup, export or reset owns the recovery-action gate.
+- [x] Include clean test-profile reset scheduling in the same non-queuing Settings action gate so backup/export/reset work cannot race the next-launch reset request and a rejected overlap remains retryable.
 - [x] Implement Aviation/Metric unit selection and reformat existing telemetry without waiting for a new sample.
 - [x] Implement live simulator/SimConnect/telemetry diagnostics.
 - [x] Implement local application file logging.
@@ -797,6 +798,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Contain diagnostic export directory-setup and archive failures, preserve cancellation, clean temporary output, keep technical details in logs and expose safe retry/Open Logs guidance.
 - [x] Implement current local-data ZIP backup and folder access.
 - [x] Contain local-data backup directory-setup and archive failures, preserve cancellation, clean partial ZIP/SQLite snapshot artifacts, keep technical details in logs and expose safe retry/Open Logs guidance.
+- [x] Exclude the transient next-launch Development/Test reset request from local-data backups so restoring a backup cannot schedule deletion of the restored isolated profile.
 - [x] Implement reduced-motion and offline optional-service permission preferences.
 - [x] Keep real binding discovery explicitly owned by MBL-05.
 - [x] Keep authoritative SQLite FlightSession/save recovery explicitly owned by MBL-07.
