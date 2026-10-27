@@ -39,6 +39,36 @@ public sealed class TutorialViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task FailedProgressReadKeepsCurrentTutorialAndCanRetry()
+    {
+        var store = new ControlledProgressStore();
+        TutorialViewModel viewModel = CreateViewModel(store);
+        await viewModel.InitializeAsync();
+        string initialTitle = viewModel.CurrentTitle;
+        int initialIndex = viewModel.CurrentIndexForTest();
+        store.NextReadFailure =
+            new IOException("Synthetic path /private/tutorial-data must stay out of the UI.");
+
+        await viewModel.StartFirstJobAsync();
+
+        Assert.Equal(initialTitle, viewModel.CurrentTitle);
+        Assert.Equal(initialIndex, viewModel.CurrentIndexForTest());
+        Assert.True(viewModel.CanRunActions);
+        Assert.Contains("current tutorial state was kept", viewModel.ActionStatus);
+        Assert.Contains("then retry", viewModel.ActionStatus);
+        Assert.Contains("diagnostic bundle", viewModel.ActionStatus);
+        Assert.DoesNotContain("/private/tutorial-data", viewModel.ActionStatus);
+        Assert.DoesNotContain("Synthetic path", viewModel.ActionStatus);
+
+        await viewModel.StartFirstJobAsync();
+
+        Assert.NotEqual(initialTitle, viewModel.CurrentTitle);
+        Assert.Equal(0, viewModel.CurrentIndexForTest());
+        Assert.True(viewModel.CanRunActions);
+        Assert.Equal(string.Empty, viewModel.ActionStatus);
+    }
+
+    [Fact]
     public async Task OverlappingTutorialActionIsRejectedWithoutQueuingAWrite()
     {
         var store = new ControlledProgressStore();
@@ -109,6 +139,62 @@ public sealed class TutorialViewModelRecoveryTests : IDisposable
         Assert.False(File.Exists(paths.TutorialPreferencesFile + ".tmp"));
     }
 
+    [Fact]
+    public async Task CorruptJsonCannotBeReadOrOverwritten()
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        Directory.CreateDirectory(_root);
+        const string corruptDocument = "{ not-valid-json";
+        await File.WriteAllTextAsync(
+            paths.TutorialPreferencesFile,
+            corruptDocument);
+        var store = new JsonTutorialProgressStore(
+            NullLogger<JsonTutorialProgressStore>.Instance,
+            paths);
+
+        await Assert.ThrowsAnyAsync<System.Text.Json.JsonException>(
+            () => store.GetAsync(AppTutorialCatalog.AppIntroId));
+        await Assert.ThrowsAnyAsync<System.Text.Json.JsonException>(
+            () => store.SaveAsync(
+                new TutorialProgress(AppTutorialCatalog.AppIntroId)));
+
+        Assert.Equal(
+            corruptDocument,
+            await File.ReadAllTextAsync(paths.TutorialPreferencesFile));
+        Assert.False(File.Exists(paths.TutorialPreferencesFile + ".tmp"));
+    }
+
+    [Fact]
+    public async Task UnsupportedSchemaCannotBeReadOrOverwritten()
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        Directory.CreateDirectory(_root);
+        const string unsupportedDocument =
+            """
+            {
+              "SchemaVersion": 2,
+              "Tutorials": {}
+            }
+            """;
+        await File.WriteAllTextAsync(
+            paths.TutorialPreferencesFile,
+            unsupportedDocument);
+        var store = new JsonTutorialProgressStore(
+            NullLogger<JsonTutorialProgressStore>.Instance,
+            paths);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => store.GetAsync(AppTutorialCatalog.AppIntroId));
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => store.SaveAsync(
+                new TutorialProgress(AppTutorialCatalog.AppIntroId)));
+
+        Assert.Equal(
+            unsupportedDocument,
+            await File.ReadAllTextAsync(paths.TutorialPreferencesFile));
+        Assert.False(File.Exists(paths.TutorialPreferencesFile + ".tmp"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))
@@ -137,6 +223,7 @@ public sealed class TutorialViewModelRecoveryTests : IDisposable
         private readonly Dictionary<string, TutorialProgress> _values =
             new(StringComparer.Ordinal);
 
+        public Exception? NextReadFailure { get; set; }
         public Exception? NextSaveFailure { get; set; }
         public TaskCompletionSource? NextSaveStarted { get; set; }
         public Task? NextSaveRelease { get; set; }
@@ -147,6 +234,12 @@ public sealed class TutorialViewModelRecoveryTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            Exception? failure = NextReadFailure;
+            NextReadFailure = null;
+            if (failure is not null)
+                return Task.FromException<TutorialProgress>(failure);
+
             return Task.FromResult(
                 _values.TryGetValue(tutorialId, out TutorialProgress? progress)
                     ? progress

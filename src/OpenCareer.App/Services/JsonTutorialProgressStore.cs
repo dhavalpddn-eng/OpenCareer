@@ -63,25 +63,16 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
         if (!File.Exists(_paths.TutorialPreferencesFile))
             return new PreferencesDocument();
 
+        PreferencesDocument? document;
         try
         {
             await using FileStream stream = File.OpenRead(_paths.TutorialPreferencesFile);
-            PreferencesDocument? document = await JsonSerializer
+            document = await JsonSerializer
                 .DeserializeAsync<PreferencesDocument>(
                     stream,
                     _serializerOptions,
                     cancellationToken)
                 .ConfigureAwait(false);
-
-            if (document is null || document.SchemaVersion != CurrentSchemaVersion)
-            {
-                _logger.LogWarning(
-                    "Ignoring unsupported tutorial preference schema at {Path}.",
-                    _paths.TutorialPreferencesFile);
-                return new PreferencesDocument();
-            }
-
-            return document;
         }
         catch (JsonException ex)
         {
@@ -89,7 +80,7 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Tutorial preference file is invalid: {Path}",
                 _paths.TutorialPreferencesFile);
-            return new PreferencesDocument();
+            throw;
         }
         catch (IOException ex)
         {
@@ -97,7 +88,7 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Unable to read tutorial preferences: {Path}",
                 _paths.TutorialPreferencesFile);
-            return new PreferencesDocument();
+            throw;
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -105,8 +96,29 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Tutorial preferences are not readable: {Path}",
                 _paths.TutorialPreferencesFile);
-            return new PreferencesDocument();
+            throw;
         }
+
+        if (document is null || document.Tutorials is null)
+        {
+            _logger.LogWarning(
+                "Tutorial preference file has no usable progress document: {Path}",
+                _paths.TutorialPreferencesFile);
+            throw new InvalidDataException(
+                "The tutorial preference file has no usable progress document.");
+        }
+
+        if (document.SchemaVersion != CurrentSchemaVersion)
+        {
+            _logger.LogWarning(
+                "Tutorial preference schema {SchemaVersion} is unsupported at {Path}.",
+                document.SchemaVersion,
+                _paths.TutorialPreferencesFile);
+            throw new InvalidDataException(
+                $"Tutorial preference schema {document.SchemaVersion} is unsupported.");
+        }
+
+        return document;
     }
 
     private async Task WriteAsync(
