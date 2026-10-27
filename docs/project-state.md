@@ -2,14 +2,14 @@
 
 **Ultra-fast resume:** read root `ASTRA.md` first. This file is the detailed handoff.
 
-Updated: 2026-10-27 against validated integration code head `07cd098b8617017ed78c9c252d2198177b7db991`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
+Updated: 2026-10-27 against validated integration code head `f8ae06e75dcc892a91a11872b965b3f81d401573`. **Read this after `AGENTS.md` when deeper implementation context is needed; do not reread chat history unless a required decision is missing.**
 
 ## Resume here
 
 - Repo: `dhavalpddn-eng/OpenCareer`
 - Branch: `feature/playable-loop-integration`. Keep `main` stable.
-- Validated implementation baseline: `07cd098b8617017ed78c9c252d2198177b7db991`.
-- Exact-head Linux build #1237 and Windows `winui-build` #1170 passed on the first attempt, including exact-head verification, WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite.
+- Validated implementation baseline: `f8ae06e75dcc892a91a11872b965b3f81d401573`.
+- Exact-head Linux build #1239 and Windows `winui-build` #1172 passed on the first attempt, including exact-head verification, WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite.
 - Exact-PC C172/KJFK validation passed the SimConnect/current-aircraft path, production FlightSession takeoff/landing/bounce/shutdown/completion, interrupted-session recovery, exact-once terminal settlement/finalization, facility-request containment with corrected receive IDs, Jobs aircraft-picker stability and shared button-state readability.
 - The isolated KJFK Development/Test profile and `tools/run-kjfk-live-test.ps1` protect normal career data while retaining restart/recovery behavior between launches unless explicitly reset. Settings labels the active profile and can schedule a marker-validated clean test reset before SQLite opens on the next launch; normal career data cannot use that action. A failed scheduling attempt remains retryable and shows safe folder/retry/diagnostic guidance while its technical exception stays in structured logs. The shell displays a permanent high-contrast DEVELOPMENT / TEST KJFK isolated-data placard on every page while the test profile is active.
 - Failed startup FlightSession checkpoint recovery remains visible in Settings until a successful retry. The UI no longer presents the ordinary no-session message or raw exception text after a recovery error; it warns that the stored checkpoint was not cleared, directs the player to close and reopen OpenCareer before starting another flight, and requests a diagnostic bundle before any reset/restore change if recovery fails again. Technical details remain in the structured startup log.
@@ -173,6 +173,7 @@ Single-player, offline-first MSFS 2024 companion. C#/.NET 10, Windows x64, WinUI
 - Settings exposes live simulator connection state/issue, simulator and SimConnect versions when reported, telemetry freshness, last sample time and pause/slew/on-ground/airborne state.
 - OpenCareer now writes an application log under `Logs/opencareer.log` with bounded rotation.
 - Diagnostic export creates a ZIP with environment, connection state, non-coordinate telemetry diagnostics, preferences and local logs/settings. Exact aircraft latitude/longitude are intentionally excluded.
+- Diagnostic export contains data-directory setup and unexpected non-cancellation failures instead of escaping the Settings action. Temporary output is cleaned, technical exceptions remain in structured logs, and the player sees safe storage/retry/Open Logs guidance without filesystem details. Exact-head Linux build #1239 and Windows `winui-build` #1172 passed on the first attempt at `f8ae06e`.
 - Current local-data backup creates a ZIP plus manifest while excluding backup/export recursion. The shared SQLite database is captured through SQLite backup semantics, so current Logbook and military-campaign data are internally consistent even with WAL enabled.
 - A validated SQLite restore backend stages a backup archive first and applies it on the next app startup with rollback protection; Settings still needs the user-facing archive picker/confirmation.
 - MBL-07 now provides authoritative SQLite FlightSession checkpoint/recovery for the supported single-session path. True multi-leg/FlightLeg runtime persistence and previous-valid corruption fallback remain open.
