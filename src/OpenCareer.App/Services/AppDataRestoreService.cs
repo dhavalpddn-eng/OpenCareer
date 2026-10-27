@@ -52,10 +52,11 @@ public sealed class AppDataRestoreService(
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(backupArchivePath);
-        paths.EnsureDirectories();
 
         try
         {
+            paths.EnsureDirectories();
+
             OpenCareerBackupManifest manifest = await restore
                 .StageRestoreAsync(
                     backupArchivePath,

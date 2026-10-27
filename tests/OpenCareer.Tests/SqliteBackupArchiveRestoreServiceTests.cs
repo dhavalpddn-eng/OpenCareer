@@ -282,6 +282,40 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
     }
 
     [Fact]
+    public async Task DataDirectorySetupFailureReturnsSafeRestoreActionFailure()
+    {
+        string dir = TempDir();
+
+        try
+        {
+            string blockedRoot = Path.Combine(dir, "blocked-profile-root");
+            await File.WriteAllTextAsync(
+                blockedRoot,
+                "technical path collision detail");
+
+            var paths = new OpenCareerDataPaths(blockedRoot);
+            var restore = new AppDataRestoreService(
+                paths,
+                RestoreService(paths.DatabaseFile),
+                NullLogger<AppDataRestoreService>.Instance);
+
+            SettingsActionResult result =
+                await restore.StageDatabaseRestoreAsync(
+                    Path.Combine(dir, "unused-backup.zip"));
+
+            Assert.False(result.Success);
+            Assert.Contains("could not be validated", result.Message);
+            Assert.DoesNotContain("blocked-profile-root", result.Message);
+            Assert.DoesNotContain("path collision", result.Message);
+            Assert.False(File.Exists(paths.PendingDatabaseRestoreFile));
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
+    [Fact]
     public async Task FailedRollbackValidationPreservesRecoverySnapshot()
     {
         string dir = TempDir();
