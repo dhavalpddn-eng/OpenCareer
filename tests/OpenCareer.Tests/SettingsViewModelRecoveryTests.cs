@@ -106,6 +106,42 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task FailedDiagnosticExportIsContainedWithoutTechnicalDetails()
+    {
+        Directory.CreateDirectory(_root);
+        string blockedRoot = Path.Combine(_root, "blocked-by-file");
+        await File.WriteAllTextAsync(
+            blockedRoot,
+            "This file intentionally prevents creation of the data directory.");
+        TestContext context = Create(
+            paths: new OpenCareerDataPaths(blockedRoot));
+
+        await context.ViewModel.ExportDiagnosticsAsync();
+
+        Assert.False(context.ViewModel.IsBusy);
+        Assert.Contains(
+            "could not be created",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "retry",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Open Logs Folder",
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            blockedRoot,
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "blocked-by-file",
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BindingStatusUsesReadOnlyDiscoverySourceWithoutClaimingUnbound()
     {
         TestContext context = Create(

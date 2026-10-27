@@ -18,8 +18,6 @@ public sealed class DiagnosticBundleService(
     public async Task<SettingsActionResult> CreateAsync(
         CancellationToken cancellationToken = default)
     {
-        paths.EnsureDirectories();
-
         string fileName =
             $"opencareer-diagnostics-{DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}.zip";
         string destination = Path.Combine(paths.DiagnosticsFolder, fileName);
@@ -27,6 +25,8 @@ public sealed class DiagnosticBundleService(
 
         try
         {
+            paths.EnsureDirectories();
+
             SimulatorConnectionSnapshot connectionSnapshot = connection.Current;
             AircraftTelemetrySnapshot? telemetry = telemetrySource.Latest;
 
@@ -142,14 +142,13 @@ public sealed class DiagnosticBundleService(
             TryDelete(temporary);
             throw;
         }
-        catch (Exception ex) when (
-            ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             TryDelete(temporary);
             logger.LogError(ex, "Failed to create OpenCareer diagnostic bundle.");
             return new SettingsActionResult(
                 false,
-                $"Diagnostic export failed: {ex.Message}");
+                "Diagnostic bundle could not be created. Verify local storage is available, then retry. If this keeps happening, use Open Logs Folder in Settings if available and share the latest log with support.");
         }
     }
 
