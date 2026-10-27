@@ -789,7 +789,7 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
-    public void SettingsRecoveryActionsDisableWhileAnotherActionOwnsTheGate()
+    public void SettingsRecoveryActionsAndPreferenceControlsDisableWhileActionOwnsTheGate()
     {
         string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
         XDocument page = XDocument.Load(
@@ -810,6 +810,25 @@ public sealed class UiDesignSystemContractTests
             Assert.Equal(
                 "{Binding CanRunSettingsActions}",
                 button.Attribute("IsEnabled")?.Value);
+        }
+
+        foreach (string controlName in new[]
+        {
+            "UnitsComboBox",
+            "InputHintsComboBox",
+            "ChecklistToggle",
+            "TutorialOfferToggle",
+            "ReduceMotionToggle",
+            "OnlineServicesToggle"
+        })
+        {
+            XElement control = Assert.Single(
+                page.Descendants(),
+                element =>
+                    element.Attribute(XamlNamespace + "Name")?.Value == controlName);
+            Assert.Equal(
+                "{Binding CanRunSettingsActions}",
+                control.Attribute("IsEnabled")?.Value);
         }
     }
 

@@ -301,6 +301,48 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task BackupWaitsForStartedPreferenceWriteAndRejectsLaterPreferenceChanges()
+    {
+        TestContext context = Create();
+        var updateStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseUpdate = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        context.Settings.NextUpdateStarted = updateStarted;
+        context.Settings.NextUpdateRelease = releaseUpdate.Task;
+
+        Task reduceMotion = context.ViewModel.SetReduceMotionAsync(true);
+        await updateStarted.Task;
+
+        Task backup = context.ViewModel.CreateBackupAsync();
+
+        Assert.True(context.ViewModel.IsBusy);
+        Assert.False(backup.IsCompleted);
+
+        Task rejectedPreference =
+            context.ViewModel.SetAllowOptionalOnlineServicesAsync(true);
+
+        Assert.True(rejectedPreference.IsCompletedSuccessfully);
+        Assert.Contains(
+            "already running",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, context.Settings.WriteCount);
+
+        releaseUpdate.SetResult();
+        await Task.WhenAll(reduceMotion, backup);
+
+        Assert.False(context.ViewModel.IsBusy);
+        Assert.True(context.Settings.Current.ReduceMotion);
+        Assert.False(context.Settings.Current.AllowOptionalOnlineServices);
+        Assert.Equal(1, context.Settings.WriteCount);
+        Assert.Contains(
+            "Backup created",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task OverlappingSettingsActionsRejectSecondAttemptUntilFirstFinishes()
     {
         TestContext context = Create();
@@ -318,8 +360,10 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         Assert.False(context.ViewModel.CanRunSettingsActions);
 
         Task duplicateReset = context.ViewModel.ResetPreferencesAsync();
+        Task rejectedPreference = context.ViewModel.SetReduceMotionAsync(true);
 
         Assert.True(duplicateReset.IsCompletedSuccessfully);
+        Assert.True(rejectedPreference.IsCompletedSuccessfully);
         Assert.Contains(
             "already running",
             context.ViewModel.ActionStatus,
@@ -332,6 +376,7 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         Assert.False(context.ViewModel.IsBusy);
         Assert.True(context.ViewModel.CanRunSettingsActions);
         Assert.Equal(1, context.Settings.WriteCount);
+        Assert.False(context.Settings.Current.ReduceMotion);
         Assert.Contains(
             "reset to defaults",
             context.ViewModel.ActionStatus,

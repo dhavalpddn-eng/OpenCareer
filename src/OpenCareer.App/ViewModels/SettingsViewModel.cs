@@ -325,9 +325,17 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
         try
         {
-            SettingsActionResult result = await _backup.CreateBackupAsync(cancellationToken)
-                .ConfigureAwait(true);
-            ActionStatus = result.Message;
+            await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                SettingsActionResult result = await _backup.CreateBackupAsync(cancellationToken)
+                    .ConfigureAwait(true);
+                ActionStatus = result.Message;
+            }
+            finally
+            {
+                _preferenceGate.Release();
+            }
         }
         finally
         {
@@ -342,10 +350,18 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
         try
         {
-            RefreshDiagnostics();
-            SettingsActionResult result = await _diagnostics.CreateAsync(cancellationToken)
-                .ConfigureAwait(true);
-            ActionStatus = result.Message;
+            await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                RefreshDiagnostics();
+                SettingsActionResult result = await _diagnostics.CreateAsync(cancellationToken)
+                    .ConfigureAwait(true);
+                ActionStatus = result.Message;
+            }
+            finally
+            {
+                _preferenceGate.Release();
+            }
         }
         finally
         {
@@ -401,9 +417,21 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         Func<AppPreferences, AppPreferences> update,
         CancellationToken cancellationToken)
     {
+        if (IsBusy)
+        {
+            ReportSettingsActionAlreadyRunning();
+            return;
+        }
+
         await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
         try
         {
+            if (IsBusy)
+            {
+                ReportSettingsActionAlreadyRunning();
+                return;
+            }
+
             try
             {
                 AppPreferences preferences = update(_settings.Current);
@@ -429,8 +457,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     {
         if (Interlocked.CompareExchange(ref _settingsActionActive, 1, 0) != 0)
         {
-            ActionStatus =
-                "Another Settings action is already running. Wait for it to finish, then retry.";
+            ReportSettingsActionAlreadyRunning();
             return false;
         }
 
@@ -445,6 +472,10 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(CanRunSettingsActions));
     }
+
+    private void ReportSettingsActionAlreadyRunning() =>
+        ActionStatus =
+            "Another Settings action is already running. Wait for it to finish, then retry.";
 
     private void OnSettingsChanged(object? sender, EventArgs e)
     {

@@ -38,6 +38,7 @@
                                        Style="{StaticResource OpenCareerInputLabelStyle}" />
                             <ComboBox x:Name="UnitsComboBox"
                                       Style="{StaticResource OpenCareerComboBoxStyle}"
+                                      IsEnabled="{Binding CanRunSettingsActions}"
                                       SelectionChanged="UnitsComboBox_SelectionChanged" />
                             <TextBlock Text="Changes live telemetry display units immediately."
                                        Style="{StaticResource OpenCareerInputHelpStyle}" />
@@ -48,6 +49,7 @@
                                        Style="{StaticResource OpenCareerInputLabelStyle}" />
                             <ComboBox x:Name="InputHintsComboBox"
                                       Style="{StaticResource OpenCareerComboBoxStyle}"
+                                      IsEnabled="{Binding CanRunSettingsActions}"
                                       SelectionChanged="InputHintsComboBox_SelectionChanged" />
                             <TextBlock Text="{Binding InputBindingStatus}"
                                        Style="{StaticResource OpenCareerInputHelpStyle}" />
@@ -72,6 +74,7 @@
                                               OnContent="On"
                                               OffContent="Off"
                                               Style="{StaticResource OpenCareerToggleSwitchStyle}"
+                                              IsEnabled="{Binding CanRunSettingsActions}"
                                               Toggled="ChecklistToggle_Toggled" />
                             </Grid>
                         </Border>
@@ -95,6 +98,7 @@
                                               OnContent="On"
                                               OffContent="Off"
                                               Style="{StaticResource OpenCareerToggleSwitchStyle}"
+                                              IsEnabled="{Binding CanRunSettingsActions}"
                                               Toggled="TutorialOfferToggle_Toggled" />
                             </Grid>
                         </Border>
@@ -128,6 +132,7 @@
                                           OnContent="On"
                                           OffContent="Off"
                                           Style="{StaticResource OpenCareerToggleSwitchStyle}"
+                                          IsEnabled="{Binding CanRunSettingsActions}"
                                           Toggled="ReduceMotionToggle_Toggled" />
                         </Grid>
                     </Border>
@@ -309,6 +314,7 @@
                                           OnContent="Allowed"
                                           OffContent="Offline"
                                           Style="{StaticResource OpenCareerToggleSwitchStyle}"
+                                          IsEnabled="{Binding CanRunSettingsActions}"
                                           Toggled="OnlineServicesToggle_Toggled" />
                         </Grid>
                     </Border>
