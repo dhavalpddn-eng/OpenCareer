@@ -124,6 +124,47 @@ public sealed class FirstJobTutorialAutoTriggerTests
     }
 
     [Fact]
+    public async Task ProgressReadFailureIsContainedAndNextCheckCanRetry()
+    {
+        var progress = new MemoryProgressStore
+        {
+            NextReadFailure = new IOException(
+                "Synthetic tutorial progress path must not escape.")
+        };
+        TriggerFixture fixture = await CreateAsync(
+            progress: progress,
+            board: BoardWithOffer());
+
+        Assert.False(await fixture.Trigger.TryStartAsync());
+        Assert.False(fixture.Coordinator.Current.IsActive);
+        Assert.Equal(0, progress.SaveCount);
+
+        Assert.True(await fixture.Trigger.TryStartAsync());
+        Assert.True(fixture.Coordinator.Current.IsActive);
+        Assert.Equal(AppTutorialCatalog.FirstJobId, fixture.Coordinator.Current.TutorialId);
+        Assert.Equal(1, progress.SaveCount);
+    }
+
+    [Fact]
+    public async Task ProgressReadCancellationStillPropagatesAndReleasesGate()
+    {
+        var progress = new MemoryProgressStore
+        {
+            NextReadFailure = new OperationCanceledException()
+        };
+        TriggerFixture fixture = await CreateAsync(
+            progress: progress,
+            board: BoardWithOffer());
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => fixture.Trigger.TryStartAsync());
+
+        Assert.True(await fixture.Trigger.TryStartAsync());
+        Assert.True(fixture.Coordinator.Current.IsActive);
+        Assert.Equal(1, progress.SaveCount);
+    }
+
+    [Fact]
     public void ProductionReadinessMarksJobsAndFirstJobAvailable()
     {
         var readiness = new CurrentTutorialFeatureReadiness();
@@ -271,14 +312,23 @@ public sealed class FirstJobTutorialAutoTriggerTests
             new(StringComparer.Ordinal);
 
         public int SaveCount { get; private set; }
+        public Exception? NextReadFailure { get; set; }
 
         public Task<TutorialProgress> GetAsync(
             string tutorialId,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(
+            CancellationToken cancellationToken = default)
+        {
+            if (NextReadFailure is { } failure)
+            {
+                NextReadFailure = null;
+                return Task.FromException<TutorialProgress>(failure);
+            }
+
+            return Task.FromResult(
                 _items.TryGetValue(tutorialId, out TutorialProgress? progress)
                     ? progress
                     : new TutorialProgress(tutorialId));
+        }
 
         public Task SaveAsync(
             TutorialProgress progress,
