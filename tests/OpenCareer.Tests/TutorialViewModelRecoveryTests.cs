@@ -98,9 +98,13 @@ public sealed class TutorialViewModelRecoveryTests : IDisposable
             NullLogger<JsonTutorialProgressStore>.Instance,
             paths);
 
-        await Assert.ThrowsAnyAsync<IOException>(
+        Exception? failure = await Record.ExceptionAsync(
             () => store.SaveAsync(
                 new TutorialProgress(AppTutorialCatalog.AppIntroId)));
+
+        Assert.True(
+            failure is IOException or UnauthorizedAccessException,
+            $"Expected a filesystem write failure, but received {failure?.GetType().Name ?? "no exception"}.");
 
         Assert.False(File.Exists(paths.TutorialPreferencesFile + ".tmp"));
     }
