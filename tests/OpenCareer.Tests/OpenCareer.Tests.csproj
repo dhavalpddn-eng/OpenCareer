@@ -38,6 +38,7 @@
     <Compile Include="../../src/OpenCareer.App/Services/AppDataBackupService.cs" Link="Services/AppDataBackupService.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/DiagnosticBundleService.cs" Link="Services/DiagnosticBundleService.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/OpenCareerDataPaths.cs" Link="Services/OpenCareerDataPaths.cs" />
+    <Compile Include="../../src/OpenCareer.App/Services/JsonAppSettingsService.cs" Link="Services/JsonAppSettingsService.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/CurrentTutorialFeatureReadiness.cs" Link="Services/CurrentTutorialFeatureReadiness.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/OpenCareerDevelopmentDataProfile.cs" Link="Services/OpenCareerDevelopmentDataProfile.cs" />
     <Compile Include="../../src/OpenCareer.App/Services/SettingsActionResult.cs" Link="Services/SettingsActionResult.cs" />

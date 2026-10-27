@@ -17,6 +17,7 @@ public sealed class JsonAppSettingsService : IAppSettingsService
     };
 
     private AppPreferences _current = AppPreferences.Default;
+    private bool _initializationFailed;
 
     public JsonAppSettingsService(
         ILogger<JsonAppSettingsService> logger,
@@ -35,8 +36,26 @@ public sealed class JsonAppSettingsService : IAppSettingsService
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            PreferencesDocument document = await ReadAsync(cancellationToken).ConfigureAwait(false);
-            Volatile.Write(ref _current, document.Preferences ?? AppPreferences.Default);
+            try
+            {
+                AppPreferences preferences =
+                    await ReadAsync(cancellationToken).ConfigureAwait(false);
+                Volatile.Write(ref _current, preferences);
+                _initializationFailed = false;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex) when (
+                ex is JsonException
+                    or IOException
+                    or UnauthorizedAccessException
+                    or InvalidDataException)
+            {
+                _initializationFailed = true;
+                throw;
+            }
         }
         finally
         {
@@ -54,6 +73,12 @@ public sealed class JsonAppSettingsService : IAppSettingsService
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            if (_initializationFailed)
+            {
+                throw new InvalidDataException(
+                    "Application preferences could not be loaded. Reset them before saving changes.");
+            }
+
             changed = !Equals(_current, preferences);
             if (!changed)
                 return;
@@ -75,14 +100,34 @@ public sealed class JsonAppSettingsService : IAppSettingsService
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public Task ResetAsync(CancellationToken cancellationToken = default) =>
-        UpdateAsync(AppPreferences.Default, cancellationToken);
-
-    private async Task<PreferencesDocument> ReadAsync(CancellationToken cancellationToken)
+    public async Task ResetAsync(CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(_paths.SettingsFile))
-            return new PreferencesDocument();
+        bool changed;
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            changed = !Equals(_current, AppPreferences.Default);
+            await WriteAsync(
+                new PreferencesDocument
+                {
+                    Preferences = AppPreferences.Default
+                },
+                cancellationToken).ConfigureAwait(false);
 
+            Volatile.Write(ref _current, AppPreferences.Default);
+            _initializationFailed = false;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (changed)
+            Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private async Task<AppPreferences> ReadAsync(CancellationToken cancellationToken)
+    {
         try
         {
             await using FileStream stream = File.OpenRead(_paths.SettingsFile);
@@ -93,31 +138,67 @@ public sealed class JsonAppSettingsService : IAppSettingsService
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            if (document is null || document.SchemaVersion != CurrentSchemaVersion)
+            if (document is null ||
+                document.Preferences is not AppPreferences preferences)
             {
                 _logger.LogWarning(
-                    "Ignoring unsupported settings schema at {Path}.",
+                    "Settings file has no usable preferences document at {Path}.",
                     _paths.SettingsFile);
-                return new PreferencesDocument();
+                throw new InvalidDataException(
+                    "The settings file has no usable preferences document.");
             }
 
-            return document;
+            if (document.SchemaVersion != CurrentSchemaVersion)
+            {
+                _logger.LogWarning(
+                    "Settings schema {SchemaVersion} is unsupported at {Path}.",
+                    document.SchemaVersion,
+                    _paths.SettingsFile);
+                throw new InvalidDataException(
+                    $"Settings schema {document.SchemaVersion} is unsupported.");
+            }
+
+            ValidatePreferences(preferences);
+            return preferences;
+        }
+        catch (FileNotFoundException)
+        {
+            return AppPreferences.Default;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return AppPreferences.Default;
         }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Settings file is invalid: {Path}", _paths.SettingsFile);
-            return new PreferencesDocument();
+            throw;
         }
         catch (IOException ex)
         {
             _logger.LogWarning(ex, "Unable to read settings: {Path}", _paths.SettingsFile);
-            return new PreferencesDocument();
+            throw;
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "Settings file is not readable: {Path}", _paths.SettingsFile);
-            return new PreferencesDocument();
+            throw;
         }
+    }
+
+    private void ValidatePreferences(AppPreferences preferences)
+    {
+        if (Enum.IsDefined(preferences.MeasurementSystem) &&
+            Enum.IsDefined(preferences.InputHints))
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "Settings file contains unsupported preference values at {Path}.",
+            _paths.SettingsFile);
+        throw new InvalidDataException(
+            "The settings file contains unsupported preference values.");
     }
 
     private async Task WriteAsync(
