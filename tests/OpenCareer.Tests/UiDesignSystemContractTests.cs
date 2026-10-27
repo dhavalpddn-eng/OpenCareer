@@ -803,10 +803,10 @@ public sealed class UiDesignSystemContractTests
         })
         {
             XElement button = Assert.Single(
-                page.Descendants()
-                    .Where(element =>
-                        element.Name.LocalName == "Button" &&
-                        element.Attribute("Click")?.Value == clickHandler));
+                page.Descendants(),
+                element =>
+                    element.Name.LocalName == "Button" &&
+                    element.Attribute("Click")?.Value == clickHandler);
             Assert.Equal(
                 "{Binding CanRunSettingsActions}",
                 button.Attribute("IsEnabled")?.Value);
