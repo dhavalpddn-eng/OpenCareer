@@ -675,6 +675,90 @@ public sealed class DispatchViewModelTests
     }
 
     [Fact]
+    public async Task PreparationFailureKeepsAcceptedJobRecoverableAndRetryableWithoutTechnicalDetails()
+    {
+        Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var accepted = new ControllableAcceptedContext(
+            ReadyAcceptedContextValue(contractId));
+        var preparation = new FailOncePreparation(
+            new IOException("Sensitive sqlite path C:\\Users\\pilot\\OpenCareer.db"),
+            new(
+                PrepareDispatchPlanStatus.AlreadyPrepared,
+                "The exact feasible dispatch plan was already prepared.",
+                PreparedPlan(contractId)));
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            accepted,
+            preparation,
+            new StubAcceptedJobCancellation());
+        var navigationTargets = new List<DispatchNavigationTarget>();
+        viewModel.NavigationRequested += (_, args) =>
+            navigationTargets.Add(args.Target);
+        await InitializeReadyAsync(viewModel);
+
+        await viewModel.PrepareAsync(ValidInput());
+
+        Assert.Equal(2, accepted.ReadCount);
+        Assert.False(viewModel.IsBusy);
+        Assert.True(viewModel.CanPrepare);
+        Assert.True(viewModel.CanCancelAcceptedJob);
+        Assert.Equal("PREPARATION NOT CONFIRMED", viewModel.PreparationStatus);
+        Assert.Contains("Retry Prepare Plan", viewModel.PreparationDetail, StringComparison.Ordinal);
+        Assert.Contains("cancel the accepted job", viewModel.PreparationDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("diagnostic bundle", viewModel.PreparationDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sqlite", viewModel.PreparationDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("OpenCareer.db", viewModel.PreparationDetail, StringComparison.Ordinal);
+        Assert.Empty(navigationTargets);
+
+        await viewModel.PrepareAsync(ValidInput());
+
+        Assert.Equal(2, preparation.CallCount);
+        Assert.Equal("ALREADY PREPARED", viewModel.PreparationStatus);
+        Assert.Equal(
+            new[] { DispatchNavigationTarget.Jobs },
+            navigationTargets);
+    }
+
+    [Fact]
+    public async Task PreparationFailureAndContextRecoveryFailureClearStaleAcceptedJobActions()
+    {
+        Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var accepted = new ControllableAcceptedContext(
+            ReadyAcceptedContextValue(contractId));
+        var preparation = new FailOncePreparation(
+            new IOException("Sensitive preparation path C:\\Users\\pilot\\plan.json"),
+            new(
+                PrepareDispatchPlanStatus.AlreadyPrepared,
+                "Should not be reached.",
+                PreparedPlan(contractId)));
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            accepted,
+            preparation,
+            new StubAcceptedJobCancellation());
+        await InitializeReadyAsync(viewModel);
+        accepted.NextReadFailure =
+            new IOException("Sensitive recovery path C:\\Users\\pilot\\context.json");
+
+        await viewModel.PrepareAsync(ValidInput());
+
+        Assert.Equal(2, accepted.ReadCount);
+        Assert.False(viewModel.IsBusy);
+        Assert.False(viewModel.CanPrepare);
+        Assert.False(viewModel.CanCancelAcceptedJob);
+        Assert.Equal("PREPARATION NOT CONFIRMED", viewModel.PreparationStatus);
+        Assert.Contains("Reopen Dispatch", viewModel.PreparationDetail, StringComparison.Ordinal);
+        Assert.Contains("Jobs", viewModel.PreparationDetail, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.PreparationDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("plan.json", viewModel.PreparationDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("context.json", viewModel.PreparationDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task UnsuccessfulPreparationStaysOnDispatch()
     {
         Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -924,11 +1008,13 @@ public sealed class DispatchViewModelTests
         : IAcceptedDispatchPlanningContextSource
     {
         public Exception? NextReadFailure { get; set; }
+        public int ReadCount { get; private set; }
 
         public Task<AcceptedDispatchPlanningContext> ReadAsync(
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            ReadCount++;
             if (NextReadFailure is { } failure)
             {
                 NextReadFailure = null;
@@ -1098,6 +1184,25 @@ public sealed class DispatchViewModelTests
                 status,
                 detail,
                 plan));
+        }
+    }
+
+    private sealed class FailOncePreparation(
+        Exception failure,
+        PrepareDispatchPlanResult retryResult)
+        : IPreparedDispatchPlanService
+    {
+        public int CallCount { get; private set; }
+
+        public Task<PrepareDispatchPlanResult> PrepareAsync(
+            PrepareDispatchPlanRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+            return CallCount == 1
+                ? Task.FromException<PrepareDispatchPlanResult>(failure)
+                : Task.FromResult(retryResult);
         }
     }
 }

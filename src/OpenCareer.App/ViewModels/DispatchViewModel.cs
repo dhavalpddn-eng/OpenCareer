@@ -623,6 +623,42 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                         DispatchNavigationTarget.Jobs));
             }
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger?.LogError(
+                ex,
+                "Dispatch-plan preparation failed in Advanced Dispatch.");
+
+            bool acceptedContextRecovered = false;
+            try
+            {
+                AcceptedDispatchPlanningContext refreshed = await _acceptedContext
+                    .ReadAsync(CancellationToken.None)
+                    .ConfigureAwait(true);
+                ApplyAcceptedContext(refreshed);
+                acceptedContextRecovered = true;
+            }
+            catch (Exception refreshException)
+                when (refreshException is not OperationCanceledException)
+            {
+                _logger?.LogError(
+                    refreshException,
+                    "Accepted-job context could not be recovered after dispatch-plan preparation failed.");
+                ApplyAcceptedContext(
+                    new(
+                        AcceptedDispatchPlanningContextStatus.ContractsUnavailable,
+                        "Accepted-job context is unavailable."));
+            }
+
+            SetPreparation(
+                "PREPARATION NOT CONFIRMED",
+                _acceptedContractIds.Count > 0
+                    ? "Plan preparation did not finish, so the persisted plan status was not confirmed. Retry Prepare Plan; preparation is idempotent. You can also cancel the accepted job below. If this repeats, create a diagnostic bundle in Settings."
+                    : acceptedContextRecovered
+                        ? "Plan preparation did not finish, and the accepted job is no longer available in Dispatch. Open Jobs to review current work before preparing or starting a flight. If this repeats, create a diagnostic bundle in Settings."
+                        : "Plan preparation did not finish, and accepted-job context could not be refreshed. Reopen Dispatch or use Jobs to review and cancel accepted work. If this repeats, create a diagnostic bundle in Settings.",
+                "Persisted plan status unconfirmed.");
+        }
         finally
         {
             SetBusy(false);
