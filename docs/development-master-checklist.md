@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-27 through validated checkpoint `a0605288` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-27 through validated checkpoint `a8232d50` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -602,7 +602,7 @@ Verification note: campaign-core implementation head `16cda14981bc6284e4f33833e8
 - [x] Wire automatic production startup/resume so app startup recovers the most recently saved military conflict campaign without a manual orchestration call.
 - [x] Add database-consistent backup snapshot integration for conflict campaign checkpoints using SQLite backup semantics rather than copying the live WAL database files.
 - [x] Add validated restore integration from an OpenCareer backup archive: stage and integrity-check the SQLite image first, then apply it on restart before SQLite-backed state is recovered, with rollback protection.
-- [ ] Expose backup selection/confirmation in Settings so the validated restore backend is user-accessible without manual/internal invocation.
+- [x] Expose profile-local OpenCareer backup selection and explicit confirmation in Settings, require a fresh safety backup before staging, and keep the pending next-launch restore visible and cancellable without manual/internal invocation.
 - [x] Add deterministic fictional operation identity and distinct friendly/hostile faction names/short codes while keeping the underlying simulation sides generic and reusable.
 - [x] Add the first bounded long-term campaign-cycle layer: nearby logistics recovery for ground units, theater-logistics air readiness recovery, momentum-based sector consolidation and linked-threat resynchronization.
 - [x] Add finite replacement reserves for both sides; replacements require operational logistics, reinforce surviving damaged ground units deterministically and consume the reserve.
