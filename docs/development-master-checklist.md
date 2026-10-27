@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-27 through validated checkpoint `f8ae06e` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-27 through validated checkpoint `49eb0b69` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -791,6 +791,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement diagnostic ZIP export with coordinates excluded.
 - [x] Contain diagnostic export directory-setup and archive failures, preserve cancellation, clean temporary output, keep technical details in logs and expose safe retry/Open Logs guidance.
 - [x] Implement current local-data ZIP backup and folder access.
+- [x] Contain local-data backup directory-setup and archive failures, preserve cancellation, clean partial ZIP/SQLite snapshot artifacts, keep technical details in logs and expose safe retry/Open Logs guidance.
 - [x] Implement reduced-motion and offline optional-service permission preferences.
 - [x] Keep real binding discovery explicitly owned by MBL-05.
 - [x] Keep authoritative SQLite FlightSession/save recovery explicitly owned by MBL-07.
