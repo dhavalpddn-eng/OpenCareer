@@ -13,8 +13,6 @@ public sealed class AppDataBackupService(
     public async Task<SettingsActionResult> CreateBackupAsync(
         CancellationToken cancellationToken = default)
     {
-        paths.EnsureDirectories();
-
         string fileName =
             $"opencareer-backup-{DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}.zip";
         string destination = Path.Combine(paths.BackupsFolder, fileName);
@@ -25,6 +23,8 @@ public sealed class AppDataBackupService(
 
         try
         {
+            paths.EnsureDirectories();
+
             var includedFiles = new List<string>();
             bool sqliteSnapshotIncluded = false;
 
@@ -129,15 +129,13 @@ public sealed class AppDataBackupService(
             TryDelete(temporary);
             throw;
         }
-        catch (Exception ex) when (
-            ex is IOException
-                or UnauthorizedAccessException
-                or InvalidDataException
-                or Microsoft.Data.Sqlite.SqliteException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             TryDelete(temporary);
             logger.LogError(ex, "Failed to create OpenCareer local-data backup.");
-            return new SettingsActionResult(false, $"Backup failed: {ex.Message}");
+            return new SettingsActionResult(
+                false,
+                "Backup could not be created. Verify local storage is available, then retry. If this keeps happening, use Open Logs Folder in Settings if available and share the latest log with support.");
         }
         finally
         {

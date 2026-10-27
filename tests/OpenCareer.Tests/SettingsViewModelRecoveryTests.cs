@@ -142,6 +142,42 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task FailedBackupIsContainedWithoutTechnicalDetails()
+    {
+        Directory.CreateDirectory(_root);
+        string blockedRoot = Path.Combine(_root, "blocked-backup-root");
+        await File.WriteAllTextAsync(
+            blockedRoot,
+            "This file intentionally prevents creation of the data directory.");
+        TestContext context = Create(
+            paths: new OpenCareerDataPaths(blockedRoot));
+
+        await context.ViewModel.CreateBackupAsync();
+
+        Assert.False(context.ViewModel.IsBusy);
+        Assert.Contains(
+            "could not be created",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "retry",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Open Logs Folder",
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            blockedRoot,
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "blocked-backup-root",
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BindingStatusUsesReadOnlyDiscoverySourceWithoutClaimingUnbound()
     {
         TestContext context = Create(
