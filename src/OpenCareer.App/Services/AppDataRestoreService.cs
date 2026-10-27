@@ -9,13 +9,19 @@ public sealed class AppDataRestoreService(
     SqliteBackupArchiveRestoreService restore,
     ILogger<AppDataRestoreService> logger)
 {
+    private bool _pendingDatabaseRestoreApplyFailed;
+
     public bool HasPendingDatabaseRestore =>
         File.Exists(paths.PendingDatabaseRestoreFile);
+
+    public bool PendingDatabaseRestoreApplyFailed =>
+        Volatile.Read(ref _pendingDatabaseRestoreApplyFailed);
 
     public SettingsActionResult CancelPendingDatabaseRestore()
     {
         if (!HasPendingDatabaseRestore)
         {
+            Volatile.Write(ref _pendingDatabaseRestoreApplyFailed, false);
             return new SettingsActionResult(
                 true,
                 "No database restore is currently staged.");
@@ -24,6 +30,7 @@ public sealed class AppDataRestoreService(
         try
         {
             File.Delete(paths.PendingDatabaseRestoreFile);
+            Volatile.Write(ref _pendingDatabaseRestoreApplyFailed, false);
             logger.LogInformation("Cancelled the pending OpenCareer database restore.");
 
             return new SettingsActionResult(
@@ -55,6 +62,8 @@ public sealed class AppDataRestoreService(
                     paths.PendingDatabaseRestoreFile,
                     cancellationToken)
                 .ConfigureAwait(false);
+
+            Volatile.Write(ref _pendingDatabaseRestoreApplyFailed, false);
 
             logger.LogInformation(
                 "Staged OpenCareer database restore from {BackupArchive}; backup created at {CreatedAt}.",
@@ -92,13 +101,30 @@ public sealed class AppDataRestoreService(
         CancellationToken cancellationToken = default)
     {
         if (!HasPendingDatabaseRestore)
+        {
+            Volatile.Write(ref _pendingDatabaseRestoreApplyFailed, false);
             return false;
+        }
 
-        await restore
-            .ApplyStagedRestoreAsync(
-                paths.PendingDatabaseRestoreFile,
-                cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            await restore
+                .ApplyStagedRestoreAsync(
+                    paths.PendingDatabaseRestoreFile,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            Volatile.Write(ref _pendingDatabaseRestoreApplyFailed, true);
+            throw;
+        }
+
+        Volatile.Write(ref _pendingDatabaseRestoreApplyFailed, false);
 
         logger.LogInformation(
             "Applied pending OpenCareer database restore.");

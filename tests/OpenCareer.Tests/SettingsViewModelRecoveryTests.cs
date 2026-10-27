@@ -258,6 +258,56 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task FailedStartupRestoreStaysVisibleWithOrWithoutPendingStage()
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        paths.EnsureDirectories();
+        await File.WriteAllTextAsync(
+            paths.PendingDatabaseRestoreFile,
+            "Synthetic invalid database detail must not reach player-facing text.");
+        TestContext context = Create(paths: paths);
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => context.Restore.ApplyPendingDatabaseRestoreAsync());
+        context.ViewModel.RefreshBackupArchives();
+
+        Assert.True(context.Restore.PendingDatabaseRestoreApplyFailed);
+        Assert.True(context.ViewModel.DatabaseRestoreApplyFailed);
+        Assert.True(context.ViewModel.HasPendingDatabaseRestore);
+        Assert.True(context.ViewModel.CanCancelPendingDatabaseRestore);
+        Assert.Contains("RESTORE ATTENTION", context.ViewModel.BackupRestoreStatus);
+        Assert.Contains("did not complete", context.ViewModel.BackupRestoreStatus);
+        Assert.Contains("stop automatic retry", context.ViewModel.BackupRestoreStatus);
+        Assert.Contains("diagnostic bundle", context.ViewModel.BackupRestoreStatus);
+        Assert.DoesNotContain("Synthetic invalid", context.ViewModel.BackupRestoreStatus);
+        Assert.DoesNotContain("not a database", context.ViewModel.BackupRestoreStatus);
+
+        context.ViewModel.CancelPendingDatabaseRestore();
+
+        Assert.False(context.Restore.PendingDatabaseRestoreApplyFailed);
+        Assert.False(context.ViewModel.DatabaseRestoreApplyFailed);
+        Assert.False(context.ViewModel.HasPendingDatabaseRestore);
+        Assert.False(File.Exists(paths.PendingDatabaseRestoreFile));
+        Assert.DoesNotContain("RESTORE ATTENTION", context.ViewModel.BackupRestoreStatus);
+
+        await File.WriteAllTextAsync(
+            paths.PendingDatabaseRestoreFile,
+            "Synthetic second invalid database detail.");
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => context.Restore.ApplyPendingDatabaseRestoreAsync());
+        File.Delete(paths.PendingDatabaseRestoreFile);
+        context.ViewModel.RefreshBackupArchives();
+
+        Assert.True(context.ViewModel.DatabaseRestoreApplyFailed);
+        Assert.False(context.ViewModel.HasPendingDatabaseRestore);
+        Assert.False(context.ViewModel.CanCancelPendingDatabaseRestore);
+        Assert.Contains("RESTORE ATTENTION", context.ViewModel.BackupRestoreStatus);
+        Assert.Contains("no staged restore remains", context.ViewModel.BackupRestoreStatus);
+        Assert.Contains("Review current career data", context.ViewModel.BackupRestoreStatus);
+        Assert.DoesNotContain("Synthetic second", context.ViewModel.BackupRestoreStatus);
+    }
+
+    [Fact]
     public async Task FailedDiagnosticExportIsContainedWithoutTechnicalDetails()
     {
         Directory.CreateDirectory(_root);
@@ -729,7 +779,8 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         return new TestContext(
             viewModel,
             settings,
-            sessions);
+            sessions,
+            restore);
     }
 
     private static async Task CreateValidDatabaseAsync(string databasePath)
@@ -774,7 +825,8 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     private sealed record TestContext(
         SettingsViewModel ViewModel,
         FakeSettings Settings,
-        FlightSessionCoordinator Sessions);
+        FlightSessionCoordinator Sessions,
+        AppDataRestoreService Restore);
 
     private sealed class FakeBindingSource(
         InputBindingDiscoverySnapshot snapshot) : IInputBindingDiscoverySource

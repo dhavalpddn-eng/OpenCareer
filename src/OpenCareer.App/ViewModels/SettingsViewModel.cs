@@ -48,6 +48,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private IReadOnlyList<string> _backupArchiveOptions = Array.Empty<string>();
     private int _selectedBackupIndex = -1;
     private bool _hasPendingDatabaseRestore;
+    private bool _databaseRestoreApplyFailed;
     private string _backupRestoreStatus =
         "No OpenCareer backup archives are available in the Backups folder.";
 
@@ -177,6 +178,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             : null;
 
     public bool HasPendingDatabaseRestore => _hasPendingDatabaseRestore;
+
+    public bool DatabaseRestoreApplyFailed => _databaseRestoreApplyFailed;
 
     public bool CanStageSelectedBackup =>
         CanRunSettingsActions
@@ -436,6 +439,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
                 ? -1
                 : IndexOfBackupArchive(selected);
             _hasPendingDatabaseRestore = _restore.HasPendingDatabaseRestore;
+            _databaseRestoreApplyFailed =
+                _restore.PendingDatabaseRestoreApplyFailed;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -443,12 +448,15 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             _backupArchiveOptions = Array.Empty<string>();
             _selectedBackupIndex = -1;
             _hasPendingDatabaseRestore = _restore.HasPendingDatabaseRestore;
+            _databaseRestoreApplyFailed =
+                _restore.PendingDatabaseRestoreApplyFailed;
         }
 
         OnPropertyChanged(nameof(BackupArchiveOptions));
         OnPropertyChanged(nameof(SelectedBackupIndex));
         OnPropertyChanged(nameof(SelectedBackupArchive));
         OnPropertyChanged(nameof(HasPendingDatabaseRestore));
+        OnPropertyChanged(nameof(DatabaseRestoreApplyFailed));
         OnPropertyChanged(nameof(CanStageSelectedBackup));
         OnPropertyChanged(nameof(CanCancelPendingDatabaseRestore));
         UpdateBackupRestoreStatus();
@@ -699,7 +707,11 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     private void UpdateBackupRestoreStatus()
     {
-        string status = HasPendingDatabaseRestore
+        string status = DatabaseRestoreApplyFailed
+            ? HasPendingDatabaseRestore
+                ? "RESTORE ATTENTION · The staged database restore did not complete during startup. Cancel it below to stop automatic retry, or create a diagnostic bundle before restarting again. OpenCareer has not recorded the selected backup as applied."
+                : "RESTORE ATTENTION · The database restore did not complete during startup and no staged restore remains to retry or cancel. OpenCareer has not recorded the selected backup as applied. Review current career data and create a diagnostic bundle before selecting that backup again."
+            : HasPendingDatabaseRestore
             ? "RESTORE STAGED · Restart OpenCareer to apply it, or cancel the staged restore below to keep current career data."
             : SelectedBackupArchive is not null
                 ? $"Selected: {SelectedBackupArchive}. Restoring requires confirmation and creates a current safety backup first."
