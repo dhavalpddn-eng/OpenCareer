@@ -228,16 +228,69 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 ex,
                 "KJFK development flight generation failed.");
 
-            SetField(
-                ref _acceptanceStatus,
-                ex.Message,
-                nameof(AcceptanceStatus));
+            await RecoverDevelopmentFlightGenerationFailureAsync()
+                .ConfigureAwait(true);
         }
         finally
         {
             SetJobActionBusy(false);
             _startGate.Release();
         }
+    }
+
+    private async Task RecoverDevelopmentFlightGenerationFailureAsync()
+    {
+        try
+        {
+            await RefreshAsync(CancellationToken.None)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(
+                ex,
+                "Jobs refresh failed while reconciling KJFK development flight generation; persisted recovery state was preserved.");
+
+            RefreshJobRecoveryAttention(
+                result:
+                    null,
+                recoveryFailed:
+                    true);
+            RefreshCurrentFlightSession();
+
+            try
+            {
+                await RefreshAcceptedJobsAsync(CancellationToken.None)
+                    .ConfigureAwait(true);
+            }
+            catch (Exception acceptedJobsException)
+            {
+                _logger?.LogWarning(
+                    acceptedJobsException,
+                    "Accepted-job refresh failed while reconciling KJFK development flight generation; persisted recovery state was preserved.");
+            }
+        }
+
+        string status =
+            HasCurrentFlightSession
+                ? "ZERO-PAY CALIBRATION could not be created. Open Current Flight to recover the existing operation, then retry from Jobs. If the issue returns, create a diagnostic bundle from Settings."
+                : _acceptedContractIds.Count > 0 || HasJobRecoveryAttention
+                    ? "ZERO-PAY CALIBRATION could not be created. Resolve the job-recovery notice or cancel the accepted preflight job below, then retry. If the issue returns, create a diagnostic bundle from Settings."
+                    : _offers.Any(
+                        static offer =>
+                            DevelopmentFlight.IsDevelopment(offer.Offer))
+                        ? "ZERO-PAY CALIBRATION is available after recovery. Review its card before starting; it still awards $0."
+                        : string.Equals(
+                            AirportText,
+                            "LOCAL BOARD · KJFK",
+                            StringComparison.Ordinal)
+                            ? "ZERO-PAY CALIBRATION could not be created. The pilot remains at KJFK, so select Create Zero-Pay Calibration to retry. If the issue returns, create a diagnostic bundle from Settings."
+                            : "ZERO-PAY CALIBRATION could not be created. If the pilot is away from KJFK, select Move pilot to KJFK for this test, then retry. If the issue returns, create a diagnostic bundle from Settings.";
+
+        SetField(
+            ref _acceptanceStatus,
+            status,
+            nameof(AcceptanceStatus));
     }
 
     public async Task RefreshAsync(

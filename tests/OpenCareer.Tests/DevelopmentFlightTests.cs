@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenCareer.App.ViewModels;
 using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
 using OpenCareer.Domain.Careers;
@@ -178,6 +179,73 @@ public sealed class DevelopmentFlightTests
         Assert.Contains(
             first.OfferId,
             fixture.Board.RetiredOfferIds);
+    }
+
+    [Fact]
+    public async Task GenerationWriteFailureKeepsPositionedPilotRetryableWithoutRawErrorText()
+    {
+        var fixture =
+            new Fixture(
+                airport:
+                    "KRME")
+            {
+                BoardSaveFailuresRemaining =
+                    1
+            };
+        var viewModel =
+            new JobsViewModel(
+                fixture,
+                fixture.Runtime,
+                new FixedClock(),
+                aircraftSelection:
+                    null,
+                startAction:
+                    null,
+                logger:
+                    null,
+                developmentFlights:
+                    fixture.Service);
+
+        await viewModel.GenerateDevelopmentFlightAsync(
+            positionPilotAtKjfk:
+                true);
+
+        Assert.Equal(
+            "KJFK",
+            fixture.Profile.Profile.Location.CurrentAirportIcao);
+        Assert.Empty(
+            viewModel.Offers);
+        Assert.False(
+            viewModel.IsJobActionBusy);
+        Assert.Contains(
+            "pilot remains at KJFK",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "retry",
+            viewModel.AcceptanceStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.AcceptanceStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            Fixture.BoardSaveFailureMessage,
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+
+        await viewModel.GenerateDevelopmentFlightAsync(
+            positionPilotAtKjfk:
+                false);
+
+        Assert.True(
+            DevelopmentFlight.IsDevelopment(
+                Assert.Single(
+                    viewModel.Offers).Offer));
+        Assert.Contains(
+            "ready",
+            viewModel.AcceptanceStatus,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -421,6 +489,9 @@ public sealed class DevelopmentFlightTests
           IJobContractRecoverySource,
           IFlightSessionCheckpointStore
     {
+        public const string BoardSaveFailureMessage =
+            "INTERNAL board-store failure details";
+
         public Fixture(
             string airport = "KJFK")
         {
@@ -435,19 +506,19 @@ public sealed class DevelopmentFlightTests
                     SavedAt:
                         Now);
 
-            var runtime =
+            Runtime =
                 new PlayerCareerRuntimeState(this);
 
             Service =
                 new DevelopmentFlightService(
                     new JobBoardGenerationService(this),
-                    runtime,
+                    Runtime,
                     this,
                     this,
                     new FixedClock(),
                     new PlayerCareerLocationCoordinator(
                         this,
-                        runtime));
+                        Runtime));
         }
 
         public JobBoardState Board { get; set; } =
@@ -462,6 +533,10 @@ public sealed class DevelopmentFlightTests
 
         public FlightSession? Checkpoint { get; set; }
 
+        public int BoardSaveFailuresRemaining { get; set; }
+
+        public PlayerCareerRuntimeState Runtime { get; }
+
         public DevelopmentFlightService Service { get; }
 
         public Task SaveAsync(
@@ -469,6 +544,14 @@ public sealed class DevelopmentFlightTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (BoardSaveFailuresRemaining > 0)
+            {
+                BoardSaveFailuresRemaining--;
+                throw new IOException(
+                    BoardSaveFailureMessage);
+            }
+
             Board = state;
             return Task.CompletedTask;
         }
