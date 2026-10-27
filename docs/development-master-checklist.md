@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-27 through validated checkpoint `118bdbd9` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-27 through validated checkpoint `4521bacf` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -808,6 +808,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Surface failed next-launch database-restore application in Settings, distinguish cancellable pending state from a consumed stage, suppress raw SQLite details and never imply the selected backup was applied successfully.
 - [x] Preserve the pre-restore SQLite rollback snapshot until a copied rollback passes integrity validation; retain the snapshot and log its recovery path if copy or validation fails.
 - [x] Normalize malformed restore-manifest JSON and null required fields as invalid imported data so staging preserves current data and returns safe validation guidance without parser details.
+- [x] Contain database-restore data-directory setup failures inside the safe validation boundary so path collisions or inaccessible storage create no pending restore and expose no filesystem details to the player.
 - [x] Implement reduced-motion and offline optional-service permission preferences.
 - [x] Keep real binding discovery explicitly owned by MBL-05.
 - [x] Keep authoritative SQLite FlightSession/save recovery explicitly owned by MBL-07.
