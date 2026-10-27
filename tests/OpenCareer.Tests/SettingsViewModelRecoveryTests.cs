@@ -74,6 +74,38 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public void FailedCleanTestResetSchedulingRemainsRetryableWithoutTechnicalDetails()
+    {
+        OpenCareerDataProfileSelection selection =
+            OpenCareerDataProfileSelection.Resolve(
+                [OpenCareerDataProfileSelection.ProfileArgument],
+                _root);
+        selection.Prepare();
+        File.WriteAllText(
+            selection.Paths.ProfileMarkerFile,
+            "Synthetic invalid marker that must not reach player-facing text.");
+        TestContext context = Create(paths: selection.Paths);
+
+        context.ViewModel.ScheduleDevelopmentProfileReset();
+
+        Assert.True(context.ViewModel.CanScheduleDevelopmentProfileReset);
+        Assert.Contains("was not scheduled", context.ViewModel.ActionStatus);
+        Assert.Contains("then retry", context.ViewModel.ActionStatus);
+        Assert.Contains("diagnostic bundle", context.ViewModel.ActionStatus);
+        Assert.DoesNotContain("marker is missing or invalid", context.ViewModel.ActionStatus);
+        Assert.DoesNotContain("Synthetic invalid marker", context.ViewModel.ActionStatus);
+        Assert.False(File.Exists(selection.Paths.DevelopmentResetRequestFile));
+
+        Directory.Delete(selection.Paths.Root, recursive: true);
+        selection.Prepare();
+        context.ViewModel.ScheduleDevelopmentProfileReset();
+
+        Assert.False(context.ViewModel.CanScheduleDevelopmentProfileReset);
+        Assert.Contains("reset scheduled", context.ViewModel.ActionStatus);
+        Assert.True(File.Exists(selection.Paths.DevelopmentResetRequestFile));
+    }
+
+    [Fact]
     public void BindingStatusUsesReadOnlyDiscoverySourceWithoutClaimingUnbound()
     {
         TestContext context = Create(
@@ -150,9 +182,10 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     private TestContext Create(
         IInputBindingDiscoverySource? inputBindings = null,
         FlightSessionCoordinator? sessions = null,
-        FlightSessionPersistenceService? flightPersistence = null)
+        FlightSessionPersistenceService? flightPersistence = null,
+        OpenCareerDataPaths? paths = null)
     {
-        var paths = new OpenCareerDataPaths(_root);
+        paths ??= new OpenCareerDataPaths(_root);
         var settings = new FakeSettings();
         var connection = new FakeConnection();
         var telemetry = new FakeTelemetrySource();

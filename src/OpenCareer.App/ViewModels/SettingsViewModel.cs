@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.App.Services;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
@@ -22,6 +24,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private readonly FlightSessionCoordinator _flightSessions;
     private readonly FlightSessionPersistenceService _flightPersistence;
     private readonly IInputBindingDiscoverySource? _inputBindings;
+    private readonly ILogger<SettingsViewModel> _logger;
 
     private string _actionStatus = "Ready.";
     private bool _isBusy;
@@ -48,7 +51,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OpenCareerDataPaths paths,
         FlightSessionCoordinator flightSessions,
         FlightSessionPersistenceService flightPersistence,
-        IInputBindingDiscoverySource? inputBindings = null)
+        IInputBindingDiscoverySource? inputBindings = null,
+        ILogger<SettingsViewModel>? logger = null)
     {
         _settings = settings;
         _connection = connection;
@@ -64,6 +68,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             flightPersistence
             ?? throw new ArgumentNullException(nameof(flightPersistence));
         _inputBindings = inputBindings;
+        _logger = logger ?? NullLogger<SettingsViewModel>.Instance;
         _careerRecoveryStatus =
             FormatCareerRecoveryStatus(
                 _flightSessions.Current,
@@ -367,7 +372,11 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
                 or InvalidDataException
                 or InvalidOperationException)
         {
-            ActionStatus = $"Could not schedule the clean test reset: {ex.Message}";
+            _logger.LogError(
+                ex,
+                "Could not schedule the clean KJFK development profile reset.");
+            ActionStatus =
+                "Clean KJFK test reset was not scheduled. Verify the isolated test profile folder is available, then retry. If this keeps happening, create a diagnostic bundle before changing or deleting profile data.";
         }
     }
 
