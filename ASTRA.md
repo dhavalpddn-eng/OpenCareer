@@ -380,6 +380,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `49eb0b697c0b129191aca1883754212415110d99`.
 - Local-data backup now contains data-directory setup and unexpected non-cancellation failures instead of escaping Settings. Partial ZIP and SQLite snapshot artifacts are cleaned, technical exceptions stay in structured logs, and player-facing copy provides storage/retry/Open Logs guidance without filesystem details.
 - Verification: exact-head Linux build #1241 and Windows `winui-build` #1174 passed on the first attempt, including WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite. Local test execution was unavailable because this runner had no .NET CLI.
+- Code checkpoint: `6a3b5586ef8b174091fe594a3a32ffd24969d979`.
+- Settings preference save/reset failures are now contained at the UI boundary. The prior in-memory preferences remain authoritative after failure, reset releases busy state and can be retried, technical exceptions stay in structured logs, and player-facing copy gives storage/retry/diagnostic/Open Logs guidance without exception or path details. Cancellation still propagates instead of being reported as a failed preference write.
+- Verification: exact-head Linux build #1243 and Windows `winui-build` #1176 passed on the first attempt, including WinUI compilation, SimConnect probe, rapid KJFK certification and the full test suite. Local test execution was unavailable because this runner had no .NET CLI.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.

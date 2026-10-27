@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-27 through validated checkpoint `49eb0b69` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-27 through validated checkpoint `6a3b5586` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -785,6 +785,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [ ] Implement Career screen.
 - [x] Implement production Settings screen.
 - [x] Persist versioned app preferences independently from career state.
+- [x] Contain preference save/reset failures, preserve the prior settings and reset retry path, release busy state, keep cancellation propagating and replace technical exception text with safe storage/retry/diagnostic/Open Logs guidance.
 - [x] Implement Aviation/Metric unit selection and reformat existing telemetry without waiting for a new sample.
 - [x] Implement live simulator/SimConnect/telemetry diagnostics.
 - [x] Implement local application file logging.
