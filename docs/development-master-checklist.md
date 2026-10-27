@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-27 through validated checkpoint `0784a7ab` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-27 through validated checkpoint `3a6f3dad` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -111,6 +111,7 @@ Chapter status: **ACTIVE**
 - [x] Persist tutorial version/progress independently from authoritative career state.
 - [x] Add Settings action to restart the intro tutorial.
 - [x] Contain unexpected automatic First Job tutorial failures so optional onboarding cannot break app activation or Jobs refresh; preserve cancellation and release the trigger gate for retry.
+- [x] Fail closed when tutorial progress cannot be persisted: keep the current state retryable, clean temporary writes, contain/log UI-boundary failures, reject overlapping manual actions and preserve cancellation.
 - [ ] Add per-control spotlight/focus targets; page navigation and **Coming Later** readiness labels are implemented.
 - [ ] Launch and inspect the production app locally on the user's Windows machine with MSFS closed.
 - [ ] Verify NavigationView interaction locally.
