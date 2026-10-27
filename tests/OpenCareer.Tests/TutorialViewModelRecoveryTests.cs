@@ -120,7 +120,7 @@ public sealed class TutorialViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
-    public async Task JsonStoreWriteFailureThrowsAndCleansTemporaryFile()
+    public async Task JsonStorePathCollisionFailsClosedAndCleansTemporaryFile()
     {
         var paths = new OpenCareerDataPaths(_root);
         Directory.CreateDirectory(paths.TutorialPreferencesFile);
@@ -128,15 +128,37 @@ public sealed class TutorialViewModelRecoveryTests : IDisposable
             NullLogger<JsonTutorialProgressStore>.Instance,
             paths);
 
-        Exception? failure = await Record.ExceptionAsync(
+        Exception? readFailure = await Record.ExceptionAsync(
+            () => store.GetAsync(AppTutorialCatalog.AppIntroId));
+        Exception? writeFailure = await Record.ExceptionAsync(
             () => store.SaveAsync(
                 new TutorialProgress(AppTutorialCatalog.AppIntroId)));
 
         Assert.True(
-            failure is IOException or UnauthorizedAccessException,
-            $"Expected a filesystem write failure, but received {failure?.GetType().Name ?? "no exception"}.");
+            readFailure is IOException or UnauthorizedAccessException,
+            $"Expected a filesystem read failure, but received {readFailure?.GetType().Name ?? "no exception"}.");
+        Assert.True(
+            writeFailure is IOException or UnauthorizedAccessException,
+            $"Expected a filesystem write failure, but received {writeFailure?.GetType().Name ?? "no exception"}.");
 
         Assert.False(File.Exists(paths.TutorialPreferencesFile + ".tmp"));
+    }
+
+    [Fact]
+    public async Task MissingProgressFileStartsFreshAndCanBePersisted()
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        var store = new JsonTutorialProgressStore(
+            NullLogger<JsonTutorialProgressStore>.Instance,
+            paths);
+
+        TutorialProgress initial =
+            await store.GetAsync(AppTutorialCatalog.AppIntroId);
+        var saved = initial with { LastStepId = "connection" };
+        await store.SaveAsync(saved);
+
+        Assert.Equal(new TutorialProgress(AppTutorialCatalog.AppIntroId), initial);
+        Assert.Equal(saved, await store.GetAsync(AppTutorialCatalog.AppIntroId));
     }
 
     [Fact]

@@ -60,9 +60,6 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
 
     private async Task<PreferencesDocument> ReadAsync(CancellationToken cancellationToken)
     {
-        if (!File.Exists(_paths.TutorialPreferencesFile))
-            return new PreferencesDocument();
-
         PreferencesDocument? document;
         try
         {
@@ -73,6 +70,14 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                     _serializerOptions,
                     cancellationToken)
                 .ConfigureAwait(false);
+        }
+        catch (FileNotFoundException)
+        {
+            return new PreferencesDocument();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return new PreferencesDocument();
         }
         catch (JsonException ex)
         {
