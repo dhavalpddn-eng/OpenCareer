@@ -22,6 +22,9 @@
                                Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
                     <TextBlock Text="Display &amp; flight preferences"
                                Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    <TextBlock Text="{Binding PreferenceStorageStatus}"
+                               Style="{StaticResource OpenCareerPaperBodyStyle}"
+                               TextWrapping="Wrap" />
 
                     <Grid ColumnSpacing="20" RowSpacing="14">
                         <Grid.ColumnDefinitions>
@@ -38,7 +41,7 @@
                                        Style="{StaticResource OpenCareerInputLabelStyle}" />
                             <ComboBox x:Name="UnitsComboBox"
                                       Style="{StaticResource OpenCareerComboBoxStyle}"
-                                      IsEnabled="{Binding CanRunSettingsActions}"
+                                      IsEnabled="{Binding CanEditPreferences}"
                                       SelectionChanged="UnitsComboBox_SelectionChanged" />
                             <TextBlock Text="Changes live telemetry display units immediately."
                                        Style="{StaticResource OpenCareerInputHelpStyle}" />
@@ -49,7 +52,7 @@
                                        Style="{StaticResource OpenCareerInputLabelStyle}" />
                             <ComboBox x:Name="InputHintsComboBox"
                                       Style="{StaticResource OpenCareerComboBoxStyle}"
-                                      IsEnabled="{Binding CanRunSettingsActions}"
+                                      IsEnabled="{Binding CanEditPreferences}"
                                       SelectionChanged="InputHintsComboBox_SelectionChanged" />
                             <TextBlock Text="{Binding InputBindingStatus}"
                                        Style="{StaticResource OpenCareerInputHelpStyle}" />
@@ -74,7 +77,7 @@
                                               OnContent="On"
                                               OffContent="Off"
                                               Style="{StaticResource OpenCareerToggleSwitchStyle}"
-                                              IsEnabled="{Binding CanRunSettingsActions}"
+                                              IsEnabled="{Binding CanEditPreferences}"
                                               Toggled="ChecklistToggle_Toggled" />
                             </Grid>
                         </Border>
@@ -98,7 +101,7 @@
                                               OnContent="On"
                                               OffContent="Off"
                                               Style="{StaticResource OpenCareerToggleSwitchStyle}"
-                                              IsEnabled="{Binding CanRunSettingsActions}"
+                                              IsEnabled="{Binding CanEditPreferences}"
                                               Toggled="TutorialOfferToggle_Toggled" />
                             </Grid>
                         </Border>
@@ -132,7 +135,7 @@
                                           OnContent="On"
                                           OffContent="Off"
                                           Style="{StaticResource OpenCareerToggleSwitchStyle}"
-                                          IsEnabled="{Binding CanRunSettingsActions}"
+                                          IsEnabled="{Binding CanEditPreferences}"
                                           Toggled="ReduceMotionToggle_Toggled" />
                         </Grid>
                     </Border>
@@ -314,7 +317,7 @@
                                           OnContent="Allowed"
                                           OffContent="Offline"
                                           Style="{StaticResource OpenCareerToggleSwitchStyle}"
-                                          IsEnabled="{Binding CanRunSettingsActions}"
+                                          IsEnabled="{Binding CanEditPreferences}"
                                           Toggled="OnlineServicesToggle_Toggled" />
                         </Grid>
                     </Border>

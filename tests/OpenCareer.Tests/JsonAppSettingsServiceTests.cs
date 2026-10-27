@@ -23,9 +23,12 @@ public sealed class JsonAppSettingsServiceTests : IDisposable
         Directory.CreateDirectory(_root);
         await File.WriteAllTextAsync(paths.SettingsFile, invalidDocument);
         JsonAppSettingsService service = CreateService(paths);
+        int changes = 0;
+        service.Changed += (_, _) => changes++;
 
         await Assert.ThrowsAnyAsync<Exception>(
             () => service.InitializeAsync());
+        Assert.True(service.RequiresReset);
         await Assert.ThrowsAsync<InvalidDataException>(
             () => service.UpdateAsync(
                 AppPreferences.Default with { ReduceMotion = true }));
@@ -35,6 +38,8 @@ public sealed class JsonAppSettingsServiceTests : IDisposable
             await File.ReadAllTextAsync(paths.SettingsFile));
 
         await service.ResetAsync();
+        Assert.False(service.RequiresReset);
+        Assert.Equal(1, changes);
         await service.UpdateAsync(
             AppPreferences.Default with { ReduceMotion = true });
 
@@ -51,6 +56,7 @@ public sealed class JsonAppSettingsServiceTests : IDisposable
         JsonAppSettingsService service = CreateService(paths);
 
         await service.InitializeAsync();
+        Assert.False(service.RequiresReset);
         AppPreferences saved = AppPreferences.Default with
         {
             MeasurementSystem = MeasurementSystem.Metric,
@@ -82,6 +88,7 @@ public sealed class JsonAppSettingsServiceTests : IDisposable
         Assert.True(
             resetFailure is IOException or UnauthorizedAccessException,
             $"Expected a filesystem write failure, but received {resetFailure?.GetType().Name ?? "no exception"}.");
+        Assert.True(service.RequiresReset);
         Assert.True(Directory.Exists(paths.SettingsFile));
         Assert.False(File.Exists(paths.SettingsFile + ".tmp"));
     }

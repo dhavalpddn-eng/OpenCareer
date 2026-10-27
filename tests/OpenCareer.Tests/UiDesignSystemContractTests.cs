@@ -827,9 +827,16 @@ public sealed class UiDesignSystemContractTests
                 element =>
                     element.Attribute(XamlNamespace + "Name")?.Value == controlName);
             Assert.Equal(
-                "{Binding CanRunSettingsActions}",
+                "{Binding CanEditPreferences}",
                 control.Attribute("IsEnabled")?.Value);
         }
+
+        Assert.Contains(
+            page.Descendants(),
+            element =>
+                element.Name.LocalName == "TextBlock" &&
+                element.Attribute("Text")?.Value ==
+                    "{Binding PreferenceStorageStatus}");
 
         XElement scheduleResetButton = Assert.Single(
             page.Descendants(),

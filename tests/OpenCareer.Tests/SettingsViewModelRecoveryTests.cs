@@ -318,6 +318,73 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task InvalidPreferenceFileKeepsRecoveryAvailableAndEditsLockedUntilReset()
+    {
+        var settings = new FakeSettings
+        {
+            RequiresReset = true
+        };
+        TestContext context = Create(settings: settings);
+
+        Assert.False(context.ViewModel.CanEditPreferences);
+        Assert.True(context.ViewModel.CanRunSettingsActions);
+        Assert.Contains(
+            "PREFERENCES RECOVERY REQUIRED",
+            context.ViewModel.PreferenceStorageStatus,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Reset preferences to defaults",
+            context.ViewModel.PreferenceStorageStatus,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "career data is not changed",
+            context.ViewModel.PreferenceStorageStatus,
+            StringComparison.OrdinalIgnoreCase);
+
+        await context.ViewModel.SetReduceMotionAsync(true);
+
+        Assert.Equal(0, settings.WriteCount);
+        Assert.Contains(
+            "original preference file was preserved",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+
+        settings.ResetFailure = new IOException(
+            "Synthetic settings path must not reach player-facing text.");
+        await context.ViewModel.ResetPreferencesAsync();
+
+        Assert.True(settings.RequiresReset);
+        Assert.False(context.ViewModel.CanEditPreferences);
+        Assert.Equal(0, settings.WriteCount);
+        Assert.Contains(
+            "remain locked",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "preserved preference file",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "Synthetic settings path",
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+
+        settings.ResetFailure = null;
+        await context.ViewModel.ResetPreferencesAsync();
+
+        Assert.False(settings.RequiresReset);
+        Assert.True(context.ViewModel.CanEditPreferences);
+        Assert.Equal(1, settings.WriteCount);
+        Assert.Contains(
+            "reset to defaults",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            "Preferences are available from local storage.",
+            context.ViewModel.PreferenceStorageStatus);
+    }
+
+    [Fact]
     public async Task PreferencePersistenceCancellationStillPropagates()
     {
         TestContext context = Create();
@@ -525,10 +592,11 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         IInputBindingDiscoverySource? inputBindings = null,
         FlightSessionCoordinator? sessions = null,
         FlightSessionPersistenceService? flightPersistence = null,
-        OpenCareerDataPaths? paths = null)
+        OpenCareerDataPaths? paths = null,
+        FakeSettings? settings = null)
     {
         paths ??= new OpenCareerDataPaths(_root);
-        var settings = new FakeSettings();
+        settings ??= new FakeSettings();
         var connection = new FakeConnection();
         var telemetry = new FakeTelemetrySource();
         sessions ??= new FlightSessionCoordinator();
@@ -602,9 +670,12 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
             IReadOnlyList<InputBindingActionIdentity> actions) => snapshot;
     }
 
-    private sealed class FakeSettings : IAppSettingsService
+    private sealed class FakeSettings :
+        IAppSettingsService,
+        IAppSettingsRecoveryState
     {
         public AppPreferences Current { get; private set; } = AppPreferences.Default;
+        public bool RequiresReset { get; set; }
         public int WriteCount { get; private set; }
         public Exception? UpdateFailure { get; set; }
         public Exception? ResetFailure { get; set; }
@@ -653,6 +724,7 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
 
             WriteCount++;
             Current = AppPreferences.Default;
+            RequiresReset = false;
             Changed?.Invoke(this, EventArgs.Empty);
         }
     }

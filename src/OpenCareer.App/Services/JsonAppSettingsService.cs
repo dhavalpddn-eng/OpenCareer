@@ -4,7 +4,9 @@ using OpenCareer.Application.Settings;
 
 namespace OpenCareer.App.Services;
 
-public sealed class JsonAppSettingsService : IAppSettingsService
+public sealed class JsonAppSettingsService :
+    IAppSettingsService,
+    IAppSettingsRecoveryState
 {
     private const int CurrentSchemaVersion = 1;
 
@@ -29,6 +31,8 @@ public sealed class JsonAppSettingsService : IAppSettingsService
 
     public AppPreferences Current => Volatile.Read(ref _current);
 
+    public bool RequiresReset => Volatile.Read(ref _initializationFailed);
+
     public event EventHandler? Changed;
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -41,7 +45,7 @@ public sealed class JsonAppSettingsService : IAppSettingsService
                 AppPreferences preferences =
                     await ReadAsync(cancellationToken).ConfigureAwait(false);
                 Volatile.Write(ref _current, preferences);
-                _initializationFailed = false;
+                Volatile.Write(ref _initializationFailed, false);
             }
             catch (OperationCanceledException)
             {
@@ -53,7 +57,7 @@ public sealed class JsonAppSettingsService : IAppSettingsService
                     or UnauthorizedAccessException
                     or InvalidDataException)
             {
-                _initializationFailed = true;
+                Volatile.Write(ref _initializationFailed, true);
                 throw;
             }
         }
@@ -73,7 +77,7 @@ public sealed class JsonAppSettingsService : IAppSettingsService
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            if (_initializationFailed)
+            if (RequiresReset)
             {
                 throw new InvalidDataException(
                     "Application preferences could not be loaded. Reset them before saving changes.");
@@ -103,10 +107,12 @@ public sealed class JsonAppSettingsService : IAppSettingsService
     public async Task ResetAsync(CancellationToken cancellationToken = default)
     {
         bool changed;
+        bool recovered;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             changed = !Equals(_current, AppPreferences.Default);
+            recovered = RequiresReset;
             await WriteAsync(
                 new PreferencesDocument
                 {
@@ -115,14 +121,14 @@ public sealed class JsonAppSettingsService : IAppSettingsService
                 cancellationToken).ConfigureAwait(false);
 
             Volatile.Write(ref _current, AppPreferences.Default);
-            _initializationFailed = false;
+            Volatile.Write(ref _initializationFailed, false);
         }
         finally
         {
             _gate.Release();
         }
 
-        if (changed)
+        if (changed || recovered)
             Changed?.Invoke(this, EventArgs.Empty);
     }
 

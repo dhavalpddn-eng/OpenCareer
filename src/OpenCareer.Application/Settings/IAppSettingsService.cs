@@ -14,3 +14,8 @@ public interface IAppSettingsService
 
     Task ResetAsync(CancellationToken cancellationToken = default);
 }
+
+public interface IAppSettingsRecoveryState
+{
+    bool RequiresReset { get; }
+}

@@ -14,6 +14,9 @@ namespace OpenCareer.App.ViewModels;
 
 public sealed class SettingsViewModel : INotifyPropertyChanged
 {
+    private const string PreferenceResetRequiredStatus =
+        "Preferences could not be loaded. The original preference file was preserved and preference edits are locked. Use Reset preferences to defaults below to repair preferences; career data is not changed.";
+
     private readonly IAppSettingsService _settings;
     private readonly ISimulatorConnection _connection;
     private readonly ISimulatorTelemetrySource _telemetrySource;
@@ -80,6 +83,10 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
         _settings.Changed += OnSettingsChanged;
         _flightSessions.SessionChanged += OnFlightSessionChanged;
+
+        if (PreferencesRequireReset)
+            _actionStatus = PreferenceResetRequiredStatus;
+
         RefreshDiagnostics();
     }
 
@@ -168,6 +175,14 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public bool IsBusy => Volatile.Read(ref _settingsActionActive) != 0;
 
     public bool CanRunSettingsActions => !IsBusy;
+
+    public bool CanEditPreferences =>
+        CanRunSettingsActions
+        && !PreferencesRequireReset;
+
+    public string PreferenceStorageStatus => PreferencesRequireReset
+        ? "PREFERENCES RECOVERY REQUIRED · OpenCareer could not read the existing preference file. Defaults are active for this launch, preference edits are locked, and the original file is preserved. Use Reset preferences to defaults below to repair preferences; career data is not changed."
+        : "Preferences are available from local storage.";
 
     public void RefreshDiagnostics()
     {
@@ -300,14 +315,17 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             {
                 await _settings.ResetAsync(cancellationToken).ConfigureAwait(true);
                 ActionStatus = "Application preferences reset to defaults. Career data and tutorial progress were not changed.";
+                OnPropertyChanged(nameof(CanEditPreferences));
+                OnPropertyChanged(nameof(PreferenceStorageStatus));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogError(
                     ex,
                     "Could not reset OpenCareer application preferences.");
-                ActionStatus =
-                    "Application preferences could not be reset. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
+                ActionStatus = PreferencesRequireReset
+                    ? "Preferences remain locked because Reset preferences could not repair the preserved preference file. Career data was not changed. Verify local storage is available, then retry Reset preferences. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings."
+                    : "Application preferences could not be reset. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
             }
             finally
             {
@@ -439,6 +457,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             return;
         }
 
+        if (PreferencesRequireReset)
+        {
+            ActionStatus = PreferenceResetRequiredStatus;
+            return;
+        }
+
         await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
         try
         {
@@ -479,6 +503,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(CanRunSettingsActions));
+        OnPropertyChanged(nameof(CanEditPreferences));
         OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
         return true;
     }
@@ -488,6 +513,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         Interlocked.Exchange(ref _settingsActionActive, 0);
         OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(CanRunSettingsActions));
+        OnPropertyChanged(nameof(CanEditPreferences));
         OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
     }
 
@@ -504,7 +530,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ReduceMotion));
         OnPropertyChanged(nameof(AllowOptionalOnlineServices));
         OnPropertyChanged(nameof(OptionalServicesStatus));
+        OnPropertyChanged(nameof(CanEditPreferences));
+        OnPropertyChanged(nameof(PreferenceStorageStatus));
     }
+
+    private bool PreferencesRequireReset =>
+        _settings is IAppSettingsRecoveryState { RequiresReset: true };
 
     private void OnFlightSessionChanged(
         object? sender,
