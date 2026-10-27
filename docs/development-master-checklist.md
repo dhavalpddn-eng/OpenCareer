@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-26 through validated checkpoint `443aae93` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-26 through validated checkpoint `05a02b4d` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -778,6 +778,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Add deterministic Communications panel from current campaign/support/threat/active-operation snapshot state; no AI or fabricated event history.
 - [ ] Complete local visual/accessibility acceptance of the Military/Government history/drill-down and surrounding operational surface.
 - [x] Implement production Logbook / Debrief screen with committed-flight list, aggregate totals, filters, multi-leg detail, route-track rendering, landing evidence, incidents and settlement summary.
+- [x] Fail Logbook refresh closed: clear stale entries, totals and selection, suppress technical exception text, retain explicit retry/diagnostic guidance and restore history only from a successful committed-entry read.
 - [ ] Implement Career screen.
 - [x] Implement production Settings screen.
 - [x] Persist versioned app preferences independently from career state.
