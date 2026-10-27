@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-26 through validated checkpoint `05a02b4d` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-26 through validated checkpoint `7873f7de` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -793,6 +793,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Replace stale Settings recovery copy with a read-only live projection of the current SQLite-backed FlightSession recovery state.
 - [x] Surface failed FlightSession checkpoint recovery as persistent generic recovery-attention state in Settings until a successful retry; keep raw exceptions in structured logs and direct the player to restart/capture diagnostics rather than misreporting an empty session or inviting a replacement flight.
 - [x] Label the active normal versus isolated KJFK Development/Test data profile in Settings and provide a confirmed next-launch clean reset that is disabled for normal career data.
+- [x] Keep a failed isolated-profile clean-reset scheduling attempt retryable, suppress raw storage/path exception text and retain technical details in structured logs with diagnostic guidance.
 - [x] Keep the active KJFK Development/Test profile visibly identified in the main shell on every page while leaving normal career mode unmarked.
 - [x] Group primary navigation around functional workflows, label optional Dispatch as advanced and remove unfinished placeholder destinations from the active test path.
 - [x] Add a test-profile-only Home entry that opens the KJFK playable loop in Jobs with explicit zero-pay/zero-progression and no-Advanced-Dispatch guidance.
