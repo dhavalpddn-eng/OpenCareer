@@ -25,6 +25,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private readonly FlightSessionPersistenceService _flightPersistence;
     private readonly IInputBindingDiscoverySource? _inputBindings;
     private readonly ILogger<SettingsViewModel> _logger;
+    private readonly SemaphoreSlim _preferenceGate = new(1, 1);
 
     private string _actionStatus = "Ready.";
     private bool _isBusy;
@@ -235,7 +236,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public Task SetUnitsAsync(int selectedIndex, CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with
+            current => current with
             {
                 MeasurementSystem = selectedIndex == 1
                     ? MeasurementSystem.Metric
@@ -255,7 +256,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         };
 
         return UpdateAsync(
-            _settings.Current with { InputHints = preference },
+            current => current with { InputHints = preference },
             cancellationToken);
     }
 
@@ -263,28 +264,28 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         bool value,
         CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with { ShowChecklistEveryFlight = value },
+            current => current with { ShowChecklistEveryFlight = value },
             cancellationToken);
 
     public Task SetAutomaticallyOfferTutorialsAsync(
         bool value,
         CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with { AutomaticallyOfferTutorials = value },
+            current => current with { AutomaticallyOfferTutorials = value },
             cancellationToken);
 
     public Task SetReduceMotionAsync(
         bool value,
         CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with { ReduceMotion = value },
+            current => current with { ReduceMotion = value },
             cancellationToken);
 
     public Task SetAllowOptionalOnlineServicesAsync(
         bool value,
         CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with { AllowOptionalOnlineServices = value },
+            current => current with { AllowOptionalOnlineServices = value },
             cancellationToken);
 
     public async Task ResetPreferencesAsync(CancellationToken cancellationToken = default)
@@ -292,16 +293,24 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         IsBusy = true;
         try
         {
-            await _settings.ResetAsync(cancellationToken).ConfigureAwait(true);
-            ActionStatus = "Application preferences reset to defaults. Career data and tutorial progress were not changed.";
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogError(
-                ex,
-                "Could not reset OpenCareer application preferences.");
-            ActionStatus =
-                "Application preferences could not be reset. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
+            await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                await _settings.ResetAsync(cancellationToken).ConfigureAwait(true);
+                ActionStatus = "Application preferences reset to defaults. Career data and tutorial progress were not changed.";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    ex,
+                    "Could not reset OpenCareer application preferences.");
+                ActionStatus =
+                    "Application preferences could not be reset. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
+            }
+            finally
+            {
+                _preferenceGate.Release();
+            }
         }
         finally
         {
@@ -385,21 +394,30 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     }
 
     private async Task UpdateAsync(
-        AppPreferences preferences,
+        Func<AppPreferences, AppPreferences> update,
         CancellationToken cancellationToken)
     {
+        await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
         try
         {
-            await _settings.UpdateAsync(preferences, cancellationToken).ConfigureAwait(true);
-            ActionStatus = "Settings saved.";
+            try
+            {
+                AppPreferences preferences = update(_settings.Current);
+                await _settings.UpdateAsync(preferences, cancellationToken).ConfigureAwait(true);
+                ActionStatus = "Settings saved.";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    ex,
+                    "Could not save OpenCareer application preferences.");
+                ActionStatus =
+                    "Settings could not be saved. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
+            }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        finally
         {
-            _logger.LogError(
-                ex,
-                "Could not save OpenCareer application preferences.");
-            ActionStatus =
-                "Settings could not be saved. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
+            _preferenceGate.Release();
         }
     }
 

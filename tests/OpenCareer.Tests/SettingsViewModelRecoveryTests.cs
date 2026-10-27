@@ -275,6 +275,32 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task OverlappingPreferenceChangesPreserveBothAuthoritativeUpdates()
+    {
+        TestContext context = Create();
+        var updateStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseUpdate = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        context.Settings.NextUpdateStarted = updateStarted;
+        context.Settings.NextUpdateRelease = releaseUpdate.Task;
+
+        Task reduceMotion = context.ViewModel.SetReduceMotionAsync(true);
+        await updateStarted.Task;
+
+        Task allowOnlineServices =
+            context.ViewModel.SetAllowOptionalOnlineServicesAsync(true);
+        Assert.False(allowOnlineServices.IsCompleted);
+
+        releaseUpdate.SetResult();
+        await Task.WhenAll(reduceMotion, allowOnlineServices);
+
+        Assert.True(context.Settings.Current.ReduceMotion);
+        Assert.True(context.Settings.Current.AllowOptionalOnlineServices);
+        Assert.Equal(2, context.Settings.WriteCount);
+    }
+
+    [Fact]
     public void BindingStatusUsesReadOnlyDiscoverySourceWithoutClaimingUnbound()
     {
         TestContext context = Create(
@@ -435,23 +461,32 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         public int WriteCount { get; private set; }
         public Exception? UpdateFailure { get; set; }
         public Exception? ResetFailure { get; set; }
+        public TaskCompletionSource? NextUpdateStarted { get; set; }
+        public Task? NextUpdateRelease { get; set; }
 
         public event EventHandler? Changed;
 
         public Task InitializeAsync(CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 
-        public Task UpdateAsync(
+        public async Task UpdateAsync(
             AppPreferences preferences,
             CancellationToken cancellationToken = default)
         {
             if (UpdateFailure is not null)
                 throw UpdateFailure;
 
+            TaskCompletionSource? updateStarted = NextUpdateStarted;
+            Task? updateRelease = NextUpdateRelease;
+            NextUpdateStarted = null;
+            NextUpdateRelease = null;
+            updateStarted?.TrySetResult();
+            if (updateRelease is not null)
+                await updateRelease.WaitAsync(cancellationToken);
+
             WriteCount++;
             Current = preferences;
             Changed?.Invoke(this, EventArgs.Empty);
-            return Task.CompletedTask;
         }
 
         public Task ResetAsync(CancellationToken cancellationToken = default)
