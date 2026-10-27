@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
@@ -102,6 +103,69 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
 
         Assert.False(context.ViewModel.CanScheduleDevelopmentProfileReset);
         Assert.Contains("reset scheduled", context.ViewModel.ActionStatus);
+        Assert.True(File.Exists(selection.Paths.DevelopmentResetRequestFile));
+    }
+
+    [Fact]
+    public async Task CleanTestResetSchedulingRejectsConcurrentSettingsActionThenRemainsRetryable()
+    {
+        OpenCareerDataProfileSelection selection =
+            OpenCareerDataProfileSelection.Resolve(
+                [OpenCareerDataProfileSelection.ProfileArgument],
+                _root);
+        selection.Prepare();
+        TestContext context = Create(paths: selection.Paths);
+        var resetStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseReset = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        context.Settings.NextResetStarted = resetStarted;
+        context.Settings.NextResetRelease = releaseReset.Task;
+
+        Task reset = context.ViewModel.ResetPreferencesAsync();
+        await resetStarted.Task;
+
+        Assert.False(context.ViewModel.CanScheduleDevelopmentProfileReset);
+        context.ViewModel.ScheduleDevelopmentProfileReset();
+
+        Assert.Contains(
+            "already running",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(selection.Paths.DevelopmentResetRequestFile));
+
+        releaseReset.SetResult();
+        await reset;
+
+        Assert.True(context.ViewModel.CanScheduleDevelopmentProfileReset);
+        context.ViewModel.ScheduleDevelopmentProfileReset();
+
+        Assert.False(context.ViewModel.CanScheduleDevelopmentProfileReset);
+        Assert.True(File.Exists(selection.Paths.DevelopmentResetRequestFile));
+    }
+
+    [Fact]
+    public async Task BackupExcludesPendingDevelopmentProfileResetRequest()
+    {
+        OpenCareerDataProfileSelection selection =
+            OpenCareerDataProfileSelection.Resolve(
+                [OpenCareerDataProfileSelection.ProfileArgument],
+                _root);
+        selection.Prepare();
+        TestContext context = Create(paths: selection.Paths);
+        context.ViewModel.ScheduleDevelopmentProfileReset();
+
+        await context.ViewModel.CreateBackupAsync();
+
+        string backupPath = Assert.Single(
+            Directory.EnumerateFiles(selection.Paths.BackupsFolder, "*.zip"));
+        using ZipArchive archive = ZipFile.OpenRead(backupPath);
+        Assert.DoesNotContain(
+            archive.Entries,
+            entry => string.Equals(
+                entry.FullName,
+                Path.GetFileName(selection.Paths.DevelopmentResetRequestFile),
+                StringComparison.OrdinalIgnoreCase));
         Assert.True(File.Exists(selection.Paths.DevelopmentResetRequestFile));
     }
 

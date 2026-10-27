@@ -143,7 +143,9 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         : "Clean test reset is disabled because this is the normal career profile.";
 
     public bool CanScheduleDevelopmentProfileReset =>
-        _paths.IsDevelopmentLiveTest && !_developmentProfileResetScheduled;
+        _paths.IsDevelopmentLiveTest
+        && !_developmentProfileResetScheduled
+        && CanRunSettingsActions;
 
     public string InputBindingStatus => _inputBindingStatus;
 
@@ -390,6 +392,16 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             return;
         }
 
+        if (_developmentProfileResetScheduled)
+        {
+            ActionStatus =
+                "Clean KJFK test reset is already scheduled for the next launch.";
+            return;
+        }
+
+        if (!TryBeginSettingsAction())
+            return;
+
         try
         {
             OpenCareerDevelopmentDataProfile.RequestResetOnNextLaunch(_paths);
@@ -410,6 +422,10 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
                 "Could not schedule the clean KJFK development profile reset.");
             ActionStatus =
                 "Clean KJFK test reset was not scheduled. Verify the isolated test profile folder is available, then retry. If this keeps happening, create a diagnostic bundle before changing or deleting profile data.";
+        }
+        finally
+        {
+            EndSettingsAction();
         }
     }
 
@@ -463,6 +479,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(CanRunSettingsActions));
+        OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
         return true;
     }
 
@@ -471,6 +488,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         Interlocked.Exchange(ref _settingsActionActive, 0);
         OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(CanRunSettingsActions));
+        OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
     }
 
     private void ReportSettingsActionAlreadyRunning() =>

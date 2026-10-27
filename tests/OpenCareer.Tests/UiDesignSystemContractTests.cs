@@ -830,6 +830,16 @@ public sealed class UiDesignSystemContractTests
                 "{Binding CanRunSettingsActions}",
                 control.Attribute("IsEnabled")?.Value);
         }
+
+        XElement scheduleResetButton = Assert.Single(
+            page.Descendants(),
+            element =>
+                element.Name.LocalName == "Button" &&
+                element.Attribute("Click")?.Value ==
+                    "ScheduleDevelopmentProfileReset_Click");
+        Assert.Equal(
+            "{Binding CanScheduleDevelopmentProfileReset}",
+            scheduleResetButton.Attribute("IsEnabled")?.Value);
     }
 
     [Fact]

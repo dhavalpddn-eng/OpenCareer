@@ -152,6 +152,8 @@ public sealed class AppDataBackupService(
         string diagnosticsRoot = Path.GetFullPath(paths.DiagnosticsFolder);
         string databasePath = Path.GetFullPath(paths.DatabaseFile);
         string pendingRestorePath = Path.GetFullPath(paths.PendingDatabaseRestoreFile);
+        string developmentResetRequestPath = Path.GetFullPath(
+            paths.DevelopmentResetRequestFile);
 
         foreach (string file in Directory.EnumerateFiles(
                      paths.Root,
@@ -168,6 +170,14 @@ public sealed class AppDataBackupService(
             if (string.Equals(
                 fullPath,
                 pendingRestorePath,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (string.Equals(
+                fullPath,
+                developmentResetRequestPath,
                 StringComparison.OrdinalIgnoreCase))
             {
                 continue;
