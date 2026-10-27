@@ -178,6 +178,103 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task FailedPreferenceSaveIsContainedWithoutTechnicalDetails()
+    {
+        TestContext context = Create();
+        context.Settings.UpdateFailure = new InvalidOperationException(
+            "Synthetic settings path must not reach player-facing text.");
+
+        await context.ViewModel.SetReduceMotionAsync(true);
+
+        Assert.Contains(
+            "could not be saved",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "retry",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "diagnostic bundle",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Open Logs Folder",
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Synthetic settings path",
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+        Assert.False(context.Settings.Current.ReduceMotion);
+    }
+
+    [Fact]
+    public async Task FailedPreferenceResetIsContainedAndRemainsRetryable()
+    {
+        TestContext context = Create();
+        await context.ViewModel.SetReduceMotionAsync(true);
+        context.Settings.ResetFailure = new UnauthorizedAccessException(
+            "Synthetic reset path must not reach player-facing text.");
+
+        await context.ViewModel.ResetPreferencesAsync();
+
+        Assert.False(context.ViewModel.IsBusy);
+        Assert.Contains(
+            "could not be reset",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "retry",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "diagnostic bundle",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Open Logs Folder",
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Synthetic reset path",
+            context.ViewModel.ActionStatus,
+            StringComparison.Ordinal);
+        Assert.True(context.Settings.Current.ReduceMotion);
+
+        context.Settings.ResetFailure = null;
+        await context.ViewModel.ResetPreferencesAsync();
+
+        Assert.False(context.ViewModel.IsBusy);
+        Assert.Contains(
+            "reset to defaults",
+            context.ViewModel.ActionStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.False(context.Settings.Current.ReduceMotion);
+    }
+
+    [Fact]
+    public async Task PreferencePersistenceCancellationStillPropagates()
+    {
+        TestContext context = Create();
+        context.Settings.UpdateFailure = new OperationCanceledException();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => context.ViewModel.SetReduceMotionAsync(true));
+        Assert.Equal("Ready.", context.ViewModel.ActionStatus);
+
+        context.Settings.UpdateFailure = null;
+        await context.ViewModel.SetReduceMotionAsync(true);
+        context.Settings.ResetFailure = new OperationCanceledException();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => context.ViewModel.ResetPreferencesAsync());
+        Assert.False(context.ViewModel.IsBusy);
+        Assert.Equal("Settings saved.", context.ViewModel.ActionStatus);
+        Assert.True(context.Settings.Current.ReduceMotion);
+    }
+
+    [Fact]
     public void BindingStatusUsesReadOnlyDiscoverySourceWithoutClaimingUnbound()
     {
         TestContext context = Create(
@@ -336,6 +433,8 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
     {
         public AppPreferences Current { get; private set; } = AppPreferences.Default;
         public int WriteCount { get; private set; }
+        public Exception? UpdateFailure { get; set; }
+        public Exception? ResetFailure { get; set; }
 
         public event EventHandler? Changed;
 
@@ -346,6 +445,9 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
             AppPreferences preferences,
             CancellationToken cancellationToken = default)
         {
+            if (UpdateFailure is not null)
+                throw UpdateFailure;
+
             WriteCount++;
             Current = preferences;
             Changed?.Invoke(this, EventArgs.Empty);
@@ -354,6 +456,9 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
 
         public Task ResetAsync(CancellationToken cancellationToken = default)
         {
+            if (ResetFailure is not null)
+                throw ResetFailure;
+
             WriteCount++;
             Current = AppPreferences.Default;
             Changed?.Invoke(this, EventArgs.Empty);

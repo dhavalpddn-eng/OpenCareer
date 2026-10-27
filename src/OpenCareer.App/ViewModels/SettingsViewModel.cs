@@ -295,9 +295,13 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             await _settings.ResetAsync(cancellationToken).ConfigureAwait(true);
             ActionStatus = "Application preferences reset to defaults. Career data and tutorial progress were not changed.";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ActionStatus = $"Could not reset preferences: {ex.Message}";
+            _logger.LogError(
+                ex,
+                "Could not reset OpenCareer application preferences.");
+            ActionStatus =
+                "Application preferences could not be reset. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
         }
         finally
         {
@@ -389,9 +393,13 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             await _settings.UpdateAsync(preferences, cancellationToken).ConfigureAwait(true);
             ActionStatus = "Settings saved.";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ActionStatus = $"Could not save settings: {ex.Message}";
+            _logger.LogError(
+                ex,
+                "Could not save OpenCareer application preferences.");
+            ActionStatus =
+                "Settings could not be saved. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
         }
     }
 
