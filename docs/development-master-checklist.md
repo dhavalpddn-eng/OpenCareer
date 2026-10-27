@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-26 through validated checkpoint `7873f7de` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-27 through validated checkpoint `9857e1eb` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -377,6 +377,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Interlock the same Jobs new-flight controls whenever any authoritative current FlightSession occupies the playable loop, recheck synchronous session authority for stale direct calls, and preserve Current Flight navigation plus accepted-job cancellation.
 - [x] Reject overlapping Jobs mutations instead of queueing stale accept/start, calibration or accepted-job cancellation actions; publish one shared busy state and disable the corresponding controls.
 - [x] Keep the Jobs aircraft selection immutable for the duration of each action-bound operation; reject concurrent selection changes and disable refresh/development-position inputs until the operation releases its gate.
+- [x] Recover failed zero-pay calibration generation by reconciling persisted Jobs authority, preserving a successfully positioned KJFK pilot and any Current Flight/accepted-job recovery exits, retaining a direct retry and suppressing raw technical exception text.
 - [x] Restrict accepted-job preflight cancellation to an atomic persisted `Accepted` transition so stale Jobs or Dispatch state cannot cancel a contract after flight start.
 - [x] Recheck FlightSession ownership across automatic accepted/in-progress recovery authority reads; stop without contract or checkpoint mutation if another operation appears.
 - [x] Recheck FlightSession ownership across asynchronous career-job acceptance readiness reads; stop without producing an acceptance request if another operation appears.
