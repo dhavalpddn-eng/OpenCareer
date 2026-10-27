@@ -85,7 +85,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetUnitsAsync(UnitsComboBox.SelectedIndex);
+        await PersistPreferenceAsync(
+            () => _settings.SetUnitsAsync(UnitsComboBox.SelectedIndex));
     }
 
     private async void InputHintsComboBox_SelectionChanged(
@@ -95,7 +96,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetInputHintPreferenceAsync(InputHintsComboBox.SelectedIndex);
+        await PersistPreferenceAsync(
+            () => _settings.SetInputHintPreferenceAsync(InputHintsComboBox.SelectedIndex));
     }
 
     private async void ChecklistToggle_Toggled(object sender, RoutedEventArgs e)
@@ -103,7 +105,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetShowChecklistEveryFlightAsync(ChecklistToggle.IsOn);
+        await PersistPreferenceAsync(
+            () => _settings.SetShowChecklistEveryFlightAsync(ChecklistToggle.IsOn));
     }
 
     private async void TutorialOfferToggle_Toggled(object sender, RoutedEventArgs e)
@@ -111,7 +114,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetAutomaticallyOfferTutorialsAsync(TutorialOfferToggle.IsOn);
+        await PersistPreferenceAsync(
+            () => _settings.SetAutomaticallyOfferTutorialsAsync(TutorialOfferToggle.IsOn));
     }
 
     private async void ReduceMotionToggle_Toggled(object sender, RoutedEventArgs e)
@@ -119,7 +123,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetReduceMotionAsync(ReduceMotionToggle.IsOn);
+        await PersistPreferenceAsync(
+            () => _settings.SetReduceMotionAsync(ReduceMotionToggle.IsOn));
     }
 
     private async void OnlineServicesToggle_Toggled(object sender, RoutedEventArgs e)
@@ -127,7 +132,20 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetAllowOptionalOnlineServicesAsync(OnlineServicesToggle.IsOn);
+        await PersistPreferenceAsync(
+            () => _settings.SetAllowOptionalOnlineServicesAsync(OnlineServicesToggle.IsOn));
+    }
+
+    private async Task PersistPreferenceAsync(Func<Task> updateAsync)
+    {
+        try
+        {
+            await updateAsync();
+        }
+        finally
+        {
+            ApplyPreferenceControls();
+        }
     }
 
     private void RefreshDiagnostics_Click(object sender, RoutedEventArgs e) =>

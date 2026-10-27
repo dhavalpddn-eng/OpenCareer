@@ -772,6 +772,23 @@ public sealed class UiDesignSystemContractTests
     }
 
     [Fact]
+    public void SettingsPreferenceHandlersReprojectAuthoritativeStateAfterPersistence()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "UiButtons");
+        string code = File.ReadAllText(
+            Path.Combine(directory, "SettingsPage.xaml.cs"));
+
+        Assert.Equal(
+            6,
+            code.Split(
+                "await PersistPreferenceAsync(",
+                StringSplitOptions.None).Length - 1);
+        Assert.Matches(
+            @"private async Task PersistPreferenceAsync\(Func<Task> updateAsync\)\s*\{\s*try\s*\{\s*await updateAsync\(\);\s*\}\s*finally\s*\{\s*ApplyPreferenceControls\(\);",
+            code);
+    }
+
+    [Fact]
     public void ButtonDesignSystemDoesNotUsePointerHandlers()
     {
         foreach (string path in GetProductionButtonXamlPaths())
