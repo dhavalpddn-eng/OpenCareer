@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.App.Services;
 using OpenCareer.App.ViewModels;
@@ -167,6 +168,93 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
                 Path.GetFileName(selection.Paths.DevelopmentResetRequestFile),
                 StringComparison.OrdinalIgnoreCase));
         Assert.True(File.Exists(selection.Paths.DevelopmentResetRequestFile));
+    }
+
+    [Fact]
+    public void RestoreInventoryIncludesOnlyTopLevelOpenCareerBackupArchives()
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        paths.EnsureDirectories();
+        string expected = "opencareer-backup-20261001-120000-000.zip";
+        File.WriteAllText(Path.Combine(paths.BackupsFolder, expected), "archive");
+        File.WriteAllText(Path.Combine(paths.BackupsFolder, "unrelated.zip"), "archive");
+        string nested = Path.Combine(paths.BackupsFolder, "nested");
+        Directory.CreateDirectory(nested);
+        File.WriteAllText(
+            Path.Combine(nested, "opencareer-backup-20261001-130000-000.zip"),
+            "archive");
+        TestContext context = Create(paths: paths);
+
+        context.ViewModel.RefreshBackupArchives();
+
+        Assert.Equal(new[] { expected }, context.ViewModel.BackupArchiveOptions);
+        Assert.Null(context.ViewModel.SelectedBackupArchive);
+        Assert.False(context.ViewModel.CanStageSelectedBackup);
+        Assert.Contains("Select", context.ViewModel.BackupRestoreStatus);
+    }
+
+    [Fact]
+    public async Task SelectedRestoreCreatesCurrentSafetyBackupAndCanBeCancelled()
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        paths.EnsureDirectories();
+        await CreateValidDatabaseAsync(paths.DatabaseFile);
+        TestContext context = Create(paths: paths);
+
+        await context.ViewModel.CreateBackupAsync();
+        string generated = Assert.Single(
+            Directory.EnumerateFiles(paths.BackupsFolder, "*.zip"));
+        string selectedPath = Path.Combine(
+            paths.BackupsFolder,
+            "opencareer-backup-20261001-120000-000.zip");
+        File.Move(generated, selectedPath);
+        context.ViewModel.RefreshBackupArchives();
+        context.ViewModel.SelectedBackupIndex = 0;
+
+        await context.ViewModel.StageSelectedBackupAsync();
+
+        Assert.True(context.ViewModel.HasPendingDatabaseRestore);
+        Assert.True(File.Exists(paths.PendingDatabaseRestoreFile));
+        Assert.Equal(
+            2,
+            Directory.EnumerateFiles(paths.BackupsFolder, "*.zip").Count());
+        Assert.Contains("safety backup created", context.ViewModel.ActionStatus);
+        Assert.Contains("Restart OpenCareer", context.ViewModel.ActionStatus);
+        Assert.True(context.ViewModel.CanCancelPendingDatabaseRestore);
+
+        context.ViewModel.CancelPendingDatabaseRestore();
+
+        Assert.False(context.ViewModel.HasPendingDatabaseRestore);
+        Assert.False(File.Exists(paths.PendingDatabaseRestoreFile));
+        Assert.Contains("cancelled", context.ViewModel.ActionStatus);
+        Assert.Contains("remain active", context.ViewModel.ActionStatus);
+    }
+
+    [Fact]
+    public async Task InvalidSelectedRestoreKeepsSafetyBackupAndHidesArchiveDetails()
+    {
+        var paths = new OpenCareerDataPaths(_root);
+        paths.EnsureDirectories();
+        string selectedPath = Path.Combine(
+            paths.BackupsFolder,
+            "opencareer-backup-20261001-120000-000.zip");
+        await File.WriteAllTextAsync(
+            selectedPath,
+            "Synthetic corrupt archive detail must not reach player-facing text.");
+        TestContext context = Create(paths: paths);
+        context.ViewModel.SelectedBackupIndex = 0;
+
+        await context.ViewModel.StageSelectedBackupAsync();
+
+        Assert.False(context.ViewModel.HasPendingDatabaseRestore);
+        Assert.False(File.Exists(paths.PendingDatabaseRestoreFile));
+        Assert.Equal(
+            2,
+            Directory.EnumerateFiles(paths.BackupsFolder, "*.zip").Count());
+        Assert.Contains("safety backup created", context.ViewModel.ActionStatus);
+        Assert.Contains("no restore was staged", context.ViewModel.ActionStatus);
+        Assert.DoesNotContain("Synthetic corrupt", context.ViewModel.ActionStatus);
+        Assert.True(context.ViewModel.CanStageSelectedBackup);
     }
 
     [Fact]
@@ -610,11 +698,19 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
             connection,
             telemetry,
             NullLogger<DiagnosticBundleService>.Instance);
+        var databaseOptions = new OpenCareerDatabaseOptions(paths.DatabaseFile);
         var backup = new AppDataBackupService(
             paths,
-            new SqliteDatabaseSnapshotService(
-                new OpenCareerDatabaseOptions(paths.DatabaseFile)),
+            new SqliteDatabaseSnapshotService(databaseOptions),
             NullLogger<AppDataBackupService>.Instance);
+        var restoreArchive = new SqliteBackupArchiveRestoreService(
+            databaseOptions,
+            new SqliteDatabaseSnapshotService(databaseOptions),
+            NullLogger<SqliteBackupArchiveRestoreService>.Instance);
+        var restore = new AppDataRestoreService(
+            paths,
+            restoreArchive,
+            NullLogger<AppDataRestoreService>.Instance);
         var shell = new ShellOpenService(
             NullLogger<ShellOpenService>.Instance);
         var viewModel = new SettingsViewModel(
@@ -623,6 +719,7 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
             telemetry,
             diagnostics,
             backup,
+            restore,
             shell,
             paths,
             sessions,
@@ -633,6 +730,22 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
             viewModel,
             settings,
             sessions);
+    }
+
+    private static async Task CreateValidDatabaseAsync(string databasePath)
+    {
+        await using (var connection = new SqliteConnection(
+                         $"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText =
+                "CREATE TABLE restore_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL);"
+                + " INSERT INTO restore_probe (value) VALUES ('valid');";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        SqliteConnection.ClearAllPools();
     }
 
     private static readonly DateTimeOffset Now =

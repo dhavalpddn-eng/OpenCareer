@@ -22,6 +22,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private readonly ISimulatorTelemetrySource _telemetrySource;
     private readonly DiagnosticBundleService _diagnostics;
     private readonly AppDataBackupService _backup;
+    private readonly AppDataRestoreService _restore;
     private readonly ShellOpenService _shell;
     private readonly OpenCareerDataPaths _paths;
     private readonly FlightSessionCoordinator _flightSessions;
@@ -44,6 +45,11 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private string _inputBindingStatus =
         "UNAVAILABLE · No supported binding source is connected.";
     private bool _developmentProfileResetScheduled;
+    private IReadOnlyList<string> _backupArchiveOptions = Array.Empty<string>();
+    private int _selectedBackupIndex = -1;
+    private bool _hasPendingDatabaseRestore;
+    private string _backupRestoreStatus =
+        "No OpenCareer backup archives are available in the Backups folder.";
 
     public SettingsViewModel(
         IAppSettingsService settings,
@@ -51,6 +57,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         ISimulatorTelemetrySource telemetrySource,
         DiagnosticBundleService diagnostics,
         AppDataBackupService backup,
+        AppDataRestoreService restore,
         ShellOpenService shell,
         OpenCareerDataPaths paths,
         FlightSessionCoordinator flightSessions,
@@ -63,6 +70,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         _telemetrySource = telemetrySource;
         _diagnostics = diagnostics;
         _backup = backup;
+        _restore = restore;
         _shell = shell;
         _paths = paths;
         _flightSessions =
@@ -87,6 +95,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         if (PreferencesRequireReset)
             _actionStatus = PreferenceResetRequiredStatus;
 
+        RefreshBackupArchives();
         RefreshDiagnostics();
     }
 
@@ -138,6 +147,46 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public string LogFile => _paths.LogFile;
     public string BackupsFolder => _paths.BackupsFolder;
     public string DiagnosticsFolder => _paths.DiagnosticsFolder;
+
+    public IReadOnlyList<string> BackupArchiveOptions => _backupArchiveOptions;
+
+    public int SelectedBackupIndex
+    {
+        get => _selectedBackupIndex;
+        set
+        {
+            int normalized = value >= 0 && value < _backupArchiveOptions.Count
+                ? value
+                : -1;
+
+            if (_selectedBackupIndex == normalized)
+                return;
+
+            _selectedBackupIndex = normalized;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedBackupArchive));
+            OnPropertyChanged(nameof(CanStageSelectedBackup));
+            UpdateBackupRestoreStatus();
+        }
+    }
+
+    public string? SelectedBackupArchive =>
+        _selectedBackupIndex >= 0
+        && _selectedBackupIndex < _backupArchiveOptions.Count
+            ? _backupArchiveOptions[_selectedBackupIndex]
+            : null;
+
+    public bool HasPendingDatabaseRestore => _hasPendingDatabaseRestore;
+
+    public bool CanStageSelectedBackup =>
+        CanRunSettingsActions
+        && SelectedBackupArchive is not null;
+
+    public bool CanCancelPendingDatabaseRestore =>
+        CanRunSettingsActions
+        && HasPendingDatabaseRestore;
+
+    public string BackupRestoreStatus => _backupRestoreStatus;
 
     public string DataProfileStatus => _paths.IsDevelopmentLiveTest
         ? "DEVELOPMENT / TEST · KJFK · Isolated from normal career data"
@@ -351,11 +400,122 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
                 SettingsActionResult result = await _backup.CreateBackupAsync(cancellationToken)
                     .ConfigureAwait(true);
                 ActionStatus = result.Message;
+                RefreshBackupArchives();
             }
             finally
             {
                 _preferenceGate.Release();
             }
+        }
+        finally
+        {
+            EndSettingsAction();
+        }
+    }
+
+    public void RefreshBackupArchives()
+    {
+        string? selected = SelectedBackupArchive;
+
+        try
+        {
+            _backupArchiveOptions = Directory.Exists(_paths.BackupsFolder)
+                ? Directory
+                    .EnumerateFiles(
+                        _paths.BackupsFolder,
+                        "opencareer-backup-*.zip",
+                        SearchOption.TopDirectoryOnly)
+                    .Select(Path.GetFileName)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Cast<string>()
+                    .OrderByDescending(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+                : Array.Empty<string>();
+
+            _selectedBackupIndex = selected is null
+                ? -1
+                : IndexOfBackupArchive(selected);
+            _hasPendingDatabaseRestore = _restore.HasPendingDatabaseRestore;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not enumerate OpenCareer backup archives.");
+            _backupArchiveOptions = Array.Empty<string>();
+            _selectedBackupIndex = -1;
+            _hasPendingDatabaseRestore = _restore.HasPendingDatabaseRestore;
+        }
+
+        OnPropertyChanged(nameof(BackupArchiveOptions));
+        OnPropertyChanged(nameof(SelectedBackupIndex));
+        OnPropertyChanged(nameof(SelectedBackupArchive));
+        OnPropertyChanged(nameof(HasPendingDatabaseRestore));
+        OnPropertyChanged(nameof(CanStageSelectedBackup));
+        OnPropertyChanged(nameof(CanCancelPendingDatabaseRestore));
+        UpdateBackupRestoreStatus();
+    }
+
+    public async Task StageSelectedBackupAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string? selected = SelectedBackupArchive;
+        if (selected is null)
+        {
+            ActionStatus =
+                "Select an OpenCareer backup from the Backups folder before staging a restore.";
+            return;
+        }
+
+        if (!TryBeginSettingsAction())
+            return;
+
+        try
+        {
+            await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                SettingsActionResult safetyBackup = await _backup
+                    .CreateBackupAsync(cancellationToken)
+                    .ConfigureAwait(true);
+
+                if (!safetyBackup.Success)
+                {
+                    ActionStatus =
+                        "Restore was not staged because a current safety backup could not be created. "
+                        + safetyBackup.Message;
+                    return;
+                }
+
+                string selectedPath = Path.Combine(_paths.BackupsFolder, selected);
+                SettingsActionResult result = await _restore
+                    .StageDatabaseRestoreAsync(selectedPath, cancellationToken)
+                    .ConfigureAwait(true);
+
+                ActionStatus = result.Success
+                    ? $"Current safety backup created. {result.Message}"
+                    : $"Current safety backup created, but restore staging stopped. {result.Message}";
+            }
+            finally
+            {
+                _preferenceGate.Release();
+            }
+        }
+        finally
+        {
+            RefreshBackupArchives();
+            EndSettingsAction();
+        }
+    }
+
+    public void CancelPendingDatabaseRestore()
+    {
+        if (!TryBeginSettingsAction())
+            return;
+
+        try
+        {
+            SettingsActionResult result = _restore.CancelPendingDatabaseRestore();
+            ActionStatus = result.Message;
+            RefreshBackupArchives();
         }
         finally
         {
@@ -505,6 +665,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanRunSettingsActions));
         OnPropertyChanged(nameof(CanEditPreferences));
         OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
+        OnPropertyChanged(nameof(CanStageSelectedBackup));
+        OnPropertyChanged(nameof(CanCancelPendingDatabaseRestore));
         return true;
     }
 
@@ -515,6 +677,37 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanRunSettingsActions));
         OnPropertyChanged(nameof(CanEditPreferences));
         OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
+        OnPropertyChanged(nameof(CanStageSelectedBackup));
+        OnPropertyChanged(nameof(CanCancelPendingDatabaseRestore));
+    }
+
+    private int IndexOfBackupArchive(string fileName)
+    {
+        for (int index = 0; index < _backupArchiveOptions.Count; index++)
+        {
+            if (string.Equals(
+                _backupArchiveOptions[index],
+                fileName,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private void UpdateBackupRestoreStatus()
+    {
+        string status = HasPendingDatabaseRestore
+            ? "RESTORE STAGED · Restart OpenCareer to apply it, or cancel the staged restore below to keep current career data."
+            : SelectedBackupArchive is not null
+                ? $"Selected: {SelectedBackupArchive}. Restoring requires confirmation and creates a current safety backup first."
+                : _backupArchiveOptions.Count == 0
+                    ? "No OpenCareer backup archives are available in the Backups folder."
+                    : "Select an OpenCareer backup archive to make restore available.";
+
+        SetField(ref _backupRestoreStatus, status, nameof(BackupRestoreStatus));
     }
 
     private void ReportSettingsActionAlreadyRunning() =>

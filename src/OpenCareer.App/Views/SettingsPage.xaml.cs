@@ -31,6 +31,7 @@ public sealed partial class SettingsPage : Page
         TutorialActionsPanel.DataContext = _tutorial;
 
         ApplyPreferenceControls();
+        _settings.RefreshBackupArchives();
         _settings.RefreshDiagnostics();
 
         _diagnosticTimer = DispatcherQueue.CreateTimer();
@@ -166,6 +167,29 @@ public sealed partial class SettingsPage : Page
 
     private void OpenBackupsFolder_Click(object sender, RoutedEventArgs e) =>
         _settings?.OpenBackupsFolder();
+
+    private async void StageSelectedRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settings?.SelectedBackupArchive is not string selected)
+            return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Restore this OpenCareer backup on next launch?",
+            Content =
+                $"Selected backup: {selected}\n\nOn restart, this replaces the current career database with the selected backup. OpenCareer will create a fresh safety backup before staging the restore. Any accepted job or flight progress newer than the selected backup will no longer be current after restore.",
+            PrimaryButtonText = "Create safety backup and stage",
+            CloseButtonText = "Keep current career",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            await _settings.StageSelectedBackupAsync();
+    }
+
+    private void CancelStagedRestore_Click(object sender, RoutedEventArgs e) =>
+        _settings?.CancelPendingDatabaseRestore();
 
     private async void ScheduleDevelopmentProfileReset_Click(
         object sender,

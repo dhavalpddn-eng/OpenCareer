@@ -12,6 +12,34 @@ public sealed class AppDataRestoreService(
     public bool HasPendingDatabaseRestore =>
         File.Exists(paths.PendingDatabaseRestoreFile);
 
+    public SettingsActionResult CancelPendingDatabaseRestore()
+    {
+        if (!HasPendingDatabaseRestore)
+        {
+            return new SettingsActionResult(
+                true,
+                "No database restore is currently staged.");
+        }
+
+        try
+        {
+            File.Delete(paths.PendingDatabaseRestoreFile);
+            logger.LogInformation("Cancelled the pending OpenCareer database restore.");
+
+            return new SettingsActionResult(
+                true,
+                "Staged database restore cancelled. Current career data will remain active after restart.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Failed to cancel the pending OpenCareer database restore.");
+
+            return new SettingsActionResult(
+                false,
+                "The staged restore could not be cancelled. Keep OpenCareer open, verify local storage is available, and retry before restarting.");
+        }
+    }
+
     public async Task<SettingsActionResult> StageDatabaseRestoreAsync(
         string backupArchivePath,
         CancellationToken cancellationToken = default)
@@ -56,7 +84,7 @@ public sealed class AppDataRestoreService(
 
             return new SettingsActionResult(
                 false,
-                $"Restore staging failed: {ex.Message}");
+                "The selected backup could not be validated and no restore was staged. Choose another OpenCareer backup or create a diagnostic bundle, then retry.");
         }
     }
 

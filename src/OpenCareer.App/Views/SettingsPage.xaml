@@ -258,6 +258,33 @@
                                 Style="{StaticResource OpenCareerSecondaryButtonStyle}"
                                 Click="OpenBackupsFolder_Click" />
                     </StackPanel>
+
+                    <Border Style="{StaticResource OpenCareerPaperInsetStyle}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="RESTORE FROM AN OPENCAREER BACKUP"
+                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <ComboBox x:Name="BackupArchiveComboBox"
+                                      Style="{StaticResource OpenCareerComboBoxStyle}"
+                                      ItemsSource="{Binding BackupArchiveOptions}"
+                                      SelectedIndex="{Binding SelectedBackupIndex, Mode=TwoWay}"
+                                      PlaceholderText="Select a backup archive"
+                                      HorizontalAlignment="Stretch"
+                                      IsEnabled="{Binding CanRunSettingsActions}" />
+                            <TextBlock Text="{Binding BackupRestoreStatus}"
+                                       Style="{StaticResource OpenCareerInputHelpStyle}"
+                                       TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Button Content="Stage selected restore"
+                                        Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                        IsEnabled="{Binding CanStageSelectedBackup}"
+                                        Click="StageSelectedRestore_Click" />
+                                <Button Content="Cancel staged restore"
+                                        Style="{StaticResource OpenCareerSecondaryButtonStyle}"
+                                        IsEnabled="{Binding CanCancelPendingDatabaseRestore}"
+                                        Click="CancelStagedRestore_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 

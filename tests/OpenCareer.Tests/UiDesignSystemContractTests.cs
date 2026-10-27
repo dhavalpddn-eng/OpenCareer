@@ -847,6 +847,53 @@ public sealed class UiDesignSystemContractTests
         Assert.Equal(
             "{Binding CanScheduleDevelopmentProfileReset}",
             scheduleResetButton.Attribute("IsEnabled")?.Value);
+
+        XElement backupArchiveComboBox = Assert.Single(
+            page.Descendants(),
+            element =>
+                element.Attribute(XamlNamespace + "Name")?.Value ==
+                    "BackupArchiveComboBox");
+        Assert.Equal(
+            "{StaticResource OpenCareerComboBoxStyle}",
+            backupArchiveComboBox.Attribute("Style")?.Value);
+        Assert.Equal(
+            "{Binding CanRunSettingsActions}",
+            backupArchiveComboBox.Attribute("IsEnabled")?.Value);
+
+        XElement stageRestoreButton = Assert.Single(
+            page.Descendants(),
+            element =>
+                element.Name.LocalName == "Button" &&
+                element.Attribute("Click")?.Value ==
+                    "StageSelectedRestore_Click");
+        Assert.Equal(
+            "{Binding CanStageSelectedBackup}",
+            stageRestoreButton.Attribute("IsEnabled")?.Value);
+
+        XElement cancelRestoreButton = Assert.Single(
+            page.Descendants(),
+            element =>
+                element.Name.LocalName == "Button" &&
+                element.Attribute("Click")?.Value ==
+                    "CancelStagedRestore_Click");
+        Assert.Equal(
+            "{Binding CanCancelPendingDatabaseRestore}",
+            cancelRestoreButton.Attribute("IsEnabled")?.Value);
+
+        string code = File.ReadAllText(
+            Path.Combine(directory, "SettingsPage.xaml.cs"));
+        Assert.Contains(
+            "Restore this OpenCareer backup on next launch?",
+            code,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Create safety backup and stage",
+            code,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "if (await dialog.ShowAsync() == ContentDialogResult.Primary)",
+            code,
+            StringComparison.Ordinal);
     }
 
     [Fact]
