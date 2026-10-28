@@ -368,6 +368,37 @@ public sealed class DispatchViewModelTests
     }
 
     [Fact]
+    public async Task PersistedTerminalCleanupIsVisibleAfterDispatchInitialization()
+    {
+        Guid contractId =
+            Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            new StubAcceptedContext(new(
+                AcceptedDispatchPlanningContextStatus.CancellationCleanupPending,
+                "A cancelled job still has preflight cleanup pending.",
+                ContractId: contractId,
+                AcceptedContractIds: [contractId])),
+            cancellation: new StubAcceptedJobCancellation());
+
+        await viewModel.InitializeAsync();
+
+        Assert.True(viewModel.CanCancelAcceptedJob);
+        Assert.False(viewModel.CanPrepare);
+        Assert.Equal("Retry Job Cleanup", viewModel.CancelAcceptedJobButtonText);
+        Assert.Contains(
+            "cancelled job",
+            viewModel.CancelAcceptedJobDialogText,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "cleanup pending",
+            viewModel.AcceptedContextText,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task FailedCancellationRefreshesRemainingTargetsAndStaysRetryableWithoutTechnicalDetails()
     {
         Guid first = Guid.Parse("11111111-1111-1111-1111-111111111111");

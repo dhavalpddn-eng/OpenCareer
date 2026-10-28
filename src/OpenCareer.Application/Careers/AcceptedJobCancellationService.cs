@@ -31,6 +31,12 @@ public interface IAcceptedJobCancellationService
         CancellationToken cancellationToken = default);
 }
 
+public interface IAcceptedJobCancellationRecoverySource
+{
+    Task<IReadOnlyList<Guid>> ReadPendingContractIdsAsync(
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Cancels an accepted job before flight start, retires its recoverable runtime
 /// state, releases its exact Fleet reservation, and clears any prepared plan.

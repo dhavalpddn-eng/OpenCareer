@@ -9,7 +9,8 @@ public enum AcceptedDispatchPlanningContextStatus
     ContractsUnavailable,
     NoAcceptedContract,
     MultipleAcceptedContracts,
-    ReservationUnavailable
+    ReservationUnavailable,
+    CancellationCleanupPending
 }
 
 public sealed record AcceptedDispatchPlanningContext(
@@ -38,13 +39,16 @@ public interface IAcceptedDispatchPlanningContextSource
 /// </summary>
 public sealed class AcceptedDispatchPlanningContextSource(
     IJobContractRuntimeSource contracts,
-    IAircraftReservationLookup reservations)
+    IAircraftReservationLookup reservations,
+    IAcceptedJobCancellationRecoverySource? cancellationRecovery = null)
     : IAcceptedDispatchPlanningContextSource
 {
     private readonly IJobContractRuntimeSource _contracts =
         contracts ?? throw new ArgumentNullException(nameof(contracts));
     private readonly IAircraftReservationLookup _reservations =
         reservations ?? throw new ArgumentNullException(nameof(reservations));
+    private readonly IAcceptedJobCancellationRecoverySource? _cancellationRecovery =
+        cancellationRecovery;
 
     public async Task<AcceptedDispatchPlanningContext> ReadAsync(
         CancellationToken cancellationToken = default)
@@ -55,6 +59,40 @@ public sealed class AcceptedDispatchPlanningContextSource(
             return new(
                 AcceptedDispatchPlanningContextStatus.ContractsUnavailable,
                 "Accepted-contract recovery is not initialized. Dispatch will not infer an operation.");
+        }
+
+        if (_cancellationRecovery is not null)
+        {
+            IReadOnlyList<Guid> pending = await _cancellationRecovery
+                .ReadPendingContractIdsAsync(cancellationToken)
+                .ConfigureAwait(false)
+                ?? throw new InvalidOperationException(
+                    "Accepted-job cancellation recovery returned no contract collection.");
+
+            Guid[] pendingIds = pending
+                .Where(static contractId => contractId != Guid.Empty)
+                .Distinct()
+                .OrderBy(static contractId => contractId)
+                .ToArray();
+
+            if (pendingIds.Length != pending.Count)
+            {
+                throw new InvalidDataException(
+                    "Accepted-job cancellation recovery returned invalid or duplicate contract identities.");
+            }
+
+            if (pendingIds.Length > 0)
+            {
+                return new(
+                    AcceptedDispatchPlanningContextStatus.CancellationCleanupPending,
+                    pendingIds.Length == 1
+                        ? "A cancelled job still has preflight cleanup pending. Retry cleanup before planning or starting another job."
+                        : $"{pendingIds.Length} cancelled jobs still have preflight cleanup pending. Retry cleanup before planning or starting another job.",
+                    ContractId: pendingIds.Length == 1
+                        ? pendingIds[0]
+                        : null,
+                    AcceptedContractIds: pendingIds);
+            }
         }
 
         PersistedJobContract[] accepted = _contracts.Current

@@ -790,6 +790,41 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task PersistedTerminalCleanupIsVisibleAfterJobsRefresh()
+    {
+        Guid contractId =
+            Guid.Parse("c3000000-0000-0000-0000-000000000012");
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        Offer("KRME", "KSYR", locked: false))),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection: null,
+                startAction: null,
+                logger: null,
+                acceptedContext:
+                    new CleanupPendingAcceptedContext(contractId),
+                acceptedCancellation:
+                    new FailingAcceptedCancellation());
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.Equal("Retry Job Cleanup", viewModel.CancelAcceptedJobsButtonText);
+        Assert.Contains(
+            "cleanup pending",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "cancelled job",
+            viewModel.CancelAcceptedJobsDialogText,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task TerminalCleanupFailureRetainsExactRetryWhenAcceptedContextDropsContract()
     {
         Guid contractId =
@@ -2064,6 +2099,22 @@ public sealed class JobsViewModelTests
                         "Multiple accepted jobs are waiting.",
                         AcceptedContractIds: _contractIds.ToArray())
                 });
+        }
+    }
+
+    private sealed class CleanupPendingAcceptedContext(Guid contractId)
+        : IAcceptedDispatchPlanningContextSource
+    {
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                new AcceptedDispatchPlanningContext(
+                    AcceptedDispatchPlanningContextStatus.CancellationCleanupPending,
+                    "A cancelled job still has preflight cleanup pending.",
+                    ContractId: contractId,
+                    AcceptedContractIds: [contractId]));
         }
     }
 

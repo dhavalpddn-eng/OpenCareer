@@ -59,6 +59,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private bool _isRefreshing;
     private bool _isJobActionBusy;
     private bool _isCancellingAcceptedJobs;
+    private bool _isCancellationCleanupPending;
     private IReadOnlyList<Guid> _acceptedContractIds = Array.Empty<Guid>();
     private bool _hasCurrentFlightSession;
     private string _currentFlightSessionStatus = "NO CURRENT FLIGHT SESSION";
@@ -173,15 +174,23 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public string CancelAcceptedJobsButtonText =>
         _isCancellingAcceptedJobs
             ? "Cancelling…"
-            : _acceptedContractIds.Count > 1
-                ? $"Cancel All {_acceptedContractIds.Count} Accepted Jobs"
-                : _acceptedContractIds.Count == 1
-                    ? "Cancel Accepted Job"
-                    : "No Accepted Job to Cancel";
+            : _isCancellationCleanupPending
+                ? _acceptedContractIds.Count > 1
+                    ? $"Retry Cleanup for {_acceptedContractIds.Count} Jobs"
+                    : "Retry Job Cleanup"
+                : _acceptedContractIds.Count > 1
+                    ? $"Cancel All {_acceptedContractIds.Count} Accepted Jobs"
+                    : _acceptedContractIds.Count == 1
+                        ? "Cancel Accepted Job"
+                        : "No Accepted Job to Cancel";
     public string CancelAcceptedJobsDialogText =>
-        _acceptedContractIds.Count > 1
-            ? $"All {_acceptedContractIds.Count} accepted preflight contracts will be cancelled and their aircraft reservations released. No flights will be started."
-            : "The accepted preflight contract will be cancelled, its prepared plan cleared, and its aircraft reservation released. No pay or logbook entry will be created.";
+        _isCancellationCleanupPending
+            ? _acceptedContractIds.Count > 1
+                ? $"Retry preflight cleanup for {_acceptedContractIds.Count} cancelled jobs. This will only retire remaining runtime state, reservations, or prepared plans."
+                : "Retry preflight cleanup for the cancelled job. This will only retire remaining runtime state, its reservation, or its prepared plan."
+            : _acceptedContractIds.Count > 1
+                ? $"All {_acceptedContractIds.Count} accepted preflight contracts will be cancelled and their aircraft reservations released. No flights will be started."
+                : "The accepted preflight contract will be cancelled, its prepared plan cleared, and its aircraft reservation released. No pay or logbook entry will be created.";
 
     public async Task GenerateDevelopmentFlightAsync(
         bool positionPilotAtKjfk,
@@ -825,6 +834,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 "Accepted career-job cancellation cleanup failed from Jobs for contract {ContractId}.",
                 ex.ContractId);
 
+            SetCancellationCleanupPending(true);
+
             SetField(
                 ref _acceptanceStatus,
                 CreateCancellationFailureText(),
@@ -857,6 +868,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     {
         if (_acceptedContext is null)
         {
+            SetCancellationCleanupPending(false);
             SetAcceptedContractIds(Array.Empty<Guid>());
             return;
         }
@@ -885,7 +897,19 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 ? [contractId]
                 : Array.Empty<Guid>());
 
+        bool cleanupPending =
+            context.Status
+            == AcceptedDispatchPlanningContextStatus.CancellationCleanupPending;
+        SetCancellationCleanupPending(cleanupPending);
         SetAcceptedContractIds(contractIds);
+
+        if (cleanupPending)
+        {
+            SetField(
+                ref _acceptanceStatus,
+                context.Detail,
+                nameof(AcceptanceStatus));
+        }
     }
 
     private string CreateCancellationFailureText() =>
@@ -1039,6 +1063,16 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     {
         _acceptedContractIds = contractIds;
         OnPropertyChanged(nameof(CanCancelAcceptedJobs));
+        OnPropertyChanged(nameof(CancelAcceptedJobsButtonText));
+        OnPropertyChanged(nameof(CancelAcceptedJobsDialogText));
+    }
+
+    private void SetCancellationCleanupPending(bool value)
+    {
+        if (_isCancellationCleanupPending == value)
+            return;
+
+        _isCancellationCleanupPending = value;
         OnPropertyChanged(nameof(CancelAcceptedJobsButtonText));
         OnPropertyChanged(nameof(CancelAcceptedJobsDialogText));
     }

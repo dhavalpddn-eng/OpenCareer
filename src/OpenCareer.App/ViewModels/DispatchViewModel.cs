@@ -74,6 +74,7 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     private double? _acceptedRouteDistanceNauticalMiles;
     private Guid? _acceptedContractId;
     private IReadOnlyList<Guid> _acceptedContractIds = Array.Empty<Guid>();
+    private bool _isCancellationCleanupPending;
     private string? _acceptedAircraftId;
     private string? _acceptedReservationId;
     private bool _isAcceptedContextLocked;
@@ -173,13 +174,21 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
     public string CancelAcceptedJobButtonText =>
         _isBusy && _busyOperation == DispatchBusyOperation.Cancel
             ? "Cancelling…"
-            : _acceptedContractIds.Count > 1
-                ? $"Cancel All {_acceptedContractIds.Count} Accepted Jobs"
-                : "Cancel Accepted Job";
+            : _isCancellationCleanupPending
+                ? _acceptedContractIds.Count > 1
+                    ? $"Retry Cleanup for {_acceptedContractIds.Count} Jobs"
+                    : "Retry Job Cleanup"
+                : _acceptedContractIds.Count > 1
+                    ? $"Cancel All {_acceptedContractIds.Count} Accepted Jobs"
+                    : "Cancel Accepted Job";
     public string CancelAcceptedJobDialogText =>
-        _acceptedContractIds.Count > 1
-            ? $"All {_acceptedContractIds.Count} accepted preflight contracts will be cancelled and their aircraft reservations released. No flights will be started."
-            : "The contract will be cancelled and its aircraft reservation released. The flight has not started, so no logbook entry or pay will be created.";
+        _isCancellationCleanupPending
+            ? _acceptedContractIds.Count > 1
+                ? $"Retry preflight cleanup for {_acceptedContractIds.Count} cancelled jobs. This will only retire remaining runtime state, reservations, or prepared plans."
+                : "Retry preflight cleanup for the cancelled job. This will only retire remaining runtime state, its reservation, or its prepared plan."
+            : _acceptedContractIds.Count > 1
+                ? $"All {_acceptedContractIds.Count} accepted preflight contracts will be cancelled and their aircraft reservations released. No flights will be started."
+                : "The contract will be cancelled and its aircraft reservation released. The flight has not started, so no logbook entry or pay will be created.";
 
     public async Task ReportInitializationFailureAsync(Exception exception)
     {
@@ -712,6 +721,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 "Accepted-job cancellation cleanup failed in Advanced Dispatch for contract {ContractId}.",
                 ex.ContractId);
 
+            SetCancellationCleanupPending(true);
+
             SetField(
                 ref _acceptedContextText,
                 "Accepted job cancellation did not finish. Retry the remaining cancellation. If it fails again, create a diagnostic bundle in Settings before changing recovery data.",
@@ -792,6 +803,9 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             ?? (_acceptedContractId is { } contractId
                 ? [contractId]
                 : Array.Empty<Guid>());
+        SetCancellationCleanupPending(
+            context.Status
+            == AcceptedDispatchPlanningContextStatus.CancellationCleanupPending);
         _acceptedReservationId =
             context.Status == AcceptedDispatchPlanningContextStatus.Ready
                 ? context.ReservationId
@@ -816,6 +830,16 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             .Where(contractId => contractId != completedContractId)
             .ToArray();
         OnPropertyChanged(nameof(CanCancelAcceptedJob));
+        OnPropertyChanged(nameof(CancelAcceptedJobButtonText));
+        OnPropertyChanged(nameof(CancelAcceptedJobDialogText));
+    }
+
+    private void SetCancellationCleanupPending(bool value)
+    {
+        if (_isCancellationCleanupPending == value)
+            return;
+
+        _isCancellationCleanupPending = value;
         OnPropertyChanged(nameof(CancelAcceptedJobButtonText));
         OnPropertyChanged(nameof(CancelAcceptedJobDialogText));
     }

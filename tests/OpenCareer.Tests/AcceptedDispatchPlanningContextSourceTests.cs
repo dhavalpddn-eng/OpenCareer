@@ -38,6 +38,33 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
     }
 
     [Fact]
+    public async Task PersistedCancellationCleanupTakesPriorityOverAcceptedPlanning()
+    {
+        Guid pendingId =
+            Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var reservations = new StubReservations(null);
+        var source = new AcceptedDispatchPlanningContextSource(
+            new StubContracts(
+                true,
+                [Persisted(ContractStatus.Accepted)]),
+            reservations,
+            new StubCancellationRecovery([pendingId]));
+
+        AcceptedDispatchPlanningContext result = await source.ReadAsync();
+
+        Assert.Equal(
+            AcceptedDispatchPlanningContextStatus.CancellationCleanupPending,
+            result.Status);
+        Assert.Equal(pendingId, result.ContractId);
+        Assert.Equal(
+            new[] { pendingId },
+            Assert.IsAssignableFrom<IReadOnlyList<Guid>>(
+                result.AcceptedContractIds));
+        Assert.Contains("cleanup pending", result.Detail, StringComparison.Ordinal);
+        Assert.Equal(0, reservations.CallCount);
+    }
+
+    [Fact]
     public async Task MultipleAcceptedContractsAreAmbiguous()
     {
         var reservations = new StubReservations(null);
@@ -177,6 +204,18 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
         {
             CallCount++;
             return Task.FromResult(ownership);
+        }
+    }
+
+    private sealed class StubCancellationRecovery(
+        IReadOnlyList<Guid> pending)
+        : IAcceptedJobCancellationRecoverySource
+    {
+        public Task<IReadOnlyList<Guid>> ReadPendingContractIdsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(pending);
         }
     }
 }
