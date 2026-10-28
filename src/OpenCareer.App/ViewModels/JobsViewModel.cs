@@ -33,7 +33,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private readonly ICareerJobPreFlightSessionRecoveryService? _startRecovery;
     private readonly CareerJobAircraftSelectionSource? _aircraftSelection;
     private readonly ICareerJobStartAction? _startAction;
-    private readonly IAcceptedDispatchPlanningContextSource? _acceptedContext;
+    private readonly IAcceptedDispatchPlanningContextSource _acceptedContext;
     private readonly IAcceptedJobCancellationService? _acceptedCancellation;
     private readonly CareerJobPlayableLoopReadinessSource? _playableReadiness;
     private readonly FlightSessionCoordinator? _flightSessions;
@@ -128,7 +128,10 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         _startAction =
             startAction;
         _acceptedContext =
-            acceptedContext;
+            acceptedContext
+            ?? MissingAcceptedDispatchPlanningContextSource.Instance;
+        _isCancellationCleanupUnavailable =
+            acceptedContext is null;
         _acceptedCancellation =
             acceptedCancellation;
         _playableReadiness =
@@ -869,14 +872,6 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private async Task RefreshAcceptedJobsAsync(
         CancellationToken cancellationToken)
     {
-        if (_acceptedContext is null)
-        {
-            SetCancellationCleanupPending(false);
-            SetCancellationCleanupUnavailable(false);
-            SetAcceptedContractIds(Array.Empty<Guid>());
-            return;
-        }
-
         AcceptedDispatchPlanningContext context;
         try
         {
@@ -1370,6 +1365,33 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             this,
             new PropertyChangedEventArgs(
                 propertyName));
+
+    /// <summary>
+    /// Keeps legacy or direct Jobs composition fail-closed when the accepted-job
+    /// recovery authority is omitted. Production DI supplies the durable source;
+    /// omission must never be interpreted as proof that cleanup is clear.
+    /// </summary>
+    private sealed class MissingAcceptedDispatchPlanningContextSource
+        : IAcceptedDispatchPlanningContextSource
+    {
+        public static MissingAcceptedDispatchPlanningContextSource Instance { get; } =
+            new();
+
+        private MissingAcceptedDispatchPlanningContextSource()
+        {
+        }
+
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(
+                new AcceptedDispatchPlanningContext(
+                    AcceptedDispatchPlanningContextStatus.CancellationCleanupUnavailable,
+                    "Accepted-job cleanup status could not be confirmed. New flight actions are blocked; reopen Jobs and create a diagnostic bundle from Settings if the issue returns."));
+        }
+    }
 }
 
 public sealed class JobOfferItemViewModel

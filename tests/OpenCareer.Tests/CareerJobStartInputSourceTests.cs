@@ -511,7 +511,8 @@ public sealed class CareerJobStartInputSourceTests
                 new FixedTimeProvider(Now),
                 new CareerJobAircraftSelectionSource(installed),
                 new InputBackedStartAction(inputs),
-                logger: null);
+                logger: null,
+                acceptedContext: new NoAcceptedDispatchContext());
 
         await viewModel.RefreshAsync();
 
@@ -1551,6 +1552,20 @@ public sealed class CareerJobStartInputSourceTests
             ArgumentException.ThrowIfNullOrWhiteSpace(canonicalAircraftId);
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(catalog);
+        }
+    }
+
+    private sealed class NoAcceptedDispatchContext
+        : IAcceptedDispatchPlanningContextSource
+    {
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                new AcceptedDispatchPlanningContext(
+                    AcceptedDispatchPlanningContextStatus.NoAcceptedContract,
+                    "No accepted job is waiting for dispatch preparation."));
         }
     }
 }

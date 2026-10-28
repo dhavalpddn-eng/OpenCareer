@@ -204,7 +204,9 @@ public sealed class DevelopmentFlightTests
                 logger:
                     null,
                 developmentFlights:
-                    fixture.Service);
+                    fixture.Service,
+                acceptedContext:
+                    new NoAcceptedDispatchContext());
 
         await viewModel.GenerateDevelopmentFlightAsync(
             positionPilotAtKjfk:
@@ -637,5 +639,19 @@ public sealed class DevelopmentFlightTests
     {
         public override DateTimeOffset GetUtcNow() =>
             Now;
+    }
+
+    private sealed class NoAcceptedDispatchContext
+        : IAcceptedDispatchPlanningContextSource
+    {
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                new AcceptedDispatchPlanningContext(
+                    AcceptedDispatchPlanningContextStatus.NoAcceptedContract,
+                    "No accepted job is waiting for dispatch preparation."));
+        }
     }
 }

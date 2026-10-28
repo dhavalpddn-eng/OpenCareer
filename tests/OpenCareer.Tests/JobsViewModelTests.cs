@@ -16,6 +16,52 @@ public sealed class JobsViewModelTests
         new(2026, 9, 22, 17, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task OmittedAcceptedContextFailsClosedBeforeAndAfterRefresh()
+    {
+        JobMarketOfferDraft offer =
+            Offer(
+                "KRME",
+                "KSYR",
+                locked:
+                    false);
+        var action =
+            new FakeStartAction();
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        offer)),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                new CareerJobAircraftSelectionSource(
+                    new FakeDiscovery()),
+                action,
+                logger:
+                    null);
+
+        Assert.False(viewModel.CanStartJobActions);
+
+        await viewModel.StartOfferAsync(offer.OfferId);
+        Assert.Equal(0, action.StartCount);
+
+        await viewModel.RefreshAsync();
+
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.Contains(
+            "cleanup status could not be confirmed",
+            viewModel.AcceptanceStatus,
+            StringComparison.OrdinalIgnoreCase);
+
+        await viewModel.SelectAircraftAsync("fixture-aircraft");
+        await viewModel.StartOfferAsync(offer.OfferId);
+
+        Assert.Null(viewModel.SelectedAircraftId);
+        Assert.Equal(0, action.AcceptCount);
+        Assert.Equal(0, action.StartCount);
+    }
+
+    [Fact]
     public async Task RefreshShowsOnlyCurrentCareerAirportBoard()
     {
         var boards =
@@ -388,7 +434,9 @@ public sealed class JobsViewModelTests
                     new FakeDiscovery()),
                 action,
                 logger:
-                    null);
+                    null,
+                acceptedContext:
+                    new MutableAcceptedContext());
 
         await viewModel.RefreshAsync();
 
@@ -440,7 +488,8 @@ public sealed class JobsViewModelTests
             new FixedTimeProvider(Now),
             new CareerJobAircraftSelectionSource(new FakeDiscovery()),
             action,
-            logger: null);
+            logger: null,
+            acceptedContext: new MutableAcceptedContext());
         await viewModel.RefreshAsync();
         await viewModel.SelectAircraftAsync(
             Assert.Single(viewModel.AircraftOptions).AircraftId);
@@ -486,7 +535,8 @@ public sealed class JobsViewModelTests
             new FixedTimeProvider(Now),
             new CareerJobAircraftSelectionSource(new FakeDiscovery()),
             action,
-            logger: null);
+            logger: null,
+            acceptedContext: new MutableAcceptedContext());
 
         await viewModel.RefreshAsync();
         await viewModel.SelectAircraftAsync(
@@ -546,7 +596,8 @@ public sealed class JobsViewModelTests
             new FixedTimeProvider(Now),
             new CareerJobAircraftSelectionSource(discovery),
             action,
-            logger: null);
+            logger: null,
+            acceptedContext: new MutableAcceptedContext());
 
         await viewModel.RefreshAsync();
         await viewModel.SelectAircraftAsync("first-aircraft");
@@ -583,7 +634,8 @@ public sealed class JobsViewModelTests
             new FixedTimeProvider(Now),
             new CareerJobAircraftSelectionSource(new FakeDiscovery()),
             action,
-            logger: null);
+            logger: null,
+            acceptedContext: new MutableAcceptedContext());
         var navigationTargets = new List<JobsNavigationTarget>();
         viewModel.NavigationRequested += (_, args) =>
             navigationTargets.Add(args.Target);
@@ -644,6 +696,8 @@ public sealed class JobsViewModelTests
                 action,
                 logger:
                     null,
+                acceptedContext:
+                    new MutableAcceptedContext(),
                 flightSessions:
                     sessions);
         var navigationTargets =
@@ -1141,7 +1195,9 @@ public sealed class JobsViewModelTests
                 logger:
                     null,
                 startRecovery:
-                    recovery);
+                    recovery,
+                acceptedContext:
+                    new MutableAcceptedContext());
 
         await viewModel.RefreshAsync();
         await viewModel.SelectAircraftAsync("fixture-aircraft");
@@ -1189,7 +1245,9 @@ public sealed class JobsViewModelTests
                 logger:
                     null,
                 startRecovery:
-                    recovery);
+                    recovery,
+                acceptedContext:
+                    new MutableAcceptedContext());
 
         await viewModel.RefreshAsync();
         Assert.True(viewModel.HasJobRecoveryAttention);
@@ -1669,7 +1727,8 @@ public sealed class JobsViewModelTests
     private static JobsViewModel SelectionViewModel(FakeDiscovery discovery, FakeStartAction? action = null) =>
         new(new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", locked: false))),
             CareerRuntime("KRME"), new FixedTimeProvider(Now),
-            new CareerJobAircraftSelectionSource(discovery), action ?? new FakeStartAction(), logger: null);
+            new CareerJobAircraftSelectionSource(discovery), action ?? new FakeStartAction(), logger: null,
+            acceptedContext: new MutableAcceptedContext());
 
     [Fact]
     public async Task UnchangedAircraftRefreshDoesNotRepeatDispatchReadiness()
@@ -1774,7 +1833,8 @@ public sealed class JobsViewModelTests
         var clock = new FixedTimeProvider(Now);
         var action = new FakeStartAction();
         var viewModel = new JobsViewModel(new FakeBoardStore(Board("KRME", Offer("KRME", "KSYR", false))),
-            CareerRuntime("KRME"), clock, new CareerJobAircraftSelectionSource(new FakeDiscovery()), action, logger: null);
+            CareerRuntime("KRME"), clock, new CareerJobAircraftSelectionSource(new FakeDiscovery()), action, logger: null,
+            acceptedContext: new MutableAcceptedContext());
         await viewModel.RefreshAsync();
         await viewModel.SelectAircraftAsync("fixture-aircraft");
         AssertReady(viewModel, "fixture-aircraft");
