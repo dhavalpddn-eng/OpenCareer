@@ -60,13 +60,19 @@ public sealed class AcceptedJobCancellationService(
                     $"Only an accepted preflight job can be cancelled here; current state is {persisted.Contract.Status}.");
             }
 
+            // Once cancellation is authoritative, cleanup must finish even if the
+            // caller leaves the page or cancels its operation token. Otherwise the
+            // cancelled contract disappears from Jobs while its reservation or
+            // prepared plan can remain stranded with no player-visible retry path.
+            CancellationToken cleanupCancellationToken = CancellationToken.None;
+
             await runtime
-                .RemoveCancelledAsync(persisted, cancellationToken)
+                .RemoveCancelledAsync(persisted, cleanupCancellationToken)
                 .ConfigureAwait(false);
 
             string reservationId = JobAcceptanceFleetBridge.GetReservationId(contractId);
             AircraftReservationOwnership? ownership = await reservationLookup
-                .FindByReservationIdAsync(reservationId, cancellationToken)
+                .FindByReservationIdAsync(reservationId, cleanupCancellationToken)
                 .ConfigureAwait(false);
 
             bool alreadyReleased = ownership is null;
@@ -86,7 +92,7 @@ public sealed class AcceptedJobCancellationService(
                     .ReleaseReservationAsync(
                         ownership.CanonicalAircraftId,
                         reservationId,
-                        cancellationToken)
+                        cleanupCancellationToken)
                     .ConfigureAwait(false);
 
                 alreadyReleased = release == AircraftReservationReleaseResult.AlreadyReleased;
@@ -102,7 +108,7 @@ public sealed class AcceptedJobCancellationService(
             }
 
             await preparedPlans
-                .ClearAsync(contractId, cancellationToken)
+                .ClearAsync(contractId, cleanupCancellationToken)
                 .ConfigureAwait(false);
 
             return new(contractId, reservationId, alreadyReleased);
