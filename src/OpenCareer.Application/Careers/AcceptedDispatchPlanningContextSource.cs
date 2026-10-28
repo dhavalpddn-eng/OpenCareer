@@ -42,7 +42,7 @@ public interface IAcceptedDispatchPlanningContextSource
 public sealed class AcceptedDispatchPlanningContextSource(
     IJobContractRuntimeSource contracts,
     IAircraftReservationLookup reservations,
-    IAcceptedJobCancellationRecoverySource? cancellationRecovery = null,
+    IAcceptedJobCancellationRecoverySource cancellationRecovery,
     ILogger<AcceptedDispatchPlanningContextSource>? logger = null)
     : IAcceptedDispatchPlanningContextSource
 {
@@ -50,8 +50,9 @@ public sealed class AcceptedDispatchPlanningContextSource(
         contracts ?? throw new ArgumentNullException(nameof(contracts));
     private readonly IAircraftReservationLookup _reservations =
         reservations ?? throw new ArgumentNullException(nameof(reservations));
-    private readonly IAcceptedJobCancellationRecoverySource? _cancellationRecovery =
-        cancellationRecovery;
+    private readonly IAcceptedJobCancellationRecoverySource _cancellationRecovery =
+        cancellationRecovery
+        ?? throw new ArgumentNullException(nameof(cancellationRecovery));
     private readonly ILogger<AcceptedDispatchPlanningContextSource>? _logger =
         logger;
 
@@ -71,7 +72,8 @@ public sealed class AcceptedDispatchPlanningContextSource(
             .OrderBy(static item => item.Contract.ContractId)
             .ToArray();
 
-        if (_cancellationRecovery is not null)
+        // Cleanup authority is mandatory so direct application composition cannot
+        // silently bypass the same interlock enforced by production DI.
         {
             IReadOnlyList<Guid> pending;
             try

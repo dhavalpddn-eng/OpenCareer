@@ -8,12 +8,28 @@ namespace OpenCareer.Tests;
 public sealed class AcceptedDispatchPlanningContextSourceTests
 {
     [Fact]
+    public void CancellationRecoveryAuthorityCannotBeOmittedFromConstruction()
+    {
+        System.Reflection.ParameterInfo parameter = Assert.Single(
+            Assert.Single(typeof(AcceptedDispatchPlanningContextSource).GetConstructors())
+                .GetParameters(),
+            candidate => candidate.Name == "cancellationRecovery");
+
+        Assert.Equal(
+            typeof(IAcceptedJobCancellationRecoverySource),
+            parameter.ParameterType);
+        Assert.False(parameter.IsOptional);
+        Assert.False(parameter.HasDefaultValue);
+    }
+
+    [Fact]
     public async Task UninitializedContractsFailClosedWithoutReservationLookup()
     {
         var reservations = new StubReservations(null);
         var source = new AcceptedDispatchPlanningContextSource(
             new StubContracts(false, []),
-            reservations);
+            reservations,
+            new NoPendingCancellationRecovery());
 
         AcceptedDispatchPlanningContext result = await source.ReadAsync();
 
@@ -29,7 +45,8 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
             new StubContracts(
                 true,
                 [Persisted(ContractStatus.InProgress)]),
-            reservations);
+            reservations,
+            new NoPendingCancellationRecovery());
 
         AcceptedDispatchPlanningContext result = await source.ReadAsync();
 
@@ -113,7 +130,8 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
             ]);
         var source = new AcceptedDispatchPlanningContextSource(
             contracts,
-            reservations);
+            reservations,
+            new NoPendingCancellationRecovery());
 
         AcceptedDispatchPlanningContext result = await source.ReadAsync();
 
@@ -133,7 +151,8 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
         PersistedJobContract accepted = Persisted(ContractStatus.Accepted);
         var source = new AcceptedDispatchPlanningContextSource(
             new StubContracts(true, [accepted]),
-            new StubReservations(null));
+            new StubReservations(null),
+            new NoPendingCancellationRecovery());
 
         AcceptedDispatchPlanningContext result = await source.ReadAsync();
 
@@ -154,7 +173,8 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
             accepted.Contract.ContractId);
         var source = new AcceptedDispatchPlanningContextSource(
             new StubContracts(true, [accepted]),
-            new StubReservations(new("aircraft-a", reservationId)));
+            new StubReservations(new("aircraft-a", reservationId)),
+            new NoPendingCancellationRecovery());
 
         AcceptedDispatchPlanningContext result = await source.ReadAsync();
 
@@ -174,7 +194,8 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
         PersistedJobContract accepted = Persisted(ContractStatus.Accepted);
         var source = new AcceptedDispatchPlanningContextSource(
             new StubContracts(true, [accepted]),
-            new StubReservations(new("aircraft-a", "different-reservation")));
+            new StubReservations(new("aircraft-a", "different-reservation")),
+            new NoPendingCancellationRecovery());
 
         await Assert.ThrowsAsync<InvalidDataException>(() => source.ReadAsync());
     }
@@ -251,6 +272,17 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(pending);
+        }
+    }
+
+    private sealed class NoPendingCancellationRecovery
+        : IAcceptedJobCancellationRecoverySource
+    {
+        public Task<IReadOnlyList<Guid>> ReadPendingContractIdsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<IReadOnlyList<Guid>>([]);
         }
     }
 
