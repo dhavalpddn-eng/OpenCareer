@@ -797,6 +797,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Reject overlapping backup, diagnostic-export and preference-reset actions through one Settings gate; disable their controls while owned and retain authoritative busy state until the owner finishes.
 - [x] Serialize backup and diagnostic snapshots against preference persistence; disable every preference control and reject late direct mutations while backup, export or reset owns the recovery-action gate.
 - [x] Include clean test-profile reset scheduling in the same non-queuing Settings action gate so backup/export/reset work cannot race the next-launch reset request and a rejected overlap remains retryable.
+- [x] Require exact OpenCareer reset-request contents and reject redirected request files before consuming a scheduled KJFK test-profile reset, preserving recoverable test data when the request is malformed or tampered.
 - [x] Implement Aviation/Metric unit selection and reformat existing telemetry without waiting for a new sample.
 - [x] Implement live simulator/SimConnect/telemetry diagnostics.
 - [x] Implement local application file logging.
