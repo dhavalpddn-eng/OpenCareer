@@ -815,6 +815,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Reject restore manifests with a missing creation timestamp so the year-one deserialization default cannot be accepted as trusted backup metadata or exposed through player-facing validation details.
 - [x] Serialize pending restore cancellation with staging and startup application, and await the authoritative result so cancellation cannot race a staged source into or out of existence.
 - [x] Reject a database-restore staging path that resolves to the selected backup archive so extraction cannot overwrite the only recovery ZIP; preserve both archive bytes and live career data on rejection.
+- [x] Reject pending restore cancellation when its path resolves to the live career database so cancellation cannot delete authoritative storage; verify the SQLite checkpoint remains loadable and unchanged.
 - [x] Implement reduced-motion and offline optional-service permission preferences.
 - [x] Keep real binding discovery explicitly owned by MBL-05.
 - [x] Keep authoritative SQLite FlightSession/save recovery explicitly owned by MBL-07.
