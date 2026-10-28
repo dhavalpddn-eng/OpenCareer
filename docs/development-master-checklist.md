@@ -384,6 +384,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Keep the Jobs aircraft selection immutable for the duration of each action-bound operation; reject concurrent selection changes and disable refresh/development-position inputs until the operation releases its gate.
 - [x] Recover failed zero-pay calibration generation by reconciling persisted Jobs authority, preserving a successfully positioned KJFK pilot and any Current Flight/accepted-job recovery exits, retaining a direct retry and suppressing raw technical exception text.
 - [x] Restrict accepted-job preflight cancellation to an atomic persisted `Accepted` transition so stale Jobs or Dispatch state cannot cancel a contract after flight start.
+- [x] Finish runtime retirement, exact reservation release and prepared-plan cleanup after an authoritative accepted-job cancellation even when the initiating UI token is cancelled, so navigation cannot strand invisible preflight artifacts.
 - [x] Recheck FlightSession ownership across automatic accepted/in-progress recovery authority reads; stop without contract or checkpoint mutation if another operation appears.
 - [x] Recheck FlightSession ownership across asynchronous career-job acceptance readiness reads; stop without producing an acceptance request if another operation appears.
 - [x] Recheck FlightSession ownership at the acceptance mutation boundary around the authoritative contract read; stop before aircraft reservation or contract mutation if another operation appears during handoff.

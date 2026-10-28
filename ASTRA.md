@@ -456,6 +456,12 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Scheduled KJFK test-profile reset authority now requires the exact OpenCareer request contents and rejects redirected request files before deleting any profile data. A malformed, corrupt or tampered request fails closed at startup, preserving the marker, request and recoverable test-career state for diagnosis instead of treating mere filename presence as reset authorization.
 - Verification: exact-head Linux build #1297 passed all 29 SimLab scenarios and all 1,935 tests; Windows `winui-build` #1230 verified exact SHA `0e29a07e`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,935 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
 
+## Recovery checkpoint — 2026-10-28
+
+- Code checkpoint: `82e47d0c5613832660cd9ae06f46443542d22dc3`.
+- After an accepted preflight contract is authoritatively cancelled, runtime retirement, exact Fleet-reservation release and prepared-plan cleanup now finish independently of the initiating UI cancellation token. Leaving Jobs or Advanced Dispatch can no longer interrupt that post-transition cleanup and strand artifacts after the cancelled contract disappears from the player-visible retry list.
+- Verification: exact-head Linux build #1299 passed all 29 SimLab scenarios and all 1,936 tests; Windows `winui-build` #1232 verified exact SHA `82e47d0c`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,936 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
+
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
 2. Live-validate the implemented aircraft-mismatch, touch-and-go/go-around, simulation-rate, night and actual-instrument paths on representative sessions; do not rebuild them.
