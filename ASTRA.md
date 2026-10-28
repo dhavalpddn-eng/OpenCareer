@@ -446,6 +446,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `168f0951fa75b6f1b9eeb164ad9bd6e257adaaae`.
 - Restore archive manifests now require a real creation timestamp. A missing timestamp can no longer deserialize to the year-one default and enter trusted backup metadata; it follows the existing invalid-import boundary, leaves the live database and staged state unchanged and exposes no technical validation detail to the player.
 - Verification: exact-head Linux build #1288 passed all 29 SimLab scenarios and all 1,931 tests; Windows `winui-build` #1221 verified exact SHA `168f0951`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,931 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
+- Code checkpoint: `5eb9f3f248675def942c132c2b9a04f9589f2772`.
+- Pending database-restore cancellation now acquires the same asynchronous backend gate as staging and startup application. Cancellation cannot race a replacement into existence after reporting success or delete a source while it is being applied; Settings awaits the authoritative post-gate result and retains its existing safe recovery guidance.
+- Verification: exact-head Linux build #1290 passed all 29 SimLab scenarios and all 1,932 tests; Windows `winui-build` #1223 verified exact SHA `5eb9f3f2`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,932 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
