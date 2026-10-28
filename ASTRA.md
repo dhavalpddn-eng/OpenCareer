@@ -461,6 +461,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `82e47d0c5613832660cd9ae06f46443542d22dc3`.
 - After an accepted preflight contract is authoritatively cancelled, runtime retirement, exact Fleet-reservation release and prepared-plan cleanup now finish independently of the initiating UI cancellation token. Leaving Jobs or Advanced Dispatch can no longer interrupt that post-transition cleanup and strand artifacts after the cancelled contract disappears from the player-visible retry list.
 - Verification: exact-head Linux build #1299 passed all 29 SimLab scenarios and all 1,936 tests; Windows `winui-build` #1232 verified exact SHA `82e47d0c`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,936 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
+- Code checkpoint: `49c4a3b014162edf316efcfa3141f42567ad69c3`.
+- Post-transition accepted-job cleanup failures now carry the exact cancelled contract identity. Jobs and Advanced Dispatch remove completed targets incrementally but retain the failed and unattempted IDs locally instead of refreshing from an accepted-only source that can no longer see terminal contracts, so the idempotent cleanup retry remains player-visible without exposing technical details.
+- Verification: exact-head Linux build #1301 passed all 29 SimLab scenarios and all 1,939 tests; Windows `winui-build` #1234 verified exact SHA `49c4a3b0`, compiled WinUI and the SimConnect probe, passed all five rapid KJFK certification tests and all 1,939 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.

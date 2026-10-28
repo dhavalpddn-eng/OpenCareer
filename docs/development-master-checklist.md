@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-27 through validated checkpoint `f7e3c3f7` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-28 through validated checkpoint `49c4a3b0` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -385,6 +385,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Recover failed zero-pay calibration generation by reconciling persisted Jobs authority, preserving a successfully positioned KJFK pilot and any Current Flight/accepted-job recovery exits, retaining a direct retry and suppressing raw technical exception text.
 - [x] Restrict accepted-job preflight cancellation to an atomic persisted `Accepted` transition so stale Jobs or Dispatch state cannot cancel a contract after flight start.
 - [x] Finish runtime retirement, exact reservation release and prepared-plan cleanup after an authoritative accepted-job cancellation even when the initiating UI token is cancelled, so navigation cannot strand invisible preflight artifacts.
+- [x] Preserve the exact failed and unattempted accepted-job cleanup identities after a terminal cancellation transition, removing completed targets incrementally so Jobs and Advanced Dispatch keep idempotent cleanup retry visible even after accepted-only context drops the contract.
 - [x] Recheck FlightSession ownership across automatic accepted/in-progress recovery authority reads; stop without contract or checkpoint mutation if another operation appears.
 - [x] Recheck FlightSession ownership across asynchronous career-job acceptance readiness reads; stop without producing an acceptance request if another operation appears.
 - [x] Recheck FlightSession ownership at the acceptance mutation boundary around the authoritative contract read; stop before aircraft reservation or contract mutation if another operation appears during handoff.
