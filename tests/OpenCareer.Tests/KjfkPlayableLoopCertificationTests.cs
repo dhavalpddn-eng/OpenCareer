@@ -754,6 +754,7 @@ public sealed class KjfkPlayableLoopCertificationTests
                 acceptedContext:
                     new AcceptedDispatchPlanningContextSource(
                         Contracts,
+                        Fleet,
                         cancellationRecovery));
             CompletionInputs = new(Sessions, Contracts, Evidence, Fleet, _registry,
                 [new StandardPointToPointMissionCompletionSource(airports, StandardPointToPointMissionPolicy.Default)],
