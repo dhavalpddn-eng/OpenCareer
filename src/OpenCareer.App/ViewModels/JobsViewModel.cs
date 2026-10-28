@@ -60,6 +60,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     private bool _isJobActionBusy;
     private bool _isCancellingAcceptedJobs;
     private bool _isCancellationCleanupPending;
+    private bool _isCancellationCleanupUnavailable;
     private IReadOnlyList<Guid> _acceptedContractIds = Array.Empty<Guid>();
     private bool _hasCurrentFlightSession;
     private string _currentFlightSessionStatus = "NO CURRENT FLIGHT SESSION";
@@ -159,7 +160,8 @@ public sealed class JobsViewModel : INotifyPropertyChanged
     public bool CanStartJobActions =>
         CanRunJobActions
         && !HasJobRecoveryAttention
-        && !HasCurrentFlightSession;
+        && !HasCurrentFlightSession
+        && !CancellationCleanupBlocksNewFlight;
     public bool HasCurrentFlightSession => _hasCurrentFlightSession;
     public string CurrentFlightSessionStatus => _currentFlightSessionStatus;
     public string CurrentFlightSessionDetail => _currentFlightSessionDetail;
@@ -834,6 +836,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 "Accepted career-job cancellation cleanup failed from Jobs for contract {ContractId}.",
                 ex.ContractId);
 
+            SetCancellationCleanupUnavailable(false);
             SetCancellationCleanupPending(true);
 
             SetField(
@@ -869,6 +872,7 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         if (_acceptedContext is null)
         {
             SetCancellationCleanupPending(false);
+            SetCancellationCleanupUnavailable(false);
             SetAcceptedContractIds(Array.Empty<Guid>());
             return;
         }
@@ -900,10 +904,14 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         bool cleanupPending =
             context.Status
             == AcceptedDispatchPlanningContextStatus.CancellationCleanupPending;
+        bool cleanupUnavailable =
+            context.Status
+            == AcceptedDispatchPlanningContextStatus.CancellationCleanupUnavailable;
         SetCancellationCleanupPending(cleanupPending);
+        SetCancellationCleanupUnavailable(cleanupUnavailable);
         SetAcceptedContractIds(contractIds);
 
-        if (cleanupPending)
+        if (cleanupPending || cleanupUnavailable)
         {
             SetField(
                 ref _acceptanceStatus,
@@ -1039,6 +1047,19 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         // race a FlightSession that appeared after the last Jobs refresh.
         RefreshCurrentFlightSession();
 
+        if (CancellationCleanupBlocksNewFlight)
+        {
+            SetField(
+                ref _acceptanceStatus,
+                _isCancellationCleanupPending
+                    ? "Retry the cancelled job cleanup below before starting or creating another flight. Refresh Jobs if the retry action is stale; if the issue returns, create a diagnostic bundle from Settings."
+                    : _acceptedContractIds.Count > 0
+                        ? "Accepted-job cleanup status could not be confirmed, so another flight cannot start. The accepted job remains available to cancel below. Refresh Jobs to retry inspection; if the warning returns, create a diagnostic bundle from Settings."
+                        : "Accepted-job cleanup status could not be confirmed, so another flight cannot start. Refresh Jobs to retry inspection; if the warning returns, create a diagnostic bundle from Settings.",
+                nameof(AcceptanceStatus));
+            return true;
+        }
+
         if (HasJobRecoveryAttention)
         {
             SetField(
@@ -1075,7 +1096,21 @@ public sealed class JobsViewModel : INotifyPropertyChanged
         _isCancellationCleanupPending = value;
         OnPropertyChanged(nameof(CancelAcceptedJobsButtonText));
         OnPropertyChanged(nameof(CancelAcceptedJobsDialogText));
+        OnPropertyChanged(nameof(CanStartJobActions));
     }
+
+    private void SetCancellationCleanupUnavailable(bool value)
+    {
+        if (_isCancellationCleanupUnavailable == value)
+            return;
+
+        _isCancellationCleanupUnavailable = value;
+        OnPropertyChanged(nameof(CanStartJobActions));
+    }
+
+    private bool CancellationCleanupBlocksNewFlight =>
+        _isCancellationCleanupPending
+        || _isCancellationCleanupUnavailable;
 
     private void SetCancellingAcceptedJobs(bool value)
     {

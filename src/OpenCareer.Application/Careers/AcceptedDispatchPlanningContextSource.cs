@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using OpenCareer.Application.Fleet;
 using OpenCareer.Domain.Careers;
 
@@ -10,7 +11,8 @@ public enum AcceptedDispatchPlanningContextStatus
     NoAcceptedContract,
     MultipleAcceptedContracts,
     ReservationUnavailable,
-    CancellationCleanupPending
+    CancellationCleanupPending,
+    CancellationCleanupUnavailable
 }
 
 public sealed record AcceptedDispatchPlanningContext(
@@ -40,7 +42,8 @@ public interface IAcceptedDispatchPlanningContextSource
 public sealed class AcceptedDispatchPlanningContextSource(
     IJobContractRuntimeSource contracts,
     IAircraftReservationLookup reservations,
-    IAcceptedJobCancellationRecoverySource? cancellationRecovery = null)
+    IAcceptedJobCancellationRecoverySource? cancellationRecovery = null,
+    ILogger<AcceptedDispatchPlanningContextSource>? logger = null)
     : IAcceptedDispatchPlanningContextSource
 {
     private readonly IJobContractRuntimeSource _contracts =
@@ -49,6 +52,8 @@ public sealed class AcceptedDispatchPlanningContextSource(
         reservations ?? throw new ArgumentNullException(nameof(reservations));
     private readonly IAcceptedJobCancellationRecoverySource? _cancellationRecovery =
         cancellationRecovery;
+    private readonly ILogger<AcceptedDispatchPlanningContextSource>? _logger =
+        logger;
 
     public async Task<AcceptedDispatchPlanningContext> ReadAsync(
         CancellationToken cancellationToken = default)
@@ -61,13 +66,42 @@ public sealed class AcceptedDispatchPlanningContextSource(
                 "Accepted-contract recovery is not initialized. Dispatch will not infer an operation.");
         }
 
+        PersistedJobContract[] accepted = _contracts.Current
+            .Where(static item => item.Contract.Status == ContractStatus.Accepted)
+            .OrderBy(static item => item.Contract.ContractId)
+            .ToArray();
+
         if (_cancellationRecovery is not null)
         {
-            IReadOnlyList<Guid> pending = await _cancellationRecovery
-                .ReadPendingContractIdsAsync(cancellationToken)
-                .ConfigureAwait(false)
-                ?? throw new InvalidOperationException(
-                    "Accepted-job cancellation recovery returned no contract collection.");
+            IReadOnlyList<Guid> pending;
+            try
+            {
+                pending = await _cancellationRecovery
+                    .ReadPendingContractIdsAsync(cancellationToken)
+                    .ConfigureAwait(false)
+                    ?? throw new InvalidOperationException(
+                        "Accepted-job cancellation recovery returned no contract collection.");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger?.LogError(
+                    ex,
+                    "Accepted-job cancellation cleanup state could not be read; dispatch planning remains blocked.");
+
+                Guid[] acceptedIds = accepted
+                    .Select(static item => item.Contract.ContractId)
+                    .ToArray();
+
+                return new(
+                    AcceptedDispatchPlanningContextStatus.CancellationCleanupUnavailable,
+                    acceptedIds.Length > 0
+                        ? "Accepted-job cleanup status could not be confirmed. Planning is blocked, but the accepted job remains available to cancel. Retry or reopen this screen; if the warning returns, create a diagnostic bundle in Settings."
+                        : "Accepted-job cleanup status could not be confirmed. Planning is blocked. Retry or reopen this screen; if the warning returns, create a diagnostic bundle in Settings.",
+                    ContractId: acceptedIds.Length == 1
+                        ? acceptedIds[0]
+                        : null,
+                    AcceptedContractIds: acceptedIds);
+            }
 
             Guid[] pendingIds = pending
                 .Where(static contractId => contractId != Guid.Empty)
@@ -94,11 +128,6 @@ public sealed class AcceptedDispatchPlanningContextSource(
                     AcceptedContractIds: pendingIds);
             }
         }
-
-        PersistedJobContract[] accepted = _contracts.Current
-            .Where(static item => item.Contract.Status == ContractStatus.Accepted)
-            .OrderBy(static item => item.Contract.ContractId)
-            .ToArray();
 
         if (accepted.Length == 0)
         {

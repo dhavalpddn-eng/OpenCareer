@@ -794,6 +794,52 @@ public sealed class JobsViewModelTests
     {
         Guid contractId =
             Guid.Parse("c3000000-0000-0000-0000-000000000012");
+        JobMarketOfferDraft offer =
+            Offer("KRME", "KSYR", locked: false);
+        var action = new FakeStartAction();
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board("KRME", offer)),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection: null,
+                startAction: action,
+                logger: null,
+                acceptedContext:
+                    new CleanupPendingAcceptedContext(contractId),
+                acceptedCancellation:
+                    new FailingAcceptedCancellation());
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.Equal("Retry Job Cleanup", viewModel.CancelAcceptedJobsButtonText);
+        Assert.Contains(
+            "cleanup pending",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "cancelled job",
+            viewModel.CancelAcceptedJobsDialogText,
+            StringComparison.Ordinal);
+
+        await viewModel.StartOfferAsync(offer.OfferId);
+
+        Assert.Equal(0, action.AcceptCount);
+        Assert.Equal(0, action.StartCount);
+        Assert.Contains(
+            "Retry the cancelled job cleanup",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UnavailableCleanupInspectionRetainsAcceptedCancellationOnly()
+    {
+        Guid contractId =
+            Guid.Parse("c3000000-0000-0000-0000-000000000013");
         var viewModel =
             new JobsViewModel(
                 new FakeBoardStore(
@@ -806,21 +852,20 @@ public sealed class JobsViewModelTests
                 startAction: null,
                 logger: null,
                 acceptedContext:
-                    new CleanupPendingAcceptedContext(contractId),
+                    new CleanupUnavailableAcceptedContext(contractId),
                 acceptedCancellation:
                     new FailingAcceptedCancellation());
 
         await viewModel.RefreshAsync();
 
         Assert.True(viewModel.CanCancelAcceptedJobs);
-        Assert.Equal("Retry Job Cleanup", viewModel.CancelAcceptedJobsButtonText);
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.Equal(
+            "Cancel Accepted Job",
+            viewModel.CancelAcceptedJobsButtonText);
         Assert.Contains(
-            "cleanup pending",
+            "Planning is blocked",
             viewModel.AcceptanceStatus,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "cancelled job",
-            viewModel.CancelAcceptedJobsDialogText,
             StringComparison.Ordinal);
     }
 
@@ -2113,6 +2158,22 @@ public sealed class JobsViewModelTests
                 new AcceptedDispatchPlanningContext(
                     AcceptedDispatchPlanningContextStatus.CancellationCleanupPending,
                     "A cancelled job still has preflight cleanup pending.",
+                    ContractId: contractId,
+                    AcceptedContractIds: [contractId]));
+        }
+    }
+
+    private sealed class CleanupUnavailableAcceptedContext(Guid contractId)
+        : IAcceptedDispatchPlanningContextSource
+    {
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                new AcceptedDispatchPlanningContext(
+                    AcceptedDispatchPlanningContextStatus.CancellationCleanupUnavailable,
+                    "Accepted-job cleanup status could not be confirmed. Planning is blocked, but the accepted job remains available to cancel.",
                     ContractId: contractId,
                     AcceptedContractIds: [contractId]));
         }

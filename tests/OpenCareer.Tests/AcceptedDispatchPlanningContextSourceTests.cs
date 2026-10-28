@@ -65,6 +65,41 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
     }
 
     [Fact]
+    public async Task CleanupInspectionFailureBlocksPlanningButRetainsAcceptedCancellation()
+    {
+        PersistedJobContract accepted = Persisted(ContractStatus.Accepted);
+        var reservations = new StubReservations(null);
+        var source = new AcceptedDispatchPlanningContextSource(
+            new StubContracts(true, [accepted]),
+            reservations,
+            new FailingCancellationRecovery());
+
+        AcceptedDispatchPlanningContext result = await source.ReadAsync();
+
+        Assert.Equal(
+            AcceptedDispatchPlanningContextStatus.CancellationCleanupUnavailable,
+            result.Status);
+        Assert.Equal(accepted.Contract.ContractId, result.ContractId);
+        Assert.Equal(
+            new[] { accepted.Contract.ContractId },
+            Assert.IsAssignableFrom<IReadOnlyList<Guid>>(
+                result.AcceptedContractIds));
+        Assert.Contains(
+            "Planning is blocked",
+            result.Detail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "available to cancel",
+            result.Detail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            FailingCancellationRecovery.TechnicalMessage,
+            result.Detail,
+            StringComparison.Ordinal);
+        Assert.Equal(0, reservations.CallCount);
+    }
+
+    [Fact]
     public async Task MultipleAcceptedContractsAreAmbiguous()
     {
         var reservations = new StubReservations(null);
@@ -216,6 +251,21 @@ public sealed class AcceptedDispatchPlanningContextSourceTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(pending);
+        }
+    }
+
+    private sealed class FailingCancellationRecovery
+        : IAcceptedJobCancellationRecoverySource
+    {
+        public const string TechnicalMessage =
+            "sqlite path C:\\Users\\pilot\\OpenCareer.db";
+
+        public Task<IReadOnlyList<Guid>> ReadPendingContractIdsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromException<IReadOnlyList<Guid>>(
+                new IOException(TechnicalMessage));
         }
     }
 }

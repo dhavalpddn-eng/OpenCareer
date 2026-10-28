@@ -399,6 +399,35 @@ public sealed class DispatchViewModelTests
     }
 
     [Fact]
+    public async Task UnavailableCleanupInspectionRetainsAcceptedCancellationOnly()
+    {
+        Guid contractId =
+            Guid.Parse("44444444-4444-4444-4444-444444444444");
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            new StubAcceptedContext(new(
+                AcceptedDispatchPlanningContextStatus.CancellationCleanupUnavailable,
+                "Accepted-job cleanup status could not be confirmed. Planning is blocked, but the accepted job remains available to cancel.",
+                ContractId: contractId,
+                AcceptedContractIds: [contractId])),
+            cancellation: new StubAcceptedJobCancellation());
+
+        await viewModel.InitializeAsync();
+
+        Assert.True(viewModel.CanCancelAcceptedJob);
+        Assert.False(viewModel.CanPrepare);
+        Assert.Equal(
+            "Cancel Accepted Job",
+            viewModel.CancelAcceptedJobButtonText);
+        Assert.Contains(
+            "Planning is blocked",
+            viewModel.AcceptedContextText,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task FailedCancellationRefreshesRemainingTargetsAndStaysRetryableWithoutTechnicalDetails()
     {
         Guid first = Guid.Parse("11111111-1111-1111-1111-111111111111");
