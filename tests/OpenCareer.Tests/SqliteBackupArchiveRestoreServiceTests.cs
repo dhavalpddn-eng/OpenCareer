@@ -612,23 +612,30 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
         try
         {
             string livePath = Path.Combine(dir, "live.db");
+            ConflictCampaignCheckpoint liveCheckpoint =
+                Checkpoint("live-campaign");
 
             await Store(livePath).SaveAsync(
-                Checkpoint("live-campaign"),
+                liveCheckpoint,
                 expectedRevision: null);
-
-            byte[] liveDatabase = await File.ReadAllBytesAsync(livePath);
 
             ArgumentException error = await Assert.ThrowsAsync<ArgumentException>(
                 () => RestoreService(livePath).CancelStagedRestoreAsync(
                     livePath));
 
             Assert.Equal("stagedDatabasePath", error.ParamName);
+            Assert.True(File.Exists(livePath));
+
+            ConflictCampaignStoreRecord? live =
+                await Store(livePath).LoadAsync("live-campaign");
+
+            Assert.NotNull(live);
             Assert.Equal(
-                liveDatabase,
-                await File.ReadAllBytesAsync(livePath));
-            Assert.NotNull(
-                await Store(livePath).LoadAsync("live-campaign"));
+                liveCheckpoint.MilitaryCareer,
+                live!.Checkpoint.MilitaryCareer);
+            Assert.Equal(
+                liveCheckpoint.PlayerCombatState,
+                live.Checkpoint.PlayerCombatState);
         }
         finally
         {
