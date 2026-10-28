@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-28 through validated checkpoint `8f051e40` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-28 through validated checkpoint `8dc091a7` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -393,6 +393,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Require the same recovery authority when constructing accepted-dispatch planning so direct application composition cannot skip pending or unavailable cleanup inspection.
 - [x] Fail Jobs closed from construction when accepted-dispatch context is omitted so legacy or direct composition cannot clear the cleanup interlock or invoke stale new-flight actions.
 - [x] Fail Jobs closed when accepted-dispatch context refresh throws, retaining previously known cancellation targets and suppressing technical details from player-facing recovery guidance.
+- [x] Invalidate stale Advanced Dispatch evaluation/preparation authority when cancellation and its recovery refresh both fail, while preserving known cancellation targets for retry.
 - [x] Recheck FlightSession ownership across automatic accepted/in-progress recovery authority reads; stop without contract or checkpoint mutation if another operation appears.
 - [x] Recheck FlightSession ownership across asynchronous career-job acceptance readiness reads; stop without producing an acceptance request if another operation appears.
 - [x] Recheck FlightSession ownership at the acceptance mutation boundary around the authoritative contract read; stop before aircraft reservation or contract mutation if another operation appears during handoff.
