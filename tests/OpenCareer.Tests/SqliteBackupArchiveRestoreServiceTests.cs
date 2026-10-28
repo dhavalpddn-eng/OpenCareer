@@ -424,14 +424,81 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
         }
     }
 
+    [Fact]
+    public async Task SidecarCleanupFailureRestoresLiveDatabaseAndPreservesStage()
+    {
+        string dir = TempDir();
+
+        try
+        {
+            string livePath = Path.Combine(dir, "live.db");
+            string sourcePath = Path.Combine(dir, "source.db");
+            string sourceSnapshot = Path.Combine(dir, "source-snapshot.db");
+            string archivePath = Path.Combine(dir, "backup.zip");
+            string stagedPath = Path.Combine(dir, "pending.db");
+
+            await Store(livePath).SaveAsync(
+                Checkpoint("live-campaign"),
+                expectedRevision: null);
+
+            await Store(sourcePath).SaveAsync(
+                Checkpoint("backup-campaign"),
+                expectedRevision: null);
+
+            await new SqliteDatabaseSnapshotService(
+                    new OpenCareerDatabaseOptions(sourcePath))
+                .CreateSnapshotAsync(sourceSnapshot);
+
+            await CreateBackupArchiveAsync(
+                archivePath,
+                sourceSnapshot);
+
+            var restore = RestoreService(livePath);
+            await restore.StageRestoreAsync(archivePath, stagedPath);
+            byte[] stagedSnapshot = await File.ReadAllBytesAsync(stagedPath);
+
+            var failingRestore = RestoreService(
+                livePath,
+                _ => throw new IOException("simulated sidecar cleanup failure"));
+
+            IOException error = await Assert.ThrowsAsync<IOException>(
+                () => failingRestore.ApplyStagedRestoreAsync(stagedPath));
+
+            Assert.Contains("sidecar cleanup", error.Message);
+            Assert.True(File.Exists(stagedPath));
+            Assert.Equal(
+                stagedSnapshot,
+                await File.ReadAllBytesAsync(stagedPath));
+            Assert.NotNull(
+                await Store(livePath).LoadAsync("live-campaign"));
+            Assert.Null(
+                await Store(livePath).LoadAsync("backup-campaign"));
+            await SqliteDatabaseSnapshotService
+                .ValidateSnapshotAsync(livePath);
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
     private static SqliteBackupArchiveRestoreService RestoreService(
-        string livePath)
+        string livePath,
+        Action<string>? deleteDatabaseSidecars = null)
     {
         var options = new OpenCareerDatabaseOptions(livePath);
-        return new SqliteBackupArchiveRestoreService(
-            options,
-            new SqliteDatabaseSnapshotService(options),
-            NullLogger<SqliteBackupArchiveRestoreService>.Instance);
+        var snapshots = new SqliteDatabaseSnapshotService(options);
+
+        return deleteDatabaseSidecars is null
+            ? new SqliteBackupArchiveRestoreService(
+                options,
+                snapshots,
+                NullLogger<SqliteBackupArchiveRestoreService>.Instance)
+            : new SqliteBackupArchiveRestoreService(
+                options,
+                snapshots,
+                NullLogger<SqliteBackupArchiveRestoreService>.Instance,
+                deleteDatabaseSidecars);
     }
 
     private static SqliteConflictCampaignStore Store(string path) =>

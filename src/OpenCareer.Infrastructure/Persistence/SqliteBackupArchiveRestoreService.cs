@@ -10,6 +10,7 @@ public sealed class SqliteBackupArchiveRestoreService
     private readonly OpenCareerDatabaseOptions _options;
     private readonly SqliteDatabaseSnapshotService _snapshots;
     private readonly ILogger<SqliteBackupArchiveRestoreService> _logger;
+    private readonly Action<string> _deleteDatabaseSidecars;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private readonly JsonSerializerOptions _jsonOptions = new()
@@ -22,10 +23,25 @@ public sealed class SqliteBackupArchiveRestoreService
         OpenCareerDatabaseOptions options,
         SqliteDatabaseSnapshotService snapshots,
         ILogger<SqliteBackupArchiveRestoreService> logger)
+        : this(
+            options,
+            snapshots,
+            logger,
+            DeleteDatabaseSidecarsOrThrow)
+    {
+    }
+
+    internal SqliteBackupArchiveRestoreService(
+        OpenCareerDatabaseOptions options,
+        SqliteDatabaseSnapshotService snapshots,
+        ILogger<SqliteBackupArchiveRestoreService> logger,
+        Action<string> deleteDatabaseSidecars)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _snapshots = snapshots ?? throw new ArgumentNullException(nameof(snapshots));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _deleteDatabaseSidecars = deleteDatabaseSidecars
+            ?? throw new ArgumentNullException(nameof(deleteDatabaseSidecars));
     }
 
     public async Task<OpenCareerBackupManifest> StageRestoreAsync(
@@ -138,11 +154,11 @@ public sealed class SqliteBackupArchiveRestoreService
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            SqliteConnection.ClearAllPools();
-            DeleteDatabaseSidecarsOrThrow(databasePath);
-
             try
             {
+                SqliteConnection.ClearAllPools();
+                _deleteDatabaseSidecars(databasePath);
+
                 await CopyAndValidateStagedSnapshotAsync(
                         stagePath,
                         databasePath)
