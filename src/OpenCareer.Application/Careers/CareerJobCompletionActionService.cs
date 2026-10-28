@@ -59,6 +59,20 @@ public sealed class CareerJobCompletionActionService
                 .ReadCurrentAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+        if (!snapshot.IsReady
+            && await IsMatchingTerminalRecoveryPendingAsync(
+                    snapshot,
+                    cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return new(
+                CanComplete: true,
+                CareerJobCompletionInputState.TerminalRecoveryPending,
+                "Settlement or finalization recovery is pending for this completed flight. Retry Complete Career Flight; exactly-once settlement prevents duplicate pay.",
+                snapshot.FlightSessionId,
+                snapshot.ContractId);
+        }
+
         return new(
             snapshot.IsReady,
             snapshot.State,
@@ -83,13 +97,6 @@ public sealed class CareerJobCompletionActionService
                 .ReadCurrentAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-        if (!snapshot.IsReady
-            || snapshot.Request is null)
-        {
-            throw new InvalidOperationException(
-                snapshot.Detail);
-        }
-
         if (snapshot.FlightSessionId != expectedFlightSessionId
             || snapshot.ContractId != expectedContractId)
         {
@@ -97,11 +104,34 @@ public sealed class CareerJobCompletionActionService
                 "Career completion inputs changed after readiness was reviewed. Refresh Current Flight and try again.");
         }
 
-        CareerJobPlayableCompletionResult result =
-            await _playableLoop.CompleteAsync(
-                snapshot.Request,
-                cancellationToken)
-            .ConfigureAwait(false);
+        CareerJobPlayableCompletionResult result;
+        if (snapshot.IsReady
+            && snapshot.Request is not null)
+        {
+            result =
+                await _playableLoop
+                    .CompleteAsync(
+                        snapshot.Request,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+        }
+        else if (await IsMatchingTerminalRecoveryPendingAsync(
+                    snapshot,
+                    cancellationToken)
+                .ConfigureAwait(false))
+        {
+            result =
+                await _playableLoop
+                    .ResumePendingAsync(
+                        expectedContractId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                snapshot.Detail);
+        }
 
         return new(
             result.CompletedContract.Contract.ContractId,
@@ -116,5 +146,23 @@ public sealed class CareerJobCompletionActionService
             result.Terminal.CareerProfile.Profile.Experience.FlightCount,
             DevelopmentFlight.IsDevelopment(
                 result.CompletedContract.Contract));
+    }
+
+    private async Task<bool> IsMatchingTerminalRecoveryPendingAsync(
+        CareerJobCompletionInputSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        if (snapshot.ContractId is not { } contractId
+            || snapshot.FlightSessionId is null)
+        {
+            return false;
+        }
+
+        Guid? pendingContractId =
+            await _playableLoop
+                .ReadPendingTerminalContractIdAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        return pendingContractId == contractId;
     }
 }

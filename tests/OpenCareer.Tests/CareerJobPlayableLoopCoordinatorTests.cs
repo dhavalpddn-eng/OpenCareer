@@ -309,11 +309,17 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
             () => context.Coordinator.CompleteAsync(context.Request));
 
         Assert.NotNull(context.TerminalRecovery.Pending);
+        Assert.Equal(
+            context.Request.ContractId,
+            await context.Coordinator.ReadPendingTerminalContractIdAsync());
 
         CareerJobPlayableLoopCoordinator restarted = context.Restart();
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => restarted.ResumePendingAsync(Guid.NewGuid()));
         CareerJobPlayableCompletionResult resumed =
             Assert.IsType<CareerJobPlayableCompletionResult>(
-                await restarted.ResumePendingAsync());
+                await restarted.ResumePendingAsync(
+                    context.Request.ContractId));
 
         Assert.Equal(
             CareerFlightFinalizationStatus.Finalized,
@@ -326,6 +332,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
         Assert.Equal(1, context.TerminalRecovery.ClearCount);
         Assert.Null(context.TerminalRecovery.Pending);
         Assert.Null(context.Sessions.Current);
+        Assert.Null(
+            await restarted.ReadPendingTerminalContractIdAsync());
         Assert.Null(await restarted.ResumePendingAsync());
     }
 

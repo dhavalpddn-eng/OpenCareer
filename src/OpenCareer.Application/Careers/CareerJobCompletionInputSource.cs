@@ -114,7 +114,8 @@ public enum CareerJobCompletionInputState
     MissionConditionsNotVerified = 7,
     SettlementCostsUnavailable = 8,
     Ready = 9,
-    FlightSessionChanged = 10
+    FlightSessionChanged = 10,
+    TerminalRecoveryPending = 11
 }
 
 public sealed record CareerJobCompletionInputSnapshot(

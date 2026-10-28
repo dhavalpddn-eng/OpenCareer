@@ -288,6 +288,45 @@ public sealed class CareerJobPlayableLoopCoordinator
                 .ConfigureAwait(false);
     }
 
+    public async Task<Guid?> ReadPendingTerminalContractIdAsync(
+        CancellationToken cancellationToken = default) =>
+        (await _terminalRecovery
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(false))
+            ?.ContractId;
+
+    public async Task<CareerJobPlayableCompletionResult> ResumePendingAsync(
+        Guid expectedContractId,
+        CancellationToken cancellationToken = default)
+    {
+        if (expectedContractId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Expected contract ID is required.",
+                nameof(expectedContractId));
+        }
+
+        CareerJobPlayableCompletionRequest? request =
+            await _terminalRecovery
+                .ReadAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+        if (request is null)
+        {
+            throw new InvalidOperationException(
+                "No career terminal workflow is pending recovery.");
+        }
+
+        if (request.ContractId != expectedContractId)
+        {
+            throw new InvalidOperationException(
+                "Pending career terminal recovery belongs to a different contract.");
+        }
+
+        return await CompleteAsync(request, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private FlightSession? _lastCompletedFlight;
 
     private static DateTimeOffset Latest(

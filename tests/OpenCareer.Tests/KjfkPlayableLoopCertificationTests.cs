@@ -484,7 +484,15 @@ public sealed class KjfkPlayableLoopCertificationTests
                 Assert.Equal(1, await app.RowCountAsync("logbook_entries"));
                 Assert.Single((await app.Profiles.LoadAsync())!.Profile.AppliedExperienceDebriefIds);
             };
-            await app.Shell.CompleteCareerFlightAsync(); // actual completion action + terminal workflow
+            app.Checkpoints.FailNextClear = true;
+            Assert.False(
+                await app.Shell.CompleteCareerFlightAsync()); // actual completion action + terminal workflow
+            Assert.True(app.Shell.CanCompleteCareerFlight);
+            Assert.Contains(
+                "retry",
+                app.Shell.CareerCompletionActionDetail,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.True(await app.Shell.CompleteCareerFlightAsync());
             Assert.Contains("EVALUATION COMPLETE", app.Shell.CareerCompletionActionDetail);
             Assert.Contains("$0 calibration pay (by design)", app.Shell.CareerCompletionActionDetail);
             Assert.Null(app.Sessions.Current);
