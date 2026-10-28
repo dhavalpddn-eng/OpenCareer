@@ -67,6 +67,56 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
     }
 
     [Fact]
+    public async Task StagePathMatchingArchiveIsRejectedWithoutChangingRecoveryData()
+    {
+        string dir = TempDir();
+
+        try
+        {
+            string livePath = Path.Combine(dir, "live.db");
+            string sourcePath = Path.Combine(dir, "source.db");
+            string sourceSnapshot = Path.Combine(dir, "source-snapshot.db");
+            string archivePath = Path.Combine(dir, "backup.zip");
+
+            await Store(livePath).SaveAsync(
+                Checkpoint("live-campaign"),
+                expectedRevision: null);
+
+            await Store(sourcePath).SaveAsync(
+                Checkpoint("backup-campaign"),
+                expectedRevision: null);
+
+            await new SqliteDatabaseSnapshotService(
+                    new OpenCareerDatabaseOptions(sourcePath))
+                .CreateSnapshotAsync(sourceSnapshot);
+
+            await CreateBackupArchiveAsync(
+                archivePath,
+                sourceSnapshot);
+
+            byte[] recoveryArchive = await File.ReadAllBytesAsync(archivePath);
+
+            ArgumentException error = await Assert.ThrowsAsync<ArgumentException>(
+                () => RestoreService(livePath).StageRestoreAsync(
+                    archivePath,
+                    archivePath));
+
+            Assert.Equal("stagedDatabasePath", error.ParamName);
+            Assert.Equal(
+                recoveryArchive,
+                await File.ReadAllBytesAsync(archivePath));
+            Assert.NotNull(
+                await Store(livePath).LoadAsync("live-campaign"));
+            Assert.Null(
+                await Store(livePath).LoadAsync("backup-campaign"));
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
+    [Fact]
     public async Task ApplyStagedRestoreReplacesDatabaseWithValidatedBackup()
     {
         string dir = TempDir();

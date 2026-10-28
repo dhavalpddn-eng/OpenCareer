@@ -59,6 +59,13 @@ public sealed class SqliteBackupArchiveRestoreService
         if (!File.Exists(archivePath))
             throw new FileNotFoundException("OpenCareer backup archive was not found.", archivePath);
 
+        if (string.Equals(stagePath, archivePath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "Restore staging path must differ from the backup archive.",
+                nameof(stagedDatabasePath));
+        }
+
         if (string.Equals(stagePath, databasePath, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
