@@ -282,6 +282,51 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
     }
 
     [Fact]
+    public async Task FailedReplacementKeepsPriorPendingRestoreVisible()
+    {
+        string dir = TempDir();
+
+        try
+        {
+            var paths = new OpenCareerDataPaths(dir);
+            paths.EnsureDirectories();
+            byte[] pendingRestore =
+                "existing pending restore must remain recoverable"u8.ToArray();
+            await File.WriteAllBytesAsync(
+                paths.PendingDatabaseRestoreFile,
+                pendingRestore);
+
+            string archivePath = Path.Combine(
+                paths.BackupsFolder,
+                "opencareer-backup-invalid-replacement.zip");
+            await CreateBackupArchiveWithRawManifestAsync(
+                archivePath,
+                "{ replacement parser detail must stay technical");
+
+            var restore = new AppDataRestoreService(
+                paths,
+                RestoreService(paths.DatabaseFile),
+                NullLogger<AppDataRestoreService>.Instance);
+
+            SettingsActionResult result =
+                await restore.StageDatabaseRestoreAsync(archivePath);
+
+            Assert.False(result.Success);
+            Assert.Contains("still pending", result.Message);
+            Assert.Contains("Cancel", result.Message);
+            Assert.DoesNotContain("parser detail", result.Message);
+            Assert.Equal(
+                pendingRestore,
+                await File.ReadAllBytesAsync(
+                    paths.PendingDatabaseRestoreFile));
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
+    [Fact]
     public async Task DataDirectorySetupFailureReturnsSafeRestoreActionFailure()
     {
         string dir = TempDir();

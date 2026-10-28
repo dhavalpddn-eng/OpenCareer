@@ -92,6 +92,13 @@ public sealed class AppDataRestoreService(
                 "Failed to stage OpenCareer database restore from {BackupArchive}.",
                 backupArchivePath);
 
+            if (HasPendingDatabaseRestore)
+            {
+                return new SettingsActionResult(
+                    false,
+                    "The selected backup could not be validated. The previously staged restore is still pending and will be retried on restart. Cancel the staged restore before restarting if it should not be applied.");
+            }
+
             return new SettingsActionResult(
                 false,
                 "The selected backup could not be validated and no restore was staged. Choose another OpenCareer backup or create a diagnostic bundle, then retry.");
