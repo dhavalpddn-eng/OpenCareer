@@ -11,6 +11,8 @@ public sealed record CareerJobCompletionActionAvailability(
 
 public sealed record CareerJobCompletionReceipt(
     Guid ContractId,
+    decimal GrossCashReceipt,
+    decimal PlayerOperatingCosts,
     decimal NetCashChange,
     decimal CashBalanceAfter,
     string OriginIcao,
@@ -103,6 +105,8 @@ public sealed class CareerJobCompletionActionService
 
         return new(
             result.CompletedContract.Contract.ContractId,
+            result.Terminal.Settlement.Settlement.GrossCashReceipt,
+            result.Terminal.Settlement.Settlement.PlayerOperatingCosts,
             result.Terminal.Settlement.Settlement.NetCashChange,
             result.Terminal.Settlement.CashBalanceAfter,
             result.CompletedContract.Contract.OriginIcao,

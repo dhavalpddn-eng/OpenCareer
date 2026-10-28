@@ -741,13 +741,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private static string FormatCareerCompletionReceipt(
         CareerJobCompletionReceipt receipt)
     {
-        string payment =
+        string settlement =
             receipt.IsZeroPayCalibration
                 ? "$0 calibration pay (by design)"
-                : $"Pay {FormatSignedCurrency(receipt.NetCashChange)}";
+                : $"Gross {FormatCurrency(receipt.GrossCashReceipt)} · " +
+                  $"Operating costs {FormatSignedCurrency(-receipt.PlayerOperatingCosts)} · " +
+                  $"Net {FormatSignedCurrency(receipt.NetCashChange)}";
 
         return
-            $"EVALUATION COMPLETE · {payment} · Balance {FormatCurrency(receipt.CashBalanceAfter)} · " +
+            $"EVALUATION COMPLETE · {settlement} · Balance {FormatCurrency(receipt.CashBalanceAfter)} · " +
             $"{receipt.OriginIcao} → {receipt.DestinationIcao} logged · " +
             $"Pilot location {receipt.CurrentAirportIcao} · Career flight #{receipt.CareerFlightCount}.";
     }

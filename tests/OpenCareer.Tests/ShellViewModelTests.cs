@@ -397,7 +397,7 @@ public sealed class ShellViewModelTests
             viewModel.CareerCompletionActionDetail,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Pay +$425",
+            "Gross $500 · Operating costs -$75 · Net +$425",
             viewModel.CareerCompletionActionDetail,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -1292,6 +1292,8 @@ public sealed class ShellViewModelTests
             return Task.FromResult(
                 new CareerJobCompletionReceipt(
                     Guid.Parse("aaaaaaaa-0000-0000-0000-000000000010"),
+                    500m,
+                    75m,
                     425m,
                     5_425m,
                     "KJFK",
