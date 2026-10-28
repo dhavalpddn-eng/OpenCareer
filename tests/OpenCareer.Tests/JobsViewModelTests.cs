@@ -773,7 +773,7 @@ public sealed class JobsViewModelTests
         Assert.Equal(1, cancellation.CallCount);
         Assert.True(viewModel.CanCancelAcceptedJobs);
         Assert.Equal(
-            "Retry Job Cleanup",
+            "Cancel Accepted Job",
             viewModel.CancelAcceptedJobsButtonText);
         Assert.Contains(
             "remains available to retry",
@@ -854,7 +854,7 @@ public sealed class JobsViewModelTests
         Assert.Equal(1, cancellation.CallCount);
         Assert.True(viewModel.CanCancelAcceptedJobs);
         Assert.Equal(
-            "Cancel Accepted Job",
+            "Retry Job Cleanup",
             viewModel.CancelAcceptedJobsButtonText);
         Assert.Contains(
             "remains available to retry",
