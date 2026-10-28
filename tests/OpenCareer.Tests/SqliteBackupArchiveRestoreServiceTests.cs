@@ -604,6 +604,38 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
         }
     }
 
+    [Fact]
+    public async Task CancelPathMatchingLiveDatabaseIsRejectedWithoutChangingCareerData()
+    {
+        string dir = TempDir();
+
+        try
+        {
+            string livePath = Path.Combine(dir, "live.db");
+
+            await Store(livePath).SaveAsync(
+                Checkpoint("live-campaign"),
+                expectedRevision: null);
+
+            byte[] liveDatabase = await File.ReadAllBytesAsync(livePath);
+
+            ArgumentException error = await Assert.ThrowsAsync<ArgumentException>(
+                () => RestoreService(livePath).CancelStagedRestoreAsync(
+                    livePath));
+
+            Assert.Equal("stagedDatabasePath", error.ParamName);
+            Assert.Equal(
+                liveDatabase,
+                await File.ReadAllBytesAsync(livePath));
+            Assert.NotNull(
+                await Store(livePath).LoadAsync("live-campaign"));
+        }
+        finally
+        {
+            DeleteTempDirectory(dir);
+        }
+    }
+
     private static SqliteBackupArchiveRestoreService RestoreService(
         string livePath,
         Action<string>? deleteDatabaseSidecars = null)

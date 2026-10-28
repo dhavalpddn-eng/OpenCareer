@@ -231,6 +231,14 @@ public sealed class SqliteBackupArchiveRestoreService
         ArgumentException.ThrowIfNullOrWhiteSpace(stagedDatabasePath);
 
         string stagePath = Path.GetFullPath(stagedDatabasePath);
+        string databasePath = Path.GetFullPath(_options.DatabasePath);
+
+        if (string.Equals(stagePath, databasePath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "Restore staging path must differ from the live database.",
+                nameof(stagedDatabasePath));
+        }
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
