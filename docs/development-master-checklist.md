@@ -812,6 +812,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Preserve the staged database until its copied live replacement passes final integrity validation and staged cleanup succeeds, so a post-copy failure retains a retryable recovery source while rollback protects current career data.
 - [x] When replacement staging fails over an existing pending restore, preserve its bytes and explicitly warn that it will still run on restart with a direct cancellation instruction and no technical archive details.
 - [x] Protect startup restore sidecar cleanup with the same validated rollback boundary as database replacement, restoring the original career database and preserving the staged source when cleanup fails.
+- [x] Reject restore manifests with a missing creation timestamp so the year-one deserialization default cannot be accepted as trusted backup metadata or exposed through player-facing validation details.
 - [x] Implement reduced-motion and offline optional-service permission preferences.
 - [x] Keep real binding discovery explicitly owned by MBL-05.
 - [x] Keep authoritative SQLite FlightSession/save recovery explicitly owned by MBL-07.

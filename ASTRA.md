@@ -443,6 +443,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `6512a6b31f7bf46e61ed3139afb834bddbd3f547`.
 - Startup restore sidecar cleanup now runs inside the rollback-protected replacement boundary. If WAL/SHM cleanup fails after the safety snapshot is created, the original career database is restored and validated while the staged restore remains byte-for-byte available for retry.
 - Verification: exact-head Linux build #1286 passed all 29 SimLab scenarios and all 1,929 tests; Windows `winui-build` #1219 verified exact SHA `6512a6b3`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,929 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
+- Code checkpoint: `168f0951fa75b6f1b9eeb164ad9bd6e257adaaae`.
+- Restore archive manifests now require a real creation timestamp. A missing timestamp can no longer deserialize to the year-one default and enter trusted backup metadata; it follows the existing invalid-import boundary, leaves the live database and staged state unchanged and exposes no technical validation detail to the player.
+- Verification: exact-head Linux build #1288 passed all 29 SimLab scenarios and all 1,931 tests; Windows `winui-build` #1221 verified exact SHA `168f0951`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,931 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
