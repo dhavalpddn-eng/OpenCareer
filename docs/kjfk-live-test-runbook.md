@@ -95,7 +95,33 @@ Do not use `-PreserveState` for the first run after an unknown failure. Start wi
 
 ## 8. Test a paid contract
 
-Do not use the calibration card. Choose an **Available Contract** whose card shows a nonzero quoted payment, then select **Accept & Start Flight**. OpenCareer must automatically prepare the authoritative plan and open Current Flight without visiting Dispatch. Fly and settle it. The final receipt must show the signed pay change and the new balance; a paid contract that opens Dispatch, finishes with calibration wording or produces an unexplained zero change is a failure.
+Use code checkpoint `714a048b` or later. This is the remaining ordinary paid-job live acceptance gate; automated tests do not satisfy it.
+
+1. Start from a clean isolated profile and record the balance shown on **Career / Profile**.
+2. Do not use the calibration card. On **Jobs**, choose an **Available Contract** whose card shows a nonzero quoted payment and a route supported by the loaded aircraft.
+3. Select **Accept & Start Flight** once. OpenCareer must prepare the plan automatically, open **Current Flight**, retain the exact aircraft reservation and never require **Advanced Dispatch** or another profile setup.
+4. Before engine start, close OpenCareer and relaunch with `-PreserveState`. **Current Flight** must recover the same contract, route and FlightSession without accepting it again.
+5. Start, taxi and take off only after the checklist is live. In stable flight, close OpenCareer while MSFS remains running, then relaunch immediately with `-PreserveState`. The same session must recover; no second contract or payment may appear.
+6. Land at the contracted destination, park, set the parking brake and shut down every engine. Wait for the established takeoff, airborne, landing, parking and shutdown evidence before selecting **Complete Career Flight**.
+7. The receipt must show all of the following authoritative values:
+   - `EVALUATION COMPLETE`
+   - `Gross` with the nonzero cash receipt
+   - `Operating costs` with the player-paid amount, including `$0` when the employer covered them
+   - `Net` equal to gross minus player operating costs
+   - the resulting `Balance`
+   - the contracted origin and destination logged
+   - pilot location equal to the contracted destination
+8. Open **Logbook** and verify exactly one new automatic career entry with the same settlement. Return to **Jobs** and verify the aircraft is no longer trapped by the completed reservation.
+9. Close OpenCareer after completion and relaunch with `-PreserveState`. Verify the balance, Logbook count and destination are unchanged. No completion action, duplicate ledger entry or second payment may appear.
+
+Failure evidence to retain:
+
+- a paid contract that opens Advanced Dispatch or requests repeated profile setup;
+- a missing or replaced contract/session after either restart;
+- completion enabled without the required simulator evidence;
+- calibration wording, unexplained zero gross receipt or arithmetic that does not satisfy `net = gross - operating costs`;
+- a changed balance, extra Logbook entry, duplicate payment or retained aircraft reservation after the final restart;
+- a raw persistence/settlement exception without a retryable **Complete Career Flight** recovery action.
 
 ## 9. Collect the result
 
