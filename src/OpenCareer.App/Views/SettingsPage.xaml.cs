@@ -188,8 +188,11 @@ public sealed partial class SettingsPage : Page
             await _settings.StageSelectedBackupAsync();
     }
 
-    private void CancelStagedRestore_Click(object sender, RoutedEventArgs e) =>
-        _settings?.CancelPendingDatabaseRestore();
+    private async void CancelStagedRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settings is not null)
+            await _settings.CancelPendingDatabaseRestoreAsync();
+    }
 
     private async void ScheduleDevelopmentProfileReset_Click(
         object sender,

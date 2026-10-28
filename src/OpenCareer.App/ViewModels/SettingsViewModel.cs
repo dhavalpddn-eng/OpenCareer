@@ -514,14 +514,17 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
-    public void CancelPendingDatabaseRestore()
+    public async Task CancelPendingDatabaseRestoreAsync(
+        CancellationToken cancellationToken = default)
     {
         if (!TryBeginSettingsAction())
             return;
 
         try
         {
-            SettingsActionResult result = _restore.CancelPendingDatabaseRestore();
+            SettingsActionResult result = await _restore
+                .CancelPendingDatabaseRestoreAsync(cancellationToken)
+                .ConfigureAwait(true);
             ActionStatus = result.Message;
             RefreshBackupArchives();
         }

@@ -17,25 +17,35 @@ public sealed class AppDataRestoreService(
     public bool PendingDatabaseRestoreApplyFailed =>
         Volatile.Read(ref _pendingDatabaseRestoreApplyFailed);
 
-    public SettingsActionResult CancelPendingDatabaseRestore()
+    public async Task<SettingsActionResult> CancelPendingDatabaseRestoreAsync(
+        CancellationToken cancellationToken = default)
     {
-        if (!HasPendingDatabaseRestore)
-        {
-            Volatile.Write(ref _pendingDatabaseRestoreApplyFailed, false);
-            return new SettingsActionResult(
-                true,
-                "No database restore is currently staged.");
-        }
-
         try
         {
-            File.Delete(paths.PendingDatabaseRestoreFile);
+            bool cancelled = await restore
+                .CancelStagedRestoreAsync(
+                    paths.PendingDatabaseRestoreFile,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
             Volatile.Write(ref _pendingDatabaseRestoreApplyFailed, false);
+
+            if (!cancelled)
+            {
+                return new SettingsActionResult(
+                    true,
+                    "No database restore is currently staged.");
+            }
+
             logger.LogInformation("Cancelled the pending OpenCareer database restore.");
 
             return new SettingsActionResult(
                 true,
                 "Staged database restore cancelled. Current career data will remain active after restart.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -487,6 +487,73 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
         }
     }
 
+    [Fact]
+    public async Task CancelWaitsForInProgressRestoreMutation()
+    {
+        string dir = TempDir();
+        var cleanupStarted = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCleanup = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        try
+        {
+            string livePath = Path.Combine(dir, "live.db");
+            string sourcePath = Path.Combine(dir, "source.db");
+            string sourceSnapshot = Path.Combine(dir, "source-snapshot.db");
+            string archivePath = Path.Combine(dir, "backup.zip");
+            string stagedPath = Path.Combine(dir, "pending.db");
+
+            await Store(livePath).SaveAsync(
+                Checkpoint("live-campaign"),
+                expectedRevision: null);
+            await Store(sourcePath).SaveAsync(
+                Checkpoint("backup-campaign"),
+                expectedRevision: null);
+            await new SqliteDatabaseSnapshotService(
+                    new OpenCareerDatabaseOptions(sourcePath))
+                .CreateSnapshotAsync(sourceSnapshot);
+            await CreateBackupArchiveAsync(archivePath, sourceSnapshot);
+
+            var restore = RestoreService(
+                livePath,
+                _ =>
+                {
+                    cleanupStarted.TrySetResult(true);
+                    releaseCleanup.Task.GetAwaiter().GetResult();
+                });
+            await restore.StageRestoreAsync(archivePath, stagedPath);
+
+            Task applyTask = Task.Run(
+                () => restore.ApplyStagedRestoreAsync(stagedPath));
+            Task<bool>? cancelTask = null;
+
+            try
+            {
+                await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                cancelTask = restore.CancelStagedRestoreAsync(stagedPath);
+
+                Assert.False(cancelTask.IsCompleted);
+            }
+            finally
+            {
+                releaseCleanup.TrySetResult(true);
+            }
+
+            await applyTask;
+            Assert.NotNull(cancelTask);
+            Assert.False(await cancelTask!);
+            Assert.False(File.Exists(stagedPath));
+            Assert.NotNull(
+                await Store(livePath).LoadAsync("backup-campaign"));
+        }
+        finally
+        {
+            releaseCleanup.TrySetResult(true);
+            DeleteTempDirectory(dir);
+        }
+    }
+
     private static SqliteBackupArchiveRestoreService RestoreService(
         string livePath,
         Action<string>? deleteDatabaseSidecars = null)

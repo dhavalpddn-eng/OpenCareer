@@ -217,6 +217,32 @@ public sealed class SqliteBackupArchiveRestoreService
         }
     }
 
+    public async Task<bool> CancelStagedRestoreAsync(
+        string stagedDatabasePath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stagedDatabasePath);
+
+        string stagePath = Path.GetFullPath(stagedDatabasePath);
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!File.Exists(stagePath))
+                return false;
+
+            File.Delete(stagePath);
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     internal static async Task CopyAndValidateRollbackSnapshotAsync(
         string rollbackSnapshotPath,
         string databasePath)

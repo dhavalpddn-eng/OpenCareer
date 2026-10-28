@@ -222,7 +222,7 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         Assert.Contains("Restart OpenCareer", context.ViewModel.ActionStatus);
         Assert.True(context.ViewModel.CanCancelPendingDatabaseRestore);
 
-        context.ViewModel.CancelPendingDatabaseRestore();
+        await context.ViewModel.CancelPendingDatabaseRestoreAsync();
 
         Assert.False(context.ViewModel.HasPendingDatabaseRestore);
         Assert.False(File.Exists(paths.PendingDatabaseRestoreFile));
@@ -282,7 +282,7 @@ public sealed class SettingsViewModelRecoveryTests : IDisposable
         Assert.DoesNotContain("Synthetic invalid", context.ViewModel.BackupRestoreStatus);
         Assert.DoesNotContain("not a database", context.ViewModel.BackupRestoreStatus);
 
-        context.ViewModel.CancelPendingDatabaseRestore();
+        await context.ViewModel.CancelPendingDatabaseRestoreAsync();
 
         Assert.False(context.Restore.PendingDatabaseRestoreApplyFailed);
         Assert.False(context.ViewModel.DatabaseRestoreApplyFailed);
