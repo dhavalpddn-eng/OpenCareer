@@ -154,6 +154,35 @@ public sealed class OpenCareerDevelopmentDataProfileTests
     }
 
     [Fact]
+    public async Task InvalidScheduledResetRequestPreservesKjfkProfile()
+    {
+        using var root = new TemporaryDirectory();
+        OpenCareerDataProfileSelection testProfile =
+            OpenCareerDataProfileSelection.Resolve(
+                [OpenCareerDataProfileSelection.ProfileArgument],
+                root.Path);
+        testProfile.Prepare();
+        await File.WriteAllTextAsync(
+            testProfile.Paths.SettingsFile,
+            "recover-test-career");
+        await File.WriteAllTextAsync(
+            testProfile.Paths.DevelopmentResetRequestFile,
+            "untrusted reset request");
+
+        OpenCareerDataProfileSelection restarted =
+            OpenCareerDataProfileSelection.Resolve(
+                [OpenCareerDataProfileSelection.ProfileArgument],
+                root.Path);
+
+        Assert.Throws<InvalidDataException>(() => restarted.Prepare());
+        Assert.Equal(
+            "recover-test-career",
+            await File.ReadAllTextAsync(testProfile.Paths.SettingsFile));
+        Assert.True(File.Exists(testProfile.Paths.ProfileMarkerFile));
+        Assert.True(File.Exists(testProfile.Paths.DevelopmentResetRequestFile));
+    }
+
+    [Fact]
     public void NormalProfileCannotScheduleDevelopmentReset()
     {
         using var root = new TemporaryDirectory();

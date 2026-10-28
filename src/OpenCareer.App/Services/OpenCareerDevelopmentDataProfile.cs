@@ -123,7 +123,27 @@ internal static class OpenCareerDevelopmentDataProfile
     internal static bool IsResetRequested(OpenCareerDataPaths paths)
     {
         RequireDevelopmentProfile(paths);
-        return File.Exists(paths.DevelopmentResetRequestFile);
+
+        if (!File.Exists(paths.DevelopmentResetRequestFile))
+            return false;
+
+        if (File.GetAttributes(paths.DevelopmentResetRequestFile)
+            .HasFlag(FileAttributes.ReparsePoint))
+        {
+            throw new InvalidOperationException(
+                "KJFK development data reset refused a redirected reset request.");
+        }
+
+        if (!string.Equals(
+                File.ReadAllText(paths.DevelopmentResetRequestFile),
+                ResetRequestContents,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                "The KJFK development data reset request is invalid; reset was refused.");
+        }
+
+        return true;
     }
 
     internal static void RequestResetOnNextLaunch(OpenCareerDataPaths paths)
