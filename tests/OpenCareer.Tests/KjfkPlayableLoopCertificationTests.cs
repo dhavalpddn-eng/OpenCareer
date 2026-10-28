@@ -724,12 +724,14 @@ public sealed class KjfkPlayableLoopCertificationTests
                 : [liveAirports, referenceAirports], clock: clock);
             var dispatch = new OperationDispatchPlanningService(_registry, airports, aircraftAvailability: Fleet);
             var acceptance = new JobOfferAcceptanceService(ContractStore, lifecycle, boards, Contracts);
+            var cancellationRecovery =
+                new SqliteAcceptedJobCancellationRecoverySource(options);
             var fleetBridge = new JobAcceptanceFleetBridge(
                 acceptance,
                 ContractStore,
                 new AircraftReservationCoordinator(_registry, Fleet),
                 Sessions,
-                new SqliteAcceptedJobCancellationRecoverySource(options));
+                cancellationRecovery);
             var preparedPlans = new SqlitePreparedDispatchPlanStore(options);
             var terminal = new CareerFlightTerminalWorkflowCoordinator(
                 new SettlementPendingContractCoordinator(new EconomySettlementService(ContractStore, Ledger)),
@@ -748,7 +750,11 @@ public sealed class KjfkPlayableLoopCertificationTests
             Development = new(new JobBoardGenerationService(boards), _career, recoverySource, Checkpoints, clock, location);
             Jobs = new(boards, _career, clock, new CareerJobAircraftSelectionSource(discovery),
                 new CareerJobStartActionService(inputs, Loop), NullLogger<JobsViewModel>.Instance,
-                developmentFlights: Development);
+                developmentFlights: Development,
+                acceptedContext:
+                    new AcceptedDispatchPlanningContextSource(
+                        Contracts,
+                        cancellationRecovery));
             CompletionInputs = new(Sessions, Contracts, Evidence, Fleet, _registry,
                 [new StandardPointToPointMissionCompletionSource(airports, StandardPointToPointMissionPolicy.Default)],
                 [new PersistedFlightSettlementCostsSource([new EmployerCoveredOperatingCostQuoteSource()])]);
