@@ -774,6 +774,79 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task FailedCareerAbandonmentRefreshesAuthoritativeCompletionExit()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string sensitiveFailure =
+            "INTERNAL abandonment failure C:\\Users\\pilot\\career.db";
+        var completion =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete: true,
+                        CareerJobCompletionInputState.Ready,
+                        "The active career flight can be completed.",
+                        sessionId,
+                        contractId)
+            };
+        var abandonment =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned."),
+                NextAbandonFailure =
+                    new IOException(sensitiveFailure)
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: completion,
+                careerAbandonAction: abandonment,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+        abandonment.Availability =
+            new(
+                CanAbandon: false,
+                CareerFlightAbandonAvailabilityState.Unavailable,
+                SessionId: null,
+                ContractId: null,
+                "Abandonment is no longer available.");
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+
+        Assert.False(viewModel.CanAbandonCurrentFlight);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "remains available to complete",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            sensitiveFailure,
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+
+        Assert.True(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(1, completion.CompleteCount);
+        Assert.Equal(sessionId, completion.LastFlightSessionId);
+        Assert.Equal(contractId, completion.LastContractId);
+    }
+
+    [Fact]
     public async Task FailedCareerAbandonmentFailsClosedWhenRecoveryRefreshAlsoFails()
     {
         Guid sessionId = Guid.NewGuid();

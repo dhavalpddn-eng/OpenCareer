@@ -920,12 +920,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 sessionId,
                 contractId);
 
+            bool abandonmentRecoverySucceeded = false;
             try
             {
                 CareerFlightAbandonAvailability availability =
                     await _careerAbandonAction
                         .ReadAvailabilityAsync(
-                            cancellationToken);
+                            CancellationToken.None);
 
                 bool canRetry =
                     availability.CanAbandon
@@ -939,6 +940,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     canRetry
                         ? "Flight abandonment did not finish. The current flight is still eligible to abandon; retry Abandon Current Flight. If this repeats, create a diagnostic bundle in Settings."
                         : "Flight abandonment did not finish. Authoritative Current Flight state was refreshed; use any available recovery action. If no recovery action appears, reopen Current Flight. If this repeats, create a diagnostic bundle in Settings.");
+                abandonmentRecoverySucceeded = true;
             }
             catch (Exception refreshEx)
             {
@@ -953,6 +955,62 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                     detail:
                         "Flight abandonment did not finish, and recovery readiness could not be refreshed. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings.");
             }
+
+            bool completionRecoverySucceeded =
+                _careerCompletionAction is null;
+            if (_careerCompletionAction is { } completionAction)
+            {
+                try
+                {
+                    CareerJobCompletionActionAvailability availability =
+                        await completionAction
+                            .ReadAvailabilityAsync(CancellationToken.None);
+
+                    _completionSessionId =
+                        availability.CanComplete
+                            ? availability.FlightSessionId
+                            : null;
+                    _completionContractId =
+                        availability.CanComplete
+                            ? availability.ContractId
+                            : null;
+
+                    SetBoolean(
+                        ref _canCompleteCareerFlight,
+                        availability.CanComplete
+                            && _completionSessionId is not null
+                            && _completionContractId is not null,
+                        nameof(CanCompleteCareerFlight));
+                    completionRecoverySucceeded = true;
+                }
+                catch (Exception refreshEx)
+                {
+                    _logger?.LogWarning(
+                        refreshEx,
+                        "Career completion readiness could not be refreshed after a failed abandonment attempt.");
+
+                    _completionSessionId = null;
+                    _completionContractId = null;
+
+                    SetBoolean(
+                        ref _canCompleteCareerFlight,
+                        false,
+                        nameof(CanCompleteCareerFlight));
+                }
+            }
+
+            SetField(
+                ref _careerAbandonActionDetail,
+                CanAbandonCurrentFlight && CanCompleteCareerFlight
+                    ? "Flight abandonment did not finish. Retry Abandon Current Flight, or use Complete Career Flight to finish normally. If this repeats, create a diagnostic bundle in Settings."
+                    : CanAbandonCurrentFlight
+                        ? "Flight abandonment did not finish. The current flight is still eligible to abandon; retry Abandon Current Flight. If this repeats, create a diagnostic bundle in Settings."
+                        : CanCompleteCareerFlight
+                            ? "Flight abandonment did not finish. The current flight remains available to complete normally. If this repeats, create a diagnostic bundle in Settings."
+                            : abandonmentRecoverySucceeded && completionRecoverySucceeded
+                                ? "Flight abandonment did not finish. Authoritative Current Flight state was refreshed, but no terminal action is currently available. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings."
+                                : "Flight abandonment did not finish, and recovery readiness could not be refreshed. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings.",
+                nameof(CareerAbandonActionDetail));
 
             return false;
         }
