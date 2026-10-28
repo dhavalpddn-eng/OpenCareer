@@ -449,6 +449,8 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `5eb9f3f248675def942c132c2b9a04f9589f2772`.
 - Pending database-restore cancellation now acquires the same asynchronous backend gate as staging and startup application. Cancellation cannot race a replacement into existence after reporting success or delete a source while it is being applied; Settings awaits the authoritative post-gate result and retains its existing safe recovery guidance.
 - Verification: exact-head Linux build #1290 passed all 29 SimLab scenarios and all 1,932 tests; Windows `winui-build` #1223 verified exact SHA `5eb9f3f2`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,932 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
+- Database-restore staging now rejects a staging path that resolves to the selected backup archive. A malformed or direct caller therefore cannot replace the only recovery archive with its extracted SQLite image; deterministic coverage proves both archive bytes and live career data remain unchanged.
+- Verification: exact-head Linux build #1292 passed all 29 SimLab scenarios and all 1,933 tests; Windows `winui-build` #1225 verified exact SHA `5020068d`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,933 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
