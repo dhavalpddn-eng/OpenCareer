@@ -182,8 +182,8 @@ public sealed class KjfkPlayableLoopCertificationTests
 
             // Now stop all inbound traffic: true silence still closes the connection.
             transport.Enqueue(action: () => connectionClock.Advance(TimeSpan.FromSeconds(31)));
-            await Until(() => transport.Attempts == 2);
-            Assert.Equal(SimulatorConnectionState.Connecting, connection.Current.State);
+            await Until(() => transport.Attempts == 2
+                && connection.Current.State == SimulatorConnectionState.Connecting);
             Assert.Equal(InstalledAircraftDiscoveryAvailability.Unavailable, discovery.Current.Availability);
             int reads = app.RegistryReadCount;
             var selected = app.Jobs.SelectedAircraftOption;
