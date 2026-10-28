@@ -1375,6 +1375,8 @@ public sealed class ShellViewModelTests
 
             return new(
                 Guid.Parse("aaaaaaaa-0000-0000-0000-000000000010"),
+                500m,
+                75m,
                 425m,
                 5_425m,
                 "KJFK",
