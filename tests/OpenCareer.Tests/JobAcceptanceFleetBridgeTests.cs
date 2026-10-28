@@ -16,6 +16,21 @@ public sealed class JobAcceptanceFleetBridgeTests
         new(2026, 9, 22, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void CancellationRecoveryAuthorityCannotBeOmittedFromConstruction()
+    {
+        System.Reflection.ParameterInfo parameter = Assert.Single(
+            Assert.Single(typeof(JobAcceptanceFleetBridge).GetConstructors())
+                .GetParameters(),
+            candidate => candidate.Name == "cancellationRecovery");
+
+        Assert.Equal(
+            typeof(IAcceptedJobCancellationRecoverySource),
+            parameter.ParameterType);
+        Assert.False(parameter.IsOptional);
+        Assert.False(parameter.HasDefaultValue);
+    }
+
+    [Fact]
     public async Task AcceptanceCreatesOneAuthoritativeReservationForDispatch()
     {
         JobContractCreationRequest request = Request();
@@ -801,7 +816,18 @@ public sealed class JobAcceptanceFleetBridgeTests
             contractStore,
             reservations,
             sessions ?? new FlightSessionCoordinator(),
-            cancellationRecovery);
+            cancellationRecovery ?? new NoPendingCancellationRecovery());
+    }
+
+    private sealed class NoPendingCancellationRecovery
+        : IAcceptedJobCancellationRecoverySource
+    {
+        public Task<IReadOnlyList<Guid>> ReadPendingContractIdsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<IReadOnlyList<Guid>>([]);
+        }
     }
 
     private sealed class SequenceCancellationRecovery(

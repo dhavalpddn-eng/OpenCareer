@@ -26,7 +26,7 @@ public sealed class JobAcceptanceFleetBridge
     private readonly IJobContractStore _contractStore;
     private readonly AircraftReservationCoordinator _reservationCoordinator;
     private readonly FlightSessionCoordinator _flightSessions;
-    private readonly IAcceptedJobCancellationRecoverySource? _cancellationRecovery;
+    private readonly IAcceptedJobCancellationRecoverySource _cancellationRecovery;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public JobAcceptanceFleetBridge(
@@ -34,7 +34,7 @@ public sealed class JobAcceptanceFleetBridge
         IJobContractStore contractStore,
         AircraftReservationCoordinator reservationCoordinator,
         FlightSessionCoordinator flightSessions,
-        IAcceptedJobCancellationRecoverySource? cancellationRecovery = null)
+        IAcceptedJobCancellationRecoverySource cancellationRecovery)
     {
         _acceptanceService =
             acceptanceService
@@ -48,7 +48,9 @@ public sealed class JobAcceptanceFleetBridge
         _flightSessions =
             flightSessions
             ?? throw new ArgumentNullException(nameof(flightSessions));
-        _cancellationRecovery = cancellationRecovery;
+        _cancellationRecovery =
+            cancellationRecovery
+            ?? throw new ArgumentNullException(nameof(cancellationRecovery));
     }
 
     public async Task<JobAcceptanceFleetResult> AcceptAndReserveAsync(
@@ -225,9 +227,6 @@ public sealed class JobAcceptanceFleetBridge
     private async Task EnsureNoCancellationCleanupBlocksAcceptanceAsync(
         CancellationToken cancellationToken)
     {
-        if (_cancellationRecovery is null)
-            return;
-
         IReadOnlyList<Guid> pending;
         try
         {

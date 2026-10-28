@@ -550,7 +550,8 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
                 acceptance,
                 contractStore,
                 reservationCoordinator,
-                sessions);
+                sessions,
+                new NoPendingCancellationRecovery());
 
         var dispatch =
             new AcceptedJobDispatchBridge(
@@ -972,6 +973,17 @@ public sealed class CareerJobPlayableLoopCoordinatorTests
 
             return Task.FromResult<IReadOnlyList<JobContractRecoveryCandidate>>(
                 Array.Empty<JobContractRecoveryCandidate>());
+        }
+    }
+
+    private sealed class NoPendingCancellationRecovery
+        : IAcceptedJobCancellationRecoverySource
+    {
+        public Task<IReadOnlyList<Guid>> ReadPendingContractIdsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<IReadOnlyList<Guid>>([]);
         }
     }
 
