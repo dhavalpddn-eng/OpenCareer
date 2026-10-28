@@ -470,7 +470,7 @@ public sealed class DispatchViewModelTests
         Assert.Equal(1, acceptedContext.ReadCount);
         Assert.Equal(new[] { first, second }, cancellation.ContractIds);
         Assert.True(viewModel.CanCancelAcceptedJob);
-        Assert.Equal("Cancel Accepted Job", viewModel.CancelAcceptedJobButtonText);
+        Assert.Equal("Retry Job Cleanup", viewModel.CancelAcceptedJobButtonText);
         Assert.Contains("Retry the remaining cancellation", viewModel.AcceptedContextText, StringComparison.Ordinal);
         Assert.DoesNotContain(
             RetryableCleanupFailureAcceptedJobCancellation.TechnicalMessage,
