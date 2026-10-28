@@ -924,6 +924,84 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task AcceptedContextFailureBlocksInitialStartWithoutRawErrorText()
+    {
+        JobMarketOfferDraft offer =
+            Offer("KRME", "KSYR", locked: false);
+        var action = new FakeStartAction();
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board("KRME", offer)),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                new CareerJobAircraftSelectionSource(
+                    new FakeDiscovery()),
+                action,
+                logger: null,
+                acceptedContext:
+                    new ThrowingAcceptedContext());
+
+        await viewModel.RefreshAsync();
+
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.Contains(
+            "new flights are blocked",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            ThrowingAcceptedContext.TechnicalMessage,
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+
+        await viewModel.StartOfferAsync(offer.OfferId);
+
+        Assert.Equal(0, action.AcceptCount);
+        Assert.Equal(0, action.StartCount);
+    }
+
+    [Fact]
+    public async Task AcceptedContextFailureRetainsKnownCancellationTarget()
+    {
+        Guid contractId =
+            Guid.Parse("c3000000-0000-0000-0000-000000000014");
+        var acceptedContext =
+            new ReadyThenThrowAcceptedContext(contractId);
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection: null,
+                startAction: null,
+                logger: null,
+                acceptedContext: acceptedContext,
+                acceptedCancellation:
+                    new FailingAcceptedCancellation());
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.True(viewModel.CanStartJobActions);
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.False(viewModel.CanStartJobActions);
+        Assert.Equal(
+            "Cancel Accepted Job",
+            viewModel.CancelAcceptedJobsButtonText);
+        Assert.Contains(
+            "previously known job remains available",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            ThrowingAcceptedContext.TechnicalMessage,
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task TerminalCleanupFailureRetainsExactRetryWhenAcceptedContextDropsContract()
     {
         Guid contractId =
@@ -2236,6 +2314,45 @@ public sealed class JobsViewModelTests
                     "Accepted-job cleanup status could not be confirmed. Planning is blocked, but the accepted job remains available to cancel.",
                     ContractId: contractId,
                     AcceptedContractIds: [contractId]));
+        }
+    }
+
+    private sealed class ThrowingAcceptedContext
+        : IAcceptedDispatchPlanningContextSource
+    {
+        public const string TechnicalMessage =
+            "INTERNAL accepted-context refresh failure";
+
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromException<AcceptedDispatchPlanningContext>(
+                new IOException(TechnicalMessage));
+        }
+    }
+
+    private sealed class ReadyThenThrowAcceptedContext(Guid contractId)
+        : IAcceptedDispatchPlanningContextSource
+    {
+        private int _readCount;
+
+        public Task<AcceptedDispatchPlanningContext> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _readCount++;
+
+            return _readCount == 1
+                ? Task.FromResult(
+                    new AcceptedDispatchPlanningContext(
+                        AcceptedDispatchPlanningContextStatus.Ready,
+                        "One accepted job is waiting.",
+                        ContractId: contractId,
+                        AcceptedContractIds: [contractId]))
+                : Task.FromException<AcceptedDispatchPlanningContext>(
+                    new IOException(
+                        ThrowingAcceptedContext.TechnicalMessage));
         }
     }
 

@@ -884,6 +884,18 @@ public sealed class JobsViewModel : INotifyPropertyChanged
             _logger?.LogWarning(
                 ex,
                 "Accepted career-job cancellation state could not be refreshed from Jobs.");
+
+            // An unexpected context failure is not evidence that durable cleanup
+            // is clear. Keep any previously known cancellation targets available,
+            // but fail closed for every new-flight action until a later refresh
+            // re-establishes authoritative context.
+            SetCancellationCleanupUnavailable(true);
+            SetField(
+                ref _acceptanceStatus,
+                _acceptedContractIds.Count > 0
+                    ? "Accepted-job state could not be refreshed, so new flights are blocked. The previously known job remains available to cancel or retry below. Select Refresh Jobs to retry; if the warning returns, create a diagnostic bundle from Settings."
+                    : "Accepted-job state could not be refreshed, so new flights are blocked. Select Refresh Jobs to retry; if the warning returns, create a diagnostic bundle from Settings.",
+                nameof(AcceptanceStatus));
             return;
         }
 
