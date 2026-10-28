@@ -747,6 +747,12 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 _logger?.LogError(
                     refreshException,
                     "Accepted-job cancellation recovery refresh failed in Advanced Dispatch.");
+
+                // A failed recovery read is not evidence that the accepted plan
+                // is still authoritative. Block stale evaluation/preparation,
+                // but retain the known contract IDs so cancellation can retry.
+                SetInitializationAuthorityUnavailable(true);
+                ClearPlanningAuthority();
             }
 
             SetField(

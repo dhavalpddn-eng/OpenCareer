@@ -472,6 +472,71 @@ public sealed class DispatchViewModelTests
     }
 
     [Fact]
+    public async Task CancellationFailureAndContextRecoveryFailureBlockStalePlanningButKeepCancellationRetry()
+    {
+        Guid contractId =
+            Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var acceptedContext =
+            new ControllableAcceptedContext(
+                ReadyAcceptedContextValue(contractId));
+        var planning = new StubPlanning();
+        var preparation = new StubPreparation(
+            PrepareDispatchPlanStatus.Prepared,
+            "Should not be reached.");
+        var cancellation = new PartialFailureAcceptedJobCancellation(
+            contractId,
+            "INTERNAL cancellation failure C:\\Users\\pilot\\OpenCareer.db");
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            planning,
+            acceptedContext,
+            preparation,
+            cancellation);
+        await InitializeReadyAsync(viewModel);
+        Assert.True(viewModel.CanEvaluate);
+        Assert.True(viewModel.CanPrepare);
+
+        acceptedContext.NextReadFailure =
+            new IOException(
+                "INTERNAL recovery failure C:\\Users\\pilot\\context.json");
+
+        await viewModel.CancelAcceptedJobAsync();
+
+        Assert.Equal(2, acceptedContext.ReadCount);
+        Assert.False(viewModel.CanEvaluate);
+        Assert.False(viewModel.CanPrepare);
+        Assert.True(viewModel.CanCancelAcceptedJob);
+        Assert.Contains(
+            "Retry the remaining cancellation",
+            viewModel.AcceptedContextText,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "OpenCareer.db",
+            viewModel.AcceptedContextText,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "context.json",
+            viewModel.AcceptedContextText,
+            StringComparison.Ordinal);
+
+        await viewModel.PrepareAsync(ValidInput());
+        await viewModel.EvaluateAsync(ValidInput());
+
+        Assert.Equal(0, preparation.CallCount);
+        Assert.Equal(0, planning.CallCount);
+        Assert.Equal("AUTHORITY UNAVAILABLE", viewModel.PreparationStatus);
+        Assert.Equal("AUTHORITY UNAVAILABLE", viewModel.ResultStatus);
+
+        await viewModel.CancelAcceptedJobAsync();
+
+        Assert.Equal(
+            new[] { contractId, contractId },
+            cancellation.ContractIds);
+        Assert.False(viewModel.CanCancelAcceptedJob);
+    }
+
+    [Fact]
     public async Task TerminalCleanupFailureRetainsExactDispatchRetryWithoutContextRefresh()
     {
         Guid first = Guid.Parse("11111111-1111-1111-1111-111111111111");
