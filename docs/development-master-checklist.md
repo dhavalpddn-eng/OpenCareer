@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-28 through validated checkpoint `95f66c85` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-10-28 through validated checkpoint `296674a6` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -389,6 +389,7 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Rediscover cancelled contracts with persisted exact-reservation or prepared-plan artifacts after reopen/restart and expose explicit idempotent cleanup retry before accepted-job planning.
 - [x] Block Jobs new-flight controls and stale direct start/create calls while cancellation cleanup is pending or cannot be inspected, while retaining known accepted contracts for cancellation and suppressing technical read failures.
 - [x] Enforce the durable cancellation-cleanup invariant at the authoritative job-acceptance/Fleet-reservation boundary, including post-reservation compensation when cleanup appears before contract acceptance persists.
+- [x] Require a cancellation-cleanup recovery authority when constructing the acceptance/Fleet boundary so direct application composition cannot silently disable the invariant.
 - [x] Recheck FlightSession ownership across automatic accepted/in-progress recovery authority reads; stop without contract or checkpoint mutation if another operation appears.
 - [x] Recheck FlightSession ownership across asynchronous career-job acceptance readiness reads; stop without producing an acceptance request if another operation appears.
 - [x] Recheck FlightSession ownership at the acceptance mutation boundary around the authoritative contract read; stop before aircraft reservation or contract mutation if another operation appears during handoff.
