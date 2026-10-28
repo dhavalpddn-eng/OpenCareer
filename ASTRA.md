@@ -440,6 +440,9 @@ The initial MBL-13 roadmap and award boundary share one deterministic catalog: S
 - Code checkpoint: `f7e3c3f7226adfd2e3f80d972097a4d43b476fba`.
 - A failed attempt to replace an already staged database restore now reports that the prior restore remains pending and will still run on restart, with an explicit cancellation instruction. The prior pending bytes remain unchanged and technical archive/parser details stay out of player-facing text.
 - Verification: exact-head Linux build #1284 passed all 29 SimLab scenarios and all 1,928 tests; Windows `winui-build` #1217 verified exact SHA `f7e3c3f7`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,928 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
+- Code checkpoint: `6512a6b31f7bf46e61ed3139afb834bddbd3f547`.
+- Startup restore sidecar cleanup now runs inside the rollback-protected replacement boundary. If WAL/SHM cleanup fails after the safety snapshot is created, the original career database is restored and validated while the staged restore remains byte-for-byte available for retry.
+- Verification: exact-head Linux build #1286 passed all 29 SimLab scenarios and all 1,929 tests; Windows `winui-build` #1219 verified exact SHA `6512a6b3`, compiled WinUI and the SimConnect probe with zero warnings/errors, passed all five rapid KJFK certification tests and all 1,929 tests on the first attempt. Local test execution was unavailable because this runner had no .NET CLI.
 
 ## Next
 1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
