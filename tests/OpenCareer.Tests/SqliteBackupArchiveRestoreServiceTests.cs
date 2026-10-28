@@ -207,6 +207,7 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
 
     [Theory]
     [InlineData("{ malformed manifest detail must stay technical")]
+    [InlineData("{\"schemaVersion\":2,\"appDataRoot\":\"OpenCareer\",\"includedFiles\":[\"opencareer.db\"],\"sqliteSnapshotIncluded\":true,\"note\":\"test\"}")]
     [InlineData("{\"schemaVersion\":2,\"createdAt\":\"2026-09-20T03:00:00Z\",\"appDataRoot\":\"OpenCareer\",\"includedFiles\":null,\"sqliteSnapshotIncluded\":true,\"note\":\"test\"}")]
     [InlineData("{\"schemaVersion\":2,\"createdAt\":\"2026-09-20T03:00:00Z\",\"appDataRoot\":\"OpenCareer\",\"includedFiles\":[\"opencareer.db\"],\"sqliteSnapshotIncluded\":true,\"note\":null}")]
     public async Task InvalidManifestIsRejectedAsImportedData(
@@ -245,8 +246,11 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
         }
     }
 
-    [Fact]
-    public async Task MalformedManifestReturnsSafeRestoreActionFailure()
+    [Theory]
+    [InlineData("{ parser detail must not reach player-facing text")]
+    [InlineData("{\"schemaVersion\":2,\"appDataRoot\":\"OpenCareer\",\"includedFiles\":[\"opencareer.db\"],\"sqliteSnapshotIncluded\":true,\"note\":\"test\"}")]
+    public async Task InvalidManifestReturnsSafeRestoreActionFailure(
+        string manifestJson)
     {
         string dir = TempDir();
 
@@ -260,7 +264,7 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
 
             await CreateBackupArchiveWithRawManifestAsync(
                 archivePath,
-                "{ parser detail must not reach player-facing text");
+                manifestJson);
 
             var restore = new AppDataRestoreService(
                 paths,
@@ -273,6 +277,7 @@ public sealed class SqliteBackupArchiveRestoreServiceTests
             Assert.False(result.Success);
             Assert.Contains("could not be validated", result.Message);
             Assert.DoesNotContain("parser detail", result.Message);
+            Assert.DoesNotContain("creation timestamp", result.Message);
             Assert.False(File.Exists(paths.PendingDatabaseRestoreFile));
         }
         finally

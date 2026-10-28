@@ -21,6 +21,12 @@ public sealed record OpenCareerBackupManifest(
                 $"OpenCareer backup schema {SchemaVersion} is not supported.");
         }
 
+        if (CreatedAt == default)
+        {
+            throw new InvalidDataException(
+                "Backup manifest creation timestamp is missing.");
+        }
+
         if (!string.Equals(
             AppDataRoot,
             ExpectedAppDataRoot,
