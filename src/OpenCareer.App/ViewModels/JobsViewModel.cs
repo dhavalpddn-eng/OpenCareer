@@ -801,6 +801,11 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 await cancellation
                     .CancelAsync(contractId, cancellationToken)
                     .ConfigureAwait(true);
+
+                SetAcceptedContractIds(
+                    _acceptedContractIds
+                        .Where(candidate => candidate != contractId)
+                        .ToArray());
             }
 
             await RefreshAsync(cancellationToken)
@@ -811,6 +816,18 @@ public sealed class JobsViewModel : INotifyPropertyChanged
                 contractIds.Length == 1
                     ? "Accepted job cancelled. Its prepared plan was cleared and aircraft reservation released."
                     : $"All {contractIds.Length} accepted jobs were cancelled. Their prepared plans were cleared and aircraft reservations released.",
+                nameof(AcceptanceStatus));
+        }
+        catch (AcceptedJobCancellationCleanupException ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Accepted career-job cancellation cleanup failed from Jobs for contract {ContractId}.",
+                ex.ContractId);
+
+            SetField(
+                ref _acceptanceStatus,
+                CreateCancellationFailureText(),
                 nameof(AcceptanceStatus));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

@@ -52,6 +52,54 @@ public sealed class AcceptedJobCancellationServiceTests
         Assert.False(result.ReservationWasAlreadyReleased);
     }
 
+    [Fact]
+    public async Task CleanupFailureKeepsContractIdentityForIdempotentRetry()
+    {
+        Guid contractId =
+            Guid.Parse("c4000000-0000-0000-0000-000000000002");
+        using var cancellation = new CancellationTokenSource();
+        var contracts = new CancellingContractStore(
+            AcceptedContract(contractId),
+            cancellation);
+        var runtime = new JobContractRuntimeState(
+            new JobContractRecoveryService(
+                new EmptyRecoverySource(),
+                contracts));
+        var reservations = new RecordingReservations(
+            contractId,
+            "aircraft-a");
+        var preparedPlans = new RecordingPreparedPlanStore
+        {
+            FailNextClear = true
+        };
+        var service = new AcceptedJobCancellationService(
+            contracts,
+            new JobContractLifecycleService(contracts),
+            runtime,
+            reservations,
+            reservations,
+            preparedPlans);
+
+        AcceptedJobCancellationCleanupException failure =
+            await Assert.ThrowsAsync<AcceptedJobCancellationCleanupException>(
+                () => service.CancelAsync(contractId));
+
+        Assert.Equal(contractId, failure.ContractId);
+        Assert.IsType<IOException>(failure.InnerException);
+        Assert.Equal(ContractStatus.Cancelled, contracts.Current.Contract.Status);
+        Assert.Equal(1, reservations.ReleaseCount);
+        Assert.Equal(1, preparedPlans.ClearCount);
+
+        AcceptedJobCancellationResult retry = await service
+            .CancelAsync(contractId);
+
+        Assert.Equal(contractId, retry.ContractId);
+        Assert.True(retry.ReservationWasAlreadyReleased);
+        Assert.Equal(2, reservations.LookupCount);
+        Assert.Equal(1, reservations.ReleaseCount);
+        Assert.Equal(2, preparedPlans.ClearCount);
+    }
+
     private static PersistedJobContract AcceptedContract(Guid contractId)
     {
         var contract = new JobContract(
@@ -142,6 +190,7 @@ public sealed class AcceptedJobCancellationServiceTests
     {
         private readonly string _reservationId =
             JobAcceptanceFleetBridge.GetReservationId(contractId);
+        private bool _released;
 
         public int LookupCount { get; private set; }
         public int ReleaseCount { get; private set; }
@@ -157,7 +206,9 @@ public sealed class AcceptedJobCancellationServiceTests
             cancellationToken.ThrowIfCancellationRequested();
             Assert.Equal(_reservationId, reservationId);
             return Task.FromResult<AircraftReservationOwnership?>(
-                new AircraftReservationOwnership(aircraftId, reservationId));
+                _released
+                    ? null
+                    : new AircraftReservationOwnership(aircraftId, reservationId));
         }
 
         public Task<AircraftReservationAcquireResult> TryReserveAsync(
@@ -176,6 +227,7 @@ public sealed class AcceptedJobCancellationServiceTests
             cancellationToken.ThrowIfCancellationRequested();
             Assert.Equal(aircraftId, canonicalAircraftId);
             Assert.Equal(_reservationId, reservationId);
+            _released = true;
             return Task.FromResult(AircraftReservationReleaseResult.Released);
         }
     }
@@ -184,6 +236,7 @@ public sealed class AcceptedJobCancellationServiceTests
     {
         public int ClearCount { get; private set; }
         public bool ClearObservedCancellation { get; private set; }
+        public bool FailNextClear { get; init; }
 
         public Task<PreparedDispatchPlan?> ReadAsync(
             Guid contractId,
@@ -202,6 +255,10 @@ public sealed class AcceptedJobCancellationServiceTests
             ClearCount++;
             ClearObservedCancellation = cancellationToken.IsCancellationRequested;
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (FailNextClear && ClearCount == 1)
+                throw new IOException("Prepared plan cleanup failed.");
+
             return Task.CompletedTask;
         }
     }

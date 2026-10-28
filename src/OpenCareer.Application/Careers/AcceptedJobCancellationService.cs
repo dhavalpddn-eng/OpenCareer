@@ -9,6 +9,21 @@ public sealed record AcceptedJobCancellationResult(
     string ReservationId,
     bool ReservationWasAlreadyReleased);
 
+public sealed class AcceptedJobCancellationCleanupException(
+    Guid contractId,
+    Exception innerException)
+    : InvalidOperationException(
+        "The accepted job was cancelled, but its preflight cleanup did not finish.",
+        innerException)
+{
+    public Guid ContractId { get; } =
+        contractId != Guid.Empty
+            ? contractId
+            : throw new ArgumentException(
+                "Contract ID is required.",
+                nameof(contractId));
+}
+
 public interface IAcceptedJobCancellationService
 {
     Task<AcceptedJobCancellationResult> CancelAsync(
@@ -66,52 +81,61 @@ public sealed class AcceptedJobCancellationService(
             // prepared plan can remain stranded with no player-visible retry path.
             CancellationToken cleanupCancellationToken = CancellationToken.None;
 
-            await runtime
-                .RemoveCancelledAsync(persisted, cleanupCancellationToken)
-                .ConfigureAwait(false);
-
             string reservationId = JobAcceptanceFleetBridge.GetReservationId(contractId);
-            AircraftReservationOwnership? ownership = await reservationLookup
-                .FindByReservationIdAsync(reservationId, cleanupCancellationToken)
-                .ConfigureAwait(false);
-
-            bool alreadyReleased = ownership is null;
-            if (ownership is not null)
+            try
             {
-                ownership.Validate();
-                if (!string.Equals(
-                        ownership.ReservationId,
-                        reservationId,
-                        StringComparison.Ordinal))
-                {
-                    throw new InvalidDataException(
-                        "Fleet reservation lookup returned a different reservation identity.");
-                }
-
-                AircraftReservationReleaseResult release = await reservationStore
-                    .ReleaseReservationAsync(
-                        ownership.CanonicalAircraftId,
-                        reservationId,
-                        cleanupCancellationToken)
+                await runtime
+                    .RemoveCancelledAsync(persisted, cleanupCancellationToken)
                     .ConfigureAwait(false);
 
-                alreadyReleased = release == AircraftReservationReleaseResult.AlreadyReleased;
-                if (release is not
-                    (AircraftReservationReleaseResult.Released
-                    or AircraftReservationReleaseResult.AlreadyReleased))
+                AircraftReservationOwnership? ownership = await reservationLookup
+                    .FindByReservationIdAsync(reservationId, cleanupCancellationToken)
+                    .ConfigureAwait(false);
+
+                bool alreadyReleased = ownership is null;
+                if (ownership is not null)
                 {
-                    throw new InvalidOperationException(
-                        release == AircraftReservationReleaseResult.HeldByAnotherReservation
-                            ? "The aircraft reservation changed ownership before cancellation could release it."
-                            : "The contract-owned aircraft is unavailable for a non-reservation reason.");
+                    ownership.Validate();
+                    if (!string.Equals(
+                            ownership.ReservationId,
+                            reservationId,
+                            StringComparison.Ordinal))
+                    {
+                        throw new InvalidDataException(
+                            "Fleet reservation lookup returned a different reservation identity.");
+                    }
+
+                    AircraftReservationReleaseResult release = await reservationStore
+                        .ReleaseReservationAsync(
+                            ownership.CanonicalAircraftId,
+                            reservationId,
+                            cleanupCancellationToken)
+                        .ConfigureAwait(false);
+
+                    alreadyReleased = release == AircraftReservationReleaseResult.AlreadyReleased;
+                    if (release is not
+                        (AircraftReservationReleaseResult.Released
+                        or AircraftReservationReleaseResult.AlreadyReleased))
+                    {
+                        throw new InvalidOperationException(
+                            release == AircraftReservationReleaseResult.HeldByAnotherReservation
+                                ? "The aircraft reservation changed ownership before cancellation could release it."
+                                : "The contract-owned aircraft is unavailable for a non-reservation reason.");
+                    }
                 }
+
+                await preparedPlans
+                    .ClearAsync(contractId, cleanupCancellationToken)
+                    .ConfigureAwait(false);
+
+                return new(contractId, reservationId, alreadyReleased);
             }
-
-            await preparedPlans
-                .ClearAsync(contractId, cleanupCancellationToken)
-                .ConfigureAwait(false);
-
-            return new(contractId, reservationId, alreadyReleased);
+            catch (Exception ex)
+            {
+                throw new AcceptedJobCancellationCleanupException(
+                    contractId,
+                    ex);
+            }
         }
         finally
         {

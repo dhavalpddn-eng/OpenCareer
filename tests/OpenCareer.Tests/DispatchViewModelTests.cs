@@ -412,6 +412,48 @@ public sealed class DispatchViewModelTests
     }
 
     [Fact]
+    public async Task TerminalCleanupFailureRetainsExactDispatchRetryWithoutContextRefresh()
+    {
+        Guid first = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        Guid second = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var acceptedContext = new SequenceAcceptedContext(
+            new(
+                AcceptedDispatchPlanningContextStatus.MultipleAcceptedContracts,
+                "2 accepted jobs are blocking Dispatch.",
+                AcceptedContractIds: [first, second]),
+            new(
+                AcceptedDispatchPlanningContextStatus.NoAcceptedContract,
+                "The terminal contracts are no longer listed as accepted."));
+        var cancellation =
+            new RetryableCleanupFailureAcceptedJobCancellation(second);
+        var viewModel = new DispatchViewModel(
+            Inventory(Item("aircraft-a", "Alpha")),
+            Profiles(),
+            new StubPlanning(),
+            acceptedContext,
+            cancellation: cancellation);
+
+        await viewModel.InitializeAsync();
+        await viewModel.CancelAcceptedJobAsync();
+
+        Assert.Equal(1, acceptedContext.ReadCount);
+        Assert.Equal(new[] { first, second }, cancellation.ContractIds);
+        Assert.True(viewModel.CanCancelAcceptedJob);
+        Assert.Equal("Cancel Accepted Job", viewModel.CancelAcceptedJobButtonText);
+        Assert.Contains("Retry the remaining cancellation", viewModel.AcceptedContextText, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            RetryableCleanupFailureAcceptedJobCancellation.TechnicalMessage,
+            viewModel.AcceptedContextText,
+            StringComparison.Ordinal);
+
+        await viewModel.CancelAcceptedJobAsync();
+
+        Assert.Equal(new[] { first, second, second }, cancellation.ContractIds);
+        Assert.False(viewModel.CanCancelAcceptedJob);
+        Assert.Contains("Accepted job cancelled", viewModel.AcceptedContextText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task FailedInitializationKeepsRefreshedAcceptedCancellationButBlocksStalePlanning()
     {
         Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -1077,6 +1119,38 @@ public sealed class DispatchViewModelTests
             {
                 _failureRaised = true;
                 throw new InvalidOperationException(failureMessage);
+            }
+
+            return Task.FromResult(new AcceptedJobCancellationResult(
+                contractId,
+                JobAcceptanceFleetBridge.GetReservationId(contractId),
+                ReservationWasAlreadyReleased: false));
+        }
+    }
+
+    private sealed class RetryableCleanupFailureAcceptedJobCancellation(
+        Guid failingContractId)
+        : IAcceptedJobCancellationService
+    {
+        public const string TechnicalMessage =
+            "INTERNAL terminal cleanup details";
+
+        private bool _failureRaised;
+
+        public List<Guid> ContractIds { get; } = [];
+
+        public Task<AcceptedJobCancellationResult> CancelAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ContractIds.Add(contractId);
+            if (contractId == failingContractId && !_failureRaised)
+            {
+                _failureRaised = true;
+                throw new AcceptedJobCancellationCleanupException(
+                    contractId,
+                    new IOException(TechnicalMessage));
             }
 
             return Task.FromResult(new AcceptedJobCancellationResult(

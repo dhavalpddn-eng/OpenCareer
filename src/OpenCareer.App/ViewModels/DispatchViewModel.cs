@@ -690,6 +690,8 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 await cancellation
                     .CancelAsync(contractId, cancellationToken)
                     .ConfigureAwait(true);
+
+                RetainIncompleteCancellationTargets(contractId);
             }
 
             ApplyAcceptedContext(
@@ -702,6 +704,18 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
                 this,
                 new DispatchNavigationRequestedEventArgs(
                     DispatchNavigationTarget.Jobs));
+        }
+        catch (AcceptedJobCancellationCleanupException ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Accepted-job cancellation cleanup failed in Advanced Dispatch for contract {ContractId}.",
+                ex.ContractId);
+
+            SetField(
+                ref _acceptedContextText,
+                "Accepted job cancellation did not finish. Retry the remaining cancellation. If it fails again, create a diagnostic bundle in Settings before changing recovery data.",
+                nameof(AcceptedContextText));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -790,6 +804,17 @@ public sealed class DispatchViewModel : INotifyPropertyChanged
             _acceptedReservationId is not null,
             nameof(IsAcceptedContextLocked));
         OnPropertyChanged(nameof(CanPrepare));
+        OnPropertyChanged(nameof(CanCancelAcceptedJob));
+        OnPropertyChanged(nameof(CancelAcceptedJobButtonText));
+        OnPropertyChanged(nameof(CancelAcceptedJobDialogText));
+    }
+
+    private void RetainIncompleteCancellationTargets(
+        Guid completedContractId)
+    {
+        _acceptedContractIds = _acceptedContractIds
+            .Where(contractId => contractId != completedContractId)
+            .ToArray();
         OnPropertyChanged(nameof(CanCancelAcceptedJob));
         OnPropertyChanged(nameof(CancelAcceptedJobButtonText));
         OnPropertyChanged(nameof(CancelAcceptedJobDialogText));

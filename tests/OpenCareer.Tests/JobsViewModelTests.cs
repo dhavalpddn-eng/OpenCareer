@@ -790,6 +790,53 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task TerminalCleanupFailureRetainsExactRetryWhenAcceptedContextDropsContract()
+    {
+        Guid contractId =
+            Guid.Parse("c3000000-0000-0000-0000-000000000011");
+        var acceptedContext =
+            new MutableAcceptedContext(contractId);
+        var cancellation =
+            new CleanupFailOnceAcceptedCancellation(acceptedContext);
+        var viewModel =
+            new JobsViewModel(
+                new FakeBoardStore(
+                    Board(
+                        "KRME",
+                        Offer("KRME", "KSYR", locked: false))),
+                CareerRuntime("KRME"),
+                new FixedTimeProvider(Now),
+                aircraftSelection: null,
+                startAction: null,
+                logger: null,
+                acceptedContext: acceptedContext,
+                acceptedCancellation: cancellation);
+
+        await viewModel.RefreshAsync();
+        await viewModel.CancelAcceptedJobsAsync();
+
+        Assert.Equal(1, acceptedContext.ReadCount);
+        Assert.Equal(1, cancellation.CallCount);
+        Assert.True(viewModel.CanCancelAcceptedJobs);
+        Assert.Equal(
+            "Cancel Accepted Job",
+            viewModel.CancelAcceptedJobsButtonText);
+        Assert.Contains(
+            "remains available to retry",
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            CleanupFailOnceAcceptedCancellation.TechnicalMessage,
+            viewModel.AcceptanceStatus,
+            StringComparison.Ordinal);
+
+        await viewModel.CancelAcceptedJobsAsync();
+
+        Assert.Equal(2, cancellation.CallCount);
+        Assert.False(viewModel.CanCancelAcceptedJobs);
+    }
+
+    [Fact]
     public async Task RefreshFailureRestoresRecoveryExitsAndSuppressesRawErrorText()
     {
         Guid contractId =
@@ -2060,6 +2107,38 @@ public sealed class JobsViewModelTests
             return Task.FromException<AcceptedJobCancellationResult>(
                 new IOException(
                     TechnicalMessage));
+        }
+    }
+
+    private sealed class CleanupFailOnceAcceptedCancellation(
+        MutableAcceptedContext context)
+        : IAcceptedJobCancellationService
+    {
+        public const string TechnicalMessage =
+            "INTERNAL prepared-plan cleanup failure";
+
+        public int CallCount { get; private set; }
+
+        public Task<AcceptedJobCancellationResult> CancelAsync(
+            Guid contractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+
+            if (CallCount == 1)
+            {
+                context.Remove(contractId);
+                throw new AcceptedJobCancellationCleanupException(
+                    contractId,
+                    new IOException(TechnicalMessage));
+            }
+
+            return Task.FromResult(
+                new AcceptedJobCancellationResult(
+                    contractId,
+                    $"job:{contractId:N}",
+                    ReservationWasAlreadyReleased: true));
         }
     }
 
