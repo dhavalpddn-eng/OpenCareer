@@ -26,13 +26,15 @@ public sealed class JobAcceptanceFleetBridge
     private readonly IJobContractStore _contractStore;
     private readonly AircraftReservationCoordinator _reservationCoordinator;
     private readonly FlightSessionCoordinator _flightSessions;
+    private readonly IAcceptedJobCancellationRecoverySource? _cancellationRecovery;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public JobAcceptanceFleetBridge(
         JobOfferAcceptanceService acceptanceService,
         IJobContractStore contractStore,
         AircraftReservationCoordinator reservationCoordinator,
-        FlightSessionCoordinator flightSessions)
+        FlightSessionCoordinator flightSessions,
+        IAcceptedJobCancellationRecoverySource? cancellationRecovery = null)
     {
         _acceptanceService =
             acceptanceService
@@ -46,6 +48,7 @@ public sealed class JobAcceptanceFleetBridge
         _flightSessions =
             flightSessions
             ?? throw new ArgumentNullException(nameof(flightSessions));
+        _cancellationRecovery = cancellationRecovery;
     }
 
     public async Task<JobAcceptanceFleetResult> AcceptAndReserveAsync(
@@ -83,6 +86,9 @@ public sealed class JobAcceptanceFleetBridge
         try
         {
             EnsureNoFlightSessionOwnsThePlayableLoop();
+            await EnsureNoCancellationCleanupBlocksAcceptanceAsync(
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             PersistedJobContract? existing =
                 await _contractStore
@@ -92,6 +98,9 @@ public sealed class JobAcceptanceFleetBridge
                     .ConfigureAwait(false);
 
             EnsureNoFlightSessionOwnsThePlayableLoop();
+            await EnsureNoCancellationCleanupBlocksAcceptanceAsync(
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             if (existing is not null
                 && existing.Contract.Status
@@ -106,6 +115,9 @@ public sealed class JobAcceptanceFleetBridge
                         .ConfigureAwait(false);
 
                 EnsureNoFlightSessionOwnsThePlayableLoop();
+                await EnsureNoCancellationCleanupBlocksAcceptanceAsync(
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
                 AircraftReservationRequestResult reservation =
                     await _reservationCoordinator
@@ -116,6 +128,9 @@ public sealed class JobAcceptanceFleetBridge
                         .ConfigureAwait(false);
 
                 EnsureNoFlightSessionOwnsThePlayableLoop();
+                await EnsureNoCancellationCleanupBlocksAcceptanceAsync(
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
                 return CreateResult(
                     reservation,
@@ -144,6 +159,9 @@ public sealed class JobAcceptanceFleetBridge
             try
             {
                 EnsureNoFlightSessionOwnsThePlayableLoop();
+                await EnsureNoCancellationCleanupBlocksAcceptanceAsync(
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
                 PersistedJobContract accepted =
                     await _acceptanceService
@@ -154,6 +172,9 @@ public sealed class JobAcceptanceFleetBridge
                         .ConfigureAwait(false);
 
                 EnsureNoFlightSessionOwnsThePlayableLoop();
+                await EnsureNoCancellationCleanupBlocksAcceptanceAsync(
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
                 return CreateResult(
                     reserved,
@@ -198,6 +219,42 @@ public sealed class JobAcceptanceFleetBridge
         {
             throw new InvalidOperationException(
                 "A FlightSession already owns the playable loop. Complete or recover it before accepting another job.");
+        }
+    }
+
+    private async Task EnsureNoCancellationCleanupBlocksAcceptanceAsync(
+        CancellationToken cancellationToken)
+    {
+        if (_cancellationRecovery is null)
+            return;
+
+        IReadOnlyList<Guid> pending;
+        try
+        {
+            pending = await _cancellationRecovery
+                .ReadPendingContractIdsAsync(cancellationToken)
+                .ConfigureAwait(false)
+                ?? throw new InvalidDataException(
+                    "Accepted-job cancellation recovery returned no contract collection.");
+
+            if (pending.Any(static contractId => contractId == Guid.Empty)
+                || pending.Distinct().Count() != pending.Count)
+            {
+                throw new InvalidDataException(
+                    "Accepted-job cancellation recovery returned invalid or duplicate contract identities.");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException(
+                "Accepted-job cleanup status could not be confirmed. Retry recovery before accepting another job.",
+                ex);
+        }
+
+        if (pending.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "A cancelled job still has preflight cleanup pending. Retry cleanup before accepting another job.");
         }
     }
 

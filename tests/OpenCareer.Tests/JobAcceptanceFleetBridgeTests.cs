@@ -83,6 +83,105 @@ public sealed class JobAcceptanceFleetBridgeTests
     }
 
     [Fact]
+    public async Task PendingCancellationCleanupRejectsBeforeAcceptanceMutation()
+    {
+        JobContractCreationRequest request = Request();
+        var contractStore = new FakeContractStore();
+        var reservationStore = new StatefulReservationStore();
+        var cleanup = new SequenceCancellationRecovery(
+            new[]
+            {
+                Guid.Parse("a1000000-0000-0000-0000-000000000001")
+            });
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => CreateBridge(
+                        contractStore,
+                        new FakeBoardStore(BoardWithOffer(request.Offer)),
+                        reservationStore,
+                        cancellationRecovery: cleanup)
+                    .AcceptAndReserveAsync(
+                        request,
+                        DispatchContext(request.AcceptanceTime)));
+
+        Assert.Contains("cleanup pending", error.Message, StringComparison.Ordinal);
+        Assert.Equal(1, cleanup.CallCount);
+        Assert.Equal(0, reservationStore.TryReserveCount);
+        Assert.Equal(0, contractStore.CreateCount);
+        Assert.Equal(0, contractStore.UpdateCount);
+    }
+
+    [Fact]
+    public async Task UnavailableCleanupInspectionRejectsWithoutTechnicalDetails()
+    {
+        JobContractCreationRequest request = Request();
+        var contractStore = new FakeContractStore();
+        var reservationStore = new StatefulReservationStore();
+        var cleanup = new SequenceCancellationRecovery(
+            new IOException(SequenceCancellationRecovery.TechnicalMessage));
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => CreateBridge(
+                        contractStore,
+                        new FakeBoardStore(BoardWithOffer(request.Offer)),
+                        reservationStore,
+                        cancellationRecovery: cleanup)
+                    .AcceptAndReserveAsync(
+                        request,
+                        DispatchContext(request.AcceptanceTime)));
+
+        Assert.Contains(
+            "cleanup status could not be confirmed",
+            error.Message,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            SequenceCancellationRecovery.TechnicalMessage,
+            error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, reservationStore.TryReserveCount);
+        Assert.Equal(0, contractStore.CreateCount);
+        Assert.Equal(0, contractStore.UpdateCount);
+    }
+
+    [Fact]
+    public async Task CleanupAppearingAfterReservationReleasesAcquireBeforeAcceptance()
+    {
+        JobContractCreationRequest request = Request();
+        var contractStore = new FakeContractStore();
+        var reservationStore = new StatefulReservationStore();
+        IReadOnlyList<Guid> none = Array.Empty<Guid>();
+        var cleanup = new SequenceCancellationRecovery(
+            none,
+            none,
+            new[]
+            {
+                Guid.Parse("a1000000-0000-0000-0000-000000000002")
+            });
+
+        InvalidOperationException error =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => CreateBridge(
+                        contractStore,
+                        new FakeBoardStore(BoardWithOffer(request.Offer)),
+                        reservationStore,
+                        cancellationRecovery: cleanup)
+                    .AcceptAndReserveAsync(
+                        request,
+                        DispatchContext(request.AcceptanceTime)));
+
+        Assert.Contains("cleanup pending", error.Message, StringComparison.Ordinal);
+        Assert.Equal(3, cleanup.CallCount);
+        Assert.Equal(1, reservationStore.AcquiredCount);
+        Assert.Equal(1, reservationStore.ReleaseCount);
+        Assert.True(reservationStore.State?.IsAvailable);
+        Assert.Null(reservationStore.State?.ReservationId);
+        Assert.Equal(0, contractStore.CreateCount);
+        Assert.Equal(0, contractStore.UpdateCount);
+    }
+
+    [Fact]
     public async Task FlightSessionAppearingDuringReservationReleasesAcquireBeforeAcceptance()
     {
         JobContractCreationRequest request = Request();
@@ -660,7 +759,8 @@ public sealed class JobAcceptanceFleetBridgeTests
         FakeContractStore contractStore,
         FakeBoardStore boardStore,
         StatefulReservationStore reservationStore,
-        FlightSessionCoordinator? sessions = null)
+        FlightSessionCoordinator? sessions = null,
+        IAcceptedJobCancellationRecoverySource? cancellationRecovery = null)
     {
         JobContractRuntimeState runtimeState =
             new(
@@ -700,7 +800,40 @@ public sealed class JobAcceptanceFleetBridgeTests
             acceptance,
             contractStore,
             reservations,
-            sessions ?? new FlightSessionCoordinator());
+            sessions ?? new FlightSessionCoordinator(),
+            cancellationRecovery);
+    }
+
+    private sealed class SequenceCancellationRecovery(
+        params object[] outcomes)
+        : IAcceptedJobCancellationRecoverySource
+    {
+        public const string TechnicalMessage =
+            "sqlite path C:\\Users\\pilot\\OpenCareer.db";
+
+        private readonly Queue<object> _outcomes =
+            new(outcomes.Length > 0
+                ? outcomes
+                : throw new ArgumentException(
+                    "At least one cleanup outcome is required.",
+                    nameof(outcomes)));
+
+        public int CallCount { get; private set; }
+
+        public Task<IReadOnlyList<Guid>> ReadPendingContractIdsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+
+            object outcome = _outcomes.Count > 1
+                ? _outcomes.Dequeue()
+                : _outcomes.Peek();
+
+            return outcome is Exception exception
+                ? Task.FromException<IReadOnlyList<Guid>>(exception)
+                : Task.FromResult((IReadOnlyList<Guid>)outcome);
+        }
     }
 
     private static AcceptedJobDispatchBridge CreateDispatchBridge(
