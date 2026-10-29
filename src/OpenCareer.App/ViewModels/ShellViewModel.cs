@@ -5,6 +5,7 @@ using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 
@@ -49,6 +50,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _currentFlightDetail =
         "Accept an operation before OpenCareer creates a career FlightSession.";
     private string _currentFlightRecoveryText = "No saved active flight";
+    private string _currentFlightBriefingKind = "NO ACTIVE BRIEFING";
+    private string _currentFlightBriefingRoute = "No route assigned";
+    private string _currentFlightBriefingAircraft = "No aircraft assigned";
+    private string _currentFlightBriefingInstruction =
+        "Accept an operation in Jobs or begin an eligible training flight to create a briefing.";
     private string _currentFlightTimeSummary = "—";
     private string _currentFlightEventSummary = "—";
     private string _currentFlightMilestoneSummary = "—";
@@ -227,6 +233,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string CurrentFlightStatus => _currentFlightStatus;
     public string CurrentFlightDetail => _currentFlightDetail;
     public string CurrentFlightRecoveryText => _currentFlightRecoveryText;
+    public string CurrentFlightBriefingKind => _currentFlightBriefingKind;
+    public string CurrentFlightBriefingRoute => _currentFlightBriefingRoute;
+    public string CurrentFlightBriefingAircraft => _currentFlightBriefingAircraft;
+    public string CurrentFlightBriefingInstruction => _currentFlightBriefingInstruction;
     public string CurrentFlightTimeSummary => _currentFlightTimeSummary;
     public string CurrentFlightEventSummary => _currentFlightEventSummary;
     public string CurrentFlightMilestoneSummary => _currentFlightMilestoneSummary;
@@ -1321,6 +1331,26 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 nameof(CurrentFlightRecoveryText));
 
             SetField(
+                ref _currentFlightBriefingKind,
+                "NO ACTIVE BRIEFING",
+                nameof(CurrentFlightBriefingKind));
+
+            SetField(
+                ref _currentFlightBriefingRoute,
+                "No route assigned",
+                nameof(CurrentFlightBriefingRoute));
+
+            SetField(
+                ref _currentFlightBriefingAircraft,
+                "No aircraft assigned",
+                nameof(CurrentFlightBriefingAircraft));
+
+            SetField(
+                ref _currentFlightBriefingInstruction,
+                "Accept an operation in Jobs or begin an eligible training flight to create a briefing.",
+                nameof(CurrentFlightBriefingInstruction));
+
+            SetField(
                 ref _currentFlightTimeSummary,
                 "—",
                 nameof(CurrentFlightTimeSummary));
@@ -1414,6 +1444,26 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 ? "RESTORED FROM LOCAL SAVE"
                 : "LIVE SESSION",
             nameof(CurrentFlightRecoveryText));
+
+        SetField(
+            ref _currentFlightBriefingKind,
+            FormatBriefingKind(session),
+            nameof(CurrentFlightBriefingKind));
+
+        SetField(
+            ref _currentFlightBriefingRoute,
+            FormatBriefingRoute(session.Plan),
+            nameof(CurrentFlightBriefingRoute));
+
+        SetField(
+            ref _currentFlightBriefingAircraft,
+            FormatBriefingAircraft(session.Plan),
+            nameof(CurrentFlightBriefingAircraft));
+
+        SetField(
+            ref _currentFlightBriefingInstruction,
+            FormatBriefingInstruction(session, recovered),
+            nameof(CurrentFlightBriefingInstruction));
 
         SetField(
             ref _currentFlightTimeSummary,
@@ -1600,6 +1650,107 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             _ =>
                 $"OpenCareer is tracking the operation at {FormatOperationState(session.OperationState)}."
         };
+
+    private static string FormatBriefingKind(FlightSession session) =>
+        session.ContractId is not null
+            ? "CAREER CONTRACT FLIGHT"
+            : session.Plan?.SourceProvider is { } provider
+                && provider.Contains("training", StringComparison.OrdinalIgnoreCase)
+                    ? "TRAINING OPERATION"
+                    : "PRACTICE / NON-CONTRACT FLIGHT";
+
+    private static string FormatBriefingRoute(FlightSessionPlan? plan)
+    {
+        string origin =
+            string.IsNullOrWhiteSpace(plan?.PlannedOrigin)
+                ? "Origin not recorded"
+                : plan.PlannedOrigin.Trim().ToUpperInvariant();
+
+        string destination =
+            string.IsNullOrWhiteSpace(plan?.PlannedDestination)
+                ? "Destination not recorded"
+                : plan.PlannedDestination.Trim().ToUpperInvariant();
+
+        string alternate =
+            string.IsNullOrWhiteSpace(plan?.PlannedAlternate)
+                ? string.Empty
+                : $" · Alternate {plan.PlannedAlternate.Trim().ToUpperInvariant()}";
+
+        return $"{origin} → {destination}{alternate}";
+    }
+
+    private static string FormatBriefingAircraft(FlightSessionPlan? plan)
+    {
+        string? canonicalAircraftId =
+            plan?.ExpectedCanonicalAircraftId;
+
+        if (string.IsNullOrWhiteSpace(canonicalAircraftId))
+            return "Expected aircraft not recorded · verify the loaded aircraft before continuing";
+
+        return AircraftCanonicalIdentity.TryGetMsfsTitle(
+                canonicalAircraftId,
+                out string title)
+            ? $"{title} · exact loaded-aircraft identity required"
+            : $"{canonicalAircraftId.Trim()} · exact loaded-aircraft identity required";
+    }
+
+    private static string FormatBriefingInstruction(
+        FlightSession session,
+        bool recovered)
+    {
+        if (session.Status == FlightSessionStatus.Suspended)
+        {
+            return "Do not accept another job. Reconnect MSFS with the same aircraft and plausible flight continuity; OpenCareer will resume only after continuity is proven.";
+        }
+
+        if (session.Status == FlightSessionStatus.Interrupted)
+        {
+            return "The flight could not be resumed automatically. Use the exact recovery action in Flight Actions; abandonment awards no pay or completion credit.";
+        }
+
+        if (session.Status == FlightSessionStatus.Cancelled)
+        {
+            return "This operation is cancelled. Keep this page open until cleanup releases its saved session and any exact aircraft reservation.";
+        }
+
+        if (session.Status == FlightSessionStatus.Completed
+            || session.OperationState is FlightOperationState.Shutdown
+                or FlightOperationState.Complete)
+        {
+            return session.ContractId is not null
+                ? "Use Complete Career Flight once. OpenCareer will settle configured pay and operating costs, finalize the Logbook and location, and release the reservation exactly once."
+                : "Use the available manual postflight action to log or discard this flight; contractless flights do not receive career settlement.";
+        }
+
+        if (session.OperationState is FlightOperationState.Landed
+            or FlightOperationState.TaxiIn
+            or FlightOperationState.Parked
+            or FlightOperationState.Unloading)
+        {
+            return "Taxi to authorized parking at the destination, set the parking brake, and shut down every engine. Wait for parking and shutdown evidence before completing the flight.";
+        }
+
+        if (session.OperationState == FlightOperationState.Airborne)
+        {
+            return "Continue to the assigned destination. OpenCareer must observe the established airborne, full-stop landing, parking and shutdown evidence before completion.";
+        }
+
+        if (session.OperationState is FlightOperationState.EngineStart
+            or FlightOperationState.Ramp
+            or FlightOperationState.TaxiOut
+            or FlightOperationState.DepartureReady)
+        {
+            return "Follow the live checklist, taxi normally and depart only in the assigned aircraft. OpenCareer will preserve this operation through a recoverable disconnect.";
+        }
+
+        string recoveryPrefix =
+            recovered
+                ? "This operation was restored from local save. Verify the same route and assigned aircraft before continuing. "
+                : string.Empty;
+
+        return recoveryPrefix
+            + "Remain parked with engines off until the live checklist is ready, then start the assigned aircraft. Advanced Dispatch and repeated profile setup are not required.";
+    }
 
     private static string FormatOperationState(
         FlightOperationState state) =>

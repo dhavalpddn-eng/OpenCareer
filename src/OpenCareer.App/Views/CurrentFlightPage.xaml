@@ -24,6 +24,58 @@
             </StackPanel>
 
             <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="24"
+                    Visibility="{Binding HasFlightSession, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel Spacing="16">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="FLIGHT BRIEFING"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="{Binding CurrentFlightBriefingKind}"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                    </StackPanel>
+
+                    <Grid ColumnSpacing="24" RowSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                            <TextBlock Text="ASSIGNED ROUTE"
+                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightBriefingRoute}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                            <TextBlock Text="ASSIGNED AIRCRAFT"
+                                       Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                            <TextBlock Text="{Binding CurrentFlightBriefingAircraft}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                        </StackPanel>
+
+                        <Border Grid.Row="1"
+                                Grid.ColumnSpan="2"
+                                Style="{StaticResource OpenCareerPaperInsetStyle}">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="NEXT ACTION"
+                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                <TextBlock Text="{Binding CurrentFlightBriefingInstruction}"
+                                           TextWrapping="Wrap"
+                                           Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
                     Padding="24">
                 <StackPanel Spacing="14">
                     <StackPanel Spacing="4">

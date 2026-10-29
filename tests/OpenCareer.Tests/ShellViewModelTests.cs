@@ -213,6 +213,130 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public void PaidPreflightBriefingShowsExactRouteAircraftAndDirectStartInstructions()
+    {
+        Guid contractId =
+            Guid.Parse("11111111-2222-3333-4444-555555555555");
+        FlightSession session = FlightSession.Start(
+            new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero),
+            contractId,
+            plan: new FlightSessionPlan(
+                "kjfk",
+                "kalb",
+                "kbos",
+                ExpectedCanonicalAircraftId:
+                    "msfs-title:Cessna 172 Skyhawk"));
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+
+        ShellViewModel viewModel = CreateFlightViewModel(coordinator);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Equal("CAREER CONTRACT FLIGHT", viewModel.CurrentFlightBriefingKind);
+        Assert.Equal("KJFK → KALB · Alternate KBOS", viewModel.CurrentFlightBriefingRoute);
+        Assert.Equal(
+            "Cessna 172 Skyhawk · exact loaded-aircraft identity required",
+            viewModel.CurrentFlightBriefingAircraft);
+        Assert.Contains("engines off", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("Advanced Dispatch", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("not required", viewModel.CurrentFlightBriefingInstruction);
+    }
+
+    [Fact]
+    public async Task RecoveredPaidBriefingProtectsTheExistingJobAndAircraft()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+        var coordinator = new FlightSessionCoordinator();
+        var store = new TestFlightStore
+        {
+            Checkpoint = FlightSession.Start(
+                timestamp,
+                Guid.Parse("22222222-3333-4444-5555-666666666666"),
+                plan: new FlightSessionPlan(
+                    "KJFK",
+                    "KALB",
+                    ExpectedCanonicalAircraftId: "aircraft-v1"))
+        };
+        var persistence = new FlightSessionPersistenceService(coordinator, store);
+        await persistence.RecoverAsync();
+
+        ShellViewModel viewModel = CreateFlightViewModel(coordinator, persistence);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Equal("CAREER CONTRACT FLIGHT", viewModel.CurrentFlightBriefingKind);
+        Assert.Contains("Do not accept another job", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("same aircraft", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("continuity", viewModel.CurrentFlightBriefingInstruction);
+    }
+
+    [Theory]
+    [InlineData(FlightOperationState.Landed)]
+    [InlineData(FlightOperationState.TaxiIn)]
+    [InlineData(FlightOperationState.Parked)]
+    public void ArrivalBriefingRequiresParkingAndShutdownEvidence(
+        FlightOperationState operationState)
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+        FlightSession started = FlightSession.Start(
+            timestamp,
+            Guid.Parse("33333333-4444-5555-6666-777777777777"),
+            plan: new FlightSessionPlan("KJFK", "KALB"));
+        FlightSession session = started with
+        {
+            UpdatedAt = timestamp.AddMinutes(45),
+            OperationState = operationState
+        };
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+
+        ShellViewModel viewModel = CreateFlightViewModel(coordinator);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("parking", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("parking brake", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("shut down every engine", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("evidence", viewModel.CurrentFlightBriefingInstruction);
+    }
+
+    [Fact]
+    public void PaidShutdownBriefingExplainsExactlyOnceFinalization()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+        FlightSession started = FlightSession.Start(
+            timestamp,
+            Guid.Parse("44444444-5555-6666-7777-888888888888"),
+            plan: new FlightSessionPlan("KJFK", "KALB"));
+        FlightSession session = started with
+        {
+            UpdatedAt = timestamp.AddHours(1),
+            OperationState = FlightOperationState.Shutdown
+        };
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+
+        ShellViewModel viewModel = CreateFlightViewModel(coordinator);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("Complete Career Flight once", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("configured pay and operating costs", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("Logbook and location", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("exactly once", viewModel.CurrentFlightBriefingInstruction);
+    }
+
+    private static ShellViewModel CreateFlightViewModel(
+        FlightSessionCoordinator coordinator,
+        FlightSessionPersistenceService? persistence = null) =>
+        new(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            coordinator,
+            persistence);
+
+    [Fact]
     public async Task LiveChecklistUsesSourceAndRespectsPersistentVisibilityPreference()
     {
         DateTimeOffset timestamp =
