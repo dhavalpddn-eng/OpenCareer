@@ -1403,6 +1403,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             recovered,
             nameof(HasRecoveredFlightSession));
 
+        SetField(
+            ref _currentFlightBriefingInstruction,
+            FormatBriefingInstruction(
+                session,
+                recovered,
+                _connection.Current.State,
+                _telemetrySource.Latest is not null),
+            nameof(CurrentFlightBriefingInstruction));
+
         if (!changed)
         {
             string recoveryText =
@@ -1459,11 +1468,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ref _currentFlightBriefingAircraft,
             FormatBriefingAircraft(session.Plan),
             nameof(CurrentFlightBriefingAircraft));
-
-        SetField(
-            ref _currentFlightBriefingInstruction,
-            FormatBriefingInstruction(session, recovered),
-            nameof(CurrentFlightBriefingInstruction));
 
         SetField(
             ref _currentFlightTimeSummary,
@@ -1696,7 +1700,9 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
     private static string FormatBriefingInstruction(
         FlightSession session,
-        bool recovered)
+        bool recovered,
+        SimulatorConnectionState connectionState,
+        bool hasTelemetry)
     {
         if (session.Status == FlightSessionStatus.Suspended)
         {
@@ -1720,6 +1726,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             return session.ContractId is not null
                 ? "Use Complete Career Flight once. OpenCareer will settle configured pay and operating costs, finalize the Logbook and location, and release the reservation exactly once."
                 : "Use the available manual postflight action to log or discard this flight; contractless flights do not receive career settlement.";
+        }
+
+        if (connectionState != SimulatorConnectionState.Connected)
+        {
+            return "Flight tracking is interrupted. Keep MSFS on the same route and assigned aircraft; do not complete or accept another job. Resume evidence-driven flight actions only after OpenCareer reconnects and live aircraft telemetry returns. If recovery is impossible, use Abandon Current Flight; abandonment awards no pay or completion credit.";
+        }
+
+        if (!hasTelemetry)
+        {
+            return "MSFS is connected, but live aircraft telemetry is not available yet. Keep the assigned aircraft loaded and do not complete or accept another job until Current Flight confirms live telemetry. If recovery is impossible, use Abandon Current Flight; abandonment awards no pay or completion credit.";
         }
 
         if (session.OperationState is FlightOperationState.Landed

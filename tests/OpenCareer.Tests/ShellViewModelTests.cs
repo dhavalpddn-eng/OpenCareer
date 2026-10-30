@@ -326,12 +326,121 @@ public sealed class ShellViewModelTests
         Assert.Contains("exactly once", viewModel.CurrentFlightBriefingInstruction);
     }
 
+    [Fact]
+    public void ActiveBriefingTracksTelemetryLossAndReconnectWithoutSessionMutation()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
+        FlightSession started = FlightSession.Start(
+            timestamp,
+            Guid.Parse("55555555-6666-7777-8888-999999999999"),
+            plan: new FlightSessionPlan(
+                "KJFK",
+                "KALB",
+                ExpectedCanonicalAircraftId: "msfs-title:Cessna 172 Skyhawk"));
+        FlightSession session = started with
+        {
+            UpdatedAt = timestamp.AddMinutes(30),
+            OperationState = FlightOperationState.Airborne
+        };
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+        var connection = new TestConnection
+        {
+            Current = new SimulatorConnectionSnapshot(
+                SimulatorConnectionState.Connected)
+        };
+        var telemetry = new TestTelemetrySource
+        {
+            Latest = Snapshot(4_000, 105, 0, paused: false)
+        };
+        var viewModel = new ShellViewModel(
+            connection,
+            telemetry,
+            new TestSettingsService(),
+            coordinator,
+            flightPersistence: null);
+
+        viewModel.RefreshConnectionStatus();
+        Assert.Contains("full-stop landing", viewModel.CurrentFlightBriefingInstruction);
+
+        connection.Current = new SimulatorConnectionSnapshot(
+            SimulatorConnectionState.Reconnecting,
+            SimulatorConnectionIssue.ConnectionLost);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("tracking is interrupted", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("same route and assigned aircraft", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("do not complete or accept another job", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("use Abandon Current Flight", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("awards no pay", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Same(session, coordinator.Current);
+
+        connection.Current = new SimulatorConnectionSnapshot(
+            SimulatorConnectionState.Connected);
+        telemetry.Latest = null;
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("telemetry is not available yet", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("do not complete or accept another job", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("use Abandon Current Flight", viewModel.CurrentFlightBriefingInstruction);
+
+        telemetry.Latest = Snapshot(4_100, 108, -200, paused: false);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("full-stop landing", viewModel.CurrentFlightBriefingInstruction);
+        Assert.DoesNotContain("tracking is interrupted", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Same(session, coordinator.Current);
+    }
+
+    [Fact]
+    public void TerminalPaidBriefingKeepsSettlementRecoveryAvailableWithoutTelemetry()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
+        FlightSession started = FlightSession.Start(
+            timestamp,
+            Guid.Parse("66666666-7777-8888-9999-aaaaaaaaaaaa"),
+            plan: new FlightSessionPlan("KJFK", "KALB"));
+        FlightSession session = started with
+        {
+            UpdatedAt = timestamp.AddHours(1),
+            OperationState = FlightOperationState.Shutdown
+        };
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+        var viewModel = new ShellViewModel(
+            new TestConnection
+            {
+                Current = new SimulatorConnectionSnapshot(
+                    SimulatorConnectionState.Reconnecting,
+                    SimulatorConnectionIssue.ConnectionLost)
+            },
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            coordinator,
+            flightPersistence: null);
+
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("Complete Career Flight once", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("exactly once", viewModel.CurrentFlightBriefingInstruction);
+        Assert.DoesNotContain("tracking is interrupted", viewModel.CurrentFlightBriefingInstruction);
+    }
+
     private static ShellViewModel CreateFlightViewModel(
         FlightSessionCoordinator coordinator,
         FlightSessionPersistenceService? persistence = null) =>
         new(
-            new TestConnection(),
-            new TestTelemetrySource(),
+            new TestConnection
+            {
+                Current = new SimulatorConnectionSnapshot(
+                    SimulatorConnectionState.Connected)
+            },
+            new TestTelemetrySource
+            {
+                Latest = Snapshot(1_000, 0, 0, paused: false)
+            },
             new TestSettingsService(),
             coordinator,
             persistence);
