@@ -828,6 +828,60 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task CancelledCareerCompletionRestoresBothAuthoritativeTerminalActions()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        using var cancellation = new CancellationTokenSource();
+        var completion = new FakeCareerCompletionAction
+        {
+            Availability = new(
+                CanComplete: true,
+                CareerJobCompletionInputState.Ready,
+                "Authoritative completion inputs are ready.",
+                sessionId,
+                contractId),
+            CancelDuringCompletion = cancellation
+        };
+        var abandonment = new FakeCareerAbandonAction
+        {
+            Availability = new(
+                CanAbandon: true,
+                CareerFlightAbandonAvailabilityState.Ready,
+                sessionId,
+                contractId,
+                "The current career flight can be abandoned.")
+        };
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: completion,
+            careerAbandonAction: abandonment,
+            logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Assert.False(
+            await viewModel.CompleteCareerFlightAsync(cancellation.Token));
+
+        Assert.Equal(1, completion.CompleteCount);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.False(viewModel.IsCareerCompletionBusy);
+        Assert.Contains("completion was interrupted", viewModel.CareerCompletionActionDetail);
+        Assert.Contains("Retry Complete Career Flight", viewModel.CareerCompletionActionDetail);
+        Assert.Contains("Abandon Current Flight", viewModel.CareerCompletionActionDetail);
+
+        Assert.True(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(2, completion.CompleteCount);
+    }
+
+    [Fact]
     public async Task ConcurrentCareerCompletionAttemptIsRejectedInsteadOfQueued()
     {
         var action = new BlockingCareerCompletionExecutionAction();
@@ -1132,6 +1186,60 @@ public sealed class ShellViewModelTests
             refreshFailure,
             viewModel.CareerAbandonActionDetail,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CancelledCareerAbandonmentRestoresBothAuthoritativeTerminalActions()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        using var cancellation = new CancellationTokenSource();
+        var completion = new FakeCareerCompletionAction
+        {
+            Availability = new(
+                CanComplete: true,
+                CareerJobCompletionInputState.Ready,
+                "The current career flight can be completed.",
+                sessionId,
+                contractId)
+        };
+        var abandonment = new FakeCareerAbandonAction
+        {
+            Availability = new(
+                CanAbandon: true,
+                CareerFlightAbandonAvailabilityState.Ready,
+                sessionId,
+                contractId,
+                "The current career flight can be abandoned."),
+            CancelDuringAbandonment = cancellation
+        };
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: completion,
+            careerAbandonAction: abandonment,
+            logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Assert.False(
+            await viewModel.AbandonCurrentFlightAsync(cancellation.Token));
+
+        Assert.Equal(1, abandonment.AbandonCount);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.False(viewModel.IsCareerAbandonBusy);
+        Assert.Contains("abandonment was interrupted", viewModel.CareerAbandonActionDetail);
+        Assert.Contains("Retry Abandon Current Flight", viewModel.CareerAbandonActionDetail);
+        Assert.Contains("Complete Career Flight", viewModel.CareerAbandonActionDetail);
+
+        Assert.True(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(2, abandonment.AbandonCount);
     }
 
     [Fact]
@@ -1490,6 +1598,7 @@ public sealed class ShellViewModelTests
         public Guid? LastContractId { get; private set; }
         public Exception? NextCompletionFailure { get; set; }
         public Exception? NextReadFailure { get; set; }
+        public CancellationTokenSource? CancelDuringCompletion { get; set; }
 
         public Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
             CancellationToken cancellationToken = default)
@@ -1515,6 +1624,14 @@ public sealed class ShellViewModelTests
             CompleteCount++;
             LastFlightSessionId = expectedFlightSessionId;
             LastContractId = expectedContractId;
+
+            if (CancelDuringCompletion is { } cancellation)
+            {
+                CancelDuringCompletion = null;
+                cancellation.Cancel();
+                return Task.FromCanceled<CareerJobCompletionReceipt>(
+                    cancellationToken);
+            }
 
             if (NextCompletionFailure is { } failure)
             {
@@ -1637,6 +1754,7 @@ public sealed class ShellViewModelTests
         public Guid? LastContractId { get; private set; }
         public Exception? NextAbandonFailure { get; set; }
         public Exception? NextReadFailure { get; set; }
+        public CancellationTokenSource? CancelDuringAbandonment { get; set; }
 
         public Task<CareerFlightAbandonAvailability> ReadAvailabilityAsync(
             CancellationToken cancellationToken = default)
@@ -1661,6 +1779,14 @@ public sealed class ShellViewModelTests
             AbandonCount++;
             LastSessionId = expectedSessionId;
             LastContractId = expectedContractId;
+
+            if (CancelDuringAbandonment is { } cancellation)
+            {
+                CancelDuringAbandonment = null;
+                cancellation.Cancel();
+                return Task.FromCanceled<CareerFlightAbandonResult>(
+                    cancellationToken);
+            }
 
             if (NextAbandonFailure is { } failure)
             {
