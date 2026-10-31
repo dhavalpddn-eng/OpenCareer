@@ -1,8 +1,11 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 
@@ -15,6 +18,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private readonly IAppSettingsService _settings;
     private readonly FlightSessionCoordinator _flightSessions;
     private readonly FlightSessionPersistenceService? _flightPersistence;
+    private readonly CareerJobPlayableLoopReadinessSource? _careerReadiness;
+    private readonly ICareerJobCompletionAction? _careerCompletionAction;
+    private readonly ICareerFlightAbandonAction? _careerAbandonAction;
+    private readonly IManualFlightPostflightAction? _manualPostflightAction;
+    private readonly ILiveFlightChecklistSource? _flightChecklistSource;
+    private readonly ILogger<ShellViewModel>? _logger;
+    private readonly SemaphoreSlim _careerActionGate = new(1, 1);
+    private readonly SemaphoreSlim _manualPostflightGate = new(1, 1);
 
     private SimulatorConnectionSnapshot? _lastConnectionSnapshot;
     private AircraftTelemetrySnapshot? _lastTelemetry;
@@ -39,12 +50,54 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     private string _currentFlightDetail =
         "Accept an operation before OpenCareer creates a career FlightSession.";
     private string _currentFlightRecoveryText = "No saved active flight";
+    private string _currentFlightBriefingKind = "NO ACTIVE BRIEFING";
+    private string _currentFlightBriefingRoute = "No route assigned";
+    private string _currentFlightBriefingAircraft = "No aircraft assigned";
+    private string _currentFlightBriefingInstruction =
+        "Accept an operation in Jobs or begin an eligible training flight to create a briefing.";
     private string _currentFlightTimeSummary = "—";
     private string _currentFlightEventSummary = "—";
     private string _currentFlightMilestoneSummary = "—";
     private string _currentFlightRouteSummary = "—";
     private string _currentFlightPerformanceSummary = "—";
     private string _currentFlightFuelSummary = "—";
+    private string _careerWorkflowStatus = "CAREER WORKFLOW UNAVAILABLE";
+    private string _careerWorkflowDetail =
+        "Career workflow readiness is not connected to this view.";
+
+    private bool _canCompleteCareerFlight;
+    private bool _isCareerCompletionBusy;
+    private string _careerCompletionActionText =
+        "Complete Career Flight";
+    private string _careerCompletionActionDetail =
+        "Career completion inputs have not been checked yet.";
+    private Guid? _completionSessionId;
+    private Guid? _completionContractId;
+    private bool _canAbandonCurrentFlight;
+    private bool _isCareerAbandonBusy;
+    private string _careerAbandonActionText =
+        "Abandon Current Flight";
+    private string _careerAbandonActionDetail =
+        "Flight abandonment availability has not been checked yet.";
+    private Guid? _abandonSessionId;
+    private Guid? _abandonContractId;
+    private bool _isManualPostflightVisible;
+    private bool _canLogManualFlight;
+    private bool _canDiscardManualFlight;
+    private bool _isManualPostflightBusy;
+    private string _manualPostflightDetail =
+        "Manual postflight readiness has not been checked yet.";
+    private Guid? _manualPostflightSessionId;
+    private ManualFlightPostflightLogRequest? _manualPostflightRequest;
+    private bool _isCurrentFlightChecklistVisible;
+    private string _currentFlightChecklistPhase = "NO ACTIVE CHECKLIST";
+    private string _currentFlightChecklistDetail =
+        "No current FlightSession is available for a live checklist.";
+    private string _currentFlightInputBindingStatus =
+        "INPUT BINDINGS UNAVAILABLE";
+    private IReadOnlyList<LiveFlightChecklistStep> _currentFlightChecklistSteps =
+        Array.Empty<LiveFlightChecklistStep>();
+
 
     public ShellViewModel(
         ISimulatorConnection connection,
@@ -65,6 +118,76 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         IAppSettingsService settings,
         FlightSessionCoordinator flightSessions,
         FlightSessionPersistenceService? flightPersistence)
+        : this(
+            connection,
+            telemetrySource,
+            settings,
+            flightSessions,
+            flightPersistence,
+            careerReadiness:
+                null)
+    {
+    }
+
+    public ShellViewModel(
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        IAppSettingsService settings,
+        FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService? flightPersistence,
+        CareerJobPlayableLoopReadinessSource? careerReadiness)
+        : this(
+            connection,
+            telemetrySource,
+            settings,
+            flightSessions,
+            flightPersistence,
+            careerReadiness,
+            careerCompletionAction:
+                null,
+            careerAbandonAction:
+                null,
+            logger:
+                null)
+    {
+    }
+
+    public ShellViewModel(
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        IAppSettingsService settings,
+        FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService? flightPersistence,
+        CareerJobPlayableLoopReadinessSource? careerReadiness,
+        ICareerJobCompletionAction? careerCompletionAction,
+        ILogger<ShellViewModel>? logger)
+        : this(
+            connection,
+            telemetrySource,
+            settings,
+            flightSessions,
+            flightPersistence,
+            careerReadiness,
+            careerCompletionAction,
+            careerAbandonAction:
+                null,
+            logger:
+                logger)
+    {
+    }
+
+    public ShellViewModel(
+        ISimulatorConnection connection,
+        ISimulatorTelemetrySource telemetrySource,
+        IAppSettingsService settings,
+        FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService? flightPersistence,
+        CareerJobPlayableLoopReadinessSource? careerReadiness,
+        ICareerJobCompletionAction? careerCompletionAction,
+        ICareerFlightAbandonAction? careerAbandonAction,
+        ILogger<ShellViewModel>? logger,
+        IManualFlightPostflightAction? manualPostflightAction = null,
+        ILiveFlightChecklistSource? flightChecklistSource = null)
     {
         _connection =
             connection
@@ -83,6 +206,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             ?? throw new ArgumentNullException(nameof(flightSessions));
 
         _flightPersistence = flightPersistence;
+        _careerReadiness = careerReadiness;
+        _careerCompletionAction = careerCompletionAction;
+        _careerAbandonAction = careerAbandonAction;
+        _manualPostflightAction = manualPostflightAction;
+        _flightChecklistSource = flightChecklistSource;
+        _logger = logger;
         _settings.Changed += OnSettingsChanged;
     }
 
@@ -104,12 +233,37 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string CurrentFlightStatus => _currentFlightStatus;
     public string CurrentFlightDetail => _currentFlightDetail;
     public string CurrentFlightRecoveryText => _currentFlightRecoveryText;
+    public string CurrentFlightBriefingKind => _currentFlightBriefingKind;
+    public string CurrentFlightBriefingRoute => _currentFlightBriefingRoute;
+    public string CurrentFlightBriefingAircraft => _currentFlightBriefingAircraft;
+    public string CurrentFlightBriefingInstruction => _currentFlightBriefingInstruction;
     public string CurrentFlightTimeSummary => _currentFlightTimeSummary;
     public string CurrentFlightEventSummary => _currentFlightEventSummary;
     public string CurrentFlightMilestoneSummary => _currentFlightMilestoneSummary;
     public string CurrentFlightRouteSummary => _currentFlightRouteSummary;
     public string CurrentFlightPerformanceSummary => _currentFlightPerformanceSummary;
     public string CurrentFlightFuelSummary => _currentFlightFuelSummary;
+    public string CareerWorkflowStatus => _careerWorkflowStatus;
+    public string CareerWorkflowDetail => _careerWorkflowDetail;
+    public bool CanCompleteCareerFlight => _canCompleteCareerFlight;
+    public bool IsCareerCompletionBusy => _isCareerCompletionBusy;
+    public string CareerCompletionActionText => _careerCompletionActionText;
+    public string CareerCompletionActionDetail => _careerCompletionActionDetail;
+    public bool CanAbandonCurrentFlight => _canAbandonCurrentFlight;
+    public bool IsCareerAbandonBusy => _isCareerAbandonBusy;
+    public string CareerAbandonActionText => _careerAbandonActionText;
+    public string CareerAbandonActionDetail => _careerAbandonActionDetail;
+    public bool IsManualPostflightVisible => _isManualPostflightVisible;
+    public bool CanLogManualFlight => _canLogManualFlight;
+    public bool CanDiscardManualFlight => _canDiscardManualFlight;
+    public bool IsManualPostflightBusy => _isManualPostflightBusy;
+    public string ManualPostflightDetail => _manualPostflightDetail;
+    public bool IsCurrentFlightChecklistVisible => _isCurrentFlightChecklistVisible;
+    public string CurrentFlightChecklistPhase => _currentFlightChecklistPhase;
+    public string CurrentFlightChecklistDetail => _currentFlightChecklistDetail;
+    public string CurrentFlightInputBindingStatus => _currentFlightInputBindingStatus;
+    public IReadOnlyList<LiveFlightChecklistStep> CurrentFlightChecklistSteps =>
+        _currentFlightChecklistSteps;
     private bool _hasFlightSession;
     private bool _hasRecoveredFlightSession;
 
@@ -140,6 +294,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         }
 
         RefreshFlightSession();
+        RefreshFlightChecklist();
+        RefreshCareerWorkflow();
     }
 
     private void RefreshConnection(SimulatorConnectionSnapshot snapshot)
@@ -297,6 +453,873 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             nameof(ConfigurationSummary));
     }
 
+    public async Task RefreshCareerCompletionActionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await RefreshCareerCompletionActionAsync(
+            waitForCurrentAction: false,
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task RefreshCareerCompletionActionAsync(
+        bool waitForCurrentAction,
+        CancellationToken cancellationToken = default)
+    {
+        if (_careerCompletionAction is null)
+        {
+            _completionSessionId = null;
+            _completionContractId = null;
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                false,
+                nameof(CanCompleteCareerFlight));
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                "Career completion action is not connected to this view.",
+                nameof(CareerCompletionActionDetail));
+
+            return;
+        }
+
+        bool entered;
+        if (waitForCurrentAction)
+        {
+            await _careerActionGate
+                .WaitAsync(cancellationToken);
+            entered = true;
+        }
+        else
+        {
+            entered =
+                await _careerActionGate
+                    .WaitAsync(
+                        millisecondsTimeout:
+                            0,
+                        cancellationToken);
+        }
+
+        if (!entered)
+            return;
+
+        try
+        {
+            CareerJobCompletionActionAvailability availability =
+                await _careerCompletionAction
+                    .ReadAvailabilityAsync(
+                        cancellationToken);
+
+            _completionSessionId =
+                availability.CanComplete
+                    ? availability.FlightSessionId
+                    : null;
+            _completionContractId =
+                availability.CanComplete
+                    ? availability.ContractId
+                    : null;
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                availability.CanComplete
+                    && _completionSessionId is not null
+                    && _completionContractId is not null
+                    && !_isCareerCompletionBusy,
+                nameof(CanCompleteCareerFlight));
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                availability.Detail,
+                nameof(CareerCompletionActionDetail));
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _completionSessionId = null;
+            _completionContractId = null;
+
+            _logger?.LogError(
+                ex,
+                "Career completion readiness refresh failed.");
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                false,
+                nameof(CanCompleteCareerFlight));
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                "Career completion readiness could not be verified.",
+                nameof(CareerCompletionActionDetail));
+        }
+        finally
+        {
+            _careerActionGate.Release();
+        }
+    }
+
+    public async Task<bool> CompleteCareerFlightAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_careerCompletionAction is null)
+            return false;
+
+        if (_completionSessionId is not { } sessionId
+            || _completionContractId is not { } contractId)
+        {
+            return false;
+        }
+
+        bool completed = false;
+
+        bool entered;
+        try
+        {
+            entered = await _careerActionGate
+                .WaitAsync(0, cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        if (!entered)
+            return false;
+
+        try
+        {
+            SetBoolean(
+                ref _isCareerCompletionBusy,
+                true,
+                nameof(IsCareerCompletionBusy));
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                false,
+                nameof(CanCompleteCareerFlight));
+
+            SetBoolean(
+                ref _canAbandonCurrentFlight,
+                false,
+                nameof(CanAbandonCurrentFlight));
+
+            SetField(
+                ref _careerCompletionActionText,
+                "Completing Career Flight…",
+                nameof(CareerCompletionActionText));
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                "Applying authoritative completion, settlement, logbook, career progression, and cleanup.",
+                nameof(CareerCompletionActionDetail));
+
+            CareerJobCompletionReceipt receipt =
+                await _careerCompletionAction
+                .CompleteAsync(
+                    sessionId,
+                    contractId,
+                    cancellationToken);
+
+            completed = true;
+
+            _abandonSessionId = null;
+            _abandonContractId = null;
+            _completionSessionId = null;
+            _completionContractId = null;
+
+            RefreshConnectionStatus();
+
+            SetField(
+                ref _careerCompletionActionDetail,
+                FormatCareerCompletionReceipt(receipt),
+                nameof(CareerCompletionActionDetail));
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            await RecoverCareerActionsAfterCompletionAttemptAsync(
+                "Career flight completion was interrupted.");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Career flight completion failed.");
+
+            await RecoverCareerActionsAfterCompletionAttemptAsync(
+                "Career flight completion did not finish.");
+        }
+        finally
+        {
+            SetBoolean(
+                ref _isCareerCompletionBusy,
+                false,
+                nameof(IsCareerCompletionBusy));
+
+            SetField(
+                ref _careerCompletionActionText,
+                completed
+                    ? "Flight Evaluated"
+                    : "Complete Career Flight",
+                nameof(CareerCompletionActionText));
+
+            _careerActionGate.Release();
+        }
+
+        return completed;
+    }
+
+    private async Task RecoverCareerActionsAfterCompletionAttemptAsync(
+        string failureDetail)
+    {
+        bool completionRecoverySucceeded = false;
+        try
+        {
+            CareerJobCompletionActionAvailability availability =
+                await _careerCompletionAction!
+                    .ReadAvailabilityAsync(CancellationToken.None);
+
+            _completionSessionId =
+                availability.CanComplete
+                    ? availability.FlightSessionId
+                    : null;
+            _completionContractId =
+                availability.CanComplete
+                    ? availability.ContractId
+                    : null;
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                availability.CanComplete
+                    && _completionSessionId is not null
+                    && _completionContractId is not null,
+                nameof(CanCompleteCareerFlight));
+            completionRecoverySucceeded = true;
+        }
+        catch (Exception refreshEx)
+        {
+            _logger?.LogWarning(
+                refreshEx,
+                "Career completion readiness could not be refreshed after an interrupted or failed completion attempt.");
+
+            _completionSessionId = null;
+            _completionContractId = null;
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                false,
+                nameof(CanCompleteCareerFlight));
+        }
+
+        bool abandonmentRecoverySucceeded =
+            _careerAbandonAction is null;
+        if (_careerAbandonAction is { } abandonmentAction)
+        {
+            try
+            {
+                CareerFlightAbandonAvailability availability =
+                    await abandonmentAction
+                        .ReadAvailabilityAsync(CancellationToken.None);
+
+                bool canAbandon =
+                    availability.CanAbandon
+                    && availability.SessionId is not null
+                    && availability.ContractId is not null;
+                SetAbandonAvailability(
+                    canAbandon,
+                    availability.SessionId,
+                    availability.ContractId,
+                    availability.Detail);
+                abandonmentRecoverySucceeded = true;
+            }
+            catch (Exception refreshEx)
+            {
+                _logger?.LogWarning(
+                    refreshEx,
+                    "Career abandonment readiness could not be refreshed after an interrupted or failed completion attempt.");
+
+                SetAbandonAvailability(
+                    canAbandon: false,
+                    sessionId: null,
+                    contractId: null,
+                    detail:
+                        "Flight abandonment readiness could not be verified after completion stopped. Reopen Current Flight before another terminal action.");
+            }
+        }
+
+        SetField(
+            ref _careerCompletionActionDetail,
+            CanCompleteCareerFlight && CanAbandonCurrentFlight
+                ? $"{failureDetail} Retry Complete Career Flight, or use Abandon Current Flight to exit without rewards. If this repeats, create a diagnostic bundle in Settings."
+                : CanCompleteCareerFlight
+                    ? $"{failureDetail} The flight is still eligible to complete; retry Complete Career Flight. If this repeats, create a diagnostic bundle in Settings."
+                    : CanAbandonCurrentFlight
+                        ? $"{failureDetail} The current flight remains available to abandon without rewards. If this repeats, create a diagnostic bundle in Settings."
+                        : completionRecoverySucceeded && abandonmentRecoverySucceeded
+                            ? $"{failureDetail} Authoritative Current Flight state was refreshed, but no terminal action is currently available. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings."
+                            : $"{failureDetail} Recovery readiness could not be refreshed. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings.",
+            nameof(CareerCompletionActionDetail));
+    }
+
+    private static string FormatCareerCompletionReceipt(
+        CareerJobCompletionReceipt receipt)
+    {
+        string settlement =
+            receipt.IsZeroPayCalibration
+                ? "$0 calibration pay (by design)"
+                : $"Gross {FormatCurrency(receipt.GrossCashReceipt)} · " +
+                  $"Operating costs {FormatSignedCurrency(-receipt.PlayerOperatingCosts)} · " +
+                  $"Net {FormatSignedCurrency(receipt.NetCashChange)}";
+
+        return
+            $"EVALUATION COMPLETE · {settlement} · Balance {FormatCurrency(receipt.CashBalanceAfter)} · " +
+            $"{receipt.OriginIcao} → {receipt.DestinationIcao} logged · " +
+            $"Pilot location {receipt.CurrentAirportIcao} · Career flight #{receipt.CareerFlightCount}.";
+    }
+
+    private static string FormatSignedCurrency(decimal value) =>
+        value switch
+        {
+            > 0 => $"+{FormatCurrency(value)}",
+            < 0 => $"-{FormatCurrency(Math.Abs(value))}",
+            _ => "$0"
+        };
+
+    private static string FormatCurrency(decimal value) =>
+        $"${value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}";
+
+    public async Task RefreshCareerAbandonActionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await RefreshCareerAbandonActionAsync(
+            waitForCurrentAction: false,
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task RefreshCareerAbandonActionAsync(
+        bool waitForCurrentAction,
+        CancellationToken cancellationToken = default)
+    {
+        if (_careerAbandonAction is null)
+        {
+            SetAbandonAvailability(
+                canAbandon: false,
+                sessionId: null,
+                contractId: null,
+                detail:
+                    "Flight abandonment is not connected to this view.");
+            return;
+        }
+
+        bool entered;
+        if (waitForCurrentAction)
+        {
+            await _careerActionGate
+                .WaitAsync(cancellationToken);
+            entered = true;
+        }
+        else
+        {
+            entered =
+                await _careerActionGate
+                    .WaitAsync(
+                        millisecondsTimeout:
+                            0,
+                        cancellationToken);
+        }
+
+        if (!entered)
+            return;
+
+        try
+        {
+            CareerFlightAbandonAvailability availability =
+                await _careerAbandonAction
+                    .ReadAvailabilityAsync(
+                        cancellationToken);
+
+            SetAbandonAvailability(
+                availability.CanAbandon
+                    && !_isCareerAbandonBusy,
+                availability.SessionId,
+                availability.ContractId,
+                availability.Detail);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Career flight abandonment readiness refresh failed.");
+
+            SetAbandonAvailability(
+                canAbandon: false,
+                sessionId: null,
+                contractId: null,
+                detail:
+                    "Flight abandonment readiness could not be verified.");
+        }
+        finally
+        {
+            _careerActionGate.Release();
+        }
+    }
+
+    public async Task<bool> AbandonCurrentFlightAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_careerAbandonAction is null
+            || _abandonSessionId is not { } sessionId
+            || _abandonContractId is not { } contractId)
+        {
+            return false;
+        }
+
+        bool entered;
+        try
+        {
+            entered = await _careerActionGate
+                .WaitAsync(0, cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        if (!entered)
+            return false;
+
+        try
+        {
+            SetBoolean(
+                ref _isCareerAbandonBusy,
+                true,
+                nameof(IsCareerAbandonBusy));
+
+            SetBoolean(
+                ref _canAbandonCurrentFlight,
+                false,
+                nameof(CanAbandonCurrentFlight));
+
+            SetBoolean(
+                ref _canCompleteCareerFlight,
+                false,
+                nameof(CanCompleteCareerFlight));
+
+            SetField(
+                ref _careerAbandonActionText,
+                "Abandoning Current Flight…",
+                nameof(CareerAbandonActionText));
+
+            SetField(
+                ref _careerAbandonActionDetail,
+                "Reconciling the flight and contract, releasing its Fleet reservation, and cleaning up the saved session without completion credit.",
+                nameof(CareerAbandonActionDetail));
+
+            CareerFlightAbandonResult result =
+                await _careerAbandonAction
+                    .AbandonAsync(
+                        sessionId,
+                        contractId,
+                        cancellationToken);
+
+            _abandonSessionId = null;
+            _abandonContractId = null;
+
+            RefreshConnectionStatus();
+
+            SetField(
+                ref _careerAbandonActionDetail,
+                result.Status == CareerFlightAbandonStatus.NoActiveSession
+                    ? "No current FlightSession remained; no abandonment changes were made."
+                    : "Current flight abandoned. The contract was cancelled and its aircraft reservation released; no completion rewards were applied.",
+                nameof(CareerAbandonActionDetail));
+
+            return true;
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            await RecoverCareerActionsAfterAbandonmentAttemptAsync(
+                "Flight abandonment was interrupted.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(
+                ex,
+                "Career flight abandonment failed for session {SessionId} and contract {ContractId}.",
+                sessionId,
+                contractId);
+
+            await RecoverCareerActionsAfterAbandonmentAttemptAsync(
+                "Flight abandonment did not finish.");
+
+            return false;
+        }
+        finally
+        {
+            SetBoolean(
+                ref _isCareerAbandonBusy,
+                false,
+                nameof(IsCareerAbandonBusy));
+
+            SetField(
+                ref _careerAbandonActionText,
+                "Abandon Current Flight",
+                nameof(CareerAbandonActionText));
+
+            _careerActionGate.Release();
+        }
+    }
+
+    private async Task RecoverCareerActionsAfterAbandonmentAttemptAsync(
+        string failureDetail)
+    {
+        bool abandonmentRecoverySucceeded = false;
+        try
+        {
+            CareerFlightAbandonAvailability availability =
+                await _careerAbandonAction!
+                    .ReadAvailabilityAsync(CancellationToken.None);
+
+            bool canRetry =
+                availability.CanAbandon
+                && availability.SessionId is not null
+                && availability.ContractId is not null;
+
+            SetAbandonAvailability(
+                canRetry,
+                availability.SessionId,
+                availability.ContractId,
+                availability.Detail);
+            abandonmentRecoverySucceeded = true;
+        }
+        catch (Exception refreshEx)
+        {
+            _logger?.LogWarning(
+                refreshEx,
+                "Flight abandonment readiness could not be refreshed after an interrupted or failed attempt.");
+
+            SetAbandonAvailability(
+                canAbandon: false,
+                sessionId: null,
+                contractId: null,
+                detail:
+                    "Flight abandonment stopped, and recovery readiness could not be refreshed. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings.");
+        }
+
+        bool completionRecoverySucceeded =
+            _careerCompletionAction is null;
+        if (_careerCompletionAction is { } completionAction)
+        {
+            try
+            {
+                CareerJobCompletionActionAvailability availability =
+                    await completionAction
+                        .ReadAvailabilityAsync(CancellationToken.None);
+
+                _completionSessionId =
+                    availability.CanComplete
+                        ? availability.FlightSessionId
+                        : null;
+                _completionContractId =
+                    availability.CanComplete
+                        ? availability.ContractId
+                        : null;
+
+                SetBoolean(
+                    ref _canCompleteCareerFlight,
+                    availability.CanComplete
+                        && _completionSessionId is not null
+                        && _completionContractId is not null,
+                    nameof(CanCompleteCareerFlight));
+                completionRecoverySucceeded = true;
+            }
+            catch (Exception refreshEx)
+            {
+                _logger?.LogWarning(
+                    refreshEx,
+                    "Career completion readiness could not be refreshed after an interrupted or failed abandonment attempt.");
+
+                _completionSessionId = null;
+                _completionContractId = null;
+
+                SetBoolean(
+                    ref _canCompleteCareerFlight,
+                    false,
+                    nameof(CanCompleteCareerFlight));
+            }
+        }
+
+        SetField(
+            ref _careerAbandonActionDetail,
+            CanAbandonCurrentFlight && CanCompleteCareerFlight
+                ? $"{failureDetail} Retry Abandon Current Flight, or use Complete Career Flight to finish normally. If this repeats, create a diagnostic bundle in Settings."
+                : CanAbandonCurrentFlight
+                    ? $"{failureDetail} The current flight is still eligible to abandon; retry Abandon Current Flight. If this repeats, create a diagnostic bundle in Settings."
+                    : CanCompleteCareerFlight
+                        ? $"{failureDetail} The current flight remains available to complete normally. If this repeats, create a diagnostic bundle in Settings."
+                        : abandonmentRecoverySucceeded && completionRecoverySucceeded
+                            ? $"{failureDetail} Authoritative Current Flight state was refreshed, but no terminal action is currently available. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings."
+                            : $"{failureDetail} Recovery readiness could not be refreshed. Reopen Current Flight before retrying; if this repeats, create a diagnostic bundle in Settings.",
+            nameof(CareerAbandonActionDetail));
+    }
+
+    private void SetAbandonAvailability(
+        bool canAbandon,
+        Guid? sessionId,
+        Guid? contractId,
+        string detail)
+    {
+        _abandonSessionId =
+            canAbandon
+                ? sessionId
+                : null;
+        _abandonContractId =
+            canAbandon
+                ? contractId
+                : null;
+
+        SetBoolean(
+            ref _canAbandonCurrentFlight,
+            canAbandon,
+            nameof(CanAbandonCurrentFlight));
+
+        SetField(
+            ref _careerAbandonActionDetail,
+            detail,
+            nameof(CareerAbandonActionDetail));
+    }
+
+    public void ReportCareerAbandonProjectionRefreshFailure(
+        Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        _logger?.LogWarning(
+            exception,
+            "Career flight was abandoned, but the Jobs projection refresh failed.");
+
+        SetField(
+            ref _careerAbandonActionDetail,
+            "Current flight was abandoned successfully, but the Jobs view could not refresh. Reopen Jobs to retry its authoritative refresh.",
+            nameof(CareerAbandonActionDetail));
+    }
+
+    public void ReportCareerCompletionProjectionRefreshFailure(
+        Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        _logger?.LogWarning(
+            exception,
+            "Career flight completed, but the Jobs projection refresh failed.");
+
+        SetField(
+            ref _careerCompletionActionDetail,
+            $"{CareerCompletionActionDetail} Jobs could not refresh; reopen Jobs to reload the authoritative board.",
+            nameof(CareerCompletionActionDetail));
+    }
+
+    public async Task RefreshManualPostflightAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_manualPostflightAction is null)
+        {
+            SetManualPostflightState(false, false, null, null, "Manual postflight actions are not connected to this view.");
+            return;
+        }
+
+        bool entered = await _manualPostflightGate.WaitAsync(0, cancellationToken);
+        if (!entered)
+            return;
+
+        try
+        {
+            await RefreshManualPostflightLockedAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Manual postflight readiness refresh failed.");
+            SetManualPostflightState(false, false, null, null, "Manual postflight readiness could not be verified.");
+        }
+        finally
+        {
+            _manualPostflightGate.Release();
+        }
+    }
+
+    public Task<bool> LogManualFlightAsync(CancellationToken cancellationToken = default) =>
+        RunManualPostflightActionAsync(logFlight: true, cancellationToken);
+
+    public Task<bool> DiscardManualFlightAsync(CancellationToken cancellationToken = default) =>
+        RunManualPostflightActionAsync(logFlight: false, cancellationToken);
+
+    private async Task<bool> RunManualPostflightActionAsync(
+        bool logFlight,
+        CancellationToken cancellationToken)
+    {
+        if (_manualPostflightAction is null)
+            return false;
+
+        bool entered = await _manualPostflightGate.WaitAsync(0, cancellationToken);
+        if (!entered)
+            return false;
+
+        try
+        {
+            Guid? sessionId = _manualPostflightSessionId;
+            ManualFlightPostflightLogRequest? request = _manualPostflightRequest;
+            if (sessionId is null
+                || (logFlight && request is null)
+                || (!logFlight && !_canDiscardManualFlight))
+                return false;
+
+            SetBoolean(ref _isManualPostflightBusy, true, nameof(IsManualPostflightBusy));
+            SetBoolean(ref _canLogManualFlight, false, nameof(CanLogManualFlight));
+            SetBoolean(ref _canDiscardManualFlight, false, nameof(CanDiscardManualFlight));
+            SetField(
+                ref _manualPostflightDetail,
+                logFlight ? "Logging the authoritative completed flight…" : "Discarding the contractless flight without Logbook, experience, or qualification credit…",
+                nameof(ManualPostflightDetail));
+
+            if (logFlight)
+                await _manualPostflightAction.LogAsync(sessionId.Value, request!, cancellationToken);
+            else
+                await _manualPostflightAction.DiscardAsync(sessionId.Value, cancellationToken);
+
+            RefreshConnectionStatus();
+            await RefreshManualPostflightLockedAsync(cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            string actionName = logFlight ? "Log Flight" : "Discard";
+            _logger?.LogError(ex, logFlight ? "Manual flight logging failed." : "Manual flight discard failed.");
+
+            try
+            {
+                await RefreshManualPostflightLockedAsync(cancellationToken);
+
+                bool canRetry = logFlight
+                    ? _canLogManualFlight
+                    : _canDiscardManualFlight;
+                string recoveryDetail = canRetry
+                    ? $"{actionName} did not confirm success. Authoritative recovery state was refreshed; retry {actionName}. If this repeats, create a diagnostic bundle in Settings."
+                    : _canLogManualFlight || _canDiscardManualFlight
+                        ? $"{actionName} did not confirm success. Authoritative recovery state was refreshed; use the available recovery action. If this repeats, create a diagnostic bundle in Settings."
+                        : $"{actionName} did not confirm success. Reopen Current Flight to reload authoritative recovery state. If this repeats, create a diagnostic bundle in Settings.";
+                SetField(
+                    ref _manualPostflightDetail,
+                    recoveryDetail,
+                    nameof(ManualPostflightDetail));
+            }
+            catch (Exception refreshEx)
+            {
+                _logger?.LogWarning(refreshEx, "Manual postflight readiness could not be refreshed after a failed action.");
+                SetManualPostflightState(
+                    false,
+                    false,
+                    null,
+                    null,
+                    $"{actionName} did not confirm success, and recovery readiness could not be refreshed. Reopen Current Flight before another action. If this repeats, create a diagnostic bundle in Settings.");
+            }
+            return false;
+        }
+        finally
+        {
+            SetBoolean(ref _isManualPostflightBusy, false, nameof(IsManualPostflightBusy));
+            _manualPostflightGate.Release();
+        }
+    }
+
+    private async Task RefreshManualPostflightLockedAsync(CancellationToken cancellationToken)
+    {
+        ManualFlightPostflightInputSnapshot snapshot = await _manualPostflightAction!
+            .ReadAsync(cancellationToken);
+
+        bool visible = snapshot.State is
+            ManualFlightPostflightInputState.Ready or
+            ManualFlightPostflightInputState.FlightNotCompleted or
+            ManualFlightPostflightInputState.FlightNotLoggable or
+            ManualFlightPostflightInputState.AircraftIdentityUnavailable or
+            ManualFlightPostflightInputState.AircraftIdentityConflict or
+            ManualFlightPostflightInputState.AircraftDebriefUnavailable or
+            ManualFlightPostflightInputState.FlightSessionChanged;
+
+        SetBoolean(ref _isManualPostflightVisible, visible, nameof(IsManualPostflightVisible));
+        SetManualPostflightState(
+            snapshot.IsReady,
+            snapshot.CanDiscard,
+            snapshot.SessionId,
+            snapshot.Request,
+            snapshot.Detail);
+    }
+
+    private void SetManualPostflightState(
+        bool canLog,
+        bool canDiscard,
+        Guid? sessionId,
+        ManualFlightPostflightLogRequest? request,
+        string detail)
+    {
+        _manualPostflightSessionId =
+            canLog || canDiscard
+                ? sessionId
+                : null;
+        _manualPostflightRequest = request;
+        SetBoolean(ref _canLogManualFlight, canLog, nameof(CanLogManualFlight));
+        SetBoolean(ref _canDiscardManualFlight, canDiscard, nameof(CanDiscardManualFlight));
+        SetField(ref _manualPostflightDetail, detail, nameof(ManualPostflightDetail));
+    }
+
+    private void RefreshCareerWorkflow()
+    {
+        if (_careerReadiness is null)
+        {
+            SetField(
+                ref _careerWorkflowStatus,
+                "CAREER WORKFLOW UNAVAILABLE",
+                nameof(CareerWorkflowStatus));
+
+            SetField(
+                ref _careerWorkflowDetail,
+                "Career workflow readiness is not connected to this view.",
+                nameof(CareerWorkflowDetail));
+
+            return;
+        }
+
+        CareerJobPlayableReadinessSnapshot snapshot =
+            _careerReadiness.Current;
+
+        SetField(
+            ref _careerWorkflowStatus,
+            snapshot.StatusText,
+            nameof(CareerWorkflowStatus));
+
+        SetField(
+            ref _careerWorkflowDetail,
+            snapshot.Detail,
+            nameof(CareerWorkflowDetail));
+    }
+
     private void RefreshFlightSession()
     {
         FlightSession? session =
@@ -338,6 +1361,26 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 ref _currentFlightRecoveryText,
                 "No saved active flight",
                 nameof(CurrentFlightRecoveryText));
+
+            SetField(
+                ref _currentFlightBriefingKind,
+                "NO ACTIVE BRIEFING",
+                nameof(CurrentFlightBriefingKind));
+
+            SetField(
+                ref _currentFlightBriefingRoute,
+                "No route assigned",
+                nameof(CurrentFlightBriefingRoute));
+
+            SetField(
+                ref _currentFlightBriefingAircraft,
+                "No aircraft assigned",
+                nameof(CurrentFlightBriefingAircraft));
+
+            SetField(
+                ref _currentFlightBriefingInstruction,
+                "Accept an operation in Jobs or begin an eligible training flight to create a briefing.",
+                nameof(CurrentFlightBriefingInstruction));
 
             SetField(
                 ref _currentFlightTimeSummary,
@@ -392,6 +1435,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             recovered,
             nameof(HasRecoveredFlightSession));
 
+        SetField(
+            ref _currentFlightBriefingInstruction,
+            FormatBriefingInstruction(
+                session,
+                recovered,
+                _connection.Current.State,
+                _telemetrySource.Latest is not null),
+            nameof(CurrentFlightBriefingInstruction));
+
         if (!changed)
         {
             string recoveryText =
@@ -435,6 +1487,21 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             nameof(CurrentFlightRecoveryText));
 
         SetField(
+            ref _currentFlightBriefingKind,
+            FormatBriefingKind(session),
+            nameof(CurrentFlightBriefingKind));
+
+        SetField(
+            ref _currentFlightBriefingRoute,
+            FormatBriefingRoute(session.Plan),
+            nameof(CurrentFlightBriefingRoute));
+
+        SetField(
+            ref _currentFlightBriefingAircraft,
+            FormatBriefingAircraft(session.Plan),
+            nameof(CurrentFlightBriefingAircraft));
+
+        SetField(
             ref _currentFlightTimeSummary,
             $"Career {FormatDuration(session.TimeLedger.CareerCreditTime)} · Airborne {FormatDuration(session.TimeLedger.AirborneTime)} · Block {FormatDuration(session.TimeLedger.BlockTime)}",
             nameof(CurrentFlightTimeSummary));
@@ -464,6 +1531,70 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             FormatFuelSummary(session.EffectiveStatistics),
             nameof(CurrentFlightFuelSummary));
     }
+
+    private void RefreshFlightChecklist()
+    {
+        LiveFlightChecklistSnapshot snapshot =
+            _flightChecklistSource?.Read()
+            ?? LiveFlightChecklistSnapshot.NoSession;
+
+        bool visible =
+            _settings.Current.ShowChecklistEveryFlight
+            && snapshot.SessionId is not null;
+
+        IReadOnlyList<LiveFlightChecklistStep> phaseSteps =
+            snapshot.CurrentPhase is { } phase
+                ? snapshot.Steps.Where(step => step.Phase == phase).ToArray()
+                : Array.Empty<LiveFlightChecklistStep>();
+
+        SetBoolean(
+            ref _isCurrentFlightChecklistVisible,
+            visible,
+            nameof(IsCurrentFlightChecklistVisible));
+
+        SetField(
+            ref _currentFlightChecklistPhase,
+            snapshot.CurrentPhase is { } currentPhase
+                ? FormatChecklistPhase(currentPhase)
+                : "NO ACTIVE CHECKLIST",
+            nameof(CurrentFlightChecklistPhase));
+
+        SetField(
+            ref _currentFlightChecklistDetail,
+            snapshot.Detail,
+            nameof(CurrentFlightChecklistDetail));
+
+        SetField(
+            ref _currentFlightInputBindingStatus,
+            FormatInputBindingStatus(snapshot.InputBindings),
+            nameof(CurrentFlightInputBindingStatus));
+
+        if (!_currentFlightChecklistSteps.SequenceEqual(phaseSteps))
+        {
+            _currentFlightChecklistSteps = phaseSteps;
+            OnPropertyChanged(nameof(CurrentFlightChecklistSteps));
+        }
+    }
+
+    private static string FormatChecklistPhase(LiveFlightChecklistPhase phase) =>
+        phase switch
+        {
+            LiveFlightChecklistPhase.PreflightPreparation => "PREFLIGHT / PREPARATION",
+            LiveFlightChecklistPhase.EngineStart => "ENGINE / START",
+            LiveFlightChecklistPhase.Taxi => "TAXI",
+            LiveFlightChecklistPhase.Takeoff => "TAKEOFF",
+            LiveFlightChecklistPhase.Airborne => "AIRBORNE",
+            LiveFlightChecklistPhase.ApproachLanding => "APPROACH / LANDING",
+            LiveFlightChecklistPhase.Parking => "PARKING",
+            LiveFlightChecklistPhase.ShutdownCompletion => "SHUTDOWN / COMPLETION",
+            _ => "LIVE CHECKLIST"
+        };
+
+    private static string FormatInputBindingStatus(
+        InputBindingDiscoverySnapshot? snapshot) =>
+        snapshot is null
+            ? "INPUT BINDINGS UNAVAILABLE · No supported binding source is connected."
+            : $"INPUT BINDINGS {snapshot.State.ToString().ToUpperInvariant()} · {snapshot.Detail}";
 
     private string FormatRouteSummary(
         FlightSession session)
@@ -556,6 +1687,119 @@ public sealed class ShellViewModel : INotifyPropertyChanged
                 $"OpenCareer is tracking the operation at {FormatOperationState(session.OperationState)}."
         };
 
+    private static string FormatBriefingKind(FlightSession session) =>
+        session.ContractId is not null
+            ? "CAREER CONTRACT FLIGHT"
+            : session.Plan?.SourceProvider is { } provider
+                && provider.Contains("training", StringComparison.OrdinalIgnoreCase)
+                    ? "TRAINING OPERATION"
+                    : "PRACTICE / NON-CONTRACT FLIGHT";
+
+    private static string FormatBriefingRoute(FlightSessionPlan? plan)
+    {
+        string origin =
+            string.IsNullOrWhiteSpace(plan?.PlannedOrigin)
+                ? "Origin not recorded"
+                : plan.PlannedOrigin.Trim().ToUpperInvariant();
+
+        string destination =
+            string.IsNullOrWhiteSpace(plan?.PlannedDestination)
+                ? "Destination not recorded"
+                : plan.PlannedDestination.Trim().ToUpperInvariant();
+
+        string alternate =
+            string.IsNullOrWhiteSpace(plan?.PlannedAlternate)
+                ? string.Empty
+                : $" · Alternate {plan.PlannedAlternate.Trim().ToUpperInvariant()}";
+
+        return $"{origin} → {destination}{alternate}";
+    }
+
+    private static string FormatBriefingAircraft(FlightSessionPlan? plan)
+    {
+        string? canonicalAircraftId =
+            plan?.ExpectedCanonicalAircraftId;
+
+        if (string.IsNullOrWhiteSpace(canonicalAircraftId))
+            return "Expected aircraft not recorded · verify the loaded aircraft before continuing";
+
+        return AircraftCanonicalIdentity.TryGetMsfsTitle(
+                canonicalAircraftId,
+                out string title)
+            ? $"{title} · exact loaded-aircraft identity required"
+            : $"{canonicalAircraftId.Trim()} · exact loaded-aircraft identity required";
+    }
+
+    private static string FormatBriefingInstruction(
+        FlightSession session,
+        bool recovered,
+        SimulatorConnectionState connectionState,
+        bool hasTelemetry)
+    {
+        if (session.Status == FlightSessionStatus.Suspended)
+        {
+            return "Do not accept another job. Reconnect MSFS with the same aircraft and plausible flight continuity; OpenCareer will resume only after continuity is proven.";
+        }
+
+        if (session.Status == FlightSessionStatus.Interrupted)
+        {
+            return "The flight could not be resumed automatically. Use the exact recovery action in Flight Actions; abandonment awards no pay or completion credit.";
+        }
+
+        if (session.Status == FlightSessionStatus.Cancelled)
+        {
+            return "This operation is cancelled. Keep this page open until cleanup releases its saved session and any exact aircraft reservation.";
+        }
+
+        if (session.Status == FlightSessionStatus.Completed
+            || session.OperationState is FlightOperationState.Shutdown
+                or FlightOperationState.Complete)
+        {
+            return session.ContractId is not null
+                ? "Use Complete Career Flight once. OpenCareer will settle configured pay and operating costs, finalize the Logbook and location, and release the reservation exactly once."
+                : "Use the available manual postflight action to log or discard this flight; contractless flights do not receive career settlement.";
+        }
+
+        if (connectionState != SimulatorConnectionState.Connected)
+        {
+            return "Flight tracking is interrupted. Keep MSFS on the same route and assigned aircraft; do not complete or accept another job. Resume evidence-driven flight actions only after OpenCareer reconnects and live aircraft telemetry returns. If recovery is impossible, use Abandon Current Flight; abandonment awards no pay or completion credit.";
+        }
+
+        if (!hasTelemetry)
+        {
+            return "MSFS is connected, but live aircraft telemetry is not available yet. Keep the assigned aircraft loaded and do not complete or accept another job until Current Flight confirms live telemetry. If recovery is impossible, use Abandon Current Flight; abandonment awards no pay or completion credit.";
+        }
+
+        if (session.OperationState is FlightOperationState.Landed
+            or FlightOperationState.TaxiIn
+            or FlightOperationState.Parked
+            or FlightOperationState.Unloading)
+        {
+            return "Taxi to authorized parking at the destination, set the parking brake, and shut down every engine. Wait for parking and shutdown evidence before completing the flight.";
+        }
+
+        if (session.OperationState == FlightOperationState.Airborne)
+        {
+            return "Continue to the assigned destination. OpenCareer must observe the established airborne, full-stop landing, parking and shutdown evidence before completion.";
+        }
+
+        if (session.OperationState is FlightOperationState.EngineStart
+            or FlightOperationState.Ramp
+            or FlightOperationState.TaxiOut
+            or FlightOperationState.DepartureReady)
+        {
+            return "Follow the live checklist, taxi normally and depart only in the assigned aircraft. OpenCareer will preserve this operation through a recoverable disconnect.";
+        }
+
+        string recoveryPrefix =
+            recovered
+                ? "This operation was restored from local save. Verify the same route and assigned aircraft before continuing. "
+                : string.Empty;
+
+        return recoveryPrefix
+            + "Remain parked with engines off until the live checklist is ready, then start the assigned aircraft. Advanced Dispatch and repeated profile setup are not required.";
+    }
+
     private static string FormatOperationState(
         FlightOperationState state) =>
         state switch
@@ -627,6 +1871,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             _lastFlightSessionUpdatedAt = null;
             RefreshFlightSession();
         }
+
+        RefreshFlightChecklist();
     }
 
     private static double FeetToMeters(double feet) => feet * 0.3048;

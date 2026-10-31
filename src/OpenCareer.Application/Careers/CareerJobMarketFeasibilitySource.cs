@@ -1,0 +1,347 @@
+using OpenCareer.Application.Planning;
+using OpenCareer.Domain.Aircraft;
+using OpenCareer.Domain.Airports;
+using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Planning;
+
+namespace OpenCareer.Application.Careers;
+
+public enum CareerJobMarketFeasibilityStatus
+{
+    Ready = 0,
+    AircraftDiscoveryUnavailable,
+    NoAuthoritativeAircraft,
+    NoFeasibleDestinations,
+    AirportDataUnavailable
+}
+
+public sealed record CareerJobMarketFeasibilitySnapshot(
+    CareerJobMarketFeasibilityStatus Status,
+    IReadOnlyList<JobMarketDestination> Destinations,
+    string Detail,
+    IReadOnlyDictionary<ContractKind, IReadOnlySet<string>>
+        EligibleDestinationIcaosByKind,
+    IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, double>>?
+        MaximumCargoPayloadPoundsByKindAndDestination = null)
+{
+    public bool IsReady => Status == CareerJobMarketFeasibilityStatus.Ready;
+
+    public IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, double>>
+        EffectiveMaximumCargoPayloadPoundsByKindAndDestination =>
+        MaximumCargoPayloadPoundsByKindAndDestination
+        ?? new Dictionary<ContractKind, IReadOnlyDictionary<string, double>>();
+}
+
+public interface ICareerJobMarketFeasibilitySource
+{
+    Task<CareerJobMarketFeasibilitySnapshot> FilterAsync(
+        string originIcao,
+        IReadOnlyList<JobMarketDestination> destinations,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Applies the same fail-closed installed-aircraft capability projection used
+/// by the final job-start gate before market offers are generated, then requires
+/// authoritative static runway compatibility at both route endpoints. This is
+/// an early breadth filter only; final dispatch still rechecks current aircraft,
+/// airport, weather, reservation and operation evidence.
+/// </summary>
+public sealed class CareerJobMarketFeasibilitySource(
+    CareerJobAircraftSelectionSource aircraftSelection,
+    IAircraftRegistrySource aircraftRegistry,
+    IAirportDataSource airportData)
+    : ICareerJobMarketFeasibilitySource
+{
+    private readonly CareerJobAircraftSelectionSource _aircraftSelection =
+        aircraftSelection
+        ?? throw new ArgumentNullException(nameof(aircraftSelection));
+    private readonly IAircraftRegistrySource _aircraftRegistry =
+        aircraftRegistry
+        ?? throw new ArgumentNullException(nameof(aircraftRegistry));
+    private readonly IAirportDataSource _airportData =
+        airportData
+        ?? throw new ArgumentNullException(nameof(airportData));
+
+    public async Task<CareerJobMarketFeasibilitySnapshot> FilterAsync(
+        string originIcao,
+        IReadOnlyList<JobMarketDestination> destinations,
+        CancellationToken cancellationToken = default)
+    {
+        string normalizedOrigin = NormalizeIcao(originIcao);
+        ArgumentNullException.ThrowIfNull(destinations);
+        foreach (JobMarketDestination destination in destinations)
+        {
+            ArgumentNullException.ThrowIfNull(destination);
+            destination.Validate();
+        }
+
+        CareerJobAircraftSelectionSnapshot selection = await _aircraftSelection
+            .ReadAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!selection.IsAvailable)
+        {
+            return Blocked(
+                CareerJobMarketFeasibilityStatus.AircraftDiscoveryUnavailable,
+                selection.Detail);
+        }
+
+        var aircraft = new List<MarketAircraftEvidence>();
+        foreach (CareerJobAircraftOption option in selection.Aircraft)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            AircraftRegistryResolution? resolution = await _aircraftRegistry
+                .FindAircraftAsync(option.AircraftId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (resolution is null)
+                continue;
+
+            if (!string.Equals(
+                    resolution.CanonicalAircraftId,
+                    option.AircraftId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    "Aircraft registry returned market-feasibility evidence for a different canonical identity.");
+            }
+
+            if (CareerJobAircraftCapabilityProjection.TryCreate(resolution)
+                is { } record)
+            {
+                aircraft.Add(new(resolution, record));
+            }
+        }
+
+        if (aircraft.Count == 0)
+        {
+            return Blocked(
+                CareerJobMarketFeasibilityStatus.NoAuthoritativeAircraft,
+                "No installed aircraft has enough authoritative capability and access evidence for job generation.");
+        }
+
+        AirportRecord? origin = await _airportData
+            .FindAirportAsync(normalizedOrigin, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (origin is null)
+        {
+            return Blocked(
+                CareerJobMarketFeasibilityStatus.AirportDataUnavailable,
+                $"Authoritative runway data is unavailable for market origin {normalizedOrigin}.");
+        }
+
+        origin.Validate();
+        EnsureAirportIdentity(normalizedOrigin, origin);
+
+        var feasible = new List<JobMarketDestination>();
+        var eligibleByKind = new Dictionary<ContractKind, HashSet<string>>();
+        var cargoPayloadByKind =
+            new Dictionary<ContractKind, Dictionary<string, double>>();
+        foreach (JobMarketDestination destination in destinations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            AirportRecord? destinationAirport = await _airportData
+                .FindAirportAsync(destination.NormalizedIcao, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (destinationAirport is null)
+                continue;
+
+            destinationAirport.Validate();
+            EnsureAirportIdentity(destination.NormalizedIcao, destinationAirport);
+
+            bool destinationIsFeasible = false;
+
+            foreach (ContractKind kind in SupportedKinds)
+            {
+                AircraftMissionRequirements requirements =
+                    Requirements(
+                        kind,
+                        destination);
+
+                MarketAircraftEvidence[] eligibleAircraft = aircraft
+                    .Where(item => IsFeasible(
+                        item,
+                        origin,
+                        destinationAirport,
+                        requirements))
+                    .ToArray();
+
+                if (eligibleAircraft.Length == 0)
+                {
+                    continue;
+                }
+
+                if (!eligibleByKind.TryGetValue(
+                    kind,
+                    out HashSet<string>? eligible))
+                {
+                    eligible = new(StringComparer.OrdinalIgnoreCase);
+                    eligibleByKind.Add(kind, eligible);
+                }
+
+                eligible.Add(destination.NormalizedIcao);
+
+                if (IsCargoKind(kind))
+                {
+                    double maximumPayload = eligibleAircraft.Max(
+                        static item =>
+                            item.Record.Capabilities.MaximumPayloadPounds);
+
+                    if (maximumPayload > 0)
+                    {
+                        if (!cargoPayloadByKind.TryGetValue(
+                                kind,
+                                out Dictionary<string, double>? payloads))
+                        {
+                            payloads = new(StringComparer.OrdinalIgnoreCase);
+                            cargoPayloadByKind.Add(kind, payloads);
+                        }
+
+                        payloads[destination.NormalizedIcao] = maximumPayload;
+                    }
+                }
+
+                destinationIsFeasible = true;
+            }
+
+            if (destinationIsFeasible)
+                feasible.Add(destination);
+        }
+
+        if (feasible.Count == 0)
+        {
+            return Blocked(
+                CareerJobMarketFeasibilityStatus.NoFeasibleDestinations,
+                "No supported market destination has both proven installed civilian-aircraft capability and authoritative endpoint runway compatibility.");
+        }
+
+        return new(
+            CareerJobMarketFeasibilityStatus.Ready,
+            feasible.ToArray(),
+            $"{feasible.Count} of {destinations.Count} market destination(s) have at least one capability- and runway-qualified installed aircraft.",
+            eligibleByKind.ToDictionary(
+                static pair => pair.Key,
+                static pair => (IReadOnlySet<string>)pair.Value),
+            cargoPayloadByKind.ToDictionary(
+                static pair => pair.Key,
+                static pair =>
+                    (IReadOnlyDictionary<string, double>)pair.Value));
+    }
+
+    private static bool IsFeasible(
+        MarketAircraftEvidence aircraft,
+        AirportRecord origin,
+        AirportRecord destinationAirport,
+        AircraftMissionRequirements requirements)
+    {
+        if (!aircraft.Record.Capabilities.Satisfies(requirements)
+            || requirements.MinimumPassengerCapacity > 0
+                && !aircraft.Resolution.Provenance.ContainsKey(
+                    AircraftRegistryField.PassengerCapacity)
+            || aircraft.Resolution.RunwayPerformance is null
+            || !aircraft.Resolution.Provenance.TryGetValue(
+                AircraftRegistryField.RunwayPerformance,
+                out AircraftRegistryFieldProvenance? runwayProvenance)
+            || runwayProvenance is null)
+        {
+            return false;
+        }
+
+        DispatchFeasibilityResult runway =
+            RunwayCompatibilityEvaluator.Evaluate(
+                aircraft.Resolution.RunwayPerformance,
+                origin,
+                destinationAirport);
+
+        return runway.Status == DispatchFeasibilityStatus.Feasible;
+    }
+
+    private static readonly ContractKind[] SupportedKinds =
+    [
+        ContractKind.Ferry,
+        ContractKind.Reposition,
+        ContractKind.Passenger,
+        ContractKind.Cargo,
+        ContractKind.ExpressCargo,
+        ContractKind.AogPartsDelivery
+    ];
+
+    private static AircraftMissionRequirements Requirements(
+        ContractKind kind,
+        JobMarketDestination destination) =>
+        kind == ContractKind.Passenger
+            ? new(
+                RequiredCapabilities: AircraftCapability.Passenger,
+                AllowedAccess: AircraftAccess.Civilian,
+                MinimumPayloadPounds:
+                    JobMarketPolicy.Default.StandardPassengerPayloadPounds,
+                MinimumRangeNauticalMiles: destination.DistanceNm,
+                MinimumSeats: 1,
+                MinimumPassengerCapacity:
+                    JobMarketPolicy.Default.StandardPassengerCount)
+            : IsCargoKind(kind)
+                ? new(
+                    RequiredCapabilities: AircraftCapability.Cargo,
+                    AllowedAccess: AircraftAccess.Civilian,
+                    MinimumRangeNauticalMiles: destination.DistanceNm,
+                    MinimumSeats: 0)
+                : new(
+                AllowedAccess: AircraftAccess.Civilian,
+                MinimumRangeNauticalMiles: destination.DistanceNm,
+                MinimumSeats: 0);
+
+    private static bool IsCargoKind(ContractKind kind) =>
+        kind is
+            ContractKind.Cargo
+                or ContractKind.ExpressCargo
+                or ContractKind.AogPartsDelivery;
+
+    private static string NormalizeIcao(string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+
+        string normalized = value.Trim().ToUpperInvariant();
+        if (normalized.Length != 4
+            || normalized.Any(static character => character is < 'A' or > 'Z'))
+        {
+            throw new ArgumentException(
+                "A four-letter ICAO airport identifier is required.",
+                nameof(value));
+        }
+
+        return normalized;
+    }
+
+    private static void EnsureAirportIdentity(
+        string requestedIcao,
+        AirportRecord airport)
+    {
+        string returnedIcao = NormalizeIcao(airport.Icao);
+        if (!string.Equals(
+                requestedIcao,
+                returnedIcao,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                $"Airport source returned {returnedIcao} for requested market airport {requestedIcao}.");
+        }
+    }
+
+    private static CareerJobMarketFeasibilitySnapshot Blocked(
+        CareerJobMarketFeasibilityStatus status,
+        string detail) =>
+        new(
+            status,
+            Array.Empty<JobMarketDestination>(),
+            detail,
+            new Dictionary<ContractKind, IReadOnlySet<string>>());
+
+    private sealed record MarketAircraftEvidence(
+        AircraftRegistryResolution Resolution,
+        AircraftRegistryRecord Record);
+}

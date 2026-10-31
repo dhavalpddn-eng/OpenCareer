@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
+using OpenCareer.App.Services;
 using OpenCareer.Application.Dashboard;
 
 namespace OpenCareer.App.ViewModels;
@@ -9,6 +11,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     private readonly ShellViewModel _shell;
     private readonly IDashboardSnapshotSource _snapshotSource;
     private readonly DashboardGuidanceEngine _guidanceEngine;
+    private readonly ILogger<DashboardViewModel>? _logger;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     private DashboardSnapshot _snapshot = DashboardSnapshot.Empty;
@@ -22,17 +25,22 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     private string _socialSearch = string.Empty;
     private string _primaryActionTitle = "No urgent career action";
     private string _primaryActionDetail =
-        "OpenCareer will surface the most important next step here as career systems come online.";
+        "No authoritative career action currently requires attention.";
     private DashboardActionTarget _primaryActionTarget = DashboardActionTarget.None;
+    private bool _refreshUnavailable;
 
     public DashboardViewModel(
         ShellViewModel shell,
         IDashboardSnapshotSource snapshotSource,
-        DashboardGuidanceEngine guidanceEngine)
+        DashboardGuidanceEngine guidanceEngine,
+        OpenCareerDataPaths dataPaths,
+        ILogger<DashboardViewModel>? logger = null)
     {
         _shell = shell;
         _snapshotSource = snapshotSource;
         _guidanceEngine = guidanceEngine;
+        _logger = logger;
+        IsDevelopmentLiveTest = dataPaths.IsDevelopmentLiveTest;
         _shell.PropertyChanged += OnShellPropertyChanged;
     }
 
@@ -40,6 +48,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
     public event EventHandler<DashboardNavigationRequestedEventArgs>? NavigationRequested;
 
     public ShellViewModel Shell => _shell;
+    public bool IsDevelopmentLiveTest { get; }
 
     public IReadOnlyList<DashboardOpportunityItemViewModel> TopOpportunities =>
         _topOpportunities;
@@ -56,13 +65,18 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
     public string OpportunityStatusText =>
         _topOpportunities.Count == 0
-            ? "No eligible jobs are available from the Jobs system yet."
-            : $"Showing the {_topOpportunities.Count} highest-ranked eligible opportunities.";
+            ? _snapshot.OpportunityStatusDetail ??
+              "Job eligibility is currently unavailable."
+            : $"{_snapshot.OpportunityStatusDetail} " +
+              $"Showing the first {_topOpportunities.Count} in source order; " +
+              "tier and fit ranking are unavailable.";
 
     public string SocialFeedStatusText =>
         _socialFeed.Count == 0
-            ? "No OpenCareer Network posts are available for this search yet."
+            ? "No authoritative social activity source is available."
             : $"{_socialFeed.Count} OpenCareer Network post(s) match.";
+
+    public bool HasSocialFeed => _snapshot.SocialFeed.Count > 0;
 
     public string ActivityStatusText =>
         _recentActivity.Count == 0
@@ -201,6 +215,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
     public string PlayerLocationText =>
         _snapshot.Aircraft?.PlayerLocation ??
+        _snapshot.World?.PlayerLocation ??
         (_shell.HasTelemetry ? _shell.PositionSummary : "Player location —");
 
     public string DistanceToAircraftText =>
@@ -210,14 +225,21 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
     public string AircraftBlockingText =>
         _snapshot.Aircraft?.BlockingReason ??
-        "Maintenance and dispatch blockers will appear here when available.";
+        "No authoritative aircraft readiness or maintenance status is available.";
 
     public string HomeBaseText =>
         _snapshot.World?.HomeBase ?? "Home base not configured";
 
     public string WorldSummaryText =>
         _snapshot.World is null
-            ? "World layers are waiting for Map / World, Jobs and market systems."
+            ? "Career location and broader world activity are unavailable."
+            : _snapshot.World.NearbyOpportunityCount is int eligibleCount
+                ? $"{eligibleCount} eligible local job(s). Broader world activity is unavailable."
+            : _snapshot.World.NearbyOpportunityCount is null
+                && _snapshot.World.ActiveWorldEventCount is null
+                && _snapshot.World.ActiveMarketSignalCount is null
+                && _snapshot.World.ActiveGovernmentSignalCount is null
+                    ? "Broader world activity is unavailable."
             : $"{_snapshot.World.NearbyOpportunityCount} nearby jobs • " +
               $"{_snapshot.World.ActiveWorldEventCount} events • " +
               $"{_snapshot.World.ActiveMarketSignalCount} market signals • " +
@@ -235,6 +257,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
 
             cancellationToken.ThrowIfCancellationRequested();
             _snapshot = snapshot;
+            _refreshUnavailable = false;
 
             _topOpportunities = DashboardOpportunitySelector
                 .SelectTopAvailable(_snapshot.Opportunities)
@@ -255,6 +278,27 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
         {
             _refreshGate.Release();
         }
+    }
+
+    public void ReportRefreshFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        _logger?.LogError(exception, "Dashboard refresh failed.");
+
+        _snapshot = DashboardSnapshot.Empty;
+        _refreshUnavailable = true;
+        _topOpportunities = Array.Empty<DashboardOpportunityItemViewModel>();
+        _recentActivity = Array.Empty<DashboardActivityItemViewModel>();
+        _socialFeed = Array.Empty<DashboardSocialItemViewModel>();
+        _primaryActionTitle = "Dashboard unavailable";
+        _primaryActionDetail =
+            "Dashboard could not refresh. Open Jobs to recover accepted work or continue to Current Flight from its recovery panel. Reopen Home to retry; if this repeats, create a diagnostic bundle in Settings.";
+        _primaryActionTarget = DashboardActionTarget.Jobs;
+
+        RaiseAll();
+        OnPropertyChanged(nameof(PrimaryActionTitle));
+        OnPropertyChanged(nameof(PrimaryActionDetail));
+        OnPropertyChanged(nameof(HasPrimaryAction));
     }
 
     public void SetSocialSearch(string value)
@@ -371,7 +415,8 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
         if (e.PropertyName is nameof(ShellViewModel.IsSimulatorConnected) or
             nameof(ShellViewModel.HasTelemetry))
         {
-            RefreshGuidance();
+            if (!_refreshUnavailable)
+                RefreshGuidance();
         }
 
         if (e.PropertyName is nameof(ShellViewModel.PositionSummary) or
@@ -390,6 +435,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged
             nameof(SocialFeed),
             nameof(OpportunityStatusText),
             nameof(SocialFeedStatusText),
+            nameof(HasSocialFeed),
             nameof(ActivityStatusText),
             nameof(CareerLevelText),
             nameof(CareerXpText),
@@ -449,7 +495,9 @@ public sealed class DashboardOpportunityItemViewModel
     public DashboardOpportunityItemViewModel(DashboardOpportunity opportunity)
     {
         Tier = opportunity.Tier;
-        TierText = opportunity.Tier.ToString().ToUpperInvariant();
+        TierText = opportunity.Tier is { } tier
+            ? tier.ToString().ToUpperInvariant()
+            : "TIER —";
         Title = opportunity.Title;
         Route = $"{opportunity.Origin} → {opportunity.Destination}";
         JobFamily = opportunity.JobFamily;
@@ -458,14 +506,18 @@ public sealed class DashboardOpportunityItemViewModel
         Duration = opportunity.EstimatedDuration is TimeSpan duration
             ? $"{duration.TotalHours:0.#} hr"
             : "Duration —";
-        Reposition = opportunity.RepositionDistanceNauticalMiles is double distance
-            ? $"{distance:0} NM reposition"
-            : "No reposition estimate";
+        Reposition = opportunity.RouteDistanceNauticalMiles is double routeDistance
+            ? $"{routeDistance:0} NM route"
+            : opportunity.RepositionDistanceNauticalMiles is double repositionDistance
+                ? $"{repositionDistance:0} NM reposition"
+                : "Distance —";
         Aircraft = opportunity.AircraftRequirement ?? "Aircraft requirement —";
-        Fit = $"{Math.Clamp(opportunity.FitScore, 0, 100):0}% fit";
+        Fit = opportunity.FitScore is double fit && double.IsFinite(fit)
+            ? $"{Math.Clamp(fit, 0, 100):0}% fit"
+            : "Fit —";
     }
 
-    public OpportunityTier Tier { get; }
+    public OpportunityTier? Tier { get; }
     public string TierText { get; }
     public string Title { get; }
     public string Route { get; }

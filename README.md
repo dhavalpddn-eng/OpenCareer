@@ -41,20 +41,20 @@ MSFS 2024 remains the flight simulator. OpenCareer owns the career, economy, emp
 
 ## Development status
 
-The deterministic simulation foundation is implemented and tested. The next milestone is a WinUI 3 application that connects/reconnects through SimConnect, displays normalized telemetry, tracks a flight and saves/recovers it locally. Jobs and economic expansion follow that integration foundation.
+The deterministic simulation foundation and the first narrow playable career loop are implemented. The currently certified interactive path is the stock C172 KJFK Development/Test circuit: career onboarding, aircraft discovery, contract/reservation authority, persistent FlightSession, landing and shutdown evidence, exact-once settlement, Logbook finalization, recovery, and abandonment. Broader aircraft, missions, and live paid-contract acceptance remain active development work.
 
 
 ## Audit follow-up and development checklist
 
-The simulation core now includes an authoritative career clock, scoped event scheduling,
-checkpoint replay, contract dispatch guards and executable regression checks. It is not yet
-a playable application: job generation, a persistent money ledger, aircraft ownership,
-inflation, WinUI 3 and SimConnect integration remain unfinished.
+The simulation core includes an authoritative career clock, scoped event scheduling,
+checkpoint replay, contract dispatch guards, a persistent money ledger, WinUI 3 and
+SimConnect integration, and executable regression checks.
 
 - [Canonical project instructions](AGENTS.md)
 - [Instruction alignment review and foundation acceptance](docs/instruction-alignment.md)
 - [Current simulation rules and verification](docs/simulation-model.md)
 - [Remaining work, next milestone and gameplay decisions](docs/development-backlog.md)
+- [Windows/MSFS KJFK playable-loop test instructions](docs/kjfk-live-test-runbook.md)
 
 Run the same regression suite as CI:
 

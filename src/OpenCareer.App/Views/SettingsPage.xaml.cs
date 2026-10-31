@@ -28,8 +28,10 @@ public sealed partial class SettingsPage : Page
         _tutorial = context.Tutorial;
         _settings = context.Settings;
         DataContext = _settings;
+        TutorialActionsPanel.DataContext = _tutorial;
 
         ApplyPreferenceControls();
+        _settings.RefreshBackupArchives();
         _settings.RefreshDiagnostics();
 
         _diagnosticTimer = DispatcherQueue.CreateTimer();
@@ -46,6 +48,9 @@ public sealed partial class SettingsPage : Page
             _diagnosticTimer.Tick -= OnDiagnosticTimerTick;
             _diagnosticTimer = null;
         }
+
+        TutorialActionsPanel.DataContext = null;
+        _tutorial = null;
 
         base.OnNavigatedFrom(e);
     }
@@ -85,7 +90,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetUnitsAsync(UnitsComboBox.SelectedIndex);
+        await PersistPreferenceAsync(
+            () => _settings.SetUnitsAsync(UnitsComboBox.SelectedIndex));
     }
 
     private async void InputHintsComboBox_SelectionChanged(
@@ -95,7 +101,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetInputHintPreferenceAsync(InputHintsComboBox.SelectedIndex);
+        await PersistPreferenceAsync(
+            () => _settings.SetInputHintPreferenceAsync(InputHintsComboBox.SelectedIndex));
     }
 
     private async void ChecklistToggle_Toggled(object sender, RoutedEventArgs e)
@@ -103,7 +110,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetShowChecklistEveryFlightAsync(ChecklistToggle.IsOn);
+        await PersistPreferenceAsync(
+            () => _settings.SetShowChecklistEveryFlightAsync(ChecklistToggle.IsOn));
     }
 
     private async void TutorialOfferToggle_Toggled(object sender, RoutedEventArgs e)
@@ -111,7 +119,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetAutomaticallyOfferTutorialsAsync(TutorialOfferToggle.IsOn);
+        await PersistPreferenceAsync(
+            () => _settings.SetAutomaticallyOfferTutorialsAsync(TutorialOfferToggle.IsOn));
     }
 
     private async void ReduceMotionToggle_Toggled(object sender, RoutedEventArgs e)
@@ -119,7 +128,8 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetReduceMotionAsync(ReduceMotionToggle.IsOn);
+        await PersistPreferenceAsync(
+            () => _settings.SetReduceMotionAsync(ReduceMotionToggle.IsOn));
     }
 
     private async void OnlineServicesToggle_Toggled(object sender, RoutedEventArgs e)
@@ -127,7 +137,20 @@ public sealed partial class SettingsPage : Page
         if (_suppressPreferenceEvents || _settings is null)
             return;
 
-        await _settings.SetAllowOptionalOnlineServicesAsync(OnlineServicesToggle.IsOn);
+        await PersistPreferenceAsync(
+            () => _settings.SetAllowOptionalOnlineServicesAsync(OnlineServicesToggle.IsOn));
+    }
+
+    private async Task PersistPreferenceAsync(Func<Task> updateAsync)
+    {
+        try
+        {
+            await updateAsync();
+        }
+        finally
+        {
+            ApplyPreferenceControls();
+        }
     }
 
     private void RefreshDiagnostics_Click(object sender, RoutedEventArgs e) =>
@@ -144,6 +167,54 @@ public sealed partial class SettingsPage : Page
 
     private void OpenBackupsFolder_Click(object sender, RoutedEventArgs e) =>
         _settings?.OpenBackupsFolder();
+
+    private async void StageSelectedRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settings?.SelectedBackupArchive is not string selected)
+            return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Restore this OpenCareer backup on next launch?",
+            Content =
+                $"Selected backup: {selected}\n\nOn restart, this replaces the current career database with the selected backup. OpenCareer will create a fresh safety backup before staging the restore. Any accepted job or flight progress newer than the selected backup will no longer be current after restore.",
+            PrimaryButtonText = "Create safety backup and stage",
+            CloseButtonText = "Keep current career",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            await _settings.StageSelectedBackupAsync();
+    }
+
+    private async void CancelStagedRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settings is not null)
+            await _settings.CancelPendingDatabaseRestoreAsync();
+    }
+
+    private async void ScheduleDevelopmentProfileReset_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_settings is null)
+            return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Reset the KJFK test profile next launch?",
+            Content =
+                "This deletes only the isolated DEVELOPMENT / TEST jobs, flights, money, aircraft, logs and settings. Your normal career data is not touched.",
+            PrimaryButtonText = "Schedule clean reset",
+            CloseButtonText = "Keep test data",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            _settings.ScheduleDevelopmentProfileReset();
+    }
 
     private async void ExportDiagnostics_Click(object sender, RoutedEventArgs e)
     {

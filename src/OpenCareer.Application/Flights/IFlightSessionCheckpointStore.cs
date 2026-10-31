@@ -13,4 +13,18 @@ public interface IFlightSessionCheckpointStore
 
     Task ClearAsync(
         CancellationToken cancellationToken = default);
+
+    Task ClearAsync(
+        Guid expectedSessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (expectedSessionId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Session ID is required.",
+                nameof(expectedSessionId));
+        }
+
+        return ClearAsync(cancellationToken);
+    }
 }

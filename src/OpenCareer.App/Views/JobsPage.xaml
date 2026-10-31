@@ -1,0 +1,360 @@
+<Page
+    x:Class="OpenCareer.App.Views.JobsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:OpenCareer.App.Converters">
+
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Page.Resources>
+
+    <ScrollViewer HorizontalScrollMode="Disabled"
+                  HorizontalScrollBarVisibility="Disabled"
+                  HorizontalContentAlignment="Stretch">
+        <StackPanel Margin="28"
+                    Spacing="18"
+                    MaxWidth="1180"
+                    HorizontalAlignment="Left">
+            <Grid ColumnSpacing="20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="3">
+                    <TextBlock Text="CAREER FLIGHT CENTER"
+                               Style="{StaticResource OpenCareerPageTitleStyle}" />
+                    <TextBlock Text="Choose an assignment, prepare the aircraft, and launch the flight."
+                               Style="{StaticResource OpenCareerPageSubtitleStyle}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="10"
+                            VerticalAlignment="Center">
+                    <ProgressRing Width="28"
+                                  Height="28"
+                                  IsActive="{Binding IsRefreshing}" />
+                    <Border Style="{StaticResource OpenCareerMetalInsetStyle}"
+                            Padding="16,10">
+                        <StackPanel>
+                            <TextBlock Text="CURRENT STATION"
+                                       Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       CharacterSpacing="70" />
+                            <TextBlock Text="{Binding AirportText}"
+                                       Foreground="{StaticResource OpenCareerShellTextBrush}"
+                                       FontSize="18"
+                                       FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+                    <Button Content="Refresh Jobs"
+                            Click="RefreshJobs_Click"
+                            IsEnabled="{Binding CanRunJobActions}"
+                            MinWidth="120"
+                            MinHeight="44"
+                            Style="{StaticResource OpenCareerSecondaryButtonStyle}" />
+                </StackPanel>
+            </Grid>
+
+            <Border Style="{StaticResource OpenCareerMetalCardStyle}"
+                    Padding="16">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" Spacing="9">
+                        <Border Width="28" Height="28" CornerRadius="14"
+                                Background="{StaticResource OpenCareerSelectionBrush}">
+                            <TextBlock Text="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{StaticResource OpenCareerInkBrush}" FontWeight="Bold" />
+                        </Border>
+                        <StackPanel>
+                            <TextBlock Text="AIRCRAFT" Foreground="{StaticResource OpenCareerShellTextBrush}" FontWeight="SemiBold" />
+                            <TextBlock Text="Choose equipment" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="9">
+                        <Border Width="28" Height="28" CornerRadius="14"
+                                Background="{StaticResource OpenCareerSelectionBrush}">
+                            <TextBlock Text="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{StaticResource OpenCareerInkBrush}" FontWeight="Bold" />
+                        </Border>
+                        <StackPanel>
+                            <TextBlock Text="CONTRACT" Foreground="{StaticResource OpenCareerShellTextBrush}" FontWeight="SemiBold" />
+                            <TextBlock Text="Accept assignment" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="9">
+                        <Border Width="28" Height="28" CornerRadius="14"
+                                Background="{StaticResource OpenCareerSelectionBrush}">
+                            <TextBlock Text="3" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{StaticResource OpenCareerInkBrush}" FontWeight="Bold" />
+                        </Border>
+                        <StackPanel>
+                            <TextBlock Text="DISPATCH" Foreground="{StaticResource OpenCareerShellTextBrush}" FontWeight="SemiBold" />
+                            <TextBlock Text="Prepare flight" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="9">
+                        <Border Width="28" Height="28" CornerRadius="14"
+                                Background="{StaticResource OpenCareerBrassBrush}">
+                            <TextBlock Text="4" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{StaticResource OpenCareerInkBrush}" FontWeight="Bold" />
+                        </Border>
+                        <StackPanel>
+                            <TextBlock Text="FLY" Foreground="{StaticResource OpenCareerShellTextBrush}" FontWeight="SemiBold" />
+                            <TextBlock Text="Complete mission" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerMetalCardStyle}"
+                    Padding="18"
+                    Visibility="{Binding HasJobRecoveryAttention, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="JOB RECOVERY NEEDS ATTENTION"
+                               Style="{StaticResource OpenCareerShellSectionTitleStyle}" />
+                    <Border Style="{StaticResource OpenCareerWarningBadgeStyle}"
+                            HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding JobRecoveryStatus}"
+                                   Style="{StaticResource OpenCareerStatusBadgeTextStyle}" />
+                    </Border>
+                    <TextBlock Text="{Binding JobRecoveryDetail}"
+                               Foreground="{StaticResource OpenCareerShellTextBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerMetalCardStyle}"
+                    Padding="18"
+                    Visibility="{Binding HasCurrentFlightSession, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid ColumnSpacing="18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="CURRENT FLIGHT SESSION"
+                                   Style="{StaticResource OpenCareerShellSectionTitleStyle}" />
+                        <TextBlock Text="{Binding CurrentFlightSessionStatus}"
+                                   Foreground="{StaticResource OpenCareerShellTextBrush}"
+                                   FontSize="18"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding CurrentFlightSessionDetail}"
+                                   Foreground="{StaticResource OpenCareerShellMutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Content="OPEN CURRENT FLIGHT"
+                            Click="OpenCurrentFlight_Click"
+                            VerticalAlignment="Center"
+                            MinWidth="190"
+                            MinHeight="44"
+                            Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
+                </Grid>
+            </Border>
+
+            <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                    Padding="22">
+                <Grid ColumnSpacing="24">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="2*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="FLIGHT DESK"
+                                   Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                        <TextBlock Text="{Binding StatusText}"
+                                   Style="{StaticResource OpenCareerPaperTitleStyle}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="ASSIGNED AIRCRAFT"
+                                   Margin="0,6,0,0"
+                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                        <ComboBox x:Name="AircraftPicker"
+                                  ItemsSource="{Binding AircraftOptions}"
+                                  IsEnabled="{Binding CanStartJobActions}"
+                                  DisplayMemberPath="DisplayName"
+                                  SelectedValuePath="AircraftId"
+                                  SelectedValue="{Binding SelectedAircraftId, Mode=OneWay}"
+                                  PlaceholderText="Choose aircraft for this assignment"
+                                  SelectionChanged="AircraftSelection_Changed"
+                                  HorizontalAlignment="Stretch"
+                                  Style="{StaticResource OpenCareerComboBoxStyle}" />
+                        <TextBlock Text="{Binding AircraftStatus}"
+                                   Style="{StaticResource OpenCareerInputHelpStyle}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding AcceptanceStatus}"
+                                   Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                   TextWrapping="Wrap" />
+                        <Button Content="{Binding CancelAcceptedJobsButtonText}"
+                                IsEnabled="{Binding CanCancelAcceptedJobs}"
+                                Click="CancelAcceptedJobs_Click"
+                                HorizontalAlignment="Stretch"
+                                MinHeight="44"
+                                Margin="0,6,0,0"
+                                Style="{StaticResource OpenCareerDangerButtonStyle}" />
+                    </StackPanel>
+
+                    <Border Grid.Column="1"
+                            Style="{StaticResource OpenCareerPaperInsetStyle}"
+                            Padding="18">
+                        <StackPanel Spacing="9">
+                            <TextBlock Text="ZERO-PAY CALIBRATION"
+                                       Style="{StaticResource OpenCareerPaperEyebrowStyle}" />
+                            <TextBlock Text="KJFK LOCAL CIRCUIT"
+                                       Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                            <Border Style="{StaticResource OpenCareerWarningBadgeStyle}"
+                                    HorizontalAlignment="Left">
+                                <TextBlock Text="$0 PAY · $0 PROGRESSION"
+                                           Style="{StaticResource OpenCareerStatusBadgeTextStyle}" />
+                            </Border>
+                            <TextBlock Text="Calibration only. This verifies aircraft, telemetry, landing, shutdown, settlement, and logbook plumbing. Use an Available Contract below to test earnings and career progression."
+                                       Style="{StaticResource OpenCareerPaperBodyStyle}"
+                                       TextWrapping="Wrap" />
+                            <CheckBox x:Name="PositionTestPilot"
+                                      Content="Move pilot to KJFK for this test"
+                                      IsEnabled="{Binding CanStartJobActions}"
+                                      Style="{StaticResource OpenCareerCheckBoxStyle}" />
+                            <Button Content="CREATE ZERO-PAY CALIBRATION"
+                                    Click="GenerateDevelopmentFlight_Click"
+                                    IsEnabled="{Binding CanStartJobActions}"
+                                    HorizontalAlignment="Stretch"
+                                    Style="{StaticResource OpenCareerPrimaryButtonStyle}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <Grid Margin="0,4,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="AVAILABLE CONTRACTS"
+                               Style="{StaticResource OpenCareerShellSectionTitleStyle}" />
+                    <TextBlock Text="Only assignments supported by current aircraft and dispatch evidence are shown."
+                               Style="{StaticResource OpenCareerPageSubtitleStyle}" />
+                </StackPanel>
+                <Border Grid.Column="1"
+                        Style="{StaticResource OpenCareerMetalInsetStyle}"
+                        Padding="12,7"
+                        VerticalAlignment="Center">
+                    <TextBlock Text="MISSION BOARD"
+                               Foreground="{StaticResource OpenCareerShellTextBrush}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               CharacterSpacing="70" />
+                </Border>
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding Offers}"
+                          IsEnabled="{Binding CanStartJobActions}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource OpenCareerPaperCardStyle}"
+                                Margin="0,0,0,14"
+                                Padding="0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="7" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="250" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Background="{StaticResource OpenCareerNavyBrush}"
+                                        CornerRadius="5,0,0,5" />
+
+                                <StackPanel Grid.Column="1"
+                                            Margin="22,20"
+                                            Spacing="8">
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="10">
+                                        <TextBlock Text="{Binding Route}"
+                                                   Style="{StaticResource OpenCareerPaperValueStyle}" />
+                                        <Border Style="{StaticResource OpenCareerStatusBadgeStyle}">
+                                            <TextBlock Text="{Binding AvailabilityText}"
+                                                       Style="{StaticResource OpenCareerStatusBadgeTextStyle}" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding KindText}"
+                                               Style="{StaticResource OpenCareerPaperTitleStyle}" />
+                                    <TextBlock Text="{Binding TrackText}"
+                                               Style="{StaticResource OpenCareerPaperBodyStyle}" />
+                                    <TextBlock Text="{Binding ScenarioText}"
+                                               Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                    <TextBlock Text="{Binding AssignmentText}"
+                                               Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                               TextWrapping="Wrap" />
+                                    <Border Style="{StaticResource OpenCareerPaperInsetStyle}"
+                                            Margin="0,4,0,0"
+                                            Padding="12,8">
+                                        <TextBlock Text="{Binding ActionText}"
+                                                   Style="{StaticResource OpenCareerInputHelpStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </Border>
+                                </StackPanel>
+
+                                <Border Grid.Column="2"
+                                        Background="{StaticResource OpenCareerPaperAltBrush}"
+                                        BorderBrush="{StaticResource OpenCareerPaperRuleBrush}"
+                                        BorderThickness="1,0,0,0"
+                                        Padding="18">
+                                    <StackPanel Spacing="7"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding CompensationText}"
+                                                   Foreground="{StaticResource OpenCareerNavyBrush}"
+                                                   FontSize="19"
+                                                   FontWeight="Bold"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding ProgressionText}"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                                   TextWrapping="Wrap" />
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="DISTANCE"
+                                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                                <TextBlock Text="{Binding DistanceText}"
+                                                           Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="FLIGHT TIME"
+                                                           Style="{StaticResource OpenCareerPaperDataLabelStyle}" />
+                                                <TextBlock Text="{Binding EstimatedTimeText}"
+                                                           Style="{StaticResource OpenCareerPaperDataValueStyle}" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Text="{Binding ExpirationText}"
+                                                   Margin="0,4,0,0"
+                                                   Style="{StaticResource OpenCareerPaperDataLabelStyle}"
+                                                   TextWrapping="Wrap" />
+                                        <Button Content="{Binding ActionButtonText}"
+                                                IsEnabled="{Binding CanStart}"
+                                                Click="AcceptStartFlight_Click"
+                                                HorizontalAlignment="Stretch"
+                                                Style="{StaticResource OpenCareerPrimaryButtonStyle}"
+                                                MinHeight="44"
+                                                Margin="0,8,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

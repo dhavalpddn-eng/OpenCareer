@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-09-18 against branch head `155d5efe2103f24f5ce47317016a9546e1151adf`.
+Last reconciled: 2026-10-30 through validated checkpoint `924577d0` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -28,14 +28,14 @@ Status words used in the graphics:
 ```mermaid
 flowchart LR
     C1["1. Continuity<br/>COMPLETE"] --> C2["2. WinUI Shell<br/>ACTIVE"]
-    C2 --> C3["3. SimConnect + Telemetry<br/>GATED"]
-    C3 --> C4["4. Flight Detection + Recovery<br/>ACTIVE / GATED"]
-    C4 --> C5["5. Aircraft Registry + Dispatch<br/>PLANNED"]
-    C5 --> C6["6. Playable Jobs + Career Loop<br/>PLANNED"]
+    C2 --> C3["3. SimConnect + Telemetry<br/>ACTIVE / CORE LIVE PASS"]
+    C3 --> C4["4. Flight Detection + Recovery<br/>ACTIVE / CORE LIVE PASS"]
+    C4 --> C5["5. Aircraft Registry + Dispatch<br/>ACTIVE"]
+    C5 --> C6["6. Playable Jobs + Career Loop<br/>ACTIVE / FIRST LOOP LIVE PASS"]
     C6 --> C7["7. Persistent Economy<br/>ACTIVE FOUNDATION"]
     C7 --> C8["8. Dealers + Ownership<br/>ACTIVE FOUNDATION"]
     C8 --> C9["9. Maintenance + Company<br/>PLANNED"]
-    C9 --> C10["10. Military + Events<br/>ACTIVE DESIGN"]
+    C9 --> C10["10. Military + Events<br/>ACTIVE IMPLEMENTATION"]
     C10 --> C11["11. Balance + Release<br/>PLANNED"]
 
     classDef complete fill:#173b2a,stroke:#52D273,color:#ffffff,stroke-width:2px;
@@ -45,27 +45,24 @@ flowchart LR
 
     class C1 complete;
     class C2,C4,C7,C8,C10 active;
-    class C3 gated;
-    class C5,C6,C9,C11 planned;
+    class C3,C5,C6 active;
+    class C9,C11 planned;
 ```
 
 ## Current critical path
 
 ```mermaid
 flowchart TD
-    A["Live Windows/MSFS probe<br/>F-22 at KRME validation fixture"] --> B["Correct concrete SimVar/unit issues"]
-    B --> C["FlightEvidenceProcessor<br/>telemetry -> reducer evidence"]
-    C --> D["Versioned SQLite<br/>FlightSession + FlightLeg recovery"]
-    D --> E["Installed-aircraft registry<br/>+ capability confidence"]
-    E --> F["Runway / payload / fuel<br/>dispatch feasibility"]
-    F --> G["Market-driven job generation"]
-    G --> H["Mission validation<br/>+ atomic settlement"]
-    H --> I["First end-to-end playable career loop"]
+    A["C172/KJFK production path<br/>LIVE PASS"] --> B["P07–P57 foundations<br/>CI COMPLETE"]
+    B --> C["Ordinary compensated job<br/>live certification"]
+    C --> D["Broader aircraft/evidence<br/>live calibration"]
+    D --> E["Registry / jobs breadth<br/>career progression"]
+    E --> F["Later Dashboard authorities<br/>rank / pay / company / world"]
 
     classDef next fill:#3b3218,stroke:#F4B942,color:#fff,stroke-width:2px;
     classDef future fill:#172737,stroke:#4EA8DE,color:#fff,stroke-width:1px;
-    class A next;
-    class B,C,D,E,F,G,H,I future;
+    class C next;
+    class A,B,D,E,F future;
 ```
 
 ---
@@ -113,6 +110,10 @@ Chapter status: **ACTIVE**
 - [x] Implement WinUI first-run tutorial overlay with Back / Next / Skip / Finish.
 - [x] Persist tutorial version/progress independently from authoritative career state.
 - [x] Add Settings action to restart the intro tutorial.
+- [x] Contain unexpected automatic First Job tutorial failures so optional onboarding cannot break app activation or Jobs refresh; preserve cancellation and release the trigger gate for retry.
+- [x] Fail closed when tutorial progress cannot be persisted: keep the current state retryable, clean temporary writes, contain/log UI-boundary failures, reject overlapping manual actions and preserve cancellation.
+- [x] Fail closed when existing tutorial progress cannot be read or uses an unsupported schema; preserve the original file, retain safe UI/automatic-trigger recovery and create fresh progress only when the file is absent.
+- [x] Reject null, identity-mismatched or negative-version progress for the requested tutorial before read or overwrite, while isolating malformed unrelated tutorial entries.
 - [ ] Add per-control spotlight/focus targets; page navigation and **Coming Later** readiness labels are implemented.
 - [ ] Launch and inspect the production app locally on the user's Windows machine with MSFS closed.
 - [ ] Verify NavigationView interaction locally.
@@ -126,7 +127,7 @@ Exit gate: Windows launch/navigation/disconnected state verified locally; no sta
 
 # Chapter 3 — Simulator connection and normalized telemetry
 
-Chapter status: **GATED — implementation exists, live runtime acceptance is open**
+Chapter status: **ACTIVE — CORE C172/KJFK RUNTIME PATH LIVE ACCEPTED; BROADER TELEMETRY GATES OPEN**
 
 ## Implemented
 
@@ -155,13 +156,16 @@ Chapter status: **GATED — implementation exists, live runtime acceptance is op
 - [x] Add Windows live-probe executable.
 - [x] Add offline JSONL trace analyzer.
 - [x] Add synthetic trace-analyzer tests.
+- [x] Add current-aircraft TITLE observation and canonical identity mapping.
+- [x] Add bounded ordered SimFrame flight-critical telemetry while preserving the 1 Hz `Latest` consumer contract.
+- [x] Isolate malformed/request-scoped airport facility failures from the healthy core connection and bound identical retries.
 
 ## Remaining / live gate
 
 - [x] Run `./tools/run-live-probe.ps1` with MSFS 2024 on the user's Windows machine.
 - [x] Verify simulator absent -> Waiting/Disconnected.
 - [x] Verify native connection to MSFS 2024.
-- [ ] Verify actual installed aircraft identity behavior.
+- [x] Verify stock C172 current-aircraft TITLE and canonical identity behavior on the user's Windows/MSFS machine.
 - [x] Capture ~1 Hz F-22/KRME telemetry; instrument-by-instrument acceptance remains open.
 - [x] Capture pause / resume transitions.
 - [x] Capture menus/loading transitions, including placeholder coordinates that must not become flight evidence.
@@ -174,9 +178,13 @@ Chapter status: **GATED — implementation exists, live runtime acceptance is op
 - [x] Verify telemetry clearing after disconnect.
 - [x] Verify reconnect after MSFS restart.
 - [x] Correct observed gear-extension scale mismatch; live rerun verification remains required.
-- [ ] Add verified simulation-rate capture.
-- [ ] Add verified aircraft identity/title/type fields needed by the flight/session system.
-- [ ] Add bounded/adaptive telemetry sampling needed for landing detection/scoring.
+- [x] Add verified simulation-rate capture and apply the existing capped career-credit rule.
+- [x] Add simulator-time-derived night evidence and accounting.
+- [x] Add in-cloud-derived actual-instrument evidence and accounting.
+- [x] Add verified TITLE/canonical identity fields needed by registry/readiness.
+- [x] Bind current canonical aircraft identity to the active FlightSession and fail closed on an aircraft change.
+- [x] Add bounded high-rate telemetry sampling needed to preserve short landing/bounce state edges.
+- [ ] Add phase-adaptive/richer scoring capture only where later evidence requires it.
 
 Exit gate: live Windows/MSFS connect-disconnect-reconnect and telemetry behavior demonstrated; missing-value handling remains covered by automated tests.
 
@@ -184,7 +192,7 @@ Exit gate: live Windows/MSFS connect-disconnect-reconnect and telemetry behavior
 
 # Chapter 4 — Flight detection, time accounting and durable recovery
 
-Chapter status: **ACTIVE FOUNDATION / GATED FOR CALIBRATION**
+Chapter status: **DURABLE MULTI-LEG CORE IMPLEMENTED / BROADER LIVE CALIBRATION OPEN**
 
 ## Implemented foundation
 
@@ -203,35 +211,69 @@ Chapter status: **ACTIVE FOUNDATION / GATED FOR CALIBRATION**
 - [x] Define conventional park/shutdown/servicing terminal policy.
 - [x] Add deterministic unit tests for the pure flight-core foundation.
 - [x] Add offline trace analysis to support threshold calibration.
+- [x] Implement production `FlightTelemetryEvidenceProcessor` and `FlightSessionRuntime` wiring.
+- [x] Add transactional processor-state rollback so a failed checkpoint retry emits identical evidence exactly once.
+- [x] Persist and recover one authoritative FlightSession through versioned SQLite checkpoints.
+- [x] Require explicit terminal-session cleanup before persistent start so a new operation cannot overwrite a recoverable terminal checkpoint.
+- [x] Enforce the same explicit terminal-session cleanup invariant at the in-memory coordinator boundary so direct starts cannot replace recoverable terminal authority.
+- [x] Require an empty coordinator before checkpoint restore so the recovery seam cannot replace recoverable terminal authority without explicit cleanup.
+- [x] Reject persistent checkpoint recovery before any store read/write while a current FlightSession exists, preserving terminal authority and the stored checkpoint until explicit cleanup.
+- [x] Reject persisted same-identity nonterminal state from replacing terminal coordinator authority, preserving lifecycle monotonicity and emitting no false state-change notification.
+- [x] Bind terminal checkpoint cleanup to the exact reviewed coordinator instance; refuse a replacement race and restore the replacement checkpoint after storage was cleared.
+- [x] Preserve the first persisted terminal outcome; reject a newer same-identity checkpoint that attempts to rewrite cancelled, interrupted or completed state.
+- [x] Preserve immutable FlightSession authority across persisted commits; reject same-session contract-association or creation-time rewrites without publishing false state changes.
+- [x] Enforce immutable FlightSession authority before SQLite checkpoint replacement; rejected contract-association or creation-time rewrites leave the prior recovery checkpoint intact across reopen.
+- [x] Preserve terminal authority before SQLite checkpoint replacement; reject same-session resurrection or terminal-outcome rewrites and retain the prior recovery checkpoint across reopen.
+- [x] Preserve the initial FlightSession plan across persisted coordinator commits and SQLite replacement; reject same-session route, provenance or expected-aircraft rewrites without publishing or rotating recovery state.
+- [x] Require persistent start to inspect storage first; after restart, refuse to overwrite an unrecovered active or terminal checkpoint and leave it available for recovery or explicit cleanup.
+- [x] Require explicit SQLite checkpoint clearing before a different FlightSession identity can be saved; preserve valid and corrupt-current recovery state across rejected direct-store replacement.
+- [x] Bind SQLite terminal cleanup to the reviewed FlightSession identity; stale cleanup cannot delete a replacement checkpoint or its previous-valid fallback, including when the replacement's current payload is corrupt.
+- [x] Preserve immutable FlightSession authority when the current SQLite payload is corrupt; reject same-session contract, creation-time or initial-plan rewrites and retain the previous-valid fallback across reopen.
+- [x] Preserve terminal FlightSession authority when the current SQLite payload is corrupt; reject same-session active resurrection or divergent terminal-outcome rewrites and retain the previous-valid fallback across reopen.
+- [x] Preserve monotonic FlightSession progress when the current SQLite payload is corrupt; ignore same-session checkpoints older than the previous-valid fallback and retain that fallback across reopen.
+- [x] Preserve terminal FlightSession authority from corrupt-current status metadata when no previous-valid fallback exists; reject active resurrection or a divergent terminal outcome while allowing a matching terminal write to repair the checkpoint.
+- [x] Preserve monotonic FlightSession progress from corrupt-current timestamp metadata; ignore older same-session writes even without a previous-valid fallback while allowing a newer matching write to repair the checkpoint.
+- [x] Rotate a previous-valid SQLite checkpoint for equal-timestamp state changes such as restart suspension, while keeping exact duplicate saves idempotent and allowing corrupt successors to recover the prior state.
+- [x] Persist the immutable FlightSession contract association, creation time and initial plan as independent SQLite metadata; after payload corruption, reject conflicting same-session repair even without a previous-valid row, and migrate legacy databases additively to schema v17.
+- [x] Prefer a valid matching previous SQLite checkpoint over corrupt current immutable-authority metadata when authorizing a newer same-session repair; without that fallback, retain the independent metadata fail-closed boundary.
+- [x] Prefer a valid matching previous SQLite checkpoint over conflicting corrupt-current terminal status metadata when authorizing a newer same-session repair; without that fallback, retain the independent status fail-closed boundary.
+- [x] Authenticate current-row checkpoint recency against the previous row's expected successor timestamp; preserve authentic rollback protection, allow valid-fallback repair after timestamp corruption, and migrate legacy databases additively to schema v18.
+- [x] Mirror the exact current successor payload inside the previous-valid SQLite row; recover newest terminal/progress state after isolated current-payload corruption, retain the older fallback when the mirror or metadata is invalid, and migrate legacy databases additively to schema v19.
+- [x] Persist decimated route statistics and landing-episode summaries in the checkpoint.
 
 ## Remaining
 
-- [ ] Implement configurable `FlightEvidenceProcessor` from normalized telemetry/events.
-- [ ] Calibrate speed/AGL/timing/hysteresis thresholds from real MSFS traces.
-- [ ] Detect stable load/observation start.
-- [ ] Detect self-powered movement / flight-time start.
-- [ ] Detect taxi-out.
-- [ ] Detect takeoff roll.
-- [ ] Detect rejected takeoff.
-- [ ] Detect sustained airborne state.
-- [ ] Detect approach/landing episode.
-- [ ] Detect bounce/recontact without duplicate landing.
-- [ ] Detect go-around/new approach.
-- [ ] Detect taxi-in.
-- [ ] Detect parking/shutdown terminal conditions.
-- [ ] Handle aircraft change safely.
-- [ ] Handle material slew/teleport evidence.
-- [ ] Handle disconnect suspension and plausible resume.
-- [ ] Create authoritative runtime `FlightSession` orchestration.
-- [ ] Create versioned SQLite schema for FlightSession/FlightLeg.
-- [ ] Add atomic/checkpoint persistence.
-- [ ] Add previous-valid-save/recovery strategy.
-- [ ] Prevent duplicate milestones/rewards after resume.
-- [ ] Persist decimated route track plus event windows.
-- [ ] Verify recovery after app restart.
-- [ ] Verify recovery after simulator disconnect/restart.
-- [ ] Verify representative 1-, 3- and 6-hour replay scenarios.
-- [ ] Verify at least one complete live takeoff-to-park/shutdown session.
+- [x] Implement configurable `FlightTelemetryEvidenceProcessor` from normalized telemetry/events.
+- [ ] Extend calibration beyond the exact-PC C172/KJFK full-stop path to representative aircraft/edge cases.
+- [x] Detect stable load/observation start.
+- [x] Detect self-powered movement / flight-time start.
+- [x] Detect taxi-out.
+- [x] Detect takeoff roll.
+- [x] Detect rejected takeoff.
+- [x] Detect sustained airborne state.
+- [x] Detect approach/landing episode.
+- [x] Detect bounce/recontact without duplicate landing, including subsecond transitions retained across runtime polling.
+- [x] Produce telemetry-derived touch-and-go/go-around/new-approach evidence with bounce/continuity protections preserved.
+- [x] Detect taxi-in.
+- [x] Detect parking/shutdown terminal conditions.
+- [x] Handle active-session aircraft change safely through authoritative canonical identity comparison.
+- [x] Handle material slew/teleport evidence.
+- [x] Handle disconnect suspension and plausible resume.
+- [x] Create authoritative runtime `FlightSession` orchestration.
+- [x] Create versioned SQLite checkpoint persistence for the current FlightSession aggregate.
+- [x] Add atomic/checkpoint persistence with bounded steady-state writes and immediate transition checkpoints.
+- [x] Add explicit previous-valid/corrupt-checkpoint fallback beyond the atomic newest checkpoint.
+- [x] Prevent duplicate milestones/effects after resume and replay.
+- [x] Persist decimated route track and landing summaries; richer event windows remain open.
+- [x] Verify recovery after app restart for the supported current-session path.
+- [x] Verify recovery after simulator interruption with plausible continuity; broader quit/restart cases remain open.
+- [x] Implement concrete multi-leg/FlightLeg runtime persistence with explicit next-leg boundaries.
+- [x] Persist independent per-leg time, statistics, route track and landing-episode ownership while retaining session aggregates.
+- [x] Project ordered multi-leg debrief evidence without fabricating intermediate actual airports.
+- [x] Persist first-touchdown VS, normal G, IAS, pitch and bank without bounce overwrite.
+- [x] Verify representative 1-, 3- and 6-hour replay scenarios with bounded checkpoint cadence.
+- [x] Reconstruct/resume the persisted terminal workflow after restart without duplicating completed steps.
+- [x] Verify one complete C172/KJFK live takeoff-to-park/shutdown/completion session, including bounce exact-once behavior.
 
 Exit gate: a real session can be tracked, saved, interrupted, recovered and completed without duplicate effects.
 
@@ -239,7 +281,7 @@ Exit gate: a real session can be tracked, saved, interrupted, recovered and comp
 
 # Chapter 5 — Installed-aircraft registry and feasible dispatch
 
-Chapter status: **PLANNED, with domain capability foundations**
+Chapter status: **ACTIVE — FIRST C172/POINT-TO-POINT PATH IMPLEMENTED**
 
 ## Existing foundation
 
@@ -247,26 +289,38 @@ Chapter status: **PLANNED, with domain capability foundations**
 - [x] Define separate concepts for civilian ownership, rental/employer access and military assignment.
 - [x] Establish performance-source/confidence policy.
 - [x] Establish runway/performance feasibility requirement.
+- [x] Discover installed/current aircraft from SimConnect catalog/TITLE and package evidence.
+- [x] Persist installed-aircraft observations in SQLite with restart fallback.
+- [x] Normalize known aliases to canonical aircraft identity without treating TITLE as ownership.
+- [x] Retain per-field source/confidence and fail closed when critical evidence is unknown.
+- [x] Add simulator airport/runway facility observation with bounded failure fallback to reference data.
+- [x] Add persistent contract-owned Fleet reservation acquire/recovery/release.
 
 ## Remaining
 
-- [ ] Detect/index installed aircraft.
-- [ ] Persist installed-aircraft registry.
-- [ ] Normalize aircraft identity/family/type.
-- [ ] Infer/store capability profiles.
-- [ ] Record source/confidence per important capability.
-- [ ] Resolve selected aircraft access type.
-- [ ] Read/use simulator scenery/facility runway data where practical.
-- [ ] Build airport/runway candidate model.
-- [ ] Validate payload/weight.
-- [ ] Validate fuel/endurance/range.
-- [ ] Validate takeoff runway feasibility.
-- [ ] Validate landing runway feasibility.
-- [ ] Apply safety margins.
-- [ ] Include weather/environment inputs where authoritative data exists.
-- [ ] Reject unknown-critical-performance cases with explicit reason.
-- [ ] Ensure military assignment eligibility cannot imply civilian ownership.
-- [ ] Add deterministic capability/dispatch tests.
+- [x] Detect/index installed aircraft for current production discovery sources.
+- [x] Persist installed-aircraft registry observations.
+- [x] Derive stable cross-variation aircraft type identity from explicit normalized ICAO type-designator metadata without fuzzy-merging canonical aircraft records.
+- [x] Derive fail-closed None / Single / Multi powerplant classification only from explicit engine type/count evidence without implying qualifications or capabilities.
+- [x] Add stable family identity only from explicit normalized ICAO manufacturer/model metadata and stable broad powerplant-class identity only from proven engine type/count evidence; do not merge canonical records or infer capability/access.
+- [x] Derive positive pressurization capability only from one unambiguous local `systems.cfg` carrying valid positive official `[PRESSURIZATION]` values; absence or invalid evidence remains unknown rather than false.
+- [ ] Expand authoritative capability profiles beyond the C172 reference and available configuration evidence.
+- [x] Record source/confidence per important capability.
+- [ ] Complete owned/rented/employer/assigned access and location authority; current civilian/military access metadata is partial.
+- [x] Read/use simulator scenery/facility runway data where available without making failures reconnect SimConnect.
+- [x] Build airport/runway candidate model.
+- [x] Validate payload/weight.
+- [x] Reject a proven maximum zero-fuel-weight overload and an explicit landing-performance weight above a proven maximum landing weight; never invent missing landing-weight input.
+- [x] Validate fuel/endurance/range in planning services; wire the complete composite planner into all production job paths.
+- [x] Validate takeoff runway feasibility.
+- [x] Reject conditioned takeoff performance evaluated below the authoritative operating-empty-plus-payload-plus-planned-fuel weight; never fall back to a shorter static runway requirement.
+- [x] Validate landing runway feasibility.
+- [x] Reject conditioned landing performance evaluated below operating empty plus payload, the minimum possible zero-fuel landing weight; never fall back to a shorter static runway requirement.
+- [x] Apply configurable safety margins in planning; current Ferry/Reposition terms do not request every optional margin.
+- [x] Include weather/environment inputs where requested and authoritative data exists.
+- [x] Reject unknown-critical-performance cases with explicit reason.
+- [x] Ensure military assignment eligibility cannot imply civilian ownership; assignment issuance/revocation remains open.
+- [x] Add deterministic capability/dispatch/reservation tests.
 
 Exit gate: impossible or unknown-critical jobs are rejected before acceptance; feasible routes explain why they pass.
 
@@ -274,7 +328,7 @@ Exit gate: impossible or unknown-critical jobs are rejected before acceptance; f
 
 # Chapter 6 — Home airport, employment and first playable mission loop
 
-Chapter status: **PLANNED, with contract/location foundations**
+Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 
 ## Existing foundation
 
@@ -285,37 +339,107 @@ Chapter status: **PLANNED, with contract/location foundations**
 - [x] Define no-teleport company geography.
 - [x] Define fresh-career start with no required owned aircraft.
 - [x] Define employer/rental/assigned-aircraft path.
+- [x] Persist player profile/current airport and provide editable home-airport onboarding foundation.
+- [x] Implement deterministic persisted board refill foundation at the current career location.
+- [x] Implement production Jobs aircraft selection/readiness/accept-start flow.
+- [x] Implement Ferry/Reposition contract, reservation, dispatch, FlightSession and terminal authorities.
+- [x] Implement isolated zero-progression C172/KJFK Development/Test circuit through the same production authorities.
 
 ## Remaining
 
-- [ ] Create player career onboarding.
-- [ ] Home-airport selection.
-- [ ] Persist player location/home base.
-- [ ] Build market-driven job generation.
-- [ ] Filter jobs through aircraft/runway/qualification feasibility.
-- [ ] Build briefing flow.
-- [ ] Build dispatch-to-active-mission flow.
-- [ ] Bind mission evidence to FlightSession.
-- [ ] Implement mission-specific objective validation.
-- [ ] Require mission terminal conditions beyond landing.
-- [ ] Build result/debrief flow.
+- [x] Create player career onboarding foundation; licensing/training onboarding remains later MBL-13 work.
+- [x] Define one deterministic initial civilian qualification roadmap for Student, Private, Commercial and Airline Transport licenses plus existing airplane ratings.
+- [x] Project persisted qualifications as Earned / Available / Locked with explicit prerequisites through a read-only application source and Career UI.
+- [x] Preserve monotonic qualification updates and prevent roadmap/UI reads from awarding qualifications.
+- [x] Extract roadmap identities, ordering and prerequisites into one deterministic catalog reusable by roadmap and award orchestration.
+- [x] Add a fail-closed evidence-to-award boundary that accepts only stable evidence identity, rechecks career/target/prerequisites and persists solely through the monotonic qualification coordinator.
+- [x] Resolve production civilian training completion evidence only from immutable committed Training Logbook entries carrying validated career, operation and catalog qualification identities, a successful outcome and no settlement.
+- [x] Preserve generic/historical Training entries without qualification metadata as valid history that cannot award a qualification.
+- [x] Implement the first authoritative Student local-circuit operation: persist career/operation/aircraft authority in FlightSession, require registry-proven training capability, and create no-settlement qualifying evidence only after takeoff, full-stop landing, parking, shutdown and successful completion.
+- [x] Expose the Student operation through a bounded Career briefing/readiness/start surface with automatic evidence-driven completion and restart finalization; UI actions cannot directly complete training or grant qualifications.
+- [x] Recover safely from failed Student training start: reproject an authoritative created session, preserve retry only when readiness remains eligible, fail closed if refresh also fails, and keep technical exception text out of the player UI.
+- [x] Reconcile failed career onboarding against authoritative runtime profile state: retain a saved profile through projection failure, keep pre-save failure retryable, prevent duplicate creation and keep technical exception text out of the player UI.
+- [x] Fail closed when Career initialization authority cannot refresh: preserve an authoritative loaded profile, disable stale profile/training actions until a successful reload, and keep technical exception text out of the player UI.
+- [x] Recover safely from Advanced Dispatch initialization failure: invalidate stale planning authority, preserve refreshed accepted-job cancellation, direct unresolved cleanup to Jobs, and keep technical exception text out of the player UI.
+- [x] Recover safely from Advanced Dispatch plan-preparation failure: refresh accepted-job authority, keep idempotent retry and cancellation available when retained, clear stale actions when recovery fails, and suppress technical exception text.
+- [ ] Add later qualification missions with distinct authoritative definitions and completion requirements.
+- [x] Home-airport selection foundation.
+- [x] Persist player location/home base.
+- [x] Build deterministic board refill foundation; authoritative market-demand integration remains open.
+- [x] Fail closed through aircraft/runway/qualification readiness before acceptance/start.
+- [x] Filter ordinary Ferry/Reposition destinations before offer generation unless at least one currently discovered installed civilian aircraft satisfies the shared fail-closed static capability projection and provenance-backed endpoint runway compatibility.
+- [x] Filter standard Passenger offers independently by explicit passenger capability, payload/range, total seats, dedicated passenger-capacity provenance and endpoint runway compatibility; persist immutable count/payload terms through restart and completion evidence.
+- [x] Show authoritative assignment detail on Jobs offer cards before acceptance: immutable Passenger count/payload and named Cargo/Express/AOG commodity mass; keep legacy or incomplete terms explicitly unavailable/unspecified without invention.
+- [ ] Add generation-time fuel/weather feasibility and ranking only from authoritative inputs; final start must continue to recheck current evidence.
+- [x] Add a phase-aware Current Flight briefing beyond the Jobs offer/readiness surface: show authoritative flight kind, immutable route/alternate, exact assigned aircraft and evidence-preserving next actions for preparation, airborne, arrival, telemetry-loss/reconnect recovery and terminal settlement states.
+- [x] Build dispatch-to-active-mission flow for Ferry/Reposition, standard Passenger and Development/Test.
+- [x] Surface authoritative active career-flight state on Jobs with direct Current Flight recovery navigation.
+- [x] Fail closed before accepting or reserving another job whenever any current/recovered FlightSession exists, including terminal state awaiting cleanup; direct recovery through Current Flight.
+- [x] Keep the Jobs recovery panel visible for every current FlightSession, including contractless practice/training and terminal-pending state, while preserving contract-specific readiness detail when available.
+- [x] Surface automatic pre-FlightSession job-recovery blockers directly on Jobs, clear the attention state after a successful retry, and replace unexpected exception text with safe non-mutating retry/cancellation/diagnostic guidance.
+- [x] Treat outer Jobs load/manual/periodic refresh failures as recovery attention: block new-flight actions, reproject current FlightSession authority, reload accepted cancellation targets and preserve Current Flight/cancellation exits without exposing raw exception text.
+- [x] Interlock Jobs aircraft selection, paid starts and zero-pay flight creation while recovery attention remains unresolved, including a stale direct-action guard, while preserving Refresh and accepted-job cancellation as recovery paths.
+- [x] Interlock the same Jobs new-flight controls whenever any authoritative current FlightSession occupies the playable loop, recheck synchronous session authority for stale direct calls, and preserve Current Flight navigation plus accepted-job cancellation.
+- [x] Reject overlapping Jobs mutations instead of queueing stale accept/start, calibration or accepted-job cancellation actions; publish one shared busy state and disable the corresponding controls.
+- [x] Keep the Jobs aircraft selection immutable for the duration of each action-bound operation; reject concurrent selection changes and disable refresh/development-position inputs until the operation releases its gate.
+- [x] Recover failed zero-pay calibration generation by reconciling persisted Jobs authority, preserving a successfully positioned KJFK pilot and any Current Flight/accepted-job recovery exits, retaining a direct retry and suppressing raw technical exception text.
+- [x] Restrict accepted-job preflight cancellation to an atomic persisted `Accepted` transition so stale Jobs or Dispatch state cannot cancel a contract after flight start.
+- [x] Finish runtime retirement, exact reservation release and prepared-plan cleanup after an authoritative accepted-job cancellation even when the initiating UI token is cancelled, so navigation cannot strand invisible preflight artifacts.
+- [x] Preserve the exact failed and unattempted accepted-job cleanup identities after a terminal cancellation transition, removing completed targets incrementally so Jobs and Advanced Dispatch keep idempotent cleanup retry visible even after accepted-only context drops the contract.
+- [x] Rediscover cancelled contracts with persisted exact-reservation or prepared-plan artifacts after reopen/restart and expose explicit idempotent cleanup retry before accepted-job planning.
+- [x] Block Jobs new-flight controls and stale direct start/create calls while cancellation cleanup is pending or cannot be inspected, while retaining known accepted contracts for cancellation and suppressing technical read failures.
+- [x] Enforce the durable cancellation-cleanup invariant at the authoritative job-acceptance/Fleet-reservation boundary, including post-reservation compensation when cleanup appears before contract acceptance persists.
+- [x] Require a cancellation-cleanup recovery authority when constructing the acceptance/Fleet boundary so direct application composition cannot silently disable the invariant.
+- [x] Require the same recovery authority when constructing accepted-dispatch planning so direct application composition cannot skip pending or unavailable cleanup inspection.
+- [x] Fail Jobs closed from construction when accepted-dispatch context is omitted so legacy or direct composition cannot clear the cleanup interlock or invoke stale new-flight actions.
+- [x] Fail Jobs closed when accepted-dispatch context refresh throws, retaining previously known cancellation targets and suppressing technical details from player-facing recovery guidance.
+- [x] Invalidate stale Advanced Dispatch evaluation/preparation authority when cancellation and its recovery refresh both fail, while preserving known cancellation targets for retry.
+- [x] Recheck FlightSession ownership across automatic accepted/in-progress recovery authority reads; stop without contract or checkpoint mutation if another operation appears.
+- [x] Recheck FlightSession ownership across asynchronous career-job acceptance readiness reads; stop without producing an acceptance request if another operation appears.
+- [x] Recheck FlightSession ownership at the acceptance mutation boundary around the authoritative contract read; stop before aircraft reservation or contract mutation if another operation appears during handoff.
+- [x] Recheck FlightSession ownership after aircraft reservation and before contract acceptance; release only a reservation newly acquired by the interrupted attempt and preserve the competing session.
+- [x] Recheck FlightSession ownership after contract acceptance; reject stale success while retaining the accepted contract and exact reservation together for cancellation/recovery.
+- [x] Recheck FlightSession ownership after accepted-contract replay acceptance and reservation awaits; reject stale success while retaining the existing Accepted contract and exact reservation together for cancellation/recovery.
+- [x] Reject retained same-contract FlightSessions whose explicit planned origin or destination contradicts the authoritative accepted job before contract/session mutation.
+- [x] Reject retained same-contract FlightSessions whose creation time contradicts the accepted start context or authoritative in-progress contract start time before contract/session mutation.
+- [x] Reject retained same-contract FlightSessions whose explicit source provider/reference is incomplete or contradicts the authoritative job contract while preserving fully absent legacy provenance.
+- [x] Recheck FlightSession ownership after asynchronous accepted-contract transition; reject retained-session replacement before returning success or writing a new checkpoint.
+- [x] Reject overlapping Current Flight completion and abandonment attempts instead of queueing duplicate or cross-action terminal commands that can overwrite a successful result with stale follow-up state.
+- [x] Bind career completion to the exact ready FlightSession and contract identities reviewed by Current Flight; reject a changed flight before settlement, Logbook or terminal mutation and preserve authoritative retry recovery.
+- [x] Recheck career-completion input identity after asynchronous authority reads; reproject one replacement and suppress actions with visible reopen guidance if sessions continue changing.
+- [x] Recover safely from a failed or caller-cancelled paid-flight completion, including cancellation before shared-gate acquisition: contain the action boundary, refresh authoritative readiness with an independent token after execution starts, preserve verified retry and abandonment exits, fail closed when refresh also fails, and keep raw technical errors out of player-facing text.
+- [x] Refresh abandonment authority independently after failed paid-flight completion so a still-valid exact-session no-reward exit is restored even when completion is no longer eligible.
+- [x] Recheck career-abandonment availability identity after asynchronous contract and Fleet reads; reproject one replacement and suppress stale recovery actions if sessions continue changing.
+- [x] Recover safely from a failed or caller-cancelled Current Flight abandonment, including cancellation before shared-gate acquisition: contain the action boundary, refresh authoritative readiness with an independent token after execution starts, preserve verified retry and completion exits, fail closed when refresh also fails, and keep raw technical errors out of player-facing text.
+- [x] Refresh completion authority independently after failed Current Flight abandonment so a still-valid exact-session normal-completion exit is restored even when abandonment is no longer eligible.
+- [x] Revalidate career-abandonment execution identity after asynchronous contract and Fleet reads and before cleanup mutation, preserving a replacement session and preventing stale contract/reservation cleanup.
+- [x] Bind supported mission evidence to FlightSession.
+- [x] Implement mission-specific validation for the supported standard point-to-point path.
+- [x] Require parking/shutdown and mission/post-flight verification beyond landing.
+- [x] Build automatic result/debrief flow for supported career jobs and explicit manual free/practice postflight handling.
   - [x] Define immutable FlightDebrief snapshot with separate flight-safety and mission outcomes.
   - [x] Preserve multi-leg hierarchy, decimated route track, time/experience, fuel, payload, assistance, landing and event evidence.
   - [x] Preserve evidence quality and unknown/unavailable values without fabrication.
-  - [ ] Map authoritative completed FlightSession data into the debrief automatically.
-- [ ] Add logbook commit flow.
+  - [x] Map authoritative completed FlightSession data into the debrief automatically for supported career jobs.
+- [x] Add automatic career logbook commit flow.
   - [x] Implement idempotent application-level LogbookCommitCoordinator.
   - [x] Require final authoritative career settlement before automatic career log commit.
   - [x] Keep manual free/practice logging separate from contract settlement.
   - [x] Implement persistent versioned SQLite ILogbookSource / ILogbookWriter with indexed filters, immutable payload storage and idempotency.
-  - [ ] Wire authoritative career settlement -> SQLite Logbook commit.
-- [ ] Atomically settle money once.
+  - [x] Wire authoritative career settlement -> SQLite Logbook commit.
+  - [x] Wire manual free/practice **Log Flight / Discard** UI flow with authoritative readiness and retry-safe orchestration.
+  - [x] Expose confirmed no-credit recovery for contractless practice/training sessions: active state is first persisted as cancelled, and active or terminal checkpoints can then be discarded without Logbook, experience, qualification or other progression credit; keep contract-linked sessions protected.
+  - [x] Bind manual Log/Discard to the exact FlightSession identity reviewed by the caller so stale readiness cannot log, cancel or clear a replacement session.
+  - [x] Recheck manual postflight projection identity after asynchronous aircraft-registry lookup; retry once against a replacement session and fail closed with visible reopen guidance if the session changes again.
+  - [x] Recover safely from failed manual Log/Discard: refresh authoritative readiness, preserve only verified retry actions, fail closed with visible reopen guidance if refresh also fails, and keep technical exception text out of the player UI.
+- [x] Atomically settle money once.
 - [ ] Atomically settle reputation/relationships once.
-- [ ] Atomically settle travel/location once.
-- [ ] Prevent duplicate settlement.
+- [x] Atomically settle travel/location once.
+- [x] Prevent duplicate settlement/logbook/experience/location/finalization effects on replay.
 - [ ] Keep employee work viable without company ownership.
-- [ ] Add first representative passenger/cargo/utility job.
-- [ ] Add first end-to-end playable KRME-area career operation.
+- [x] Add the first representative Passenger job; cargo and utility breadth remain open.
+- [ ] Live-certify one ordinary compensated market-generated civilian route; the zero-progression KJFK circuit is already live accepted.
+- [x] Automatically reconstruct/resume a terminal workflow interrupted midway through settlement/finalization.
 
 Exit gate: accept -> dispatch -> fly -> validate -> park/shutdown -> settle once -> reload.
 
@@ -344,10 +468,11 @@ Chapter status: **ACTIVE FOUNDATION**
 - [ ] Persist authoritative world/economy state in production SQLite.
 - [ ] Connect world state to live job generation.
 - [ ] Connect fuel/service/MRO/labor pressure to operating costs.
-- [ ] Implement named commodity catalog.
-- [ ] Implement immutable accepted cargo manifests.
-- [ ] Implement airport/region commodity snapshots.
-- [ ] Generate cargo jobs from supply/demand/event state.
+- [x] Implement named commodity catalog.
+- [x] Implement immutable accepted cargo manifests.
+- [x] Implement airport/region commodity snapshots.
+- [x] Select and price an immutable named cargo lot deterministically from matching airport supply/demand snapshots.
+- [x] Generate cargo jobs from persisted supply/demand snapshots, with event effects inherited through those authoritative snapshots.
 - [ ] Implement cargo condition/outcome evidence only where supported.
 - [ ] Settle cargo freight/penalties atomically.
 - [ ] Implement long-absence advancement in authoritative career state.
@@ -426,7 +551,7 @@ Exit gate: maintenance, staffing, facilities and geography affect availability/p
 
 # Chapter 10 — Military/government careers, simulated conflict and special events
 
-Chapter status: **ACTIVE DESIGN / PLANNED IMPLEMENTATION**
+Chapter status: **CAMPAIGN CORE COMPLETE — INTEGRATIONS / ACCEPTANCE PENDING ON PR #10; EXACT-HEAD LINUX/WINDOWS GREEN**
 
 ## Completed design/foundation
 
@@ -438,32 +563,88 @@ Chapter status: **ACTIVE DESIGN / PLANNED IMPLEMENTATION**
 - [x] Define fundamental combat boundary: MSFS supplies flight telemetry; OpenCareer simulates all combat/threat/damage/world effects.
 - [x] Require fictionalized/abstracted conflict scenarios rather than recreating real tragedies as entertainment.
 - [x] Existing world-event engine can provide deterministic event foundations.
+- [x] Implement versioned deterministic conflict-world state.
+- [x] Implement friendly/hostile/neutral ground-unit state with strength, readiness and pressure.
+- [x] Implement geographic sector control and intelligence-confidence state.
+- [x] Implement derived front-line snapshot from contested sector state.
+- [x] Implement friendly/hostile simulated air units with deterministic movement.
+- [x] Implement air-defense and interceptor threat envelopes linked to simulated source units.
+- [x] Generate CAS and suppression support requests from simulated battlefield pressure.
+- [x] Generate reconnaissance, logistics and patrol requests from intelligence/readiness/control state.
+- [x] Generate escort/intercept requests from simulated air activity.
+- [x] Reserve/close support requests so one active request cannot be accepted twice.
+- [x] Implement CAS/suppression accept -> ingress -> on-station -> authorized action -> egress -> objective-complete lifecycle.
+- [x] Implement reconnaissance, logistics and patrol telemetry-driven objective lifecycles.
+- [x] Implement escort and intercept telemetry-driven objective lifecycles.
+- [x] Validate mission windows from normalized player telemetry while rejecting pause/slew and invalid on-ground/airborne conditions.
+- [x] Implement abstract precision/suppression/recon effects entirely inside OpenCareer.
+- [x] Implement abstract intercept effects entirely inside OpenCareer.
+- [x] Implement player threat exposure from normalized telemetry.
+- [x] Implement deterministic simulated threat resolution and OpenCareer-only aircraft-damage state.
+- [x] Feed mission effects back into unit strength/readiness, sector control/intelligence and linked threat severity.
+- [x] Implement military affiliation, qualification and assigned-aircraft authorization policy.
+- [x] Ensure installed/owned military-capable aircraft alone never grants military mission access.
+- [x] Implement bounded military trust/progression result updates.
+- [x] Add explicit operation-resolution input/outcome contracts with deterministic Success / PartialSuccess / Failure / Aborted resolution.
+- [x] Add stable operation-resolution keys and duplicate-completion protection.
+- [x] Add deterministic faction influence, campaign progress, thresholded territory pressure, military reputation and conflict-resource consequences.
+- [x] Add application-layer consequence orchestration that produces one validated immutable result.
+- [x] Persist immutable operation outcomes + applied consequence state in SQLite schema v5 with restart-safe duplicate rejection.
+- [x] Add failure compensation/transaction behavior so failed consequence persistence is retryable and cannot double-apply state.
+- [x] Verify reconnect/replay safety so repeated completed-flight events do not reapply campaign, territory, reputation or resource effects.
+- [x] Add end-to-end integration coverage for success, partial success, failure, abort, invalid mission, already-resolved mission, SQLite restart and rollback/retry.
+- [x] Implement seeded fictional theater generation with repeatable ground/air units, sectors and threats.
+- [x] Implement versioned campaign checkpoints for world, military career, simulated player damage and active mission state.
+- [x] Persist conflict campaigns in the shared SQLite database with schema migration and optimistic revision protection.
+- [x] Restore reserved support requests and active mission state from a persisted checkpoint without duplicating mission ownership.
+- [x] Persist mission-stage progress and simulated threat outcomes so restart recovery does not replay damage/effects.
+- [x] Implement strategic campaign phase, momentum and deterministic objectives for control, intelligence, readiness and threat reduction.
+- [x] Coordinate world advancement and strategic-state persistence through `ConflictCampaignCoordinator`.
+- [x] Enforce military authorization at the dispatch/acceptance boundary so lower-level mission services cannot bypass qualification/assignment rules.
+- [x] Project campaign/front/threat/support/active-operation data through an application snapshot consumed by the production Military/Government UI.
+- [x] Add deterministic xUnit coverage for ground conflict, air conflict, request lifecycle, mission lifecycles, qualification policy, theater generation, SQLite recovery, campaign evolution and dispatch authorization.
+- [x] Document the conflict/MSFS boundary in `docs/conflict-system.md`.
+
+Verification note: campaign-core implementation head `16cda14981bc6284e4f33833e88aa8289ff46149` is green in exact-head Linux PR CI and exact-head Windows CI. This boundary includes production mission-service consequence wiring, deterministic phase-driven faction-posture evolution, legacy-identity evolution coverage, and the bounded 96-step deterministic campaign evolution stress test.
 
 ## Remaining
 
-- [ ] Define deterministic conflict/world-state model.
-- [ ] Define factions/control/front representation.
-- [ ] Define simulated ground-unit state.
-- [ ] Define air-defense/threat model.
-- [ ] Define simulated friendly/enemy air activity.
-- [ ] Generate support requests from simulated battle needs.
-- [ ] Implement CAS mission lifecycle.
-- [ ] Implement surveillance/recon mission lifecycle.
-- [ ] Implement logistics/transport support.
-- [ ] Implement patrol/intercept/escort objectives where authorized.
-- [ ] Implement SEAD/air-defense suppression abstraction if retained in scope.
-- [ ] Implement attack-run/action validation from real player telemetry.
-- [ ] Implement virtual weapon/effect resolution entirely inside OpenCareer.
-- [ ] Implement simulated threat-to-player resolution from telemetry.
-- [ ] Implement OpenCareer-only damage/consequence state.
-- [ ] Feed mission results back into simulated battle/front state.
-- [ ] Prevent real-world current conflict data from becoming authoritative gameplay.
-- [ ] Add military/reserve onboarding/qualification progression.
-- [ ] Add mission-specific deterministic tests.
-- [ ] Implement production Military/Government/Conflict UI.
+**Campaign-core completion boundary:** reached at `16cda14981bc6284e4f33833e88aa8289ff46149`. No additional standalone campaign mechanic slice is queued. Remaining unchecked work below is dependency-driven integration, product acceptance, or later balance/live-runtime validation.
 
-Exit gate: distinct military/government mission families have deterministic validation, authorization filters, simulated consequences and no dependency on nonexistent MSFS combat APIs.
+- [x] Wire automatic production startup/resume so app startup recovers the most recently saved military conflict campaign without a manual orchestration call.
+- [x] Add database-consistent backup snapshot integration for conflict campaign checkpoints using SQLite backup semantics rather than copying the live WAL database files.
+- [x] Add validated restore integration from an OpenCareer backup archive: stage and integrity-check the SQLite image first, then apply it on restart before SQLite-backed state is recovered, with rollback protection.
+- [x] Expose profile-local OpenCareer backup selection and explicit confirmation in Settings, require a fresh safety backup before staging, and keep the pending next-launch restore visible and cancellable without manual/internal invocation.
+- [x] Add deterministic fictional operation identity and distinct friendly/hostile faction names/short codes while keeping the underlying simulation sides generic and reusable.
+- [x] Add the first bounded long-term campaign-cycle layer: nearby logistics recovery for ground units, theater-logistics air readiness recovery, momentum-based sector consolidation and linked-threat resynchronization.
+- [x] Add finite replacement reserves for both sides; replacements require operational logistics, reinforce surviving damaged ground units deterministically and consume the reserve.
+- [x] Add persisted campaign outcomes: Victory, Defeat, Stalemate and Ceasefire, with sustained-secured, mutual-exhaustion and prolonged-balanced-state rules.
+- [x] Prevent telemetry-only mission progress saves from incrementing campaign evaluation counters and prevent new military mission acceptance after a terminal campaign outcome.
+- [x] Add successor-campaign transition after terminal outcomes while preserving military career state, simulated player damage and a persistent completed-operation history chain.
+- [x] Add deterministic successor-operation offer planning across fictional theater candidates, avoiding an immediate theater repeat when alternatives exist and previewing the exact operation identity acceptance will create.
+- [x] Add an application-layer successor-operation flow with `IConflictTheaterCatalog`, offer projection, accept/decline/reconsider actions, stale-offer rejection and runtime-state replacement after acceptance.
+- [x] Persist completed-operation history through SQLite and expose it in the Military/Government operations snapshot.
+- [x] Display read-only archived operation history in Military/Government, with deterministic newest-first ordering, empty/reset states and SQLite recovery coverage.
+- [x] Add completed-operation drill-down selection/detail UX: campaign-ID-stable selection across polling/current-campaign replacement/successor activation, safe stale-history clearing, persisted terminal posture projection, native keyboard/focus behavior, long-text handling and read-only archive labeling.
+- [x] Verify completed-operation drill-down across real SQLite restart with exact field fidelity and a before/after `conflict_campaigns` fingerprint proving select/refresh/clear/reselect performs no database writes (`018e1da5`; Linux 402/402 xUnit + 29/29 SimLab; latest production Windows head `555b9dc7` WinUI/LiveProbe 0 errors + 402/402 xUnit).
+- [x] Add deterministic faction operational posture (Defensive / Aggressive / LogisticsFocused / AirFocused) and use it to bias replacement priority plus support-request thresholds/urgency/range without making AI authoritative.
+- [x] Add the user-facing Military/Government successor-operation presentation with Accept / Decline / Reconsider routed through the application transition service.
+- [x] Verify successor UI storage-failure/cancellation recovery, stable action feedback, stale-campaign refresh, duplicate-click protection and SQLite successor recovery at `4c63e365` in Linux/Windows CI; local MSBuild execution was blocked by workspace socket restrictions.
+- [x] Add deterministic faction-posture evolution across campaign phase transitions while preserving terminal/outcome posture semantics.
+- [ ] Integrate military authorization with authoritative player-career persistence/onboarding.
+- [x] Wire `PersistedOperationConsequenceCoordinator` into `MilitaryCampaignMissionService` completion/failure and replace the legacy direct `MilitaryCareerProgression.RecordOperationResult` update so reputation cannot be awarded twice.
+- [ ] Integrate conflict outcomes with authoritative mission/job settlement without allowing battle logic to pay money directly.
+- [ ] Add aircraft assignment issuance/revocation to the fleet/dispatch system.
+- [x] Implement the first production Military/Government WinUI screen against conflict application snapshots/services; it shows campaign/faction/posture/outcome/reserve/front/support/objective state without UI-owned game logic.
+- [x] Add read-only completed-operation history, schematic Operational Map and deterministic Communications feed to Conflict Operations without UI-owned conflict authority.
+- [ ] Expand Conflict Operations UI with deeper drill-down and complete local visual/accessibility acceptance.
+- [x] Add bounded deterministic long-run campaign evolution stress coverage with replay equality and invariant checks (`16cda14981bc6284e4f33833e88aa8289ff46149`).
+- [ ] Add large deterministic campaign balance/playtesting batches for later tuning.
+- [x] Record Linux + Windows validation for code head `b4e3ca81`: 376/376 xUnit on both, 29/29 SimLab on Linux, WinUI/live-probe builds at 0 errors on Windows.
+- [ ] Run gameplay tuning so conflict does not dominate civilian careers or produce repetitive support spam.
+- [ ] Verify representative conflict missions against live normalized MSFS telemetry after the flight-evidence/runtime gate is ready.
 
+Exit gate: distinct military/government mission families have deterministic validation, authorization filters, persistent simulated consequences, verified tests and no dependency on nonexistent MSFS combat APIs.
 ---
 
 # Chapter 11 — Balance, performance, packaging and release readiness
@@ -524,7 +705,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Preserve native WinUI control templates/focus behavior instead of replacing accessibility-critical templates.
 - [x] Add design-system contract tests for canonical colors, contrast, required style keys and duplicate resources.
 - [x] Migrate current Dashboard, Current Flight, Settings, placeholder, shell and tutorial surfaces onto shared design resources.
-- [ ] Verify shared resource dictionaries in Windows WinUI CI and local application launch.
+- [x] Verify shared resource dictionaries in Windows WinUI CI and exact-PC application launch; broader accessibility states remain below.
 - [x] Verify canonical text/background contrast mathematically in automated design-system contract tests.
 - [ ] Verify keyboard focus, high-contrast behavior and text scaling interactively with the production resource system.
 - [x] Define all 15 current navigation destinations.
@@ -537,46 +718,127 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PARTIAL**
 - [x] Implement initial Dashboard.
 - [x] Implement production Dashboard layout and data contract without fabricated career/job/economy values.
 - [x] Implement deterministic dynamic Dashboard guidance/routing foundation.
-- [x] Implement Top Opportunities selection: four highest available jobs by tier -> fit -> economics/reposition tie-breakers.
+- [x] Implement the future ranked-opportunity selector: tier -> fit -> economics/reposition tie-breakers when all ranking inputs are authoritative.
 - [x] Lock opportunity tiers: Green Standard / Blue Specialist / Purple Elite / Orange-Gold Legendary with text labels.
 - [x] Add career/company/finance/aircraft/world/recent-activity/social-feed Dashboard modules.
 - [x] Add searchable OpenCareer Network in-world social-feed surface.
 - [x] Remove KRME as a hard-coded production Home base; keep it developer-fixture only.
-- [ ] Wire Dashboard to authoritative Jobs/Career/Company/Aircraft/Economy/World snapshot sources as those systems are implemented.
+- [x] Replace the unavailable Dashboard source with authoritative Career/location, Economy, Logbook activity, Active Operation and contract-reserved aircraft projections.
+- [x] Add a read-only persisted-board eligibility source that retains only offers startable through existing aircraft/start-readiness authorities.
+- [x] Project up to four authoritative eligible local offers in deterministic source order with route, duration/distance and qualifying-aircraft evidence.
+- [x] Keep unknown opportunity tier, fit, gross/net pay and ranking genuinely unknown; remove copy that claims unproven ranking.
+- [x] Project authoritative eligible-local count/status and hide unsupported social content; keep Company/employment and unsupported World/Fleet fields unavailable.
+- [x] Fail closed on Dashboard initial and timer refresh errors: clear stale projections, preserve a Jobs/Current Flight recovery route, suppress technical exception text and restore guidance only after an authoritative retry.
+- [ ] Add ranked ordering, offer compensation and later Company/World/Fleet fields only when their authoritative upstream sources exist.
 - [ ] Verify production Dashboard adaptive layout, keyboard navigation and visual hierarchy on Windows.
 - [x] Implement initial Current Flight telemetry page.
 - [x] Define per-flight contextual checklist UX with inline controller/keyboard binding state.
 - [x] Define layered onboarding: app tutorial, first-job tutorial and first-time mission-family tutorials.
 - [x] Define mission-family tutorial behavior for unique procedures in `docs/mission-tutorial-system.md`.
 - [x] Implement shared versioned tutorial catalog + progress store with app intro, first-job, banner-tow and carrier-operation definitions.
+- [x] Automatically start the First Job tutorial once when authoritative career/Jobs state makes it relevant, respecting preference, intro activity and completed/skipped progress.
 - [ ] Require a tutorial definition before a specialized mission family is considered production-ready.
 - [ ] Bind banner-tow and carrier takeoff/landing tutorials automatically to first mission use and live mission/checklist evidence when those mission families are built.
-- [ ] Implement per-flight checklist phases; the persistent **Show checklist every flight** setting is implemented and ready for MBL-04 consumption.
-- [ ] Implement controller/keyboard binding resolution/profile source without guessed bindings.
+- [x] Implement the conventional per-flight checklist foundation: deterministic preflight/preparation, engine/start, taxi, takeoff, airborne, approach/landing, parking and shutdown/completion phases projected on Current Flight.
+- [x] Auto-verify checklist steps only from persisted current-leg FlightSession milestones; retain progress across suspension/recovery and keep unsupported cockpit/device procedures explicitly manual or unavailable.
+- [x] Apply the persistent **Show checklist every flight** setting to Current Flight checklist visibility without writing new gameplay state.
+- [ ] Expand checklists with aircraft-specific or specialized-mission steps only when trustworthy evidence/definitions exist, and complete local WinUI/MSFS visual/runtime acceptance.
+- [x] Establish deterministic binding action/device/profile/evidence models and an isolated production source without guessed bindings.
+- [x] Verify the official SDK boundary: connected controllers and aircraft input-event descriptors are enumerable, but active user Controls profile assignments are not exposed; report **UNAVAILABLE**, not **UNBOUND**, and do not parse undocumented profile files.
+- [x] Connect the binding-discovery state to Current Flight checklist and Settings; keep per-step hints absent until an authoritative action mapping exists and prohibit binding state from completing checklist steps.
+- [ ] Implement actual action-to-key/button discovery only when a supported authoritative source exists, then validate aircraft/device-sensitive hints in MSFS.
 - [ ] Render missing controller/keyboard mappings as visible amber/orange **UNBOUND** and required/critical missing mappings as red **UNBOUND — REQUIRED**.
-- [ ] Implement Dispatch screen against real dispatch services.
-- [ ] Implement Jobs screen against real job services.
+- [x] Implement the first dedicated Dispatch screen against the composite cruise/fuel-weight/physical-feasibility service with explicit inputs, deterministic issues and no operation-state writes.
+- [x] Prepopulate Dispatch from one unambiguous Accepted contract's persisted route and exact Fleet-reserved aircraft; fail closed on missing/ambiguous reservation state and never reuse that reservation for another aircraft.
+- [x] Lock accepted route/payload/distance fields and allow the Fleet reservation only when aircraft and every immutable contract planning term match exactly; legacy missing terms fail closed.
+- [x] Add schema-v16 prepared-dispatch persistence plus an application service that rechecks Accepted-contract/reservation authority before and after composite evaluation and stores only feasible fuel/runway plans without granting start authority.
+- [x] Expose the prepared-dispatch service on Dispatch only for one complete accepted contract and its exact reserved aircraft; project prepared/retry/failure evidence without accepting, mutating or starting a job.
+- [x] Require accepted-job pre-FlightSession recovery to reload and revalidate the exact prepared contract/reservation/aircraft/fuel/runway plan; missing, changed or infeasible evidence leaves the contract Accepted.
+- [x] Extend automatic pre-FlightSession recovery to Cargo, Express Cargo and AOG-parts contracts with immutable named manifests; leave accepted unnamed legacy cargo untouched/cancellable, but restore an already-in-progress legacy contract's FlightSession solely for safe Current Flight recovery/abandonment without inventing manifest or completion authority.
+- [x] Restore an already-in-progress legacy Passenger contract's FlightSession when immutable manifest terms are absent, solely for safe Current Flight recovery/abandonment; leave accepted legacy Passenger contracts untouched/cancellable and never invent passenger-manifest or completion authority.
+- [x] Treat multiple supported Accepted contracts as an explicit non-error automatic-recovery state; do not select or mutate one, and preserve all of them for the existing Jobs cancellation flow.
+- [x] Apply the same prepared-plan guard when Jobs requests start for an already-Accepted contract; reuse the revalidated fueled requirements and prevent the older raw-preflight path from bypassing preparation.
+- [x] Split ordinary first-time Jobs acceptance from start: accept/reserve only, direct the pilot to Dispatch, reject direct start until the accepted plan is prepared, and preserve only the named development fixture's test path.
+- [x] Add optional explicit Dispatch weather limits for crosswind, tailwind, density altitude, visibility and ceiling; query existing authoritative weather only when enabled and preserve missing evidence as insufficient.
+- [x] Persist immutable accepted offer distance/payload in the `JobContract` JSON, project it to Dispatch after restart, and keep legacy missing terms explicit.
+- [x] Replace free-form Dispatch cruise/fuel indexes with selected-aircraft registry profile choices that require complete TAS, fuel-consumption and matching fuel-density evidence; require explicit selection and clear it on aircraft change.
+- [x] Derive and display the shared weight/ISA/altitude envelope for each selectable cruise profile, exclude disjoint profiles, and reject out-of-envelope conditions before dispatch evaluation.
+- [x] Clear prepared-plan records idempotently at authoritative successful-finalization and abandonment boundaries, retaining retry safety across partial cleanup failures.
+- [x] Navigate Jobs to Dispatch only after authoritative first-time acceptance succeeds so Dispatch reloads the exact persisted planning context; failed acceptance stays on Jobs.
+- [x] Return Dispatch to Jobs only after successful/idempotent plan persistence so the separate start authority rechecks the current plan; unsuccessful preparation stays on Dispatch.
+- [x] Remove manual Dispatch from the normal paid-job loop: Jobs now accepts, reserves, applies the standard civilian planning policy, persists only an authoritative feasible plan, revalidates it and starts the flight in one action. Any post-acceptance preparation failure cancels the contract and releases its reservation before surfacing the error; Dispatch remains an optional advanced/recovery surface.
+- [x] Expose accepted-preflight cancellation directly on Jobs, including one confirmed cancel-all path for multiple recovered Accepted contracts, so start failures can clear runtime state, prepared plans and exact Fleet reservations without visiting Dispatch.
+- [x] Keep failed Jobs cancellation safely retryable: refresh remaining accepted targets, re-enable their cancellation action and show generic retry/diagnostic guidance while retaining technical exception details only in structured logs.
+- [x] Keep failed or partial Advanced Dispatch cancellation safely retryable: refresh authoritative remaining targets, suppress raw technical details, retain structured logging and prove a subsequent retry can clear the accepted job.
+- [x] Keep failed Advanced Dispatch preparation safely recoverable: refresh authoritative accepted-job context, retain retry/cancellation exits, prove Already Prepared retry navigation and fail closed if the refresh also fails.
+- [x] Navigate Jobs to Current Flight only after the start authority creates/reuses the persistent FlightSession; failed starts remain on Jobs.
+- [x] Reconcile start-path exceptions against current FlightSession authority: if a session was created before a later refresh failure, project and open Current Flight recovery while blocking new starts; otherwise keep accepted preflight work retryable/cancellable and hide technical exception text.
+- [ ] Persist or derive authoritative cruise/fuel/reserve/safety-margin planning inputs.
+- [x] Implement Jobs screen against real board, installed-aircraft readiness, accept/start, completion and abandon services.
 - [ ] Implement Map / World screen against real world state.
-- [ ] Implement Aircraft screen against registry.
+- [x] Implement read-only Aircraft screen against installed discovery, registry enrichment and authoritative Fleet availability/reservation state, with explicit unknown capability/access state and no ownership inference.
+- [x] Fail Aircraft refresh closed: clear stale availability/reservation projections, suppress technical exception text, retain explicit retry/diagnostic guidance and restore authority only from a successful inventory read.
+- [x] Project registry-proven payload/range, seats, IFR capability, pressurization and landing-gear facts individually on Aircraft; preserve each missing value as explicit unknown.
+- [x] Require per-field registry provenance before Aircraft displays a capability fact, show provider/confidence evidence, and fail unproven values closed to unknown.
+- [x] Project explicit MSFS cabin passenger capacity separately from crew-inclusive total seats; do not use it as passenger-job authority without the remaining seat/access requirements.
+- [x] Resolve cabin passenger capacity through a dedicated registry field with its own provider/confidence provenance; shared reference metadata alone is not capacity authority.
+- [x] Derive positive retractable-wheel-gear capability from valid paired official `flight_model.cfg` contact-point times; preserve zero, absent, inconsistent and malformed timing as unknown rather than fixed-gear proof.
+- [x] Resolve official MSFS `object_class` through dedicated field provenance and project it read-only on Aircraft without synthesizing mission capability, qualification or access.
+- [x] Resolve positive official `ui_certified_ceiling` through dedicated provenance, project it read-only on Aircraft, cap selectable Dispatch cruise envelopes, and reject above-ceiling authoritative cruise plans; missing or unproven evidence adds no limit.
+- [x] Project operating empty weight, distinct configured empty weight, maximum takeoff weight, maximum landing weight, maximum zero-fuel weight, maximum fuel weight and fuel capacity on Aircraft only from registry-resolved dispatch-performance evidence with provenance; preserve missing and unproven values as unknown and never substitute configured empty weight for operating-empty dispatch authority.
 - [ ] Implement Hangar / Bases screen.
 - [ ] Implement Maintenance screen.
 - [ ] Implement Company screen.
 - [ ] Implement employer rank/standing lifecycle with deterministic probation, demotion, suspension and firing/termination plus recovery/rehire rules.
 - [ ] Implement Finances screen.
 - [ ] Implement Markets screen.
-- [ ] Implement Military / Government screen.
+- [x] Implement first Military / Government screen using the production design system and application-layer conflict projections/actions.
+- [x] Add a read-only schematic Operational Map to Military/Government using existing conflict snapshot units/threats/support targets, with accessible text/automation labels and no UI-owned conflict rules.
+- [x] Add deterministic Communications panel from current campaign/support/threat/active-operation snapshot state; no AI or fabricated event history.
+- [ ] Complete local visual/accessibility acceptance of the Military/Government history/drill-down and surrounding operational surface.
 - [x] Implement production Logbook / Debrief screen with committed-flight list, aggregate totals, filters, multi-leg detail, route-track rendering, landing evidence, incidents and settlement summary.
+- [x] Fail Logbook refresh closed: clear stale entries, totals and selection, suppress technical exception text, retain explicit retry/diagnostic guidance and restore history only from a successful committed-entry read.
 - [ ] Implement Career screen.
 - [x] Implement production Settings screen.
 - [x] Persist versioned app preferences independently from career state.
+- [x] Preserve malformed, unusable, future-schema, semantically invalid, inaccessible or colliding settings storage; fail ordinary writes closed until explicit preference reset repairs it, then resume normal persistence without touching career data.
+- [x] Project preserved preference-file failure in Settings, disable only the six preference editors, keep reset/backup/diagnostics available and restore editing immediately after a successful explicit reset while failed repairs stay retryable.
+- [x] Contain preference save/reset failures, preserve the prior settings and reset retry path, release busy state, keep cancellation propagating and replace technical exception text with safe storage/retry/diagnostic/Open Logs guidance.
+- [x] Reproject every preference control from authoritative current settings after persistence so a failed write visibly restores the saved value without recursively issuing another update.
+- [x] Serialize Settings preference mutations and resets, deriving each queued change from the latest authoritative record so overlapping control events cannot lose a sibling update.
+- [x] Reject overlapping backup, diagnostic-export and preference-reset actions through one Settings gate; disable their controls while owned and retain authoritative busy state until the owner finishes.
+- [x] Serialize backup and diagnostic snapshots against preference persistence; disable every preference control and reject late direct mutations while backup, export or reset owns the recovery-action gate.
+- [x] Include clean test-profile reset scheduling in the same non-queuing Settings action gate so backup/export/reset work cannot race the next-launch reset request and a rejected overlap remains retryable.
+- [x] Require exact OpenCareer reset-request contents and reject redirected request files before consuming a scheduled KJFK test-profile reset, preserving recoverable test data when the request is malformed or tampered.
 - [x] Implement Aviation/Metric unit selection and reformat existing telemetry without waiting for a new sample.
 - [x] Implement live simulator/SimConnect/telemetry diagnostics.
 - [x] Implement local application file logging.
 - [x] Implement diagnostic ZIP export with coordinates excluded.
+- [x] Contain diagnostic export directory-setup and archive failures, preserve cancellation, clean temporary output, keep technical details in logs and expose safe retry/Open Logs guidance.
 - [x] Implement current local-data ZIP backup and folder access.
+- [x] Contain local-data backup directory-setup and archive failures, preserve cancellation, clean partial ZIP/SQLite snapshot artifacts, keep technical details in logs and expose safe retry/Open Logs guidance.
+- [x] Exclude the transient next-launch Development/Test reset request from local-data backups so restoring a backup cannot schedule deletion of the restored isolated profile.
+- [x] Surface failed next-launch database-restore application in Settings, distinguish cancellable pending state from a consumed stage, suppress raw SQLite details and never imply the selected backup was applied successfully.
+- [x] Preserve the pre-restore SQLite rollback snapshot until a copied rollback passes integrity validation; retain the snapshot and log its recovery path if copy or validation fails.
+- [x] Normalize malformed restore-manifest JSON and null required fields as invalid imported data so staging preserves current data and returns safe validation guidance without parser details.
+- [x] Contain database-restore data-directory setup failures inside the safe validation boundary so path collisions or inaccessible storage create no pending restore and expose no filesystem details to the player.
+- [x] Preserve the staged database until its copied live replacement passes final integrity validation and staged cleanup succeeds, so a post-copy failure retains a retryable recovery source while rollback protects current career data.
+- [x] When replacement staging fails over an existing pending restore, preserve its bytes and explicitly warn that it will still run on restart with a direct cancellation instruction and no technical archive details.
+- [x] Protect startup restore sidecar cleanup with the same validated rollback boundary as database replacement, restoring the original career database and preserving the staged source when cleanup fails.
+- [x] Reject restore manifests with a missing creation timestamp so the year-one deserialization default cannot be accepted as trusted backup metadata or exposed through player-facing validation details.
+- [x] Serialize pending restore cancellation with staging and startup application, and await the authoritative result so cancellation cannot race a staged source into or out of existence.
+- [x] Reject a database-restore staging path that resolves to the selected backup archive so extraction cannot overwrite the only recovery ZIP; preserve both archive bytes and live career data on rejection.
+- [x] Reject pending restore cancellation when its path resolves to the live career database so cancellation cannot delete authoritative storage; verify the SQLite checkpoint remains loadable and unchanged.
 - [x] Implement reduced-motion and offline optional-service permission preferences.
 - [x] Keep real binding discovery explicitly owned by MBL-05.
 - [x] Keep authoritative SQLite FlightSession/save recovery explicitly owned by MBL-07.
+- [x] Replace stale Settings recovery copy with a read-only live projection of the current SQLite-backed FlightSession recovery state.
+- [x] Surface failed FlightSession checkpoint recovery as persistent generic recovery-attention state in Settings until a successful retry; keep raw exceptions in structured logs and direct the player to restart/capture diagnostics rather than misreporting an empty session or inviting a replacement flight.
+- [x] Label the active normal versus isolated KJFK Development/Test data profile in Settings and provide a confirmed next-launch clean reset that is disabled for normal career data.
+- [x] Keep a failed isolated-profile clean-reset scheduling attempt retryable, suppress raw storage/path exception text and retain technical details in structured logs with diagnostic guidance.
+- [x] Keep the active KJFK Development/Test profile visibly identified in the main shell on every page while leaving normal career mode unmarked.
+- [x] Group primary navigation around functional workflows, label optional Dispatch as advanced and remove unfinished placeholder destinations from the active test path.
+- [x] Add a test-profile-only Home entry that opens the KJFK playable loop in Jobs with explicit zero-pay/zero-progression and no-Advanced-Dispatch guidance.
 - [ ] Verify Settings persistence, backup/export and diagnostics interactively on Windows.
 - [ ] Verify keyboard navigation/text scaling.
 - [ ] Verify adaptive layouts.
@@ -662,7 +924,7 @@ Track status: **DESIGN COMPLETE / IMPLEMENTATION PLANNED**
 
 # MVP acceptance checklist
 
-The first end-to-end playable foundation is not complete until every item below is checked.
+The first supported C172/KJFK playable-loop foundation is complete; unchecked items below remain broader product/runtime acceptance gates.
 
 - [x] App project exists.
 - [x] App can represent Waiting/Disconnected state.
@@ -671,17 +933,17 @@ The first end-to-end playable foundation is not complete until every item below 
 - [x] Core normalized telemetry implementation exists.
 - [x] Deterministic world/economy simulation can run independently of MSFS.
 - [ ] Production app launch verified locally with MSFS not running.
-- [ ] Live MSFS connection verified.
-- [ ] Live reconnect after MSFS restart verified.
-- [ ] Current aircraft identity verified.
-- [ ] Live core telemetry verified.
-- [ ] Robust flight-state detection works from calibrated evidence.
-- [ ] Active FlightSession orchestration works.
-- [ ] FlightSession saves to SQLite.
-- [ ] Interrupted FlightSession recovers safely.
-- [ ] Basic flight completes from start through parking/shutdown.
-- [ ] Completed flight is saved to logbook/history.
-- [ ] At least one feasible job can be accepted and settled exactly once.
+- [x] Live MSFS connection verified for the exact-PC C172/KJFK validation path.
+- [x] Live reconnect after MSFS restart verified for the established SimConnect validation path.
+- [x] Current stock C172 TITLE and canonical aircraft identity verified.
+- [x] Live core telemetry verified for the supported validation path.
+- [x] Robust full-stop flight-state detection works for the C172/KJFK validation path, including bounded bounce capture; broader calibration remains open.
+- [x] Active FlightSession orchestration works.
+- [x] FlightSession saves to SQLite.
+- [x] Interrupted FlightSession recovers safely.
+- [x] Basic flight completes from start through parking/shutdown.
+- [x] Completed supported career flight is saved to SQLite Logbook/history.
+- [x] A feasible Development/Test job is accepted, dispatched and settled exactly once with zero configured progression.
 
 ---
 
@@ -689,12 +951,10 @@ The first end-to-end playable foundation is not complete until every item below 
 
 Do not skip this order without an explicit reason:
 
-1. Run the real Windows/MSFS live probe.
-2. Analyze the JSONL trace.
-3. Correct only concrete simulator-variable/unit/runtime discrepancies.
-4. Implement configurable `FlightEvidenceProcessor`.
-5. Add versioned SQLite FlightSession/FlightLeg checkpoint/recovery.
-6. Build installed-aircraft registry and runway/dispatch feasibility.
-7. Build the first market-driven playable job and atomic settlement.
+1. Live-certify one ordinary compensated market-generated Ferry/Reposition or Passenger job through dispatch, settlement, Logbook, location and restart replay.
+2. Live-validate the implemented aircraft-mismatch, touch-and-go/go-around, simulation-rate, night and actual-instrument paths on representative simulator sessions.
+3. Expand registry/capability/job breadth without rebuilding the validated KJFK loop.
+4. Add Dashboard ranking/pay or Company/World/Fleet values only when authoritative upstream inputs exist; do not rebuild eligible-offer projection.
+5. Continue checklist/binding/specialized-mission work only through their owning MBL prerequisites.
 
 The external aviation APIs, full conflict simulation, dealer expansion and rich production UI are valuable, but they do not replace this critical path.

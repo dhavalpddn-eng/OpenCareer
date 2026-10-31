@@ -28,7 +28,7 @@ The `MBL-xx` identifier is stable and does not change when this file is reordere
 
 The reusable code layer is implemented: centralized Jet Age tokens plus shared typography, paper/metal panels, buttons, form controls, toggles, tabs, lists, ledger/table rows and semantic status styles. Dashboard, Current Flight, Settings, placeholders, shell surfaces and the tutorial overlay use the shared resources. Automated design-contract tests lock the vivid-ivory palette, contrast and required component keys.
 
-Remaining before removal: local interactive/visual/accessibility acceptance. Public-repository Windows CI now builds the WinUI surface successfully, so the remaining gate is local product acceptance rather than compilation.
+Primary/Secondary/Danger button readability now has exact-PC normal/hover acceptance and variant-scoped state resources retain the stock WinUI template. Remaining before removal: interactive keyboard-focus, high-contrast, text-scaling and broader visual/accessibility acceptance. Public-repository Windows CI builds the WinUI surface successfully.
 
 ### MBL-23 — Settings / diagnostics system — CODE COMPLETE / VERIFICATION PENDING
 **Estimated remaining effort: ~0.25–0.5 developer day**
@@ -50,30 +50,31 @@ Implemented:
 - tutorial replay/preview controls,
 - safe preference reset that does not touch career state.
 
-Dependency boundaries remain explicit: MBL-05 owns real controller/keyboard binding discovery, and MBL-07 owns authoritative SQLite FlightSession/save recovery. The Settings surface already reports those capabilities as unavailable rather than pretending they exist.
+Dependency boundaries remain explicit: MBL-05 owns real controller/keyboard binding discovery, and MBL-07 owns FlightSession persistence/recovery. Settings now projects the existing SQLite-backed FlightSession recovery state from the authoritative runtime without mutating it.
 
 Remaining before removal: local interactive verification of persistence, folders, backup/export and accessibility behavior. Public-repository Windows CI now builds the Settings surface successfully.
 
 ### MBL-03 — Full tutorial engine — IN PROGRESS
 **Estimated remaining direct effort: ~0.5–1.5 developer days**
 
-Core engine is implemented and CI-green: versioned first-run app tour, persistent resume/skip/completion, shell overlay/navigation, Settings replay, first-job walkthrough, and banner/carrier previews.
+Core engine is implemented and CI-green: versioned first-run app tour, persistent resume/skip/completion, shell overlay/navigation, Settings replay, first-job walkthrough, automatic first-job triggering from authoritative career/Jobs state, and banner/carrier previews.
 
 Remaining before removal:
 
 - local interactive/visual acceptance,
-- automatic first-job trigger when Jobs exists,
 - automatic specialized mission-family trigger when those mission families exist,
 - mission/checklist evidence integration.
 
-### MBL-01 — Production Home / Dashboard — IN PROGRESS
-**Estimated remaining direct effort: ~0.5–1.5 developer days plus downstream integrations**
+### MBL-01 — Production Home / Dashboard — CURRENT-AUTHORITY CODE COMPLETE / VERIFICATION PENDING
+**Estimated remaining direct effort: ~0.25–0.5 developer day plus downstream integrations**
 
 The production dynamic Home surface and contracts are implemented: split flight/career hero, daily P/L header, deterministic next-action routing, four-tier Top Opportunities foundation, career/company/finance/aircraft/readiness modules, world summary, recent activity, searchable OpenCareer Network feed, and an Active Operation panel for accepted work/checklist/blocker/next-action state.
 
 Dashboard snapshot guidance is centralized and domain-tested for active operations, maintenance blockers, probation/suspension/termination and job recommendations. Home refreshes its non-telemetry snapshot every 10 seconds while visible with overlap protection and cancellation on navigation. Windows WinUI, live-probe, Linux, SimLab and unit-test CI all passed after the first converter namespace defect was fixed.
 
-The UI intentionally shows honest empty/unavailable states until authoritative systems provide data. Final completion depends on Jobs, Career/XP, Company employment, Aircraft Registry/location, Economy/Finances and Map / World sources wiring into `IDashboardSnapshotSource`, plus local visual/runtime acceptance.
+Production registers `PlayerCareerDashboardSnapshotSource`. It projects authoritative career qualifications/experience and player/home location, cash/today net, recent committed flights, one deterministic active operation with existing readiness/blockers, and its contract-reserved aircraft identity when reservation/registry evidence exists. `CareerJobOfferEligibilitySource` reads the persisted local board and delegates aircraft readiness to the existing start action; Dashboard projects up to four proven-startable offers in deterministic source order with route, duration/distance and qualifying-aircraft evidence. It also exposes the authoritative eligible-local count and source status.
+
+Tier, fit, gross/net offer pay and quality ranking remain explicitly unknown because no current authority provides them. Company/employment, ownership, maintenance readiness, physical aircraft location, obligations, social activity and broader World signals remain null/empty. Final removal depends on local adaptive-layout/keyboard/visual acceptance and projecting later upstream authorities without fabrication; current Dashboard work must not block those systems.
 
 ### MBL-22 — AI dispatcher / copilot / passengers
 **Estimated effort: ~2–5 developer days for the first production version**
@@ -83,35 +84,37 @@ Optional narrative/dialogue layer that never owns authoritative game state.
 This estimate covers the first safe production integration, not an unlimited library of personalities/content.
 
 ### MBL-12 — Debrief + Logbook — IN PROGRESS
-**Estimated remaining direct effort: ~1–3 developer days plus MBL-07 / settlement integration**
+**Estimated remaining direct effort: ~1–3 developer days**
 
 The production Logbook/Debrief foundation is implemented: immutable historical debrief snapshots, FlightSession -> FlightLeg hierarchy, decimated multi-leg route tracks, independent time/experience dimensions, fuel/payload/assistance facts, landing episode metrics with evidence quality, incidents/events, mission/safety outcome separation, frozen settlement references, committed-logbook statistics, search/type/outcome filters, and a real Jet Age WinUI Logbook screen.
 
-An application-level idempotent commit coordinator prevents retry-created duplicate logbook entries and derives career-log idempotency from the authoritative settlement key. Free/practice flights use a separate manual-log path. Unknown evidence remains unknown rather than being inferred.
+An application-level idempotent commit coordinator prevents retry-created duplicate logbook entries and derives career-log idempotency from the authoritative settlement key. Free/practice flights use a separate manual-log path. Training debriefs can carry structured civilian qualification metadata; generic and historical Training entries remain valid without it. Unknown evidence remains unknown rather than being inferred.
 
-SQLite persistence is now implemented in `OpenCareer.Infrastructure`: a versioned `opencareer.db` schema, persistent `ILogbookSource` / `ILogbookWriter`, indexed history/search fields, frozen JSON debrief payloads, WAL mode, startup migration, and idempotent duplicate protection. The WinUI app is wired to the SQLite store instead of the unavailable placeholder.
+SQLite persistence is implemented in `OpenCareer.Infrastructure`: a versioned `opencareer.db` schema, persistent `ILogbookSource` / `ILogbookWriter`, indexed history/search fields, frozen JSON debrief payloads, WAL mode, startup migration, and idempotent duplicate protection. Supported terminal career flights are projected from the authoritative FlightSession and committed after settlement through the production terminal workflow. Replay uses the settlement-derived key and cannot duplicate the ledger or Logbook entry.
 
 Remaining before removal:
-- map real completed FlightSession evidence into `FlightDebrief`,
-- wire career settlement -> exactly-once Logbook commit,
-- wire free/practice **Log Flight / Discard from pilot logbook** postflight flow,
-- feed persisted route/landing/fuel/payload evidence from live sessions,
-- add database-consistent backup/recovery with MBL-07,
+- add broader event/scoring evidence only where trustworthy aircraft-relative inputs exist,
 - complete local interactive/visual acceptance.
+
+Completed since the prior reconciliation: explicit free/practice **Log Flight / Discard** orchestration and Current Flight actions, persisted multi-leg time/statistics/route/landing ownership with multi-leg debrief projection, and persisted first-touchdown VS/G/IAS/pitch/bank metrics. Retry/restart paths remain idempotent.
 
 MBL-12 does not own mission success or economy settlement; it records their authoritative final results.
 
-### MBL-04 — Live per-flight checklist
-**Estimated effort: ~3–6 developer days**
+### MBL-04 — Live per-flight checklist — CONVENTIONAL FOUNDATION IMPLEMENTED / EXPANSION AND LIVE ACCEPTANCE PENDING
+**Estimated remaining effort: ~2–5 developer days plus live validation**
 
-Phase-aware preflight through shutdown checklist with trustworthy live auto-verification.
+Current Flight now renders a deterministic conventional checklist from preflight/preparation through shutdown/completion. Automatic completion uses only persisted FlightSession milestones scoped to the current leg; raw telemetry snapshots cannot backfill earlier steps. Aircraft-specific cockpit, configuration and procedural items remain explicitly manual or unavailable when OpenCareer lacks trustworthy universal evidence. The persistent **Show checklist every flight** preference controls visibility without changing gameplay state.
 
-### MBL-06 — FlightEvidenceProcessor
-**Estimated effort: ~4–7 developer days**
+Remaining: trustworthy binding/profile discovery under MBL-05, richer aircraft-specific and specialized-mission definitions after their authorities exist, manual-step interaction only if a durable authority is designed, and local WinUI/MSFS visual and runtime acceptance.
 
-Normalized telemetry to stable taxi/takeoff/airborne/approach/landing/go-around/parking evidence.
+### MBL-06 — FlightEvidenceProcessor — CORE FULL-STOP PATH IMPLEMENTED / EDGE CALIBRATION PENDING
+**Estimated remaining effort: ~4–7 developer days plus live validation**
 
-Includes configuration, hysteresis, edge cases and regression coverage. Live calibration may extend elapsed calendar time.
+Production converts normalized telemetry into stable load, engine-start, taxi, takeoff/reject, airborne, approach, touchdown, bounded bounce/recontact, rollout, parking and shutdown evidence. The runtime drains a bounded ordered high-rate flight-critical stream, preserves the 1 Hz `Latest` contract, rejects pause/slew/stale evidence and transactionally restores processor state when persistence fails. The C172/KJFK full-stop and bounce path is exact-PC accepted.
+
+Telemetry-derived touch-and-go/go-around/new-approach classification, active-session aircraft-identity enforcement, simulation-rate/night/actual-instrument accounting, persisted first-touchdown quantitative metrics and bounded 1/3/6-hour replay are implemented and CI-covered.
+
+Remaining: broader representative-aircraft/edge calibration, aircraft-relative landing scoring/thresholds, richer event windows where trustworthy evidence exists, and local/live acceptance of the newer evidence paths. The exact-PC live pass remains limited to the established C172/KJFK full-stop/bounce path.
 
 ### MBL-24 — Installer / update / release pipeline
 **Estimated effort: ~4–8 developer days**
@@ -120,12 +123,14 @@ Packaging, migrations, backups, production logging, performance validation, sign
 
 Final release acceptance naturally waits until the app is much closer to feature-complete.
 
-### MBL-05 — Controller + keyboard binding system
-**Estimated effort: ~4–8 developer days**
+### MBL-05 — Controller + keyboard binding system — AUTHORITY BOUNDARY IMPLEMENTED / ASSIGNMENT DISCOVERY BLOCKED
+**Estimated remaining effort: ~3–7 developer days, conditional on a supported binding authority**
 
-Per-step verified bindings, UNBOUND states and aircraft/device-sensitive mapping.
+Deterministic action, device, profile, state and evidence models are implemented behind an isolated simulator/application source. `BOUND`, `UNBOUND`, `UNKNOWN` and `UNAVAILABLE` are distinct. Current Flight and Settings report the production source state, while binding evidence cannot complete checklist steps.
 
-This is more uncertain than its size suggests because MSFS binding/profile accessibility must be proven rather than guessed.
+Official MSFS 2024 SDK evidence currently exposes connected-controller enumeration (`SimConnect_EnumerateControllers`), current-aircraft input-event descriptors (`SimConnect_EnumerateInputEvents`) and client-owned input mapping (`SimConnect_MapInputEventToClientEvent_EX1`). It does not expose the user's active Controls profile or action-to-key/button assignments. Production therefore reports `UNAVAILABLE`; it does not parse undocumented profile files, infer assignments, or claim `UNBOUND`. No checklist step receives a binding hint until an authoritative action mapping exists.
+
+Remaining: implement actual assignment discovery only if Microsoft exposes a supported runtime/profile API or another explicitly authoritative source is adopted; then add device/aircraft-sensitive hints and validated UNBOUND presentation plus local MSFS acceptance.
 
 ### MBL-15 — Aircraft purchasing + financing
 **Estimated effort: ~5–8 developer days**
@@ -134,56 +139,62 @@ Persistent dealers/lenders, used/new inventory, loans, insurance and atomic owne
 
 Credit/dealer domain foundations already exist, reducing remaining effort.
 
-### MBL-07 — Persistent FlightSession / recovery
-**Estimated effort: ~5–9 developer days**
+### MBL-07 — Persistent FlightSession / recovery — CORE CHECKPOINT/RECOVERY IMPLEMENTED / HARDENING PENDING
+**Estimated remaining effort: ~1–3 developer days plus broader live validation**
 
-SQLite checkpoints, multi-leg sessions, route/event persistence, interruption recovery and duplicate-effect prevention.
+The production runtime owns one authoritative FlightSession, persists versioned SQLite checkpoints before publication, checkpoints transitions and bounded steady-state intervals, stores decimated route/landing summaries, suspends on disconnect, recovers at startup, resumes only on plausible continuity and prevents duplicate terminal effects. It falls back to the previous valid checkpoint when the newest generation is corrupt, passes bounded 1/3/6-hour replay, persists ordered multi-leg FlightLeg boundaries/evidence, and resumes interrupted terminal workflows across restart. Interrupted-session recovery and the complete C172/KJFK lifecycle are live accepted.
+
+Remaining: richer event windows where justified, broader corrupt/restart/live edge validation, and local acceptance beyond the established C172/KJFK path. Multi-leg production creation remains explicit; automatic turnaround detection is intentionally not implemented.
 
 ### MBL-16 — Hangars + Bases
 **Estimated effort: ~5–10 developer days**
 
 Physical fleet geography, storage, local services, relationships, expansion and reposition logistics.
 
-### MBL-13 — Career progression
-**Estimated effort: ~6–10 developer days**
+### MBL-13 — Career progression — IN PROGRESS
+**Estimated remaining effort: ~5–9 developer days**
 
-Licenses, ratings, experience, recency, reputation, relationships, qualifications and milestones.
+Persistent career profile, onboarding/home location, qualifications foundation and exactly-once experience/travel application from committed career Logbook entries are implemented. One shared deterministic catalog owns the initial Student -> Private -> Commercial -> Airline Transport licenses plus the existing airplane single-engine land, multi-engine land and instrument ratings. The roadmap exposes Earned / Available / Locked state and explicit persisted-profile prerequisites through that catalog. A fail-closed award service accepts only a stable evidence identity, retrieves immutable completion evidence through an authority interface, rechecks career/target/prerequisites, derives the qualification state internally and persists only through the monotonic qualification coordinator. Production evidence resolves only from an immutable committed Training Logbook entry with structured career, training-operation and catalog qualification identities, successful completed outcome and no settlement. The first Student operation persists its authority in a local-circuit FlightSession, requires an installed registry aircraft with training capability, and is exposed through a bounded Career briefing/readiness/start surface. Expected-aircraft enforcement remains active for the contractless training session. Runtime finalization creates the qualifying entry only after takeoff, full-stop landing, parking, shutdown and successful session completion and retries recovered completed sessions after restart. UI remains unable to complete training or award qualifications, and Development/Test flights remain progression-neutral.
+
+Remaining: local visual/live acceptance of the Student flow, distinct completion requirements for Private/Commercial/ATP and ratings, recency, civilian reputation/relationships, category/model experience, milestones and their job/employer gates. Generic Training entries cannot award anything, and UI actions cannot directly complete training or grant qualifications.
 
 ### MBL-20 — World Map
 **Estimated effort: ~6–12 developer days**
 
 Airports, bases, fleet/company geography, routes, opportunities, events, markets and authorized government/military overlays.
 
-### MBL-08 — Installed-aircraft registry
-**Estimated effort: ~7–12 developer days**
+### MBL-08 — Installed-aircraft registry — IN PROGRESS
+**Estimated remaining effort: ~7–12 developer days**
 
-Installed aircraft identity, capability/confidence, location/experience and installed/employer/rented/assigned/owned access.
+Implemented foundation: SimConnect catalog/current TITLE plus package discovery, canonical identity resolution, persistent installed observations, per-field provenance/confidence, configuration enrichment and one complete C172 reference profile. Registry resolutions expose a stable normalized `icao-type:` identity only when explicit ICAO type-designator metadata exists, so different title/livery records can share type identity without being merged. Explicit ICAO manufacturer/model metadata now produces a separate normalized `icao-family:` identity, while explicit engine type/count evidence derives both the detailed None / Single / Multi classification and a stable broad `powerplant-class:` identity. The official MSFS 2024 `object_class` values resolve through a separate proven registry field and read-only Aircraft projection; they do not create OpenCareer mission-capability flags. Missing or inconsistent evidence remains unknown; no identity/classification implies a pilot rating, mission capability, access or record merge. A read-only Aircraft screen projects these identities plus current installed discovery, registry capability enrichment and the existing authoritative Fleet Available / Reserved / Unavailable state. Maximum payload/range, typical cruise speed, positive official `ui_certified_ceiling`, total seats, explicit MSFS cabin passenger capacity, IFR capability, pressurization and landing-gear configuration are shown individually only when both a resolved value and provider/confidence provenance exist. Registry-resolved dispatch-performance evidence additionally exposes operating empty weight, distinct MSFS configured empty weight, maximum takeoff weight, maximum landing weight, maximum zero-fuel weight, maximum fuel weight and fuel capacity on Aircraft only while that dispatch profile retains provenance; every missing or unproven value stays explicitly unknown. Configured empty weight is read-only and never substitutes for operating-empty dispatch authority. Certified ceiling remains read-only on Aircraft and becomes a Dispatch pressure-altitude upper bound only while its value and dedicated provenance remain present; missing or unproven ceiling evidence leaves the cruise-table envelope unchanged. Passenger capacity has its own observation/resolution/provenance field rather than relying on shared reference-metadata provenance. Positive official `systems.cfg` `[PRESSURIZATION]` design-pressure or maximum-differential values can now prove pressurization. Positive paired wheel extension/retraction times from official `flight_model.cfg` contact-point data can prove retractable gear; zero, missing, inconsistent or malformed timing remains unknown rather than proving fixed gear. Cabin passenger capacity stays distinct from crew-inclusive total seats and participates in passenger-job authority only together with explicit passenger capability, access, payload/range, total-seat and runway evidence. Evidence sources are visible and missing/unproven fields remain individually unknown. A missing Fleet row stays explicitly untracked, and neither installation nor availability is treated as career access. Current-aircraft identity and picker stability are live accepted.
 
-Aircraft discovery and reliable capability inference are the main uncertainty.
+Remaining: broader capability/reference coverage, aircraft location/experience, authoritative owned/rented/employer/assigned access, and local Aircraft-screen visual/accessibility acceptance. Reference data never implies installation or ownership.
 
-### MBL-09 — Dispatch system
-**Estimated effort: ~7–14 developer days**
+### MBL-09 — Dispatch system — IN PROGRESS
+**Estimated remaining effort: ~7–14 developer days**
 
-Payload, fuel/range, runway, weather/environment, qualification and mission feasibility with explicit blocking reasons.
+Implemented foundation: persistent Fleet availability/reservations, contract-owned acquire/recovery/release, airport/runway sources with simulator/reference fallback, and fail-closed payload/range/weight/fuel/runway/weather/safety-margin evaluators. A dedicated optional Dispatch workspace evaluates explicit pilot-supplied route, payload, cruise conditions, climb/descent fuel, reserve policy and safety margins through the complete composite fuel-weight/physical-feasibility service and projects quantitative failures without starting an operation. Its cruise-profile selector exposes only selected-aircraft registry profiles with complete TAS, fuel-consumption and matching fuel-density evidence plus a common weight/ISA/altitude envelope. A registry-proven certified ceiling caps that displayed envelope and the authoritative cruise planner independently rejects an otherwise interpolable altitude above it; missing or unproven ceiling evidence adds no limit. Dispatch profiles reject contradictory OEW/configured-empty/MZFW/MLW/MTOW hierarchies. Proven maximum zero-fuel weight rejects operating-empty-plus-payload overloads independently of fuel planning; cruise planning rejects a supplied weight below operating empty plus payload. Proven maximum landing weight rejects an explicit landing-performance weight above the limit, while absent landing-weight input remains unknown rather than invented. Conditioned takeoff runway performance refuses to interpolate from a supplied weight below the authoritative operating-empty-plus-payload-plus-planned-fuel weight. Conditioned landing performance likewise refuses a supplied weight below operating empty plus payload, the minimum possible zero-fuel landing weight. Both guards suppress static fallback. The optional surface displays the resulting envelope and rejects conditions outside it; raw indexes are not user-guessed, no profile is auto-selected there, and an aircraft change clears the prior selection. Optional explicit crosswind, tailwind, density-altitude, visibility and ceiling limits activate authoritative airport/runway weather evaluation without hidden defaults. New factory-created contracts persist immutable accepted offer distance and payload in their versioned JSON, while legacy contracts retain explicit missing planning terms. One unambiguous Accepted contract preloads and locks those values, its route and exact reserved aircraft after restart; its reservation is honored only when aircraft, route, payload and distance match that accepted contract exactly. Missing/ambiguous or legacy planning context fails closed. A schema-v16 prepared-plan service rechecks current Accepted-contract and Fleet-reservation authority before and after composite evaluation, then persists only a feasible fuel/runway plan. Normal first-time Jobs actions now accept and reserve, apply the standard civilian planning policy to a registry-proven profile, persist only a feasible plan, revalidate it and start the FlightSession in one **Accept & Start Flight** action without navigating to Dispatch. Any post-acceptance automatic-preparation failure cancels the contract and releases its exact reservation before surfacing the error. Direct start still rejects unaccepted ordinary offers. Accepted-job recovery and explicit start consume the persisted plan only after rechecking its contract version, reservation/aircraft, immutable terms and unchanged current fuel/runway result. Successful start navigates to Current Flight. Prepared plans are retained during the active operation and cleared idempotently at successful finalization or abandonment; cleanup failures preserve a retryable authority path. The named KJFK development fixture retains its test-only immediate route. Supported civilian Ferry/Reposition and Passenger paths check installation, access, qualifications and physical feasibility before start.
+
+Generation-time filtering now evaluates Ferry/Reposition and Passenger eligibility separately for every destination. Passenger eligibility requires the explicit passenger capability plus policy payload, total-seat and independently proven cabin-capacity requirements; total seats never substitute for passenger capacity. Every kind/route pair still requires one currently discovered installed civilian aircraft satisfying the shared fail-closed projection and authoritative static runway compatibility at both endpoints. Runway performance requires registry provenance; missing evidence cannot qualify a pair. Remaining: derive more planning inputs only from authority, add generation-time fuel/weather filtering from authoritative inputs, broaden aircraft/airport/weather data, issue/revoke military assignments, and complete local Dispatch visual/accessibility acceptance.
 
 ### MBL-17 — Maintenance
 **Estimated effort: ~8–14 developer days**
 
 Wear, service, repairs, parts/MRO, downtime, history and supported incident consequences.
 
-### MBL-14 — Economy + Markets
+### MBL-14 — Economy + Markets — IN PROGRESS
 **Estimated effort: ~8–15 developer days**
 
 Authoritative persistent economy, named cargo, market pressure/events, long absence and bankruptcy/recovery.
 
-A substantial deterministic foundation already exists, which keeps this below a from-scratch economy implementation.
+Persistent SQLite contract terms and ledger settlement now complete supported jobs exactly once; the terminal workflow also applies experience/location markers before cleanup. The deterministic commodity catalog, market snapshots and immutable accepted cargo manifests exist, and named lots now survive accepted-contract persistence and can drive cargo dispatch/completion evidence. Civilian reputation/relationship application, broader operating-cost authorities, market-driven cargo generation/settlement, persistent market-demand integration, long absence and bankruptcy/recovery execution remain open.
 
-### MBL-10 — Playable Jobs system
-**Estimated effort: ~10–18 developer days**
+### MBL-10 — Playable Jobs system — FIRST LOOP IMPLEMENTED / BREADTH PENDING
+**Estimated remaining effort: ~10–18 developer days**
 
-Market/location/career-driven work with employee viability and accept-to-active-operation flow.
+The production Jobs surface now provides persisted deterministic board refill, generation-time installed-aircraft static capability and endpoint-runway filtering, installed-aircraft selection/readiness, contract acceptance, Fleet reservation, dispatch, FlightSession start/recovery, mission completion, settlement, Logbook, experience/location finalization, reservation release, abandon cleanup and exact-once replay. Market filtering and the final start gate share one fail-closed registry projection; runway generation requires proven aircraft performance plus authoritative endpoint runway data, and final start still rechecks current full physical authority. The first standard civilian Passenger job now carries deterministic immutable count/payload terms, generates only on separately proven passenger-capable routes, survives Accepted/InProgress restart recovery, and projects its accepted manifest into completion evidence. Accepted named-cargo terms now persist and recover through the same contract boundary, with dedicated cargo dispatch authority and immutable mass/commodity completion evidence; Cargo offers are not generated yet. The zero-progression C172/KJFK Development/Test circuit runs through the same common authorities and is live accepted.
 
-This is where many earlier foundations become one playable product loop.
+Remaining: authoritative market-demand-driven generation, generation-time fuel/weather filtering and ranking from authoritative inputs, cargo/utility and other job-family breadth, richer briefing, civilian reputation/relationship consequences and live validation of an ordinary compensated route, including the new Passenger path.
 
 ### MBL-21 — MSFS EFB companion
 **Estimated effort: ~10–20 developer days**
@@ -197,11 +208,14 @@ MSFS SDK/version-sensitive behavior is the largest uncertainty.
 
 Optional business ownership, contracts, routes, utilization, staff, margins and expansion while preserving employee-only play. Employer careers must include rank/standing plus deterministic probation, suspension, demotion and firing/termination behavior with fair recovery paths.
 
-### MBL-19 — Military / Government career system
-**Estimated effort: ~15–30 developer days**
+### MBL-19 — Military / Government career system — CAMPAIGN CORE COMPLETE / INTEGRATIONS PENDING
+**Estimated remaining effort: ~6–14 developer days**
 
-Separate qualifications, assigned aircraft, patrol/surveillance/logistics/intercept/escort and later fictionalized conflict operations.
+Draft PR #10 now provides deterministic ground/air conflict state, sector/front representation, linked air-defense/interceptor threats, battlefield-driven CAS/suppression/recon/logistics/patrol/escort/intercept lifecycles, OpenCareer-only effects/damage, military qualification and assigned-aircraft authorization, seeded fictional theater generation, deterministic operation/faction identity plus Defensive/Aggressive/LogisticsFocused/AirFocused operational posture, posture-biased replacement/support-request behavior, SQLite campaign/active-mission recovery, strategic phase/momentum/objectives, bounded campaign cycles, finite replacement reserves, terminal Victory/Defeat/Stalemate/Ceasefire outcomes, persistent completed-operation history, deterministic successor planning/actions with stale-offer protection, an authorization-enforcing dispatch boundary, the production Military/Government WinUI screen using the application snapshot/transition boundaries, persisted completed-operation history, a read-only schematic Operational Map projecting units/threats/support targets, a deterministic current-state Communications feed for command/flight/dispatch/intelligence messages, and an interactive read-only completed-operation drill-down with persisted terminal facts, polling-stable selection, keyboard/focus UX and SQLite restart/no-write verification. MSFS remains flight/telemetry only.
 
+Campaign-core completion boundary reached at `16cda14981bc6284e4f33833e88aa8289ff46149`: production mission completion/failure now settles through the persisted operation-consequence pipeline without the legacy duplicate trust/reputation path, faction posture evolves deterministically with campaign phase changes, and a bounded 96-step deterministic campaign evolution stress test verifies replay equality and state bounds across campaign state, reserves, sectors, units, air units, threats, support requests, identity and postures. Exact-head Linux PR CI for `16cda14981bc6284e4f33833e88aa8289ff46149` is green; exact-head Windows CI is green as well.
+
+MBL-19 remains open only for dependency-driven integration and product acceptance: authoritative career onboarding/profile integration (MBL-13), aircraft assignment issuance/revocation through registry/dispatch (MBL-08/09), authoritative mission/job/economy settlement (MBL-10/14), representative live gameplay verification after flight-evidence/session-recovery gates (MBL-06/07), and local Military/Government visual/accessibility acceptance. No further standalone campaign-core mechanics slice is queued unless a concrete defect is found; broader balance/playtesting remains later tuning work.
 ### MBL-11 — Specialized mission framework
 **Estimated effort: ~20–40+ developer days for the full planned family set**
 

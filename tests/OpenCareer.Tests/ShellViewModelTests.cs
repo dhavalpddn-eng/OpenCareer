@@ -1,8 +1,11 @@
 using OpenCareer.App.ViewModels;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Flights;
+using OpenCareer.Application.Logbook;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
 using OpenCareer.Domain.Flights;
+using OpenCareer.Domain.Logbook;
 using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.Tests;
@@ -210,6 +213,1419 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public void PaidPreflightBriefingShowsExactRouteAircraftAndDirectStartInstructions()
+    {
+        Guid contractId =
+            Guid.Parse("11111111-2222-3333-4444-555555555555");
+        FlightSession session = FlightSession.Start(
+            new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero),
+            contractId,
+            plan: new FlightSessionPlan(
+                "kjfk",
+                "kalb",
+                "kbos",
+                ExpectedCanonicalAircraftId:
+                    "msfs-title:Cessna 172 Skyhawk"));
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+
+        ShellViewModel viewModel = CreateFlightViewModel(coordinator);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Equal("CAREER CONTRACT FLIGHT", viewModel.CurrentFlightBriefingKind);
+        Assert.Equal("KJFK → KALB · Alternate KBOS", viewModel.CurrentFlightBriefingRoute);
+        Assert.Equal(
+            "Cessna 172 Skyhawk · exact loaded-aircraft identity required",
+            viewModel.CurrentFlightBriefingAircraft);
+        Assert.Contains("engines off", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("Advanced Dispatch", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("not required", viewModel.CurrentFlightBriefingInstruction);
+    }
+
+    [Fact]
+    public async Task RecoveredPaidBriefingProtectsTheExistingJobAndAircraft()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+        var coordinator = new FlightSessionCoordinator();
+        var store = new TestFlightStore
+        {
+            Checkpoint = FlightSession.Start(
+                timestamp,
+                Guid.Parse("22222222-3333-4444-5555-666666666666"),
+                plan: new FlightSessionPlan(
+                    "KJFK",
+                    "KALB",
+                    ExpectedCanonicalAircraftId: "aircraft-v1"))
+        };
+        var persistence = new FlightSessionPersistenceService(coordinator, store);
+        await persistence.RecoverAsync();
+
+        ShellViewModel viewModel = CreateFlightViewModel(coordinator, persistence);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Equal("CAREER CONTRACT FLIGHT", viewModel.CurrentFlightBriefingKind);
+        Assert.Contains("Do not accept another job", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("same aircraft", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("continuity", viewModel.CurrentFlightBriefingInstruction);
+    }
+
+    [Theory]
+    [InlineData(FlightOperationState.Landed)]
+    [InlineData(FlightOperationState.TaxiIn)]
+    [InlineData(FlightOperationState.Parked)]
+    public void ArrivalBriefingRequiresParkingAndShutdownEvidence(
+        FlightOperationState operationState)
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+        FlightSession started = FlightSession.Start(
+            timestamp,
+            Guid.Parse("33333333-4444-5555-6666-777777777777"),
+            plan: new FlightSessionPlan("KJFK", "KALB"));
+        FlightSession session = started with
+        {
+            UpdatedAt = timestamp.AddMinutes(45),
+            OperationState = operationState
+        };
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+
+        ShellViewModel viewModel = CreateFlightViewModel(coordinator);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("parking", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("parking brake", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("shut down every engine", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("evidence", viewModel.CurrentFlightBriefingInstruction);
+    }
+
+    [Fact]
+    public void PaidShutdownBriefingExplainsExactlyOnceFinalization()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+        FlightSession started = FlightSession.Start(
+            timestamp,
+            Guid.Parse("44444444-5555-6666-7777-888888888888"),
+            plan: new FlightSessionPlan("KJFK", "KALB"));
+        FlightSession session = started with
+        {
+            UpdatedAt = timestamp.AddHours(1),
+            OperationState = FlightOperationState.Shutdown
+        };
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+
+        ShellViewModel viewModel = CreateFlightViewModel(coordinator);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("Complete Career Flight once", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("configured pay and operating costs", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("Logbook and location", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("exactly once", viewModel.CurrentFlightBriefingInstruction);
+    }
+
+    [Fact]
+    public void ActiveBriefingTracksTelemetryLossAndReconnectWithoutSessionMutation()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
+        FlightSession started = FlightSession.Start(
+            timestamp,
+            Guid.Parse("55555555-6666-7777-8888-999999999999"),
+            plan: new FlightSessionPlan(
+                "KJFK",
+                "KALB",
+                ExpectedCanonicalAircraftId: "msfs-title:Cessna 172 Skyhawk"));
+        FlightSession session = started with
+        {
+            UpdatedAt = timestamp.AddMinutes(30),
+            OperationState = FlightOperationState.Airborne
+        };
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+        var connection = new TestConnection
+        {
+            Current = new SimulatorConnectionSnapshot(
+                SimulatorConnectionState.Connected)
+        };
+        var telemetry = new TestTelemetrySource
+        {
+            Latest = Snapshot(4_000, 105, 0, paused: false)
+        };
+        var viewModel = new ShellViewModel(
+            connection,
+            telemetry,
+            new TestSettingsService(),
+            coordinator,
+            flightPersistence: null);
+
+        viewModel.RefreshConnectionStatus();
+        Assert.Contains("full-stop landing", viewModel.CurrentFlightBriefingInstruction);
+
+        connection.Current = new SimulatorConnectionSnapshot(
+            SimulatorConnectionState.Reconnecting,
+            SimulatorConnectionIssue.ConnectionLost);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("tracking is interrupted", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("same route and assigned aircraft", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("do not complete or accept another job", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("use Abandon Current Flight", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("awards no pay", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Same(session, coordinator.Current);
+
+        connection.Current = new SimulatorConnectionSnapshot(
+            SimulatorConnectionState.Connected);
+        telemetry.Latest = null;
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("telemetry is not available yet", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("do not complete or accept another job", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("use Abandon Current Flight", viewModel.CurrentFlightBriefingInstruction);
+
+        telemetry.Latest = Snapshot(4_100, 108, -200, paused: false);
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("full-stop landing", viewModel.CurrentFlightBriefingInstruction);
+        Assert.DoesNotContain("tracking is interrupted", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Same(session, coordinator.Current);
+    }
+
+    [Fact]
+    public void TerminalPaidBriefingKeepsSettlementRecoveryAvailableWithoutTelemetry()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
+        FlightSession started = FlightSession.Start(
+            timestamp,
+            Guid.Parse("66666666-7777-8888-9999-aaaaaaaaaaaa"),
+            plan: new FlightSessionPlan("KJFK", "KALB"));
+        FlightSession session = started with
+        {
+            UpdatedAt = timestamp.AddHours(1),
+            OperationState = FlightOperationState.Shutdown
+        };
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+        var viewModel = new ShellViewModel(
+            new TestConnection
+            {
+                Current = new SimulatorConnectionSnapshot(
+                    SimulatorConnectionState.Reconnecting,
+                    SimulatorConnectionIssue.ConnectionLost)
+            },
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            coordinator,
+            flightPersistence: null);
+
+        viewModel.RefreshConnectionStatus();
+
+        Assert.Contains("Complete Career Flight once", viewModel.CurrentFlightBriefingInstruction);
+        Assert.Contains("exactly once", viewModel.CurrentFlightBriefingInstruction);
+        Assert.DoesNotContain("tracking is interrupted", viewModel.CurrentFlightBriefingInstruction);
+    }
+
+    private static ShellViewModel CreateFlightViewModel(
+        FlightSessionCoordinator coordinator,
+        FlightSessionPersistenceService? persistence = null) =>
+        new(
+            new TestConnection
+            {
+                Current = new SimulatorConnectionSnapshot(
+                    SimulatorConnectionState.Connected)
+            },
+            new TestTelemetrySource
+            {
+                Latest = Snapshot(1_000, 0, 0, paused: false)
+            },
+            new TestSettingsService(),
+            coordinator,
+            persistence);
+
+    [Fact]
+    public async Task LiveChecklistUsesSourceAndRespectsPersistentVisibilityPreference()
+    {
+        DateTimeOffset timestamp =
+            new(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
+        FlightSession session = FlightSession.Start(timestamp);
+        var coordinator = new FlightSessionCoordinator();
+        coordinator.Restore(session);
+        var settings = new TestSettingsService();
+        var checklist = new TestLiveFlightChecklistSource(
+            new LiveFlightChecklistSnapshot(
+                session.SessionId,
+                LiveFlightChecklistPhase.PreflightPreparation,
+                FlightSessionStatus.Active,
+                [
+                    new LiveFlightChecklistStep(
+                        "aircraft-ready",
+                        LiveFlightChecklistPhase.PreflightPreparation,
+                        "Aircraft readiness established",
+                        LiveFlightChecklistVerificationMode.Automatic,
+                        LiveFlightChecklistStepState.Pending,
+                        "Pending authoritative flight evidence."),
+                    new LiveFlightChecklistStep(
+                        "engine-start",
+                        LiveFlightChecklistPhase.EngineStart,
+                        "Engine start observed",
+                        LiveFlightChecklistVerificationMode.Automatic,
+                        LiveFlightChecklistStepState.Pending,
+                        "Pending authoritative flight evidence.")
+                ],
+                "Authoritative checklist detail.",
+                InputBindingDiscoverySnapshot.Unavailable(
+                    "Official runtime profile assignments are not exposed.")));
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            settings,
+            coordinator,
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: null,
+            careerAbandonAction: null,
+            logger: null,
+            manualPostflightAction: null,
+            flightChecklistSource: checklist);
+
+        viewModel.RefreshConnectionStatus();
+
+        Assert.True(viewModel.IsCurrentFlightChecklistVisible);
+        Assert.Equal("PREFLIGHT / PREPARATION", viewModel.CurrentFlightChecklistPhase);
+        Assert.Equal("Authoritative checklist detail.", viewModel.CurrentFlightChecklistDetail);
+        Assert.Contains("UNAVAILABLE", viewModel.CurrentFlightInputBindingStatus);
+        Assert.Contains("not exposed", viewModel.CurrentFlightInputBindingStatus);
+        Assert.Single(viewModel.CurrentFlightChecklistSteps);
+        Assert.Equal("aircraft-ready", viewModel.CurrentFlightChecklistSteps[0].Id);
+
+        await settings.UpdateAsync(
+            settings.Current with { ShowChecklistEveryFlight = false });
+
+        Assert.False(viewModel.IsCurrentFlightChecklistVisible);
+    }
+
+    [Fact]
+    public async Task CareerCompletionActionEnablesOnlyWhenAuthoritativeInputsAreReady()
+    {
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete:
+                            false,
+                        CareerJobCompletionInputState.SettlementCostsUnavailable,
+                        "Actual settlement costs are unavailable.")
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence:
+                    null,
+                careerReadiness:
+                    null,
+                action,
+                logger:
+                    null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Assert.False(
+            viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "cost",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+
+        action.Availability =
+            new(
+                CanComplete:
+                    true,
+                CareerJobCompletionInputState.Ready,
+                "Authoritative completion inputs are ready.");
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Assert.False(
+            viewModel.CanCompleteCareerFlight);
+
+        action.Availability =
+            action.Availability with
+            {
+                FlightSessionId = Guid.NewGuid(),
+                ContractId = Guid.NewGuid()
+            };
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Assert.True(
+            viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "ready",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CareerCompletionActionDelegatesOnceAndDisablesAfterSuccess()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete:
+                            true,
+                        CareerJobCompletionInputState.Ready,
+                        "Authoritative completion inputs are ready.",
+                        sessionId,
+                        contractId)
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence:
+                    null,
+                careerReadiness:
+                    null,
+                action,
+                logger:
+                    null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        Assert.True(
+            viewModel.CanCompleteCareerFlight);
+
+        bool completed =
+            await viewModel.CompleteCareerFlightAsync();
+
+        Assert.True(completed);
+        Assert.Equal(
+            1,
+            action.CompleteCount);
+        Assert.Equal(sessionId, action.LastFlightSessionId);
+        Assert.Equal(contractId, action.LastContractId);
+        Assert.False(
+            viewModel.CanCompleteCareerFlight);
+        Assert.False(
+            viewModel.IsCareerCompletionBusy);
+        Assert.Equal(
+            "Flight Evaluated",
+            viewModel.CareerCompletionActionText);
+        Assert.Contains(
+            "EVALUATION COMPLETE",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Gross $500 · Operating costs -$75 · Net +$425",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "KJFK → KBOS logged",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Career flight #7",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FailedCareerCompletionRemainsRetryableWithoutRawErrorText()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string sensitiveFailure =
+            "SQLite failed at C:\\Users\\pilot\\AppData\\Local\\OpenCareer\\career.db";
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete: true,
+                        CareerJobCompletionInputState.Ready,
+                        "Authoritative completion inputs are ready.",
+                        sessionId,
+                        contractId),
+                NextCompletionFailure =
+                    new IOException(sensitiveFailure)
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                action,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Assert.False(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(1, action.CompleteCount);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "retry Complete Career Flight",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "Abandon Current Flight",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            sensitiveFailure,
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+
+        Assert.True(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(2, action.CompleteCount);
+    }
+
+    [Fact]
+    public async Task FailedCareerCompletionRefreshesAuthoritativeAbandonmentExit()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string sensitiveFailure =
+            "INTERNAL settlement failure C:\\Users\\pilot\\career.db";
+        var completion =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete: true,
+                        CareerJobCompletionInputState.Ready,
+                        "Authoritative completion inputs are ready.",
+                        sessionId,
+                        contractId),
+                NextCompletionFailure =
+                    new IOException(sensitiveFailure)
+            };
+        var abandonment =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The current career flight can be abandoned.")
+            };
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: completion,
+                careerAbandonAction: abandonment,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+        completion.Availability =
+            new(
+                CanComplete: false,
+                CareerJobCompletionInputState.FlightEvidenceIncomplete,
+                "Completion is no longer ready.",
+                sessionId,
+                contractId);
+
+        Assert.False(await viewModel.CompleteCareerFlightAsync());
+
+        Assert.False(viewModel.CanCompleteCareerFlight);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.Contains(
+            "remains available to abandon",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            sensitiveFailure,
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+
+        Assert.True(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(1, abandonment.AbandonCount);
+        Assert.Equal(sessionId, abandonment.LastSessionId);
+        Assert.Equal(contractId, abandonment.LastContractId);
+    }
+
+    [Fact]
+    public async Task FailedCareerCompletionFailsClosedWhenRecoveryRefreshAlsoFails()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string completionFailure = "Sensitive settlement failure.";
+        const string refreshFailure = "Sensitive readiness failure.";
+        var action =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete: true,
+                        CareerJobCompletionInputState.Ready,
+                        "Authoritative completion inputs are ready.",
+                        sessionId,
+                        contractId)
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                action,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        action.NextCompletionFailure = new IOException(completionFailure);
+        action.NextReadFailure = new IOException(refreshFailure);
+
+        Assert.False(await viewModel.CompleteCareerFlightAsync());
+        Assert.False(viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "Reopen Current Flight",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            completionFailure,
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            refreshFailure,
+            viewModel.CareerCompletionActionDetail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CancelledCareerCompletionRestoresBothAuthoritativeTerminalActions()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        using var cancellation = new CancellationTokenSource();
+        var completion = new FakeCareerCompletionAction
+        {
+            Availability = new(
+                CanComplete: true,
+                CareerJobCompletionInputState.Ready,
+                "Authoritative completion inputs are ready.",
+                sessionId,
+                contractId),
+            CancelDuringCompletion = cancellation
+        };
+        var abandonment = new FakeCareerAbandonAction
+        {
+            Availability = new(
+                CanAbandon: true,
+                CareerFlightAbandonAvailabilityState.Ready,
+                sessionId,
+                contractId,
+                "The current career flight can be abandoned.")
+        };
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: completion,
+            careerAbandonAction: abandonment,
+            logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Assert.False(
+            await viewModel.CompleteCareerFlightAsync(cancellation.Token));
+
+        Assert.Equal(1, completion.CompleteCount);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.False(viewModel.IsCareerCompletionBusy);
+        Assert.Contains("completion was interrupted", viewModel.CareerCompletionActionDetail);
+        Assert.Contains("Retry Complete Career Flight", viewModel.CareerCompletionActionDetail);
+        Assert.Contains("Abandon Current Flight", viewModel.CareerCompletionActionDetail);
+
+        Assert.True(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(2, completion.CompleteCount);
+    }
+
+    [Fact]
+    public async Task PreCancelledCareerCompletionDoesNotEscapeOrInvalidateActions()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var completion = new FakeCareerCompletionAction
+        {
+            Availability = new(
+                CanComplete: true,
+                CareerJobCompletionInputState.Ready,
+                "Authoritative completion inputs are ready.",
+                sessionId,
+                contractId)
+        };
+        var abandonment = new FakeCareerAbandonAction
+        {
+            Availability = new(
+                CanAbandon: true,
+                CareerFlightAbandonAvailabilityState.Ready,
+                sessionId,
+                contractId,
+                "The current career flight can be abandoned.")
+        };
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: completion,
+            careerAbandonAction: abandonment,
+            logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.False(
+            await viewModel.CompleteCareerFlightAsync(cancellation.Token));
+
+        Assert.Equal(0, completion.CompleteCount);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.False(viewModel.IsCareerCompletionBusy);
+    }
+
+    [Fact]
+    public async Task ConcurrentCareerCompletionAttemptIsRejectedInsteadOfQueued()
+    {
+        var action = new BlockingCareerCompletionExecutionAction();
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                action,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+
+        Task<bool> first = viewModel.CompleteCareerFlightAsync();
+        await action.CompleteStarted.Task;
+
+        Assert.False(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(1, action.CompleteCount);
+
+        action.ReleaseComplete.TrySetResult(true);
+
+        Assert.True(await first);
+        Assert.Equal(1, action.CompleteCount);
+        Assert.Equal("Flight Evaluated", viewModel.CareerCompletionActionText);
+    }
+
+    [Fact]
+    public async Task CareerAbandonAttemptIsRejectedWhileCompletionOwnsSharedActionGate()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var completion = new BlockingCareerCompletionExecutionAction();
+        var abandon =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned.")
+            };
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: completion,
+                careerAbandonAction: abandon,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Task<bool> completing = viewModel.CompleteCareerFlightAsync();
+        await completion.CompleteStarted.Task;
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(0, abandon.AbandonCount);
+
+        completion.ReleaseComplete.TrySetResult(true);
+        Assert.True(await completing);
+    }
+
+    [Fact]
+    public async Task CareerAbandonActionUsesVerifiedIdentityAndDisablesAfterSuccess()
+    {
+        Guid sessionId =
+            Guid.Parse(
+                "aaaaaaaa-0000-0000-0000-000000000001");
+        Guid contractId =
+            Guid.Parse(
+                "aaaaaaaa-0000-0000-0000-000000000002");
+
+        var action =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned.")
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: null,
+                careerAbandonAction: action,
+                logger: null);
+
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+
+        Assert.True(
+            await viewModel.AbandonCurrentFlightAsync());
+
+        Assert.Equal(1, action.AbandonCount);
+        Assert.Equal(sessionId, action.LastSessionId);
+        Assert.Equal(contractId, action.LastContractId);
+        Assert.False(viewModel.CanAbandonCurrentFlight);
+        Assert.False(viewModel.IsCareerAbandonBusy);
+        Assert.Contains(
+            "no completion rewards",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task FailedCareerAbandonmentRemainsRetryableWithoutRawErrorText()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string sensitiveFailure =
+            "SQLite failed at C:\\Users\\pilot\\AppData\\Local\\OpenCareer\\career.db";
+        var action =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned."),
+                NextAbandonFailure =
+                    new IOException(sensitiveFailure)
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: null,
+                careerAbandonAction: action,
+                logger: null);
+
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(1, action.AbandonCount);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.Contains(
+            "retry Abandon Current Flight",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            sensitiveFailure,
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+
+        Assert.True(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(2, action.AbandonCount);
+    }
+
+    [Fact]
+    public async Task FailedCareerAbandonmentRefreshesAuthoritativeCompletionExit()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string sensitiveFailure =
+            "INTERNAL abandonment failure C:\\Users\\pilot\\career.db";
+        var completion =
+            new FakeCareerCompletionAction
+            {
+                Availability =
+                    new(
+                        CanComplete: true,
+                        CareerJobCompletionInputState.Ready,
+                        "The active career flight can be completed.",
+                        sessionId,
+                        contractId)
+            };
+        var abandonment =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned."),
+                NextAbandonFailure =
+                    new IOException(sensitiveFailure)
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: completion,
+                careerAbandonAction: abandonment,
+                logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+        abandonment.Availability =
+            new(
+                CanAbandon: false,
+                CareerFlightAbandonAvailabilityState.Unavailable,
+                SessionId: null,
+                ContractId: null,
+                "Abandonment is no longer available.");
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+
+        Assert.False(viewModel.CanAbandonCurrentFlight);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.Contains(
+            "remains available to complete",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            sensitiveFailure,
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+
+        Assert.True(await viewModel.CompleteCareerFlightAsync());
+        Assert.Equal(1, completion.CompleteCount);
+        Assert.Equal(sessionId, completion.LastFlightSessionId);
+        Assert.Equal(contractId, completion.LastContractId);
+    }
+
+    [Fact]
+    public async Task FailedCareerAbandonmentFailsClosedWhenRecoveryRefreshAlsoFails()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        const string abandonFailure = "Sensitive abandonment failure.";
+        const string refreshFailure = "Sensitive readiness failure.";
+        var action =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned.")
+            };
+
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: null,
+                careerAbandonAction: action,
+                logger: null);
+
+        await viewModel.RefreshCareerAbandonActionAsync();
+        action.NextAbandonFailure = new IOException(abandonFailure);
+        action.NextReadFailure = new IOException(refreshFailure);
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+        Assert.False(viewModel.CanAbandonCurrentFlight);
+        Assert.Contains(
+            "Reopen Current Flight",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "diagnostic bundle",
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            abandonFailure,
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            refreshFailure,
+            viewModel.CareerAbandonActionDetail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CancelledCareerAbandonmentRestoresBothAuthoritativeTerminalActions()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        using var cancellation = new CancellationTokenSource();
+        var completion = new FakeCareerCompletionAction
+        {
+            Availability = new(
+                CanComplete: true,
+                CareerJobCompletionInputState.Ready,
+                "The current career flight can be completed.",
+                sessionId,
+                contractId)
+        };
+        var abandonment = new FakeCareerAbandonAction
+        {
+            Availability = new(
+                CanAbandon: true,
+                CareerFlightAbandonAvailabilityState.Ready,
+                sessionId,
+                contractId,
+                "The current career flight can be abandoned."),
+            CancelDuringAbandonment = cancellation
+        };
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: completion,
+            careerAbandonAction: abandonment,
+            logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Assert.False(
+            await viewModel.AbandonCurrentFlightAsync(cancellation.Token));
+
+        Assert.Equal(1, abandonment.AbandonCount);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.False(viewModel.IsCareerAbandonBusy);
+        Assert.Contains("abandonment was interrupted", viewModel.CareerAbandonActionDetail);
+        Assert.Contains("Retry Abandon Current Flight", viewModel.CareerAbandonActionDetail);
+        Assert.Contains("Complete Career Flight", viewModel.CareerAbandonActionDetail);
+
+        Assert.True(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(2, abandonment.AbandonCount);
+    }
+
+    [Fact]
+    public async Task PreCancelledCareerAbandonmentDoesNotEscapeOrInvalidateActions()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var completion = new FakeCareerCompletionAction
+        {
+            Availability = new(
+                CanComplete: true,
+                CareerJobCompletionInputState.Ready,
+                "The current career flight can be completed.",
+                sessionId,
+                contractId)
+        };
+        var abandonment = new FakeCareerAbandonAction
+        {
+            Availability = new(
+                CanAbandon: true,
+                CareerFlightAbandonAvailabilityState.Ready,
+                sessionId,
+                contractId,
+                "The current career flight can be abandoned.")
+        };
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: completion,
+            careerAbandonAction: abandonment,
+            logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.False(
+            await viewModel.AbandonCurrentFlightAsync(cancellation.Token));
+
+        Assert.Equal(0, abandonment.AbandonCount);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.False(viewModel.IsCareerAbandonBusy);
+    }
+
+    [Fact]
+    public async Task ConcurrentCareerAbandonAttemptIsRejectedInsteadOfQueued()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var action = new BlockingCareerAbandonAction
+        {
+            Availability =
+                new(
+                    CanAbandon: true,
+                    CareerFlightAbandonAvailabilityState.Ready,
+                    sessionId,
+                    contractId,
+                    "The active career flight can be abandoned.")
+        };
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: null,
+                careerAbandonAction: action,
+                logger: null);
+
+        await viewModel.RefreshCareerAbandonActionAsync();
+
+        Task<bool> first = viewModel.AbandonCurrentFlightAsync();
+        await action.AbandonStarted.Task;
+
+        Assert.False(await viewModel.AbandonCurrentFlightAsync());
+        Assert.Equal(1, action.AbandonCount);
+
+        action.ReleaseAbandon.TrySetResult(true);
+
+        Assert.True(await first);
+        Assert.Equal(1, action.AbandonCount);
+    }
+
+    [Fact]
+    public async Task AuthoritativeAbandonRefreshWaitsForInFlightCareerActionRefresh()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var completion = new BlockingCareerCompletionAction();
+        var abandon =
+            new FakeCareerAbandonAction
+            {
+                Availability =
+                    new(
+                        CanAbandon: true,
+                        CareerFlightAbandonAvailabilityState.Ready,
+                        sessionId,
+                        contractId,
+                        "The active career flight can be abandoned.")
+            };
+        var viewModel =
+            new ShellViewModel(
+                new TestConnection(),
+                new TestTelemetrySource(),
+                new TestSettingsService(),
+                new FlightSessionCoordinator(),
+                flightPersistence: null,
+                careerReadiness: null,
+                careerCompletionAction: completion,
+                careerAbandonAction: abandon,
+                logger: null);
+
+        Task backgroundRefresh =
+            viewModel.RefreshCareerCompletionActionAsync();
+        await completion.ReadStarted.Task;
+
+        Task authoritativeRefresh =
+            viewModel.RefreshCareerAbandonActionAsync(
+                waitForCurrentAction: true);
+
+        Assert.False(authoritativeRefresh.IsCompleted);
+
+        completion.ReleaseRead.TrySetResult(true);
+        await Task.WhenAll(backgroundRefresh, authoritativeRefresh);
+
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+    }
+
+    [Fact]
+    public async Task ActiveManualFlightExposesDiscardOnlyRecovery()
+    {
+        Guid sessionId = Guid.NewGuid();
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = BlockedManualSnapshot(
+                ManualFlightPostflightInputState.FlightNotCompleted,
+                sessionId)
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.True(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+        Assert.True(viewModel.CanDiscardManualFlight);
+
+        Assert.True(await viewModel.DiscardManualFlightAsync());
+        Assert.Equal(1, action.DiscardCount);
+        Assert.Equal(sessionId, action.LastSessionId);
+        Assert.False(viewModel.IsManualPostflightVisible);
+    }
+
+    [Theory]
+    [InlineData(ManualFlightPostflightInputState.FlightNotLoggable)]
+    [InlineData(ManualFlightPostflightInputState.AircraftIdentityUnavailable)]
+    [InlineData(ManualFlightPostflightInputState.AircraftIdentityConflict)]
+    [InlineData(ManualFlightPostflightInputState.AircraftDebriefUnavailable)]
+    public async Task TerminalManualFlightWithoutLogEvidenceExposesDiscardOnly(
+        ManualFlightPostflightInputState state)
+    {
+        Guid sessionId = Guid.NewGuid();
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = BlockedManualSnapshot(state, sessionId)
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.True(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+        Assert.True(viewModel.CanDiscardManualFlight);
+
+        Assert.True(await viewModel.DiscardManualFlightAsync());
+        Assert.Equal(1, action.DiscardCount);
+        Assert.Equal(sessionId, action.LastSessionId);
+        Assert.False(viewModel.IsManualPostflightVisible);
+    }
+
+    [Fact]
+    public async Task ChangedManualFlightSessionKeepsRecoveryNoticeVisibleWithoutStaleActions()
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = new(
+                ManualFlightPostflightInputState.FlightSessionChanged,
+                SessionId: null,
+                Request: null,
+                "Reopen Current Flight before logging or discarding.")
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.True(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+        Assert.False(viewModel.CanDiscardManualFlight);
+        Assert.Contains("Reopen Current Flight", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ManualLogUsesExactReadyRequestOnceAndClearsUi()
+    {
+        Guid sessionId = Guid.NewGuid();
+        ManualFlightPostflightLogRequest request = ManualRequest();
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = ReadyManualSnapshot(request, sessionId)
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.True(viewModel.IsManualPostflightVisible);
+        Assert.True(viewModel.CanLogManualFlight);
+        Assert.True(viewModel.CanDiscardManualFlight);
+
+        Assert.True(await viewModel.LogManualFlightAsync());
+
+        Assert.Equal(1, action.LogCount);
+        Assert.Same(request, action.LastRequest);
+        Assert.Equal(sessionId, action.LastSessionId);
+        Assert.False(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+    }
+
+    [Fact]
+    public async Task ManualDiscardRunsOnlyWhenReadyAndClearsUi()
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.ContractLinked)
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.False(await viewModel.DiscardManualFlightAsync());
+        Assert.Equal(0, action.DiscardCount);
+
+        action.Snapshot = ReadyManualSnapshot(ManualRequest());
+        await viewModel.RefreshManualPostflightAsync();
+        Assert.True(await viewModel.DiscardManualFlightAsync());
+        Assert.Equal(1, action.DiscardCount);
+        Assert.False(viewModel.IsManualPostflightVisible);
+    }
+
+    [Fact]
+    public async Task FailedManualLogRefreshesAndRemainsRetryable()
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = ReadyManualSnapshot(ManualRequest()),
+            FailNextLog = true
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+        await viewModel.RefreshManualPostflightAsync();
+
+        Assert.False(await viewModel.LogManualFlightAsync());
+
+        Assert.Equal(1, action.LogCount);
+        Assert.True(viewModel.CanLogManualFlight);
+        Assert.Contains("retry Log Flight", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.ManualPostflightDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Synthetic manual Logbook failure", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+        Assert.True(await viewModel.LogManualFlightAsync());
+        Assert.Equal(2, action.LogCount);
+    }
+
+    [Fact]
+    public async Task FailedManualDiscardAndReadinessRefreshFailClosedWithoutTechnicalDetails()
+    {
+        var action = new FakeManualPostflightAction
+        {
+            Snapshot = ReadyManualSnapshot(ManualRequest())
+        };
+        ShellViewModel viewModel = ManualViewModel(action);
+        await viewModel.RefreshManualPostflightAsync();
+        action.FailNextDiscard = true;
+        action.FailNextRead = true;
+
+        Assert.False(await viewModel.DiscardManualFlightAsync());
+
+        Assert.Equal(1, action.DiscardCount);
+        Assert.True(viewModel.IsManualPostflightVisible);
+        Assert.False(viewModel.CanLogManualFlight);
+        Assert.False(viewModel.CanDiscardManualFlight);
+        Assert.Contains("Reopen Current Flight", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+        Assert.Contains("diagnostic bundle", viewModel.ManualPostflightDetail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Synthetic manual discard failure", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("Synthetic manual readiness failure", viewModel.ManualPostflightDetail, StringComparison.Ordinal);
+    }
+
+    private static ShellViewModel ManualViewModel(IManualFlightPostflightAction action) =>
+        new(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: null,
+            careerAbandonAction: null,
+            logger: null,
+            manualPostflightAction: action);
+
+    private static ManualFlightPostflightLogRequest ManualRequest() =>
+        new(
+            new FlightSessionDebriefContext(
+                LogbookEntryKind.FreeFlight,
+                new AircraftDebrief("Test Aircraft"),
+                null,
+                null,
+                null,
+                new PayloadDebrief(null, null, null, null, EvidenceQuality.Unavailable),
+                FlightSafetyOutcome.CompletedNormally,
+                MissionOutcome.NotApplicable,
+                FlightSettlementRecord.NotApplicable),
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
+
+    private static ManualFlightPostflightInputSnapshot ReadyManualSnapshot(
+        ManualFlightPostflightLogRequest request,
+        Guid? sessionId = null) =>
+        new(ManualFlightPostflightInputState.Ready, sessionId ?? Guid.NewGuid(), request, "Ready.");
+
+    private static ManualFlightPostflightInputSnapshot BlockedManualSnapshot(
+        ManualFlightPostflightInputState state,
+        Guid? sessionId = null) =>
+        new(state, sessionId ?? Guid.NewGuid(), null, "Blocked.");
+
+    [Fact]
     public void MissingRuntimeIsDistinguishedFromWaitingForSimulator()
     {
         var connection = new TestConnection
@@ -262,6 +1678,333 @@ public sealed class ShellViewModelTests
             true,
             paused,
             false);
+
+    private sealed class FakeCareerCompletionAction
+        : ICareerJobCompletionAction
+    {
+        public CareerJobCompletionActionAvailability Availability { get; set; } =
+            new(
+                CanComplete:
+                    false,
+                CareerJobCompletionInputState.NoCareerFlight,
+                "No career flight.");
+
+        public int CompleteCount { get; private set; }
+        public Guid? LastFlightSessionId { get; private set; }
+        public Guid? LastContractId { get; private set; }
+        public Exception? NextCompletionFailure { get; set; }
+        public Exception? NextReadFailure { get; set; }
+        public CancellationTokenSource? CancelDuringCompletion { get; set; }
+
+        public Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (NextReadFailure is { } failure)
+            {
+                NextReadFailure = null;
+                return Task.FromException<CareerJobCompletionActionAvailability>(failure);
+            }
+
+            return Task.FromResult(
+                Availability);
+        }
+
+        public Task<CareerJobCompletionReceipt> CompleteAsync(
+            Guid expectedFlightSessionId,
+            Guid expectedContractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CompleteCount++;
+            LastFlightSessionId = expectedFlightSessionId;
+            LastContractId = expectedContractId;
+
+            if (CancelDuringCompletion is { } cancellation)
+            {
+                CancelDuringCompletion = null;
+                cancellation.Cancel();
+                return Task.FromCanceled<CareerJobCompletionReceipt>(
+                    cancellationToken);
+            }
+
+            if (NextCompletionFailure is { } failure)
+            {
+                NextCompletionFailure = null;
+                return Task.FromException<CareerJobCompletionReceipt>(failure);
+            }
+
+            return Task.FromResult(
+                new CareerJobCompletionReceipt(
+                    Guid.Parse("aaaaaaaa-0000-0000-0000-000000000010"),
+                    500m,
+                    75m,
+                    425m,
+                    5_425m,
+                    "KJFK",
+                    "KBOS",
+                    Guid.Parse("aaaaaaaa-0000-0000-0000-000000000011"),
+                    "KBOS",
+                    7,
+                    IsZeroPayCalibration: false));
+        }
+    }
+
+    private sealed class BlockingCareerCompletionAction
+        : ICareerJobCompletionAction
+    {
+        public TaskCompletionSource<bool> ReadStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<bool> ReleaseRead { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            ReadStarted.TrySetResult(true);
+            await ReleaseRead.Task.WaitAsync(cancellationToken);
+
+            return new(
+                CanComplete: false,
+                CareerJobCompletionInputState.FlightEvidenceIncomplete,
+                "The career flight is still active.");
+        }
+
+        public Task<CareerJobCompletionReceipt> CompleteAsync(
+            Guid expectedFlightSessionId,
+            Guid expectedContractId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class BlockingCareerCompletionExecutionAction
+        : ICareerJobCompletionAction
+    {
+        private static readonly Guid FlightSessionId =
+            Guid.Parse("aaaaaaaa-0000-0000-0000-000000000020");
+        private static readonly Guid ContractId =
+            Guid.Parse("aaaaaaaa-0000-0000-0000-000000000021");
+
+        public TaskCompletionSource<bool> CompleteStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<bool> ReleaseComplete { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int CompleteCount { get; private set; }
+
+        public Task<CareerJobCompletionActionAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                new CareerJobCompletionActionAvailability(
+                    CanComplete: true,
+                    CareerJobCompletionInputState.Ready,
+                    "Authoritative completion inputs are ready.",
+                    FlightSessionId,
+                    ContractId));
+        }
+
+        public async Task<CareerJobCompletionReceipt> CompleteAsync(
+            Guid expectedFlightSessionId,
+            Guid expectedContractId,
+            CancellationToken cancellationToken = default)
+        {
+            Assert.Equal(FlightSessionId, expectedFlightSessionId);
+            Assert.Equal(ContractId, expectedContractId);
+            CompleteCount++;
+            CompleteStarted.TrySetResult(true);
+            await ReleaseComplete.Task.WaitAsync(cancellationToken);
+
+            return new(
+                Guid.Parse("aaaaaaaa-0000-0000-0000-000000000010"),
+                500m,
+                75m,
+                425m,
+                5_425m,
+                "KJFK",
+                "KBOS",
+                Guid.Parse("aaaaaaaa-0000-0000-0000-000000000011"),
+                "KBOS",
+                7,
+                IsZeroPayCalibration: false);
+        }
+    }
+
+    private sealed class FakeCareerAbandonAction
+        : ICareerFlightAbandonAction
+    {
+        public CareerFlightAbandonAvailability Availability { get; set; } =
+            new(
+                CanAbandon: false,
+                CareerFlightAbandonAvailabilityState.Unavailable,
+                SessionId: null,
+                ContractId: null,
+                "No career flight.");
+
+        public int AbandonCount { get; private set; }
+        public Guid? LastSessionId { get; private set; }
+        public Guid? LastContractId { get; private set; }
+        public Exception? NextAbandonFailure { get; set; }
+        public Exception? NextReadFailure { get; set; }
+        public CancellationTokenSource? CancelDuringAbandonment { get; set; }
+
+        public Task<CareerFlightAbandonAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (NextReadFailure is { } failure)
+            {
+                NextReadFailure = null;
+                return Task.FromException<CareerFlightAbandonAvailability>(failure);
+            }
+
+            return Task.FromResult(Availability);
+        }
+
+        public Task<CareerFlightAbandonResult> AbandonAsync(
+            Guid expectedSessionId,
+            Guid expectedContractId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AbandonCount++;
+            LastSessionId = expectedSessionId;
+            LastContractId = expectedContractId;
+
+            if (CancelDuringAbandonment is { } cancellation)
+            {
+                CancelDuringAbandonment = null;
+                cancellation.Cancel();
+                return Task.FromCanceled<CareerFlightAbandonResult>(
+                    cancellationToken);
+            }
+
+            if (NextAbandonFailure is { } failure)
+            {
+                NextAbandonFailure = null;
+                return Task.FromException<CareerFlightAbandonResult>(failure);
+            }
+
+            return Task.FromResult(
+                new CareerFlightAbandonResult(
+                    CareerFlightAbandonStatus.Abandoned,
+                    expectedSessionId,
+                    expectedContractId,
+                    SessionWasAlreadyCancelled: false,
+                    ContractWasAlreadyCancelled: false,
+                    ReservationWasAlreadyReleased: false));
+        }
+    }
+
+    private sealed class BlockingCareerAbandonAction
+        : ICareerFlightAbandonAction
+    {
+        public CareerFlightAbandonAvailability Availability { get; set; } =
+            new(
+                CanAbandon: false,
+                CareerFlightAbandonAvailabilityState.Unavailable,
+                SessionId: null,
+                ContractId: null,
+                "No career flight.");
+
+        public TaskCompletionSource<bool> AbandonStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<bool> ReleaseAbandon { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int AbandonCount { get; private set; }
+
+        public Task<CareerFlightAbandonAvailability> ReadAvailabilityAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Availability);
+        }
+
+        public async Task<CareerFlightAbandonResult> AbandonAsync(
+            Guid expectedSessionId,
+            Guid expectedContractId,
+            CancellationToken cancellationToken = default)
+        {
+            AbandonCount++;
+            AbandonStarted.TrySetResult(true);
+            await ReleaseAbandon.Task.WaitAsync(cancellationToken);
+
+            return new(
+                CareerFlightAbandonStatus.Abandoned,
+                expectedSessionId,
+                expectedContractId,
+                SessionWasAlreadyCancelled: false,
+                ContractWasAlreadyCancelled: false,
+                ReservationWasAlreadyReleased: false);
+        }
+    }
+
+    private sealed class FakeManualPostflightAction : IManualFlightPostflightAction
+    {
+        public ManualFlightPostflightInputSnapshot Snapshot { get; set; } =
+            BlockedManualSnapshot(ManualFlightPostflightInputState.NoFlightSession);
+
+        public int LogCount { get; private set; }
+        public int DiscardCount { get; private set; }
+        public bool FailNextLog { get; set; }
+        public bool FailNextDiscard { get; set; }
+        public bool FailNextRead { get; set; }
+        public Guid? LastSessionId { get; private set; }
+        public ManualFlightPostflightLogRequest? LastRequest { get; private set; }
+
+        public Task<ManualFlightPostflightInputSnapshot> ReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            if (FailNextRead)
+            {
+                FailNextRead = false;
+                throw new IOException("Synthetic manual readiness failure.");
+            }
+
+            return Task.FromResult(Snapshot);
+        }
+
+        public Task LogAsync(
+            Guid expectedSessionId,
+            ManualFlightPostflightLogRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            LogCount++;
+            LastSessionId = expectedSessionId;
+            LastRequest = request;
+            if (FailNextLog)
+            {
+                FailNextLog = false;
+                throw new IOException("Synthetic manual Logbook failure.");
+            }
+
+            Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.NoFlightSession);
+            return Task.CompletedTask;
+        }
+
+        public Task DiscardAsync(
+            Guid expectedSessionId,
+            CancellationToken cancellationToken = default)
+        {
+            DiscardCount++;
+            LastSessionId = expectedSessionId;
+            if (FailNextDiscard)
+            {
+                FailNextDiscard = false;
+                throw new IOException("Synthetic manual discard failure.");
+            }
+
+            Snapshot = BlockedManualSnapshot(ManualFlightPostflightInputState.NoFlightSession);
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class TestConnection : ISimulatorConnection
     {
@@ -323,5 +2066,11 @@ public sealed class ShellViewModelTests
 
         public Task ResetAsync(CancellationToken cancellationToken = default) =>
             UpdateAsync(AppPreferences.Default, cancellationToken);
+    }
+
+    private sealed class TestLiveFlightChecklistSource(
+        LiveFlightChecklistSnapshot snapshot) : ILiveFlightChecklistSource
+    {
+        public LiveFlightChecklistSnapshot Read() => snapshot;
     }
 }
