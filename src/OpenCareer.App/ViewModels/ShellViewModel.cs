@@ -535,8 +535,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
         {
-            await RecoverCareerActionsAfterCompletionAttemptAsync(
-                "Career flight completion was interrupted.");
         }
         catch (Exception ex)
         {
@@ -634,6 +632,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
         {
+            await RecoverCareerActionsAfterCompletionAttemptAsync(
+                "Career flight completion was interrupted.");
         }
         catch (Exception ex)
         {
