@@ -575,8 +575,17 @@ public sealed class ShellViewModel : INotifyPropertyChanged
 
         bool completed = false;
 
-        bool entered = await _careerActionGate
-            .WaitAsync(0, cancellationToken);
+        bool entered;
+        try
+        {
+            entered = await _careerActionGate
+                .WaitAsync(0, cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
 
         if (!entered)
             return false;
@@ -873,8 +882,17 @@ public sealed class ShellViewModel : INotifyPropertyChanged
             return false;
         }
 
-        bool entered = await _careerActionGate
-            .WaitAsync(0, cancellationToken);
+        bool entered;
+        try
+        {
+            entered = await _careerActionGate
+                .WaitAsync(0, cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
 
         if (!entered)
             return false;

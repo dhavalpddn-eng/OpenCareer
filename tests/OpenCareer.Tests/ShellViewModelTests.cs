@@ -882,6 +882,54 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public async Task PreCancelledCareerCompletionDoesNotEscapeOrInvalidateActions()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var completion = new FakeCareerCompletionAction
+        {
+            Availability = new(
+                CanComplete: true,
+                CareerJobCompletionInputState.Ready,
+                "Authoritative completion inputs are ready.",
+                sessionId,
+                contractId)
+        };
+        var abandonment = new FakeCareerAbandonAction
+        {
+            Availability = new(
+                CanAbandon: true,
+                CareerFlightAbandonAvailabilityState.Ready,
+                sessionId,
+                contractId,
+                "The current career flight can be abandoned.")
+        };
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: completion,
+            careerAbandonAction: abandonment,
+            logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.False(
+            await viewModel.CompleteCareerFlightAsync(cancellation.Token));
+
+        Assert.Equal(0, completion.CompleteCount);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.False(viewModel.IsCareerCompletionBusy);
+    }
+
+    [Fact]
     public async Task ConcurrentCareerCompletionAttemptIsRejectedInsteadOfQueued()
     {
         var action = new BlockingCareerCompletionExecutionAction();
@@ -1240,6 +1288,54 @@ public sealed class ShellViewModelTests
 
         Assert.True(await viewModel.AbandonCurrentFlightAsync());
         Assert.Equal(2, abandonment.AbandonCount);
+    }
+
+    [Fact]
+    public async Task PreCancelledCareerAbandonmentDoesNotEscapeOrInvalidateActions()
+    {
+        Guid sessionId = Guid.NewGuid();
+        Guid contractId = Guid.NewGuid();
+        var completion = new FakeCareerCompletionAction
+        {
+            Availability = new(
+                CanComplete: true,
+                CareerJobCompletionInputState.Ready,
+                "The current career flight can be completed.",
+                sessionId,
+                contractId)
+        };
+        var abandonment = new FakeCareerAbandonAction
+        {
+            Availability = new(
+                CanAbandon: true,
+                CareerFlightAbandonAvailabilityState.Ready,
+                sessionId,
+                contractId,
+                "The current career flight can be abandoned.")
+        };
+        var viewModel = new ShellViewModel(
+            new TestConnection(),
+            new TestTelemetrySource(),
+            new TestSettingsService(),
+            new FlightSessionCoordinator(),
+            flightPersistence: null,
+            careerReadiness: null,
+            careerCompletionAction: completion,
+            careerAbandonAction: abandonment,
+            logger: null);
+
+        await viewModel.RefreshCareerCompletionActionAsync();
+        await viewModel.RefreshCareerAbandonActionAsync();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.False(
+            await viewModel.AbandonCurrentFlightAsync(cancellation.Token));
+
+        Assert.Equal(0, abandonment.AbandonCount);
+        Assert.True(viewModel.CanAbandonCurrentFlight);
+        Assert.True(viewModel.CanCompleteCareerFlight);
+        Assert.False(viewModel.IsCareerAbandonBusy);
     }
 
     [Fact]
