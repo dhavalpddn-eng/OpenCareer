@@ -33,7 +33,8 @@ public sealed partial class DashboardPage : Page
 
         _refreshCancellation?.Cancel();
         _refreshCancellation?.Dispose();
-        _refreshCancellation = new CancellationTokenSource();
+        var refreshCancellation = new CancellationTokenSource();
+        _refreshCancellation = refreshCancellation;
 
         _viewModel = viewModel;
         DataContext = viewModel;
@@ -41,11 +42,16 @@ public sealed partial class DashboardPage : Page
 
         try
         {
-            await viewModel.RefreshAsync(_refreshCancellation.Token);
+            await viewModel.RefreshAsync(refreshCancellation.Token);
         }
         catch (OperationCanceledException)
+            when (refreshCancellation.IsCancellationRequested)
         {
             // Navigation away cancels an in-flight refresh.
+        }
+        catch (Exception ex)
+        {
+            viewModel.ReportRefreshFailure(ex);
         }
     }
 
@@ -72,6 +78,10 @@ public sealed partial class DashboardPage : Page
         catch (OperationCanceledException)
         {
             // Normal when the user leaves Home during a refresh.
+        }
+        catch (Exception ex)
+        {
+            _viewModel.ReportRefreshFailure(ex);
         }
     }
 

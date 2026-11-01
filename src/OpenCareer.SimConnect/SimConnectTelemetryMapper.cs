@@ -18,6 +18,11 @@ internal static class SimConnectTelemetryMapper
                 return null;
         }
 
+        double simulationRate =
+            Read(values, SimConnectTelemetryValue.SimulationRate);
+        if (!IsDocumentedSimulationRate(simulationRate))
+            return null;
+
         double fuelPounds = Math.Max(0, Read(values, SimConnectTelemetryValue.FuelTotalWeight));
         double totalWeight = Math.Max(0, Read(values, SimConnectTelemetryValue.TotalWeight));
         double emptyWeight = Math.Max(0, Read(values, SimConnectTelemetryValue.EmptyWeight));
@@ -56,7 +61,12 @@ internal static class SimConnectTelemetryMapper
             Math.Clamp(Read(values, SimConnectTelemetryValue.FlapsHandlePercentOver100) * 100.0, 0, 100),
             IsGearDown(Read(values, SimConnectTelemetryValue.GearTotalPercent)),
             paused,
-            IsTrue(Read(values, SimConnectTelemetryValue.SlewActive)));
+            IsTrue(Read(values, SimConnectTelemetryValue.SlewActive)),
+            simulationRate,
+            NormalizeNightEvidence(
+                Read(values, SimConnectTelemetryValue.TimeOfDay)),
+            NormalizeBooleanEvidence(
+                Read(values, SimConnectTelemetryValue.AmbientInCloud)));
     }
 
     private static double Read(IReadOnlyList<double> values, SimConnectTelemetryValue index) =>
@@ -66,6 +76,36 @@ internal static class SimConnectTelemetryMapper
 
     private static bool IsGearDown(double value) =>
         value >= 95.0 || value is >= 0.95 and <= 1.0;
+
+    private static bool IsDocumentedSimulationRate(double value) =>
+        value is 0.0625d
+            or 0.125d
+            or 0.25d
+            or 0.5d
+            or 1d
+            or 2d
+            or 4d
+            or 8d
+            or 16d
+            or 32d
+            or 64d
+            or 128d;
+
+    private static bool? NormalizeNightEvidence(double timeOfDay) =>
+        timeOfDay switch
+        {
+            0d or 1d or 2d => false,
+            3d => true,
+            _ => null
+        };
+
+    private static bool? NormalizeBooleanEvidence(double value) =>
+        value switch
+        {
+            0d => false,
+            1d or -1d => true,
+            _ => null
+        };
 
     private static double NormalizeHeading(double degrees)
     {

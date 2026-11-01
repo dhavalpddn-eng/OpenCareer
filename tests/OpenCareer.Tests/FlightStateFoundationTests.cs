@@ -84,6 +84,26 @@ public class FlightStateFoundationTests
     }
 
     [Fact]
+    public void GoAroundThenNewApproachCreatesOnlySubsequentLandingEpisode()
+    {
+        var state = Airborne();
+        state = Step(state, 6, approach: true);
+        state = Step(state, 7, goAround: true);
+
+        Assert.Equal(FlightTrackingState.Airborne, state.State);
+        Assert.Equal(0, state.LandingEpisodeCount);
+
+        state = Step(state, 8, approach: true);
+        Assert.Equal(FlightTrackingState.Approach, state.State);
+
+        state = Step(state, 9, touchdown: true);
+
+        Assert.Equal(FlightTrackingState.LandingEpisode, state.State);
+        Assert.Equal(1, state.LandingEpisodeCount);
+        Assert.Equal(0, state.BounceCount);
+    }
+
+    [Fact]
     public void DisconnectHasNoTimeoutAndResumesWhenContinuityIsPlausible()
     {
         var state = Airborne();
@@ -198,15 +218,17 @@ public class FlightStateFoundationTests
     public void PauseAndSlewNeverCreateCareerOrSimulatedOperationalTime()
     {
         var paused = FlightTimeLedger.Empty.Add(new FlightTimeInterval(
-            TimeSpan.FromMinutes(5), 4d, true, true, false, true, true, false, true, false, false, false));
+            TimeSpan.FromMinutes(5), 4d, true, true, false, true, true, false, true, false, true, true));
         var slewed = paused.Add(new FlightTimeInterval(
-            TimeSpan.FromMinutes(5), 1d, true, false, true, true, true, false, false, true, false, false));
+            TimeSpan.FromMinutes(5), 1d, true, false, true, true, true, false, false, true, true, true));
 
         Assert.Equal(TimeSpan.FromMinutes(10), slewed.ObservedWallTime);
         Assert.Equal(TimeSpan.FromMinutes(5), slewed.PausedWallTime);
         Assert.Equal(TimeSpan.FromMinutes(5), slewed.SlewWallTime);
         Assert.Equal(TimeSpan.Zero, slewed.SimulatedOperationalTime);
         Assert.Equal(TimeSpan.Zero, slewed.CareerCreditTime);
+        Assert.Equal(TimeSpan.Zero, slewed.NightCareerCreditTime);
+        Assert.Equal(TimeSpan.Zero, slewed.ActualInstrumentCareerCreditTime);
     }
 
     [Fact]

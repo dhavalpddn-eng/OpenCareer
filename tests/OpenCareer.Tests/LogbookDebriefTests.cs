@@ -425,13 +425,71 @@ public sealed class LogbookDebriefTests
         Assert.Throws<ArgumentException>(query.Validate);
     }
 
+    [Fact]
+    public void GenericTrainingEntryRemainsValidWithoutQualificationMetadata()
+    {
+        FlightDebrief debrief = FlightDebriefFactory.Create(
+            Draft(
+                entryKind: LogbookEntryKind.Training,
+                missionOutcome: MissionOutcome.Succeeded,
+                settlement: FlightSettlementRecord.NotApplicable));
+
+        Assert.Null(debrief.QualificationTraining);
+    }
+
+    [Fact]
+    public void QualificationTrainingMetadataIsPreservedOnlyForTrainingEntries()
+    {
+        var metadata = new CivilianQualificationTrainingMetadata(
+            Guid.NewGuid(),
+            "student-operation-001",
+            "license.student",
+            "Committed civilian training operation.");
+
+        FlightDebrief debrief = FlightDebriefFactory.Create(
+            Draft(
+                entryKind: LogbookEntryKind.Training,
+                missionOutcome: MissionOutcome.Succeeded,
+                settlement: FlightSettlementRecord.NotApplicable,
+                qualificationTraining: metadata));
+
+        Assert.Equal(metadata, debrief.QualificationTraining);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            FlightDebriefFactory.Create(
+                Draft(
+                    entryKind: LogbookEntryKind.FreeFlight,
+                    missionOutcome: MissionOutcome.NotApplicable,
+                    settlement: FlightSettlementRecord.NotApplicable,
+                    qualificationTraining: metadata)));
+    }
+
+    [Fact]
+    public void MalformedQualificationTrainingMetadataIsRejected()
+    {
+        var metadata = new CivilianQualificationTrainingMetadata(
+            Guid.Empty,
+            " ",
+            "license.student",
+            "source");
+
+        Assert.ThrowsAny<Exception>(() =>
+            FlightDebriefFactory.Create(
+                Draft(
+                    entryKind: LogbookEntryKind.Training,
+                    missionOutcome: MissionOutcome.Succeeded,
+                    settlement: FlightSettlementRecord.NotApplicable,
+                    qualificationTraining: metadata)));
+    }
+
     private static FlightDebriefDraft Draft(
         Guid? contractId = null,
         LogbookEntryKind entryKind = LogbookEntryKind.CareerJob,
         MissionOutcome missionOutcome = MissionOutcome.Pending,
         IReadOnlyList<LandingDebrief>? landings = null,
         IReadOnlyList<FlightDebriefEvent>? events = null,
-        FlightSettlementRecord? settlement = null)
+        FlightSettlementRecord? settlement = null,
+        CivilianQualificationTrainingMetadata? qualificationTraining = null)
     {
         contractId ??= entryKind == LogbookEntryKind.CareerJob
             ? Guid.Parse("10000000-0000-0000-0000-000000000001")
@@ -510,7 +568,8 @@ public sealed class LogbookDebriefTests
             missionOutcome,
             landings ?? [Landing(1, Start.AddMinutes(70))],
             events ?? Array.Empty<FlightDebriefEvent>(),
-            settlement ?? FlightSettlementRecord.Pending("settle-contract-1"));
+            settlement ?? FlightSettlementRecord.Pending("settle-contract-1"),
+            qualificationTraining);
     }
 
     private static LandingDebrief Landing(

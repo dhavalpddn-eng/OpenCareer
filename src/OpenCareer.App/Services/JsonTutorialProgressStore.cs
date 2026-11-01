@@ -31,9 +31,10 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
         try
         {
             PreferencesDocument document = await ReadAsync(cancellationToken).ConfigureAwait(false);
-            return document.Tutorials.TryGetValue(tutorialId, out TutorialProgress? progress)
-                ? progress
-                : new TutorialProgress(tutorialId);
+            if (!document.Tutorials.TryGetValue(tutorialId, out TutorialProgress? progress))
+                return new TutorialProgress(tutorialId);
+
+            return ValidateProgress(progress, tutorialId);
         }
         finally
         {
@@ -48,7 +49,16 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            ValidateProgress(progress, progress.TutorialId);
             PreferencesDocument document = await ReadAsync(cancellationToken).ConfigureAwait(false);
+
+            if (document.Tutorials.TryGetValue(
+                    progress.TutorialId,
+                    out TutorialProgress? existing))
+            {
+                ValidateProgress(existing, progress.TutorialId);
+            }
+
             document.Tutorials[progress.TutorialId] = progress;
             await WriteAsync(document, cancellationToken).ConfigureAwait(false);
         }
@@ -60,28 +70,24 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
 
     private async Task<PreferencesDocument> ReadAsync(CancellationToken cancellationToken)
     {
-        if (!File.Exists(_paths.TutorialPreferencesFile))
-            return new PreferencesDocument();
-
+        PreferencesDocument? document;
         try
         {
             await using FileStream stream = File.OpenRead(_paths.TutorialPreferencesFile);
-            PreferencesDocument? document = await JsonSerializer
+            document = await JsonSerializer
                 .DeserializeAsync<PreferencesDocument>(
                     stream,
                     _serializerOptions,
                     cancellationToken)
                 .ConfigureAwait(false);
-
-            if (document is null || document.SchemaVersion != CurrentSchemaVersion)
-            {
-                _logger.LogWarning(
-                    "Ignoring unsupported tutorial preference schema at {Path}.",
-                    _paths.TutorialPreferencesFile);
-                return new PreferencesDocument();
-            }
-
-            return document;
+        }
+        catch (FileNotFoundException)
+        {
+            return new PreferencesDocument();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return new PreferencesDocument();
         }
         catch (JsonException ex)
         {
@@ -89,7 +95,7 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Tutorial preference file is invalid: {Path}",
                 _paths.TutorialPreferencesFile);
-            return new PreferencesDocument();
+            throw;
         }
         catch (IOException ex)
         {
@@ -97,7 +103,7 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Unable to read tutorial preferences: {Path}",
                 _paths.TutorialPreferencesFile);
-            return new PreferencesDocument();
+            throw;
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -105,19 +111,66 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Tutorial preferences are not readable: {Path}",
                 _paths.TutorialPreferencesFile);
-            return new PreferencesDocument();
+            throw;
         }
+
+        if (document is null || document.Tutorials is null)
+        {
+            _logger.LogWarning(
+                "Tutorial preference file has no usable progress document: {Path}",
+                _paths.TutorialPreferencesFile);
+            throw new InvalidDataException(
+                "The tutorial preference file has no usable progress document.");
+        }
+
+        if (document.SchemaVersion != CurrentSchemaVersion)
+        {
+            _logger.LogWarning(
+                "Tutorial preference schema {SchemaVersion} is unsupported at {Path}.",
+                document.SchemaVersion,
+                _paths.TutorialPreferencesFile);
+            throw new InvalidDataException(
+                $"Tutorial preference schema {document.SchemaVersion} is unsupported.");
+        }
+
+        return document;
+    }
+
+    private TutorialProgress ValidateProgress(
+        TutorialProgress? progress,
+        string expectedTutorialId)
+    {
+        if (progress is not null &&
+            !string.IsNullOrWhiteSpace(progress.TutorialId) &&
+            string.Equals(
+                progress.TutorialId,
+                expectedTutorialId,
+                StringComparison.Ordinal) &&
+            progress.CompletedVersion >= 0 &&
+            progress.SkippedVersion >= 0)
+        {
+            return progress;
+        }
+
+        _logger.LogWarning(
+            "Tutorial preference entry {TutorialId} is invalid at {Path}.",
+            expectedTutorialId,
+            _paths.TutorialPreferencesFile);
+        throw new InvalidDataException(
+            $"Tutorial preference entry '{expectedTutorialId}' is invalid.");
     }
 
     private async Task WriteAsync(
         PreferencesDocument document,
         CancellationToken cancellationToken)
     {
+        string tempPath = _paths.TutorialPreferencesFile + ".tmp";
+        bool committed = false;
+
         try
         {
             _paths.EnsureDirectories();
 
-            string tempPath = _paths.TutorialPreferencesFile + ".tmp";
             await using (FileStream stream = File.Create(tempPath))
             {
                 await JsonSerializer.SerializeAsync(
@@ -129,6 +182,7 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
             }
 
             File.Move(tempPath, _paths.TutorialPreferencesFile, overwrite: true);
+            committed = true;
         }
         catch (IOException ex)
         {
@@ -136,6 +190,7 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Unable to save tutorial preferences: {Path}",
                 _paths.TutorialPreferencesFile);
+            throw;
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -143,6 +198,34 @@ public sealed class JsonTutorialProgressStore : ITutorialProgressStore
                 ex,
                 "Tutorial preferences are not writable: {Path}",
                 _paths.TutorialPreferencesFile);
+            throw;
+        }
+        finally
+        {
+            if (!committed)
+                TryDeleteTemporaryFile(tempPath);
+        }
+    }
+
+    private void TryDeleteTemporaryFile(string tempPath)
+    {
+        try
+        {
+            File.Delete(tempPath);
+        }
+        catch (IOException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Unable to clean temporary tutorial preferences: {Path}",
+                tempPath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Temporary tutorial preferences are not writable: {Path}",
+                tempPath);
         }
     }
 

@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <InternalsVisibleTo Include="OpenCareer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
     <PackageReference Include="OpenAI" Version="2.14.0" />

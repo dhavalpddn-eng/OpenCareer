@@ -27,7 +27,10 @@ internal enum SimConnectTelemetryValue
     EmptyWeight,
     FlapsHandlePercentOver100,
     GearTotalPercent,
-    SlewActive
+    SlewActive,
+    SimulationRate,
+    TimeOfDay,
+    AmbientInCloud
 }
 
 internal static class SimConnectTelemetryDefinition
@@ -35,6 +38,7 @@ internal static class SimConnectTelemetryDefinition
     internal const uint DefinitionId = 0x4F430001;
     internal const uint RequestId = 0x4F430002;
     internal const uint PauseEventId = 0x4F430003;
+    internal const uint FlightCriticalRequestId = 0x4F430004;
 
     internal static readonly SimConnectTelemetryDatum[] Data =
     [
@@ -61,7 +65,10 @@ internal static class SimConnectTelemetryDefinition
         new("EMPTY WEIGHT", "pounds"),
         new("FLAPS HANDLE PERCENT", "percent over 100"),
         new("GEAR TOTAL PCT EXTENDED", "percent"),
-        new("IS SLEW ACTIVE", "bool")
+        new("IS SLEW ACTIVE", "bool"),
+        new("SIMULATION RATE", "number"),
+        new("TIME OF DAY", "number"),
+        new("AMBIENT IN CLOUD", "bool")
     ];
 
     internal static int ValueCount => Data.Length;

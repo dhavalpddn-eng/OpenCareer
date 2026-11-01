@@ -142,11 +142,49 @@ public sealed class FlightSessionDetailsTests
             plan,
             session.Plan);
 
+        FlightLeg leg =
+            Assert.Single(session.EffectiveLegs);
+
+        Assert.Equal(session.SessionId, leg.LegId);
+        Assert.Equal(1, leg.Sequence);
+        Assert.Equal(session.CreatedAt, leg.StartedAt);
+        Assert.Same(plan, leg.Plan);
+        Assert.Equal(FlightLegStatus.Active, leg.Status);
+        Assert.Null(leg.CompletedAt);
+
         Assert.NotNull(
             session.Statistics);
 
         Assert.Empty(
             session.EffectiveLandingEpisodes);
+    }
+
+    [Fact]
+    public void EngineAdvancePreservesFirstLegIdentityAndPlan()
+    {
+        Guid sessionId = Guid.NewGuid();
+        var plan = new FlightSessionPlan("KDFW", "KIAH");
+        FlightSession started =
+            FlightSession.Start(
+                Epoch,
+                sessionId: sessionId,
+                plan: plan);
+
+        FlightSession advanced =
+            FlightSessionEngine.Advance(
+                started,
+                new FlightSessionAdvance(
+                    new FlightStateEvidence(
+                        Epoch.AddSeconds(1),
+                        Connected: true,
+                        StableTelemetry: true,
+                        ValidLoadedAircraft: true,
+                        ContinuityPlausible: true)));
+
+        Assert.Equal(started.EffectiveLegs, advanced.EffectiveLegs);
+        FlightLeg leg = Assert.Single(advanced.EffectiveLegs);
+        Assert.Equal(sessionId, leg.LegId);
+        Assert.Equal(plan, leg.Plan);
     }
 
     private static FlightSessionObservation Observation(

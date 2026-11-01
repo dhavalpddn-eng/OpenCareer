@@ -13,10 +13,10 @@ public sealed class FlightSessionCoordinator
         Guid? contractId = null,
         Guid? sessionId = null)
     {
-        if (Current is { IsTerminal: false })
+        if (Current is not null)
         {
             throw new InvalidOperationException(
-                "An active flight session already exists.");
+                "The current flight session must be cleared before a new session can start.");
         }
 
         Current =
@@ -52,10 +52,10 @@ public sealed class FlightSessionCoordinator
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        if (Current is { IsTerminal: false })
+        if (Current is not null)
         {
             throw new InvalidOperationException(
-                "Cannot restore over an active flight session.");
+                "The current flight session must be cleared before another session can be restored.");
         }
 
         Current = session;
@@ -78,6 +78,27 @@ public sealed class FlightSessionCoordinator
         {
             throw new InvalidOperationException(
                 "Cannot replace the current flight session with a different session identity.");
+        }
+
+        if (Current.ContractId != session.ContractId
+            || Current.CreatedAt != session.CreatedAt
+            || Current.Plan != session.Plan)
+        {
+            throw new InvalidOperationException(
+                "Cannot replace the current flight session with different immutable session authority.");
+        }
+
+        if (Current.IsTerminal && !session.IsTerminal)
+        {
+            throw new InvalidOperationException(
+                "Cannot replace a terminal flight session with a nonterminal checkpoint.");
+        }
+
+        if (Current.IsTerminal
+            && session.Status != Current.Status)
+        {
+            throw new InvalidOperationException(
+                "Cannot replace a terminal flight session with a different terminal outcome.");
         }
 
         if (session.UpdatedAt < Current.UpdatedAt)
@@ -103,6 +124,23 @@ public sealed class FlightSessionCoordinator
 
         Current = null;
         Publish();
+    }
+
+    public void ClearTerminalSession(
+        FlightSession expectedSession)
+    {
+        ArgumentNullException.ThrowIfNull(expectedSession);
+
+        if (Current is null)
+            return;
+
+        if (!ReferenceEquals(Current, expectedSession))
+        {
+            throw new InvalidOperationException(
+                "The current flight session changed before terminal cleanup completed.");
+        }
+
+        ClearTerminalSession();
     }
 
     private void Publish()

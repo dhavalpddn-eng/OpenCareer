@@ -236,6 +236,23 @@ public sealed record FlightSettlementRecord(
     }
 }
 
+public sealed record CivilianQualificationTrainingMetadata(
+    Guid CareerId,
+    string TrainingOperationIdentity,
+    string TargetQualificationIdentity,
+    string SourceDetail)
+{
+    public void Validate()
+    {
+        if (CareerId == Guid.Empty)
+            throw new InvalidOperationException("Qualification training metadata requires a career identity.");
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(TrainingOperationIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(TargetQualificationIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(SourceDetail);
+    }
+}
+
 public sealed record FlightDebriefDraft(
     Guid DebriefId,
     Guid SessionId,
@@ -255,7 +272,8 @@ public sealed record FlightDebriefDraft(
     MissionOutcome MissionOutcome,
     IReadOnlyList<LandingDebrief> Landings,
     IReadOnlyList<FlightDebriefEvent> Events,
-    FlightSettlementRecord Settlement);
+    FlightSettlementRecord Settlement,
+    CivilianQualificationTrainingMetadata? QualificationTraining = null);
 
 public sealed record FlightDebrief(
     Guid DebriefId,
@@ -276,7 +294,8 @@ public sealed record FlightDebrief(
     MissionOutcome MissionOutcome,
     IReadOnlyList<LandingDebrief> Landings,
     IReadOnlyList<FlightDebriefEvent> Events,
-    FlightSettlementRecord Settlement);
+    FlightSettlementRecord Settlement,
+    CivilianQualificationTrainingMetadata? QualificationTraining = null);
 
 public static class FlightDebriefFactory
 {
@@ -317,6 +336,17 @@ public static class FlightDebriefFactory
         draft.Fuel.Validate();
         draft.Payload.Validate();
         draft.Settlement.Validate();
+
+        if (draft.QualificationTraining is not null)
+        {
+            if (draft.EntryKind != LogbookEntryKind.Training)
+            {
+                throw new InvalidOperationException(
+                    "Civilian qualification training metadata is valid only for Training logbook entries.");
+            }
+
+            draft.QualificationTraining.Validate();
+        }
 
         FlightLegDebrief[] legs = draft.Legs
             .OrderBy(static leg => leg.Sequence)
@@ -421,7 +451,8 @@ public static class FlightDebriefFactory
             draft.MissionOutcome,
             landings,
             events,
-            draft.Settlement);
+            draft.Settlement,
+            draft.QualificationTraining);
     }
 
     private static void ValidateTimestamp(

@@ -17,13 +17,15 @@ public sealed class FlightSessionLandingEpisodeTests
             Advance(
                 session,
                 6,
-                touchdown: true);
+                touchdown: true,
+                touchdownMetrics: Metrics(-240, 1.2, 72, 3, -1));
 
         session =
             Advance(
                 session,
                 7,
-                bounce: true);
+                bounce: true,
+                touchdownMetrics: Metrics(-900, 2.5, 40, 10, 8));
 
         session =
             Advance(
@@ -54,6 +56,11 @@ public sealed class FlightSessionLandingEpisodeTests
         Assert.Equal(
             Epoch.AddSeconds(8),
             episode.CompletedAt);
+        Assert.Equal(-240, episode.VerticalSpeedFeetPerMinute);
+        Assert.Equal(1.2, episode.NormalAccelerationG);
+        Assert.Equal(72, episode.IndicatedAirspeedKnots);
+        Assert.Equal(3, episode.PitchDegrees);
+        Assert.Equal(-1, episode.BankDegrees);
     }
 
     [Fact]
@@ -66,7 +73,8 @@ public sealed class FlightSessionLandingEpisodeTests
             Advance(
                 session,
                 6,
-                touchdown: true);
+                touchdown: true,
+                touchdownMetrics: Metrics(-180, 1.1, 68, 2, 0));
 
         session =
             Advance(
@@ -85,6 +93,47 @@ public sealed class FlightSessionLandingEpisodeTests
         Assert.Equal(
             Epoch.AddSeconds(7),
             episode.CompletedAt);
+        Assert.Equal(-180, episode.VerticalSpeedFeetPerMinute);
+    }
+
+    [Fact]
+    public void SeparateLandingEpisodesRetainIndependentMetrics()
+    {
+        FlightSession session = Airborne();
+        session = Advance(session, 6, touchdown: true, touchdownMetrics: Metrics(-150, 1.1, 70, 2, 0));
+        session = Advance(session, 7, touchAndGo: true);
+        session = Advance(session, 8, touchdown: true, touchdownMetrics: Metrics(-320, 1.4, 65, 4, 1));
+
+        Assert.Equal(2, session.EffectiveLandingEpisodes.Count);
+        Assert.Equal(-150, session.EffectiveLandingEpisodes[0].VerticalSpeedFeetPerMinute);
+        Assert.Equal(-320, session.EffectiveLandingEpisodes[1].VerticalSpeedFeetPerMinute);
+        Assert.Equal(1.1, session.EffectiveLandingEpisodes[0].NormalAccelerationG);
+        Assert.Equal(1.4, session.EffectiveLandingEpisodes[1].NormalAccelerationG);
+    }
+
+    [Fact]
+    public void MissingTouchdownMetricsRemainUnknown()
+    {
+        FlightSession session = Advance(Airborne(), 6, touchdown: true);
+        FlightSessionLandingEpisode episode = Assert.Single(session.EffectiveLandingEpisodes);
+
+        Assert.Null(episode.VerticalSpeedFeetPerMinute);
+        Assert.Null(episode.NormalAccelerationG);
+        Assert.Null(episode.IndicatedAirspeedKnots);
+        Assert.Null(episode.PitchDegrees);
+        Assert.Null(episode.BankDegrees);
+    }
+
+    [Fact]
+    public void InvalidTouchdownMetricsFailClosed()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => Advance(
+                Airborne(),
+                6,
+                touchdown: true,
+                touchdownMetrics:
+                    Metrics(double.NaN, 1, 70, 2, 0)));
     }
 
     private static FlightSession Airborne()
@@ -128,7 +177,8 @@ public sealed class FlightSessionLandingEpisodeTests
         bool touchdown = false,
         bool bounce = false,
         bool touchAndGo = false,
-        bool rollout = false) =>
+        bool rollout = false,
+        FlightSessionTouchdownMetrics? touchdownMetrics = null) =>
         FlightSessionEngine.Advance(
             session,
             new FlightSessionAdvance(
@@ -144,5 +194,14 @@ public sealed class FlightSessionLandingEpisodeTests
                     TouchdownConfirmed: touchdown,
                     BounceRecontact: bounce,
                     TouchAndGoConfirmed: touchAndGo,
-                    LandingRolloutConfirmed: rollout)));
+                    LandingRolloutConfirmed: rollout),
+                TouchdownMetrics: touchdownMetrics));
+
+    private static FlightSessionTouchdownMetrics Metrics(
+        double verticalSpeed,
+        double normalG,
+        double indicatedAirspeed,
+        double pitch,
+        double bank) =>
+        new(verticalSpeed, normalG, indicatedAirspeed, pitch, bank);
 }

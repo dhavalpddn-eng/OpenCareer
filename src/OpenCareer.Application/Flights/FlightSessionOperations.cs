@@ -72,23 +72,11 @@ public sealed class FlightSessionCompletionService
                 "FlightSession must be shut down before completion.");
         }
 
-        if (request.Timestamp < current.UpdatedAt)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(request),
-                "Completion cannot move backward in time.");
-        }
-
         return await _persistence
-            .AdvanceAsync(
-                new FlightSessionAdvance(
-                    new FlightStateEvidence(
-                        request.Timestamp,
-                        Connected: true,
-                        StableTelemetry: true,
-                        ContinuityPlausible: true,
-                        OperationCompleteConfirmed: true),
-                    ShutdownConfirmed: true),
+            .CompleteAsync(
+                current.SessionId,
+                current.ContractId,
+                request.Timestamp,
                 cancellationToken)
             .ConfigureAwait(false);
     }

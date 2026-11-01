@@ -1,25 +1,38 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenCareer.App.Services;
+using OpenCareer.Application.Flights;
 using OpenCareer.Application.Settings;
 using OpenCareer.Application.Simulator;
+using OpenCareer.Domain.Flights;
 using OpenCareer.Domain.Telemetry;
 
 namespace OpenCareer.App.ViewModels;
 
 public sealed class SettingsViewModel : INotifyPropertyChanged
 {
+    private const string PreferenceResetRequiredStatus =
+        "Preferences could not be loaded. The original preference file was preserved and preference edits are locked. Use Reset preferences to defaults below to repair preferences; career data is not changed.";
+
     private readonly IAppSettingsService _settings;
     private readonly ISimulatorConnection _connection;
     private readonly ISimulatorTelemetrySource _telemetrySource;
     private readonly DiagnosticBundleService _diagnostics;
     private readonly AppDataBackupService _backup;
+    private readonly AppDataRestoreService _restore;
     private readonly ShellOpenService _shell;
     private readonly OpenCareerDataPaths _paths;
+    private readonly FlightSessionCoordinator _flightSessions;
+    private readonly FlightSessionPersistenceService _flightPersistence;
+    private readonly IInputBindingDiscoverySource? _inputBindings;
+    private readonly ILogger<SettingsViewModel> _logger;
+    private readonly SemaphoreSlim _preferenceGate = new(1, 1);
 
     private string _actionStatus = "Ready.";
-    private bool _isBusy;
+    private int _settingsActionActive;
 
     private string _connectionState = "Disconnected";
     private string _connectionIssue = "None";
@@ -28,6 +41,16 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private string _telemetryState = "No telemetry";
     private string _lastTelemetry = "—";
     private string _aircraftRuntimeState = "—";
+    private string _careerRecoveryStatus;
+    private string _inputBindingStatus =
+        "UNAVAILABLE · No supported binding source is connected.";
+    private bool _developmentProfileResetScheduled;
+    private IReadOnlyList<string> _backupArchiveOptions = Array.Empty<string>();
+    private int _selectedBackupIndex = -1;
+    private bool _hasPendingDatabaseRestore;
+    private bool _databaseRestoreApplyFailed;
+    private string _backupRestoreStatus =
+        "No OpenCareer backup archives are available in the Backups folder.";
 
     public SettingsViewModel(
         IAppSettingsService settings,
@@ -35,18 +58,45 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         ISimulatorTelemetrySource telemetrySource,
         DiagnosticBundleService diagnostics,
         AppDataBackupService backup,
+        AppDataRestoreService restore,
         ShellOpenService shell,
-        OpenCareerDataPaths paths)
+        OpenCareerDataPaths paths,
+        FlightSessionCoordinator flightSessions,
+        FlightSessionPersistenceService flightPersistence,
+        IInputBindingDiscoverySource? inputBindings = null,
+        ILogger<SettingsViewModel>? logger = null)
     {
         _settings = settings;
         _connection = connection;
         _telemetrySource = telemetrySource;
         _diagnostics = diagnostics;
         _backup = backup;
+        _restore = restore;
         _shell = shell;
         _paths = paths;
+        _flightSessions =
+            flightSessions
+            ?? throw new ArgumentNullException(nameof(flightSessions));
+        _flightPersistence =
+            flightPersistence
+            ?? throw new ArgumentNullException(nameof(flightPersistence));
+        _inputBindings = inputBindings;
+        _logger = logger ?? NullLogger<SettingsViewModel>.Instance;
+        _careerRecoveryStatus =
+            FormatCareerRecoveryStatus(
+                _flightSessions.Current,
+                _flightPersistence.RecoveryFailed);
+        _developmentProfileResetScheduled =
+            _paths.IsDevelopmentLiveTest
+            && OpenCareerDevelopmentDataProfile.IsResetRequested(_paths);
 
         _settings.Changed += OnSettingsChanged;
+        _flightSessions.SessionChanged += OnFlightSessionChanged;
+
+        if (PreferencesRequireReset)
+            _actionStatus = PreferenceResetRequiredStatus;
+
+        RefreshBackupArchives();
         RefreshDiagnostics();
     }
 
@@ -99,11 +149,66 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public string BackupsFolder => _paths.BackupsFolder;
     public string DiagnosticsFolder => _paths.DiagnosticsFolder;
 
-    public string InputBindingStatus =>
-        "Binding resolver is not implemented yet (MBL-05). This preference controls which verified hint is shown first once bindings are available.";
+    public IReadOnlyList<string> BackupArchiveOptions => _backupArchiveOptions;
 
-    public string CareerRecoveryStatus =>
-        "Settings, tutorial state and logs can be backed up now. Authoritative FlightSession/SQLite recovery will be added with MBL-07 before career saves rely on it.";
+    public int SelectedBackupIndex
+    {
+        get => _selectedBackupIndex;
+        set
+        {
+            int normalized = value >= 0 && value < _backupArchiveOptions.Count
+                ? value
+                : -1;
+
+            if (_selectedBackupIndex == normalized)
+                return;
+
+            _selectedBackupIndex = normalized;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedBackupArchive));
+            OnPropertyChanged(nameof(CanStageSelectedBackup));
+            UpdateBackupRestoreStatus();
+        }
+    }
+
+    public string? SelectedBackupArchive =>
+        _selectedBackupIndex >= 0
+        && _selectedBackupIndex < _backupArchiveOptions.Count
+            ? _backupArchiveOptions[_selectedBackupIndex]
+            : null;
+
+    public bool HasPendingDatabaseRestore => _hasPendingDatabaseRestore;
+
+    public bool DatabaseRestoreApplyFailed => _databaseRestoreApplyFailed;
+
+    public bool CanStageSelectedBackup =>
+        CanRunSettingsActions
+        && SelectedBackupArchive is not null;
+
+    public bool CanCancelPendingDatabaseRestore =>
+        CanRunSettingsActions
+        && HasPendingDatabaseRestore;
+
+    public string BackupRestoreStatus => _backupRestoreStatus;
+
+    public string DataProfileStatus => _paths.IsDevelopmentLiveTest
+        ? "DEVELOPMENT / TEST · KJFK · Isolated from normal career data"
+        : "NORMAL CAREER · Persistent career data";
+
+    public string DevelopmentProfileResetHelp => _paths.IsDevelopmentLiveTest
+        ? _developmentProfileResetScheduled
+            ? "CLEAN RESET SCHEDULED · Close OpenCareer and launch the KJFK test profile again."
+            : "Use this after a test run to remove only the isolated KJFK jobs, flights, money, aircraft, logs and settings on the next launch."
+        : "Clean test reset is disabled because this is the normal career profile.";
+
+    public bool CanScheduleDevelopmentProfileReset =>
+        _paths.IsDevelopmentLiveTest
+        && !_developmentProfileResetScheduled
+        && CanRunSettingsActions;
+
+    public string InputBindingStatus => _inputBindingStatus;
+
+    public string CareerRecoveryStatus => _careerRecoveryStatus;
 
     public string OptionalServicesStatus =>
         AllowOptionalOnlineServices
@@ -119,14 +224,36 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         private set => SetField(ref _actionStatus, value);
     }
 
-    public bool IsBusy
-    {
-        get => _isBusy;
-        private set => SetField(ref _isBusy, value);
-    }
+    public bool IsBusy => Volatile.Read(ref _settingsActionActive) != 0;
+
+    public bool CanRunSettingsActions => !IsBusy;
+
+    public bool CanEditPreferences =>
+        CanRunSettingsActions
+        && !PreferencesRequireReset;
+
+    public string PreferenceStorageStatus => PreferencesRequireReset
+        ? "PREFERENCES RECOVERY REQUIRED · OpenCareer could not read the existing preference file. Defaults are active for this launch, preference edits are locked, and the original file is preserved. Use Reset preferences to defaults below to repair preferences; career data is not changed."
+        : "Preferences are available from local storage.";
 
     public void RefreshDiagnostics()
     {
+        SetField(
+            ref _careerRecoveryStatus,
+            FormatCareerRecoveryStatus(
+                _flightSessions.Current,
+                _flightPersistence.RecoveryFailed),
+            nameof(CareerRecoveryStatus));
+
+        InputBindingDiscoverySnapshot? bindingSnapshot =
+            _inputBindings?.Read(Array.Empty<InputBindingActionIdentity>());
+        SetField(
+            ref _inputBindingStatus,
+            bindingSnapshot is null
+                ? "UNAVAILABLE · No supported binding source is connected."
+                : $"{bindingSnapshot.State.ToString().ToUpperInvariant()} · {bindingSnapshot.Detail}",
+            nameof(InputBindingStatus));
+
         SimulatorConnectionSnapshot snapshot = _connection.Current;
         AircraftTelemetrySnapshot? telemetry = snapshot.State == SimulatorConnectionState.Connected
             ? _telemetrySource.Latest
@@ -176,7 +303,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public Task SetUnitsAsync(int selectedIndex, CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with
+            current => current with
             {
                 MeasurementSystem = selectedIndex == 1
                     ? MeasurementSystem.Metric
@@ -196,7 +323,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         };
 
         return UpdateAsync(
-            _settings.Current with { InputHints = preference },
+            current => current with { InputHints = preference },
             cancellationToken);
     }
 
@@ -204,76 +331,232 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         bool value,
         CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with { ShowChecklistEveryFlight = value },
+            current => current with { ShowChecklistEveryFlight = value },
             cancellationToken);
 
     public Task SetAutomaticallyOfferTutorialsAsync(
         bool value,
         CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with { AutomaticallyOfferTutorials = value },
+            current => current with { AutomaticallyOfferTutorials = value },
             cancellationToken);
 
     public Task SetReduceMotionAsync(
         bool value,
         CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with { ReduceMotion = value },
+            current => current with { ReduceMotion = value },
             cancellationToken);
 
     public Task SetAllowOptionalOnlineServicesAsync(
         bool value,
         CancellationToken cancellationToken = default) =>
         UpdateAsync(
-            _settings.Current with { AllowOptionalOnlineServices = value },
+            current => current with { AllowOptionalOnlineServices = value },
             cancellationToken);
 
     public async Task ResetPreferencesAsync(CancellationToken cancellationToken = default)
     {
-        IsBusy = true;
+        if (!TryBeginSettingsAction())
+            return;
+
         try
         {
-            await _settings.ResetAsync(cancellationToken).ConfigureAwait(true);
-            ActionStatus = "Application preferences reset to defaults. Career data and tutorial progress were not changed.";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ActionStatus = $"Could not reset preferences: {ex.Message}";
+            await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                await _settings.ResetAsync(cancellationToken).ConfigureAwait(true);
+                ActionStatus = "Application preferences reset to defaults. Career data and tutorial progress were not changed.";
+                OnPropertyChanged(nameof(CanEditPreferences));
+                OnPropertyChanged(nameof(PreferenceStorageStatus));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    ex,
+                    "Could not reset OpenCareer application preferences.");
+                ActionStatus = PreferencesRequireReset
+                    ? "Preferences remain locked because Reset preferences could not repair the preserved preference file. Career data was not changed. Verify local storage is available, then retry Reset preferences. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings."
+                    : "Application preferences could not be reset. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
+            }
+            finally
+            {
+                _preferenceGate.Release();
+            }
         }
         finally
         {
-            IsBusy = false;
+            EndSettingsAction();
         }
     }
 
     public async Task CreateBackupAsync(CancellationToken cancellationToken = default)
     {
-        IsBusy = true;
+        if (!TryBeginSettingsAction())
+            return;
+
         try
         {
-            SettingsActionResult result = await _backup.CreateBackupAsync(cancellationToken)
-                .ConfigureAwait(true);
-            ActionStatus = result.Message;
+            await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                SettingsActionResult result = await _backup.CreateBackupAsync(cancellationToken)
+                    .ConfigureAwait(true);
+                ActionStatus = result.Message;
+                RefreshBackupArchives();
+            }
+            finally
+            {
+                _preferenceGate.Release();
+            }
         }
         finally
         {
-            IsBusy = false;
+            EndSettingsAction();
+        }
+    }
+
+    public void RefreshBackupArchives()
+    {
+        string? selected = SelectedBackupArchive;
+
+        try
+        {
+            _backupArchiveOptions = Directory.Exists(_paths.BackupsFolder)
+                ? Directory
+                    .EnumerateFiles(
+                        _paths.BackupsFolder,
+                        "opencareer-backup-*.zip",
+                        SearchOption.TopDirectoryOnly)
+                    .Select(Path.GetFileName)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Cast<string>()
+                    .OrderByDescending(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+                : Array.Empty<string>();
+
+            _selectedBackupIndex = selected is null
+                ? -1
+                : IndexOfBackupArchive(selected);
+            _hasPendingDatabaseRestore = _restore.HasPendingDatabaseRestore;
+            _databaseRestoreApplyFailed =
+                _restore.PendingDatabaseRestoreApplyFailed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not enumerate OpenCareer backup archives.");
+            _backupArchiveOptions = Array.Empty<string>();
+            _selectedBackupIndex = -1;
+            _hasPendingDatabaseRestore = _restore.HasPendingDatabaseRestore;
+            _databaseRestoreApplyFailed =
+                _restore.PendingDatabaseRestoreApplyFailed;
+        }
+
+        OnPropertyChanged(nameof(BackupArchiveOptions));
+        OnPropertyChanged(nameof(SelectedBackupIndex));
+        OnPropertyChanged(nameof(SelectedBackupArchive));
+        OnPropertyChanged(nameof(HasPendingDatabaseRestore));
+        OnPropertyChanged(nameof(DatabaseRestoreApplyFailed));
+        OnPropertyChanged(nameof(CanStageSelectedBackup));
+        OnPropertyChanged(nameof(CanCancelPendingDatabaseRestore));
+        UpdateBackupRestoreStatus();
+    }
+
+    public async Task StageSelectedBackupAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string? selected = SelectedBackupArchive;
+        if (selected is null)
+        {
+            ActionStatus =
+                "Select an OpenCareer backup from the Backups folder before staging a restore.";
+            return;
+        }
+
+        if (!TryBeginSettingsAction())
+            return;
+
+        try
+        {
+            await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                SettingsActionResult safetyBackup = await _backup
+                    .CreateBackupAsync(cancellationToken)
+                    .ConfigureAwait(true);
+
+                if (!safetyBackup.Success)
+                {
+                    ActionStatus =
+                        "Restore was not staged because a current safety backup could not be created. "
+                        + safetyBackup.Message;
+                    return;
+                }
+
+                string selectedPath = Path.Combine(_paths.BackupsFolder, selected);
+                SettingsActionResult result = await _restore
+                    .StageDatabaseRestoreAsync(selectedPath, cancellationToken)
+                    .ConfigureAwait(true);
+
+                ActionStatus = result.Success
+                    ? $"Current safety backup created. {result.Message}"
+                    : $"Current safety backup created, but restore staging stopped. {result.Message}";
+            }
+            finally
+            {
+                _preferenceGate.Release();
+            }
+        }
+        finally
+        {
+            RefreshBackupArchives();
+            EndSettingsAction();
+        }
+    }
+
+    public async Task CancelPendingDatabaseRestoreAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryBeginSettingsAction())
+            return;
+
+        try
+        {
+            SettingsActionResult result = await _restore
+                .CancelPendingDatabaseRestoreAsync(cancellationToken)
+                .ConfigureAwait(true);
+            ActionStatus = result.Message;
+            RefreshBackupArchives();
+        }
+        finally
+        {
+            EndSettingsAction();
         }
     }
 
     public async Task ExportDiagnosticsAsync(CancellationToken cancellationToken = default)
     {
-        IsBusy = true;
+        if (!TryBeginSettingsAction())
+            return;
+
         try
         {
-            RefreshDiagnostics();
-            SettingsActionResult result = await _diagnostics.CreateAsync(cancellationToken)
-                .ConfigureAwait(true);
-            ActionStatus = result.Message;
+            await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                RefreshDiagnostics();
+                SettingsActionResult result = await _diagnostics.CreateAsync(cancellationToken)
+                    .ConfigureAwait(true);
+                ActionStatus = result.Message;
+            }
+            finally
+            {
+                _preferenceGate.Release();
+            }
         }
         finally
         {
-            IsBusy = false;
+            EndSettingsAction();
         }
     }
 
@@ -289,20 +572,162 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public void OpenDiagnosticsFolder() =>
         ActionStatus = _shell.OpenFolder(_paths.DiagnosticsFolder).Message;
 
-    private async Task UpdateAsync(
-        AppPreferences preferences,
-        CancellationToken cancellationToken)
+    public void ScheduleDevelopmentProfileReset()
     {
+        if (!_paths.IsDevelopmentLiveTest)
+        {
+            ActionStatus =
+                "Clean test reset is unavailable because this is the normal career profile.";
+            return;
+        }
+
+        if (_developmentProfileResetScheduled)
+        {
+            ActionStatus =
+                "Clean KJFK test reset is already scheduled for the next launch.";
+            return;
+        }
+
+        if (!TryBeginSettingsAction())
+            return;
+
         try
         {
-            await _settings.UpdateAsync(preferences, cancellationToken).ConfigureAwait(true);
-            ActionStatus = "Settings saved.";
+            OpenCareerDevelopmentDataProfile.RequestResetOnNextLaunch(_paths);
+            _developmentProfileResetScheduled = true;
+            OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
+            OnPropertyChanged(nameof(DevelopmentProfileResetHelp));
+            ActionStatus =
+                "Clean KJFK test reset scheduled. Close OpenCareer, then launch the KJFK test profile again.";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (
+            ex is IOException
+                or UnauthorizedAccessException
+                or InvalidDataException
+                or InvalidOperationException)
         {
-            ActionStatus = $"Could not save settings: {ex.Message}";
+            _logger.LogError(
+                ex,
+                "Could not schedule the clean KJFK development profile reset.");
+            ActionStatus =
+                "Clean KJFK test reset was not scheduled. Verify the isolated test profile folder is available, then retry. If this keeps happening, create a diagnostic bundle before changing or deleting profile data.";
+        }
+        finally
+        {
+            EndSettingsAction();
         }
     }
+
+    private async Task UpdateAsync(
+        Func<AppPreferences, AppPreferences> update,
+        CancellationToken cancellationToken)
+    {
+        if (IsBusy)
+        {
+            ReportSettingsActionAlreadyRunning();
+            return;
+        }
+
+        if (PreferencesRequireReset)
+        {
+            ActionStatus = PreferenceResetRequiredStatus;
+            return;
+        }
+
+        await _preferenceGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+        try
+        {
+            if (IsBusy)
+            {
+                ReportSettingsActionAlreadyRunning();
+                return;
+            }
+
+            try
+            {
+                AppPreferences preferences = update(_settings.Current);
+                await _settings.UpdateAsync(preferences, cancellationToken).ConfigureAwait(true);
+                ActionStatus = "Settings saved.";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    ex,
+                    "Could not save OpenCareer application preferences.");
+                ActionStatus =
+                    "Settings could not be saved. Verify local storage is available, then retry. If this keeps happening, create a diagnostic bundle and use Open Logs Folder in Settings.";
+            }
+        }
+        finally
+        {
+            _preferenceGate.Release();
+        }
+    }
+
+    private bool TryBeginSettingsAction()
+    {
+        if (Interlocked.CompareExchange(ref _settingsActionActive, 1, 0) != 0)
+        {
+            ReportSettingsActionAlreadyRunning();
+            return false;
+        }
+
+        OnPropertyChanged(nameof(IsBusy));
+        OnPropertyChanged(nameof(CanRunSettingsActions));
+        OnPropertyChanged(nameof(CanEditPreferences));
+        OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
+        OnPropertyChanged(nameof(CanStageSelectedBackup));
+        OnPropertyChanged(nameof(CanCancelPendingDatabaseRestore));
+        return true;
+    }
+
+    private void EndSettingsAction()
+    {
+        Interlocked.Exchange(ref _settingsActionActive, 0);
+        OnPropertyChanged(nameof(IsBusy));
+        OnPropertyChanged(nameof(CanRunSettingsActions));
+        OnPropertyChanged(nameof(CanEditPreferences));
+        OnPropertyChanged(nameof(CanScheduleDevelopmentProfileReset));
+        OnPropertyChanged(nameof(CanStageSelectedBackup));
+        OnPropertyChanged(nameof(CanCancelPendingDatabaseRestore));
+    }
+
+    private int IndexOfBackupArchive(string fileName)
+    {
+        for (int index = 0; index < _backupArchiveOptions.Count; index++)
+        {
+            if (string.Equals(
+                _backupArchiveOptions[index],
+                fileName,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private void UpdateBackupRestoreStatus()
+    {
+        string status = DatabaseRestoreApplyFailed
+            ? HasPendingDatabaseRestore
+                ? "RESTORE ATTENTION · The staged database restore did not complete during startup. Cancel it below to stop automatic retry, or create a diagnostic bundle before restarting again. OpenCareer has not recorded the selected backup as applied."
+                : "RESTORE ATTENTION · The database restore did not complete during startup and no staged restore remains to retry or cancel. OpenCareer has not recorded the selected backup as applied. Review current career data and create a diagnostic bundle before selecting that backup again."
+            : HasPendingDatabaseRestore
+            ? "RESTORE STAGED · Restart OpenCareer to apply it, or cancel the staged restore below to keep current career data."
+            : SelectedBackupArchive is not null
+                ? $"Selected: {SelectedBackupArchive}. Restoring requires confirmation and creates a current safety backup first."
+                : _backupArchiveOptions.Count == 0
+                    ? "No OpenCareer backup archives are available in the Backups folder."
+                    : "Select an OpenCareer backup archive to make restore available.";
+
+        SetField(ref _backupRestoreStatus, status, nameof(BackupRestoreStatus));
+    }
+
+    private void ReportSettingsActionAlreadyRunning() =>
+        ActionStatus =
+            "Another Settings action is already running. Wait for it to finish, then retry.";
 
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
@@ -313,7 +738,44 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ReduceMotion));
         OnPropertyChanged(nameof(AllowOptionalOnlineServices));
         OnPropertyChanged(nameof(OptionalServicesStatus));
+        OnPropertyChanged(nameof(CanEditPreferences));
+        OnPropertyChanged(nameof(PreferenceStorageStatus));
     }
+
+    private bool PreferencesRequireReset =>
+        _settings is IAppSettingsRecoveryState { RequiresReset: true };
+
+    private void OnFlightSessionChanged(
+        object? sender,
+        FlightSessionChangedEventArgs e) =>
+        SetField(
+            ref _careerRecoveryStatus,
+            FormatCareerRecoveryStatus(
+                e.Session,
+                _flightPersistence.RecoveryFailed),
+            nameof(CareerRecoveryStatus));
+
+    private static string FormatCareerRecoveryStatus(
+        FlightSession? session,
+        bool recoveryFailed) =>
+        session?.Status switch
+        {
+            null when recoveryFailed =>
+                "RECOVERY ATTENTION · Flight checkpoint recovery did not complete. The app did not clear the stored checkpoint during recovery. Close and reopen OpenCareer to retry before starting another flight. If this warning returns, create a diagnostic bundle before making any reset or restore change.",
+            null =>
+                "SQLite-backed FlightSession checkpoint recovery, including previous-valid fallback, is enabled. No flight session is currently loaded.",
+            FlightSessionStatus.Active =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. An active flight session is loaded and remains eligible for restart checkpoints.",
+            FlightSessionStatus.Suspended =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. A suspended flight session is retained for continuity-safe resume; it is not completed.",
+            FlightSessionStatus.Interrupted =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. An interrupted terminal session is retained for retryable postflight or cleanup handling; it is not completed.",
+            FlightSessionStatus.Completed =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. A completed terminal session remains retained until required postflight processing and checkpoint cleanup succeed.",
+            FlightSessionStatus.Cancelled =>
+                "SQLite-backed FlightSession checkpoint recovery is enabled. A cancelled terminal session remains retained until checkpoint cleanup succeeds.",
+            _ => throw new ArgumentOutOfRangeException(nameof(session))
+        };
 
     private void SetField(
         ref string field,
