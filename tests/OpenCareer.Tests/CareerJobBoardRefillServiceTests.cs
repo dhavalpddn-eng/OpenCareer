@@ -522,7 +522,7 @@ public sealed class CareerJobBoardRefillServiceTests
         Assert.Equal(original, await store.GetAsync("KRME"));
         dispatch.Failure = null;
         JobBoardState retried = await service.RefillAsync(Profile("KRME"));
-        Assert.Equal(original.Offers, retried.Offers);
+        Assert.Equal(original.Offers.ToArray(), retried.Offers.ToArray());
         Assert.Equal(2, store.SaveCount);
     }
 

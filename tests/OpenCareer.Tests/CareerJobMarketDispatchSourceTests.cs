@@ -205,7 +205,9 @@ public sealed class CareerJobMarketDispatchSourceTests
         DispatchFeasibilityStatus dispatch = DispatchFeasibilityStatus.Feasible,
         bool hasFuel = true) => new(status, null, null, null, null, null,
             hasFuel ? new RouteFuelWeightPlan(0, 6, 20, 120, 50, 300) : null,
-            DispatchFeasibilityResult.Create(dispatch, "01", "01", []));
+            DispatchFeasibilityResult.Create(dispatch, "01", "01",
+                dispatch == DispatchFeasibilityStatus.Feasible
+                    ? [] : [new(DispatchFeasibilityReason.FuelExceedsAircraftMaximum)]));
 
     private static DispatchCruiseProfileOption Profile(int index) => new(
         index, 0, "Cruise", new(1_800, 2_550, -20, 40, 0, 14_000), "Test evidence");
