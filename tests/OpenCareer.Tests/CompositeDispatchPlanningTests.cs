@@ -1,13 +1,78 @@
 using OpenCareer.Application.Fleet;
+using OpenCareer.Application.Careers;
 using OpenCareer.Application.Planning;
 using OpenCareer.Domain.Aircraft;
 using OpenCareer.Domain.Airports;
+using OpenCareer.Domain.Careers;
+using OpenCareer.Domain.Economy;
 using OpenCareer.Domain.Planning;
 
 namespace OpenCareer.Tests;
 
 public sealed class CompositeDispatchPlanningTests
 {
+    [Theory]
+    [InlineData(20, 1)]
+    [InlineData(100, 2)]
+    public async Task MarketScreeningUsesRealRouteFuelAndCapacityGates(double fuelGallons, int expectedRoutes)
+    {
+        AircraftRegistryResolution aircraft = Resolution(fuelGallons, 6);
+        var source = new CareerJobMarketDispatchSource(
+            new DispatchCruiseProfileSource(new StubAircraftRegistrySource(aircraft)),
+            Service(aircraft, Airport("KAAA", 5000), Airport("KBBB", 5000), Airport("KCCC", 5000)));
+        var snapshot = new CareerJobMarketFeasibilitySnapshot(
+            CareerJobMarketFeasibilityStatus.Ready,
+            [new("KBBB", 100, 0, 0, 1, 1), new("KCCC", 300, 0, 0, 1, 3)],
+            "Static screen passed.",
+            new Dictionary<ContractKind, IReadOnlySet<string>>
+            {
+                [ContractKind.Ferry] = new HashSet<string> { "KBBB", "KCCC" }
+            },
+            AircraftCandidates:
+            [
+                new(ContractKind.Ferry, "KBBB", "fixture-aircraft", 2000),
+                new(ContractKind.Ferry, "KCCC", "fixture-aircraft", 2000)
+            ]);
+
+        var result = await source.FilterAsync("KAAA", snapshot,
+            new Dictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>>());
+
+        Assert.Equal(expectedRoutes, result[ContractKind.Ferry].Count);
+        Assert.Contains("KBBB", result[ContractKind.Ferry]);
+    }
+
+    [Fact]
+    public async Task MarketPassengerPayloadCannotExceedActualTakeoffWeightWithFuel()
+    {
+        AircraftRegistryResolution aircraft = Resolution(100, 6);
+        aircraft = aircraft with
+        {
+            DispatchPerformance = aircraft.DispatchPerformance! with { MaximumTakeoffWeightPounds = 5_500 }
+        };
+        var source = new CareerJobMarketDispatchSource(
+            new DispatchCruiseProfileSource(new StubAircraftRegistrySource(aircraft)),
+            Service(aircraft, Airport("KAAA", 5000), Airport("KBBB", 5000)));
+        var snapshot = new CareerJobMarketFeasibilitySnapshot(
+            CareerJobMarketFeasibilityStatus.Ready,
+            [new("KBBB", 100, 0, 0, 1, 1)], "Static screen passed.",
+            new Dictionary<ContractKind, IReadOnlySet<string>>
+            {
+                [ContractKind.Ferry] = new HashSet<string> { "KBBB" },
+                [ContractKind.Passenger] = new HashSet<string> { "KBBB" }
+            },
+            AircraftCandidates:
+            [
+                new(ContractKind.Ferry, "KBBB", "fixture-aircraft", 2000),
+                new(ContractKind.Passenger, "KBBB", "fixture-aircraft", 2000)
+            ]);
+
+        var result = await source.FilterAsync("KAAA", snapshot,
+            new Dictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>>());
+
+        Assert.Contains(ContractKind.Ferry, result.Keys);
+        Assert.DoesNotContain(ContractKind.Passenger, result.Keys);
+    }
+
     [Fact]
     public async Task SuccessfulFuelPlanFlowsIntoExistingFuelCapacityGate()
     {

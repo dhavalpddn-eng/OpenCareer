@@ -15,6 +15,12 @@ public enum CareerJobMarketFeasibilityStatus
     AirportDataUnavailable
 }
 
+public sealed record CareerJobMarketAircraftCandidate(
+    ContractKind Kind,
+    string DestinationIcao,
+    string CanonicalAircraftId,
+    double MaximumPayloadPounds);
+
 public sealed record CareerJobMarketFeasibilitySnapshot(
     CareerJobMarketFeasibilityStatus Status,
     IReadOnlyList<JobMarketDestination> Destinations,
@@ -22,7 +28,8 @@ public sealed record CareerJobMarketFeasibilitySnapshot(
     IReadOnlyDictionary<ContractKind, IReadOnlySet<string>>
         EligibleDestinationIcaosByKind,
     IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, double>>?
-        MaximumCargoPayloadPoundsByKindAndDestination = null)
+        MaximumCargoPayloadPoundsByKindAndDestination = null,
+    IReadOnlyList<CareerJobMarketAircraftCandidate>? AircraftCandidates = null)
 {
     public bool IsReady => Status == CareerJobMarketFeasibilityStatus.Ready;
 
@@ -137,6 +144,7 @@ public sealed class CareerJobMarketFeasibilitySource(
         EnsureAirportIdentity(normalizedOrigin, origin);
 
         var feasible = new List<JobMarketDestination>();
+        var candidates = new List<CareerJobMarketAircraftCandidate>();
         var eligibleByKind = new Dictionary<ContractKind, HashSet<string>>();
         var cargoPayloadByKind =
             new Dictionary<ContractKind, Dictionary<string, double>>();
@@ -185,6 +193,11 @@ public sealed class CareerJobMarketFeasibilitySource(
                 }
 
                 eligible.Add(destination.NormalizedIcao);
+                candidates.AddRange(eligibleAircraft.Select(item => new CareerJobMarketAircraftCandidate(
+                    kind,
+                    destination.NormalizedIcao,
+                    item.Resolution.CanonicalAircraftId,
+                    item.Record.Capabilities.MaximumPayloadPounds)));
 
                 if (IsCargoKind(kind))
                 {
@@ -230,7 +243,8 @@ public sealed class CareerJobMarketFeasibilitySource(
             cargoPayloadByKind.ToDictionary(
                 static pair => pair.Key,
                 static pair =>
-                    (IReadOnlyDictionary<string, double>)pair.Value));
+                    (IReadOnlyDictionary<string, double>)pair.Value),
+            candidates.ToArray());
     }
 
     private static bool IsFeasible(

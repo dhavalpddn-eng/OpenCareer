@@ -204,6 +204,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         services.AddSingleton<CareerJobMarketFeasibilitySource>();
         services.AddSingleton<ICareerJobMarketFeasibilitySource>(provider =>
             provider.GetRequiredService<CareerJobMarketFeasibilitySource>());
+        services.AddSingleton<ICareerJobMarketDispatchSource, CareerJobMarketDispatchSource>();
         services.AddSingleton<CareerJobBoardRefillService>();
         services.AddSingleton<DevelopmentFlightService>();
         services.AddSingleton<ICareerJobBoardRefillService>(provider =>

@@ -422,15 +422,109 @@ public sealed class CareerJobBoardRefillServiceTests
         ICareerJobMarketAirportSource airports,
         TimeProvider timeProvider,
         ICareerJobMarketFeasibilitySource? feasibility = null,
-        ICommodityMarketSnapshotStore? commodityMarkets = null) =>
+        ICommodityMarketSnapshotStore? commodityMarkets = null,
+        ICareerJobMarketDispatchSource? dispatch = null) =>
         new(
             new JobBoardGenerationService(
                 store),
             store,
             airports,
             feasibility ?? new FakeMarketFeasibilitySource(),
+            dispatch ?? new FakeMarketDispatchSource(),
             commodityMarkets ?? new FakeCommodityMarketSnapshotStore(),
             timeProvider);
+
+    private sealed class FakeMarketDispatchSource(
+        Func<ContractKind, string, bool>? predicate = null)
+        : ICareerJobMarketDispatchSource
+    {
+        public Exception? Failure { get; set; }
+
+        public Task<IReadOnlyDictionary<ContractKind, IReadOnlySet<string>>> FilterAsync(
+            string originIcao,
+            CareerJobMarketFeasibilitySnapshot feasibility,
+            IReadOnlyDictionary<ContractKind, IReadOnlyDictionary<string, AcceptedCargoLot>> cargoLots,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Failure is not null)
+                throw Failure;
+            IReadOnlyDictionary<ContractKind, IReadOnlySet<string>> result =
+                feasibility.EligibleDestinationIcaosByKind
+                    .ToDictionary(pair => pair.Key, pair => (IReadOnlySet<string>)pair.Value
+                        .Where(icao => predicate?.Invoke(pair.Key, icao) ?? true)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase))
+                    .Where(pair => pair.Value.Count > 0)
+                    .ToDictionary(pair => pair.Key, pair => pair.Value);
+            return Task.FromResult(result);
+        }
+    }
+
+    [Fact]
+    public async Task FullDispatchScreeningRunsBeforeOfferGeneration()
+    {
+        var store = new FakeBoardStore();
+        var service = Service(store, Airports(), new FixedTimeProvider(Epoch),
+            dispatch: new FakeMarketDispatchSource((kind, icao) =>
+                kind == ContractKind.Reposition && icao == "KSYR"));
+
+        JobBoardState board = await service.RefillAsync(Profile("KRME"));
+
+        Assert.NotEmpty(board.Offers);
+        Assert.All(board.Offers, offer =>
+        {
+            Assert.Equal(ContractKind.Reposition, offer.Kind);
+            Assert.Equal("KSYR", offer.DestinationIcao);
+        });
+    }
+
+    [Fact]
+    public async Task RejectedDispatchCannotMintOrRetirePreviouslyCommittedOffers()
+    {
+        var store = new FakeBoardStore();
+        JobBoardState original = await Service(store, Airports(), new FixedTimeProvider(Epoch))
+            .RefillAsync(Profile("KRME"));
+        int priorSaves = store.SaveCount;
+        var blocked = Service(store, Airports(), new FixedTimeProvider(Epoch),
+            dispatch: new FakeMarketDispatchSource((_, _) => false));
+
+        JobBoardState preserved = await blocked.RefillAsync(Profile("KRME"));
+
+        Assert.Equal(original, preserved);
+        Assert.Equal(priorSaves, store.SaveCount);
+    }
+
+    [Fact]
+    public async Task NoPhysicallyFeasibleRouteCreatesOnlyAnEmptyBoard()
+    {
+        var store = new FakeBoardStore();
+        var service = Service(store, Airports(), new FixedTimeProvider(Epoch),
+            dispatch: new FakeMarketDispatchSource((_, _) => false));
+
+        JobBoardState board = await service.RefillAsync(Profile("KRME"));
+
+        Assert.Empty(board.Offers);
+        Assert.Empty(board.RetiredOfferIds);
+        Assert.Equal(1, store.SaveCount);
+    }
+
+    [Fact]
+    public async Task DispatchReadFailurePreservesPersistedBoardAndAllowsRetry()
+    {
+        var store = new FakeBoardStore();
+        JobBoardState original = await Service(store, Airports(), new FixedTimeProvider(Epoch))
+            .RefillAsync(Profile("KRME"));
+        var dispatch = new FakeMarketDispatchSource { Failure = new IOException("Unavailable.") };
+        var service = Service(store, Airports(), new FixedTimeProvider(Epoch), dispatch: dispatch);
+
+        await Assert.ThrowsAsync<IOException>(() => service.RefillAsync(Profile("KRME")));
+        Assert.Equal(1, store.SaveCount);
+        Assert.Equal(original, await store.GetAsync("KRME"));
+        dispatch.Failure = null;
+        JobBoardState retried = await service.RefillAsync(Profile("KRME"));
+        Assert.Equal(original.Offers, retried.Offers);
+        Assert.Equal(2, store.SaveCount);
+    }
 
     private static CommodityMarketSnapshot Market(
         string icao,

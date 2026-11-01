@@ -26,11 +26,6 @@ public sealed class AutomaticDispatchPlanService(
     IPreparedDispatchPlanService preparedPlans)
     : IAutomaticDispatchPlanService
 {
-    private const double RangeSafetyMarginPercent = 10;
-    private const double RunwaySafetyMarginPercent = 15;
-    private const double ContingencyFuelPercent = 10;
-    private const double FinalReserveMinutes = 45;
-
     public async Task<PrepareDispatchPlanResult> PrepareAsync(
         Guid contractId,
         string canonicalAircraftId,
@@ -72,11 +67,8 @@ public sealed class AutomaticDispatchPlanService(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            DispatchCruiseProfileEnvelope envelope = profile.Envelope;
-            double isaDeviation = Math.Clamp(
-                0,
-                envelope.MinimumIsaDeviationCelsius,
-                envelope.MaximumIsaDeviationCelsius);
+            AutomaticDispatchInputs inputs = AutomaticDispatchPolicy.Create(
+                profile, payloadPounds, routeDistanceNauticalMiles);
 
             var request = new PrepareDispatchPlanRequest(
                 contractId,
@@ -84,27 +76,9 @@ public sealed class AutomaticDispatchPlanService(
                 reservationId,
                 originIcao,
                 destinationIcao,
-                new CruisePerformancePlanningRequest(
-                    profile.ProfileIndex,
-                    profile.FuelTypeIndex,
-                    envelope.MaximumWeightPounds,
-                    isaDeviation,
-                    envelope.MinimumPressureAltitudeFeet),
-                new RouteFuelPlanningRequest(
-                    routeDistanceNauticalMiles,
-                    routeDistanceNauticalMiles,
-                    ClimbTimeMinutes: 0,
-                    DescentTimeMinutes: 0,
-                    ClimbFuelGallons: 0,
-                    DescentFuelGallons: 0,
-                    new RouteFuelReservePolicy(
-                        ContingencyFuelPercent,
-                        FinalReserveMinutes)),
-                new OperationDispatchRequirements(
-                    payloadPounds,
-                    routeDistanceNauticalMiles,
-                    RangeSafetyMarginPercent: RangeSafetyMarginPercent,
-                    RunwayLengthSafetyMarginPercent: RunwaySafetyMarginPercent));
+                inputs.Cruise,
+                inputs.RouteFuel,
+                inputs.Requirements);
 
             PrepareDispatchPlanResult result = await preparedPlans
                 .PrepareAsync(request, cancellationToken)

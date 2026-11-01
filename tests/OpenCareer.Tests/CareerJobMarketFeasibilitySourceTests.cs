@@ -32,6 +32,13 @@ public sealed class CareerJobMarketFeasibilitySourceTests
         Assert.Contains(ContractKind.Ferry, result.EligibleDestinationIcaosByKind.Keys);
         Assert.Contains(ContractKind.Reposition, result.EligibleDestinationIcaosByKind.Keys);
         Assert.DoesNotContain(ContractKind.Passenger, result.EligibleDestinationIcaosByKind.Keys);
+        Assert.NotNull(result.AircraftCandidates);
+        Assert.Equal(2, result.AircraftCandidates.Count);
+        Assert.All(result.AircraftCandidates, candidate =>
+        {
+            Assert.Equal("aircraft-a", candidate.CanonicalAircraftId);
+            Assert.Equal("KAAA", candidate.DestinationIcao);
+        });
     }
 
     [Fact]
@@ -56,6 +63,10 @@ public sealed class CareerJobMarketFeasibilitySourceTests
         IReadOnlySet<string> eligible =
             result.EligibleDestinationIcaosByKind[ContractKind.Passenger];
         Assert.Contains("KAAA", eligible);
+        Assert.Contains(result.AircraftCandidates!, candidate =>
+            candidate.Kind == ContractKind.Passenger
+            && candidate.CanonicalAircraftId == "passenger-aircraft"
+            && candidate.MaximumPayloadPounds == 1_000);
     }
 
     [Fact]

@@ -56,6 +56,7 @@ public sealed class CareerJobBoardRefillService
     private readonly IJobBoardStateStore _store;
     private readonly ICareerJobMarketAirportSource _airports;
     private readonly ICareerJobMarketFeasibilitySource _feasibility;
+    private readonly ICareerJobMarketDispatchSource _dispatch;
     private readonly ICommodityMarketSnapshotStore _commodityMarkets;
     private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -65,6 +66,7 @@ public sealed class CareerJobBoardRefillService
         IJobBoardStateStore store,
         ICareerJobMarketAirportSource airports,
         ICareerJobMarketFeasibilitySource feasibility,
+        ICareerJobMarketDispatchSource dispatch,
         ICommodityMarketSnapshotStore commodityMarkets,
         TimeProvider timeProvider)
     {
@@ -83,6 +85,7 @@ public sealed class CareerJobBoardRefillService
         _commodityMarkets =
             commodityMarkets
             ?? throw new ArgumentNullException(nameof(commodityMarkets));
+        _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
         _timeProvider =
             timeProvider
             ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -182,6 +185,18 @@ public sealed class CareerJobBoardRefillService
                         cancellationToken)
                     .ConfigureAwait(false);
 
+            // Freeze actual cargo mass before physical screening; an aircraft's
+            // payload ceiling alone does not prove it can also carry route fuel.
+            IReadOnlyDictionary<ContractKind, IReadOnlySet<string>> dispatchEligible =
+                await _dispatch.FilterAsync(originIcao, feasibility, cargoLots, cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (dispatchEligible.Count == 0)
+            {
+                return await PreserveOrCreateValidBoardAsync(originIcao, now, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             var request =
                 new JobMarketGenerationRequest(
                     GenerationSeed:
@@ -206,14 +221,12 @@ public sealed class CareerJobBoardRefillService
                         SupportedKinds
                             .Where(
                                 kind =>
-                                    feasibility
-                                        .EligibleDestinationIcaosByKind
-                                        .ContainsKey(kind)
+                                    dispatchEligible.ContainsKey(kind)
                                     && (!IsCargoKind(kind)
                                         || cargoLots.ContainsKey(kind)))
                             .ToHashSet(),
                     EligibleDestinationIcaosByKind:
-                        feasibility.EligibleDestinationIcaosByKind,
+                        dispatchEligible,
                     CargoLotsByKindAndDestination:
                         cargoLots);
 
