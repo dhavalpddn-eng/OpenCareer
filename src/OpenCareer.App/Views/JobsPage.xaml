@@ -23,8 +23,9 @@
                 <StackPanel Spacing="3">
                     <TextBlock Text="CAREER FLIGHT CENTER"
                                Style="{StaticResource OpenCareerPageTitleStyle}" />
-                    <TextBlock Text="Choose an assignment, prepare the aircraft, and launch the flight."
-                               Style="{StaticResource OpenCareerPageSubtitleStyle}" />
+                    <TextBlock Text="Accept &amp; Start Flight checks the plan and opens Current Flight. Advanced Dispatch is optional."
+                               Style="{StaticResource OpenCareerPageSubtitleStyle}"
+                               TextWrapping="Wrap" />
                 </StackPanel>
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
@@ -86,7 +87,7 @@
                         </Border>
                         <StackPanel>
                             <TextBlock Text="CONTRACT" Foreground="{StaticResource OpenCareerShellTextBrush}" FontWeight="SemiBold" />
-                            <TextBlock Text="Accept assignment" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
+                            <TextBlock Text="Accept &amp; start once" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
                         </StackPanel>
                     </StackPanel>
 
@@ -97,8 +98,8 @@
                                        Foreground="{StaticResource OpenCareerInkBrush}" FontWeight="Bold" />
                         </Border>
                         <StackPanel>
-                            <TextBlock Text="DISPATCH" Foreground="{StaticResource OpenCareerShellTextBrush}" FontWeight="SemiBold" />
-                            <TextBlock Text="Prepare flight" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
+                            <TextBlock Text="PREFLIGHT" Foreground="{StaticResource OpenCareerShellTextBrush}" FontWeight="SemiBold" />
+                            <TextBlock Text="Checked automatically" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
                         </StackPanel>
                     </StackPanel>
 
@@ -110,7 +111,7 @@
                         </Border>
                         <StackPanel>
                             <TextBlock Text="FLY" Foreground="{StaticResource OpenCareerShellTextBrush}" FontWeight="SemiBold" />
-                            <TextBlock Text="Complete mission" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
+                            <TextBlock Text="Follow Current Flight" Foreground="{StaticResource OpenCareerShellMutedTextBrush}" FontSize="11" />
                         </StackPanel>
                     </StackPanel>
                 </Grid>
@@ -242,8 +243,9 @@
                 <StackPanel>
                     <TextBlock Text="AVAILABLE CONTRACTS"
                                Style="{StaticResource OpenCareerShellSectionTitleStyle}" />
-                    <TextBlock Text="Only assignments supported by current aircraft and dispatch evidence are shown."
-                               Style="{StaticResource OpenCareerPageSubtitleStyle}" />
+                    <TextBlock Text="Each offer is rechecked for the selected aircraft before it can start. Read its status for any missing requirements."
+                               Style="{StaticResource OpenCareerPageSubtitleStyle}"
+                               TextWrapping="Wrap" />
                 </StackPanel>
                 <Border Grid.Column="1"
                         Style="{StaticResource OpenCareerMetalInsetStyle}"

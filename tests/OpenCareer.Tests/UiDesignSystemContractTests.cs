@@ -269,7 +269,13 @@ public sealed class UiDesignSystemContractTests
         Assert.Contains("CAREER FLIGHT CENTER", visibleText);
         Assert.Contains("AIRCRAFT", visibleText);
         Assert.Contains("CONTRACT", visibleText);
-        Assert.Contains("DISPATCH", visibleText);
+        Assert.Contains("PREFLIGHT", visibleText);
+        Assert.Contains("Checked automatically", visibleText);
+        Assert.Contains("Follow Current Flight", visibleText);
+        Assert.DoesNotContain("DISPATCH", visibleText);
+        Assert.Contains(
+            "Accept & Start Flight checks the plan and opens Current Flight. Advanced Dispatch is optional.",
+            visibleText);
         Assert.Contains("FLY", visibleText);
         Assert.Contains("ZERO-PAY CALIBRATION", visibleText);
         Assert.Contains("$0 PAY · $0 PROGRESSION", visibleText);
