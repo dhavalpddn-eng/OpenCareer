@@ -1,7 +1,7 @@
 # OpenCareer master development checklist
 
 Status: living project tracker.  
-Last reconciled: 2026-10-30 through validated checkpoint `924577d0` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
+Last reconciled: 2026-11-01 through validated checkpoint `de0cb87e` on `feature/playable-loop-integration`; exact-head CI status is recorded in ASTRA, plus separately documented military PR #10 status.
 
 This is the master checklist for OpenCareer development. It is intentionally stricter than a feature wish list: an item is checked only when the implementation exists and the stated verification has actually been performed.
 
@@ -370,7 +370,9 @@ Chapter status: **ACTIVE — FIRST PRODUCTION-AUTHORITY LOOP LIVE ACCEPTED**
 - [x] Filter ordinary Ferry/Reposition destinations before offer generation unless at least one currently discovered installed civilian aircraft satisfies the shared fail-closed static capability projection and provenance-backed endpoint runway compatibility.
 - [x] Filter standard Passenger offers independently by explicit passenger capability, payload/range, total seats, dedicated passenger-capacity provenance and endpoint runway compatibility; persist immutable count/payload terms through restart and completion evidence.
 - [x] Show authoritative assignment detail on Jobs offer cards before acceptance: immutable Passenger count/payload and named Cargo/Express/AOG commodity mass; keep legacy or incomplete terms explicitly unavailable/unspecified without invention.
-- [ ] Add generation-time fuel/weather feasibility and ranking only from authoritative inputs; final start must continue to recheck current evidence.
+- [x] Screen new Ferry/Reposition, Passenger and named Cargo/Express/AOG offers with an exact eligible aircraft through the read-only composite cruise/fuel/reserve/weight/range/runway evaluator using the same automatic policy as accepted-job preparation; use actual frozen manifest mass, preserve committed boards on failure and recheck evidence each refresh.
+- [ ] Add generation-time weather feasibility and ranking only from authoritative inputs; final start must continue to recheck current evidence.
+- [x] Align Jobs workflow guidance with automatic preflight and optional Advanced Dispatch; direct players to Current Flight and distinguish retained offers from verified selected-aircraft readiness.
 - [x] Add a phase-aware Current Flight briefing beyond the Jobs offer/readiness surface: show authoritative flight kind, immutable route/alternate, exact assigned aircraft and evidence-preserving next actions for preparation, airborne, arrival, telemetry-loss/reconnect recovery and terminal settlement states.
 - [x] Build dispatch-to-active-mission flow for Ferry/Reposition, standard Passenger and Development/Test.
 - [x] Surface authoritative active career-flight state on Jobs with direct Current Flight recovery navigation.
